@@ -1,0 +1,135 @@
+// A script as revive player functions
+
+playervar define downPosition;
+playervar define reviveTimeLimit;
+playervar define needHelpEntitys;
+playervar define reviver;
+define reviveRange : 2.5;
+define canRevive:
+    IsDead(EventPlayer()) &&
+    IsOnGround(EventPlayer());
+
+rule: "Player/Revive/_showNeedHelp"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    canRevive &&
+    reviveTimeLimit == 0
+){
+    // Display HELP on the downed player's position
+    // As for the player position, the appearance position and the down position will not match the dead body where the ragdoll works
+    // Therefore, save and use the position when down, not the position of the player
+    // If down in the abyss of the map, can not revive, so do not display HELP
+    if(!isDeadByAbyss()){
+        reviveTimeLimit = 10;
+        downPosition = PositionOf(EventPlayer());
+        needHelpEntitys = [];
+        
+        CreateInWorldText(
+            AllPlayers(Team.All), <"<0> <1> <2> <3>", "Help", EventPlayer(), HeroIconString(HeroOf(EventPlayer())), reviveTimeLimit>,
+            downPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+            Color.White, Spectators.DefaultVisibility);
+
+        needHelpEntitys[0] = LastTextID();
+        CreateIcon(
+            AllPlayers(Team.All), downPosition,
+            Icon.Skull, IconRev.VisibleToAndPosition, Color.Red, true);
+        needHelpEntitys[1] = LastCreatedEntity();
+    }
+}
+
+rule: "Player/Revive/_hideNeedHelp"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    !canRevive
+){
+    // Hide HELP on the downed player's position
+    DestroyIcon(needHelpEntitys[1]);
+    DestroyInWorldText(needHelpEntitys[0]);
+    reviveTimeLimit = 0;
+}
+
+rule: "Player/Revive/_countDownTimeLimit"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    canRevive &&
+    reviveTimeLimit > 0
+){
+    // Count down revive time limit on the downed player's position
+    WaitUpdateMediumCycle();
+    reviveTimeLimit -= 1;
+    LoopIfConditionIsTrue();
+}
+
+rule: "Player/Revive/_reviveByTeammate //by near standing"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    canRevive &&
+    CountOf(
+        FilteredArray(
+            AllPlayers(Team.All), (
+                IsAlive(ArrayElement()) &&
+                HasSpawned(ArrayElement()) &&
+                DistanceBetween(downPosition, ArrayElement()) <= reviveRange
+            )
+        )
+    ) > 0
+){
+    // revived when a teammate is nearby
+    // The event player is the player who receives the revival.
+    WaitConditionConfirmed();
+    if(!isDeadByAbyss()){
+        // Save the reviver to display a message to the reviver
+        reviver = ClosestPlayerTo(EventPlayer(), Team.All);
+
+        SmallMessage(reviver,
+            <"<0> <1> <2>.", "reviving", EventPlayer(), HeroIconString(HeroOf(EventPlayer()))>);
+        SmallMessage(EventPlayer(),
+                        <"<0> <1> <2>.", reviver, HeroIconString(HeroOf(reviver)), "reviving">);
+
+        // reviving effect and progress count
+        if(reviveTimeLimit > 1){
+            PlayEffect(
+                AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+                Color.Yellow, EventPlayer(), 1);
+            // skip this wait by timer too short
+            Wait(1, WaitBehavior.AbortWhenFalse);   
+        }
+        if(reviveTimeLimit > 1){
+            PlayEffect(
+                AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+                Color.Yellow, EventPlayer(), 1);
+            // skip this wait by timer too short
+            Wait(1, WaitBehavior.AbortWhenFalse);   
+        }
+        if(reviveTimeLimit > 1){
+            PlayEffect(
+                AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+                Color.Yellow, EventPlayer(), 1);
+            // skip this wait by timer too short
+            Wait(1, WaitBehavior.AbortWhenFalse);   
+        }
+
+        // revive effect and sound
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+            Color.Yellow, EventPlayer(), 1);
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.BuffExplosionSound,
+            Color.White, EventPlayer(), MaxLength());
+
+        Resurrect(EventPlayer());
+
+        SmallMessage(reviver,
+            <"<0> <1> <2>.", "revived", EventPlayer(), HeroIconString(HeroOf(EventPlayer()))>);
+        SmallMessage(EventPlayer(),
+            <"<0> <1> <2>.", reviver, HeroIconString(HeroOf(reviver)), "revivied">);
+    }
+}

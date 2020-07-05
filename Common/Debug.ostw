@@ -1,0 +1,237 @@
+// A script as debug functions
+
+// Message display for debugging that can be seen only by the host player
+define dbgMsg(define msg): SmallMessage(HostPlayer(), msg);   
+globalvar define debugMode;
+globalvar define debugIconHudEntitys;
+
+rule: "Debug/_changeDebugMode"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.Jump) 
+){
+    // change debug mode
+    WaitLongPressConfirm();
+    if(debugMode){
+        HideDebugHud();
+        DisableInspectorRecording();
+        debugMode = false;
+    }
+    else{
+        ShowDebugHud();
+        EnableInspectorRecording();
+        debugMode = true;
+    }
+}
+
+// show debug icon and hud
+void ShowDebugHud()"Subroutine/ShowDebugHud"{
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "server load", ServerLoad()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+    debugIconHudEntitys[0] = LastTextID();
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "server load average", ServerLoadAverage()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+    debugIconHudEntitys[1] = LastTextID();
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "server load peak", ServerLoadPeak()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+    debugIconHudEntitys[2] = LastTextID();
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "between distance of res pos",
+        DistanceBetween(respawnPosition1, respawnPosition2)>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+    debugIconHudEntitys[8] = LastTextID();  
+
+    CreateIcon(HostPlayer(), respawnPosition1, Icon.ArrowDown,
+        IconRev.VisibleToAndPosition, Color.Team1, false);
+    debugIconHudEntitys[3] = LastCreatedEntity();
+    CreateIcon(HostPlayer(), respawnPosition2, Icon.ArrowDown,
+        IconRev.VisibleToAndPosition, Color.Team2, false);
+    debugIconHudEntitys[4] = LastCreatedEntity();
+
+    CreateEffect(HostPlayer(), Effect.Sphere, Color.White,
+        respawnPosition1, offsetDistance, EffectRev.VisibleToPositionAndRadius);
+    debugIconHudEntitys[5] = LastCreatedEntity();
+    CreateEffect(HostPlayer(), Effect.Sphere, Color.White,
+        respawnPosition1, offsetDistance, EffectRev.VisibleToPositionAndRadius);
+    debugIconHudEntitys[6] = LastCreatedEntity();
+}
+
+// Hide debug icon and hud
+void HideDebugHud()"Subroutine/HideDebugHud"{
+    DestroyHudText(debugIconHudEntitys[0]);
+    DestroyHudText(debugIconHudEntitys[1]);
+    DestroyHudText(debugIconHudEntitys[2]);
+    DestroyHudText(debugIconHudEntitys[8]);
+    DestroyIcon(debugIconHudEntitys[3]);
+    DestroyIcon(debugIconHudEntitys[4]);
+    DestroyEffect(debugIconHudEntitys[5]);
+    DestroyEffect(debugIconHudEntitys[6]);
+}
+
+rule: "Debug/_triggerCheat //give ult, revive, full health"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.Ultimate)
+){
+    // Give revive, full health, charge ult to all player
+    WaitLongPressConfirm();
+    // If own player dead by abyss, teleport player to map surface
+    if(isDeadByAbyss()){
+        Teleport(EventPlayer(), NearestWalkablePosition(EventPlayer()));
+        Wait(0.5, WaitBehavior.IgnoreCondition);    // wait teleport
+    }
+    Resurrect(AllPlayers(Team.Team1));
+    Heal(AllPlayers(Team.Team1), null, MaxValue());
+    StopHoldingButton(EventPlayer(), Button.Ultimate);
+    Wait(0.5, WaitBehavior.IgnoreCondition);    // wait release ult button 
+    SetUltimateCharge(AllPlayers(Team.Team1), 100);
+}
+
+// rule: "Debug/_increaseTeamLifes"
+// Event.OngoingPlayer
+// Team.All
+// Player.All
+// if(
+//     HostPlayer() == EventPlayer() &&
+//     IsButtonHeld(EventPlayer(), Button.Interact) &&
+//     IsButtonHeld(EventPlayer(), Button.Ability2)
+// ){
+//     // Increase TeamLifes
+//     WaitLongPressConfirm();
+//     teamLifes += 1;
+//     LoopIfConditionIsTrue();
+// }
+
+// rule: "Debug/_increaseRoundNo"
+// Event.OngoingPlayer
+// Team.All
+// Player.All
+// if(
+//     HostPlayer() == EventPlayer() &&
+//     IsButtonHeld(EventPlayer(), Button.Interact) &&
+//     IsButtonHeld(EventPlayer(), Button.Ability1)
+// ){
+//     // Increase RoundNo
+//     WaitLongPressConfirm();
+//     roundNo += 1;
+//     LoopIfConditionIsTrue();
+// }
+
+// rule: "Debug/_resetPortal // reset portal position by random"
+// Event.OngoingPlayer
+// Team.All
+// Player.All
+// if(
+//     HostPlayer() == EventPlayer() &&
+//     IsButtonHeld(EventPlayer(), Button.Interact) &&
+//     IsButtonHeld(EventPlayer(), Button.Crouch)
+// ){
+//     // Recalculate portal
+//     WaitLongPressConfirm();
+//     portalState = -1;
+//     WaitChangeState();  // Wait for the changed status to be processed first
+//     portalState = PortalState.Calculating;
+// }
+
+// rule: "Debug/_setPortalOnAimCenter // reset portal position by aim center"
+// Event.OngoingPlayer
+// Team.All
+// Player.All
+// if(
+//     HostPlayer() == EventPlayer() &&
+//     IsButtonHeld(EventPlayer(), Button.Interact) &&
+//     IsButtonHeld(EventPlayer(), Button.Reload)
+// ){
+//     // Set portal position to aim center
+//     WaitLongPressConfirm();
+//     portalPosition = AimingPosition();
+//     portalState = PortalState.Set;
+//     Wait(0.5, WaitBehavior.IgnoreCondition);    // wait position calculate complete
+//     Teleport(AllPlayers(Team.Team2), portalPosition);
+//     // Push to near player for avoid fallout
+//     ApplyImpulse(AllPlayers(Team.Team2), VectorTowards(portalPosition,
+//         ClosestPlayerTo(portalPosition, Team.Team1) + PositionOffset()),
+//         15, Relative.ToWorld, ContraryMotion.Cancel);
+// }
+
+rule: "Debug/_teleportPlayer"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.Melee)
+){
+    // Teleport player to aim center
+    WaitLongPressConfirm();
+    Teleport(AllPlayers(Team.Team1), 
+        AimingPosition()
+    )
+}
+
+rule: "Debug/_freezePlayer"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.Jump) &&
+    IsButtonHeld(EventPlayer(), Button.PrimaryFire)
+){
+    // Teleport player to aim center
+    WaitLongPressConfirm();
+    RemoveFromArray(AllPlayers(Team.All), EventPlayer());
+    SetStatus(AllPlayers(Team.All), null, Status.Frozen, 60);
+    WaitChangeState();
+    ClearStatus(EventPlayer(), Status.Frozen);
+}
+
+rule: "Debug/_killPlayerOnAimCenter"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.PrimaryFire)
+){
+    // kill players on aim center
+    WaitLongPressConfirm();
+    Kill(
+        PlayersWithinRadius(
+            AimingPosition(), 5, Team.All, RadiusLOS.Off),
+        EventPlayer());
+}
+
+// for confirm the completion of script generation
+disabled rule: "ScriptEnd" {}
+

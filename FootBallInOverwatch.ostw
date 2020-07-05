@@ -1,0 +1,370 @@
+/*
+[Detail]
+Welcome to [Foot Ball In Overwatch]
+-Get the ball and touchdown into the enemy's goal post.
+-If the enemy gets the ball, defeat the enemy and take the ball.
+-push up the battle line while protecting the teammates who hold the ball.
+-When you are surrounded by enemies, press the interact button (default F) to _pass the ball to your teammates.
+-Team strategy determines whether to quickly break through the enemy or steadily pushup the battle line.
+[Share Code]
+2ZD90
+[ToDo]
+*/
+import "Common.ostw";
+import "Debug.ostw";
+import "Revive.ostw";
+
+// TAG Signature and infomation
+disabled rule: "Foot Ball In Overwatch ver.0.8"-1{}
+disabled rule: "This script was generated from source code by [Overwatch-Script-To-Workshop]"-1{}
+disabled rule: "Check detail with https://github.com/ItsDeltin/Overwatch-Script-To-Workshop"-1{}
+disabled rule: "Original source code was created by [sarami77]"-1{}
+disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopScripts"-1{}
+
+// TAG Game Function ----------
+globalvar define gameStatus;
+enum GameStatus{
+    Initializing,
+    Preparation,
+    Progress,
+    Score,
+    Ending
+}
+
+globalvar define currentMatchTime;
+
+rule: "Game/Status/Initializing"
+Event.OngoingGlobal
+if(
+    gameStatus == GameStatus.Initializing
+){
+    // Stop records to reduce server load
+    DisableInspectorRecording();
+    // If run it right after loading the server, some scripts fail, so wait 3 seconds
+    Wait(3, WaitBehavior.AbortWhenFalse);   // wait server staring
+    // Set match time
+    currentMatchTime = 30 * 60;
+    SetMatchTime(currentMatchTime);
+    PauseMatchTime();
+    // Cancel unnecessary default settings
+    DisableScoring();
+    DisableCompletion();
+    // Calculate the approximate center position of the map from the spawn room position.
+    // Therefore, change the spawn room and then spawn the entity.
+    ForceSpawnRoom(Team.Team1, 2);
+    Respawn(AllPlayers(Team.All));
+    // change status
+    gameStatus = GameStatus.Preparation;
+}
+
+define assbleTeamTime: 15;
+
+rule: "Game/Status/Preparationa"
+Event.OngoingGlobal
+if(
+    gameStatus == GameStatus.Preparation
+){
+    SetMatchTime(assbleTeamTime);
+    SetObjectiveDescription(AllPlayers(), "Asseble your hero", ObjectiveRev.String);
+    BigMessage(AllPlayers(), "Asseble your hero");
+    // reset goal post
+    goalPostPosition1 = 0;
+    goalPostPosition2 = 0;
+}
+
+rule: "Game/Status/Progress"
+Event.OngoingGlobal
+if(
+    gameStatus == GameStatus.Progress
+){
+    SetMatchTime(currentMatchTime);
+    SetObjectiveDescription(AllPlayers(), "Get ball", ObjectiveRev.String);
+    BigMessage(AllPlayers(Team.All), "Get ball");
+}
+
+globalvar define team1Score;
+globalvar define team2Score;
+
+rule: "Game/Status/Ending"
+Event.OngoingGlobal
+if(
+    gameStatus == GameStatus.Ending
+){
+    // play game end sound
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.RingExplosionSound,
+        Color.White, AllPlayers(Team.All), MaxLength());
+    // show time over
+    BigMessage(AllPlayers(Team.All), "Time Over");
+    // show slow
+    SetSlowMotion(10);
+    Wait(1, WaitBehavior.AbortWhenFalse);   
+    SetSlowMotion(100);
+    WaitNextPhase();
+
+    // show score
+    BigMessage(AllPlayers(Team.Team1),
+        <"Our Score <0> / Enemy Score <1>", team1Score, team2Score>);
+    BigMessage(AllPlayers(Team.Team2),
+        <"Our Score <0> / Enemy Score <1>", team2Score, team1Score>);
+    WaitNextPhase();
+
+    // declare victory
+    if(team1Score > team2Score){
+        DeclareTeamVictory(Team.Team1);
+    }
+    else if(team1Score < team2Score){
+        DeclareTeamVictory(Team.Team2);
+    }
+    else{
+        DeclareMatchDraw();
+    }
+}
+
+globalvar define respawnPosition1;
+rule: "Positioner/setRespawnPosition1"
+Event.OngoingPlayer
+Team.Team1
+if(
+    respawnPosition1 == 0 &&
+    gameStatus != GameStatus.Initializing &&
+    IsMoving()
+){
+    respawnPosition1 = PositionOf();
+}
+
+globalvar define respawnPosition2;
+rule: "Positioner/setRespawnPosition2"
+Event.OngoingPlayer
+Team.Team2
+if(
+    respawnPosition2 == 0 &&
+    gameStatus != GameStatus.Initializing &&
+    IsMoving()
+){
+    respawnPosition2 = PositionOf();
+}
+
+// TAG GoalPost Function ----------
+define goalPostSize: 3;
+globalvar define goalPostPosition1;
+globalvar define goalPostEntitiys1;
+globalvar define goalPostPosition2;
+globalvar define goalPostEntitiys2;
+
+rule: "GoalPost/Team1/Status/Visible"
+Event.OngoingGlobal
+if(
+    goalPostPosition1 != 0
+){
+    goalPostEntitiys1 = [];
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Team1,
+        goalPostPosition1, goalPostSize, EffectRev.VisibleToPositionAndRadius);
+    goalPostEntitiys1[0] = LastCreatedEntity();
+    CreateIcon(AllPlayers(), goalPostPosition1, Icon.Flag,
+        IconRev.VisibleToAndPosition, Color.Team1, true);
+    goalPostEntitiys1[1] = LastCreatedEntity();
+    CreateInWorldText(
+        AllPlayers(Team.Team1), "Our goal post", 
+        goalPostPosition1, 1, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    goalPostEntitiys1[2] = LastTextID();
+    CreateInWorldText(
+        AllPlayers(Team.Team2), "Enemy goal post", 
+        goalPostPosition1, 1, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    goalPostEntitiys1[3] = LastTextID();
+}
+
+rule: "GoalPost/Team2/Status/Visible"
+Event.OngoingGlobal
+if(
+    goalPostPosition2 != 0
+){
+    goalPostEntitiys2 = [];
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Team2,
+        goalPostPosition2, goalPostSize, EffectRev.VisibleToPositionAndRadius);
+    goalPostEntitiys2[0] = LastCreatedEntity();
+    CreateIcon(AllPlayers(), goalPostPosition2, Icon.Flag,
+        IconRev.VisibleToAndPosition, Color.Team2, true);
+    goalPostEntitiys2[1] = LastCreatedEntity();
+    CreateInWorldText(
+        AllPlayers(Team.Team2), "Our goal post", 
+        goalPostPosition2, 1, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    goalPostEntitiys2[2] = LastTextID();
+    CreateInWorldText(
+        AllPlayers(Team.Team1), "Enemy goal post", 
+        goalPostPosition2, 1, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    goalPostEntitiys2[3] = LastTextID();
+}
+
+rule: "GoalPost/Team1/Status/Invisible"
+Event.OngoingGlobal
+if(
+    goalPostPosition1 == 0
+){
+    DestroyEffect(goalPostEntitiys1[0]);
+    DestroyIcon(goalPostEntitiys1[1]);
+    DestroyInWorldText(goalPostEntitiys1[2]);
+    DestroyInWorldText(goalPostEntitiys1[3]);
+}
+
+rule: "GoalPost/Team2/Status/Invisible"
+Event.OngoingGlobal
+if(
+    goalPostPosition2 == 0
+){
+    DestroyEffect(goalPostEntitiys2[0]);
+    DestroyIcon(goalPostEntitiys2[1]);
+    DestroyInWorldText(goalPostEntitiys2[2]);
+    DestroyInWorldText(goalPostEntitiys2[3]);
+}
+
+define offsetDistance: DistanceBetween(respawnPosition1, respawnPosition2) / 5;
+
+rule: "GoalPost/Team1/set"
+Event.OngoingPlayer
+Team.Team1
+if(
+    goalPostPosition1 == 0 &&
+    respawnPosition1 != 0 &&
+    DistanceBetween(EventPlayer(), respawnPosition1) >= offsetDistance
+){
+    goalPostPosition1 = PositionOf();
+}
+
+rule: "GoalPost/Team2/set"
+Event.OngoingPlayer
+Team.Team2
+if(
+    goalPostPosition2 == 0 &&
+    respawnPosition2 != 0 &&
+    DistanceBetween(EventPlayer(), respawnPosition2) >= offsetDistance
+){
+    goalPostPosition2 = PositionOf();
+}
+
+// TAG Ball Function ----------
+globalvar define ballPositon;
+globalvar define ballPlayer;
+globalvar define ballEntitys;
+
+void hideBallEntitys()"hideBallEntitys"{
+    DestroyEffect(ballEntitys[0]);
+    DestroyIcon(ballEntitys[1]);
+    DestroyInWorldText(ballEntitys[2]);
+}
+
+rule: "Ball/Status/Droped"
+Event.OngoingGlobal
+if(
+    ballPositon != 0 &&
+    ballPlayer == 0
+){
+    hideBallEntitys();
+    ballEntitys = [];
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
+        ballPositon, 0.1, EffectRev.VisibleToPositionAndRadius);
+    ballEntitys[0] = LastCreatedEntity();
+    CreateIcon(AllPlayers(), ballPositon, Icon.Asterisk,
+        IconRev.VisibleToAndPosition, Color.Yellow, true);
+    ballEntitys[1] = LastCreatedEntity();
+    CreateInWorldText(
+        AllPlayers(), "Ball", 
+        ballPositon, 1, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    ballEntitys[2] = LastTextID();
+}
+
+rule: "Ball/Status/Handding"
+Event.OngoingGlobal
+if(
+    ballPlayer != 0
+){
+    hideBallEntitys();
+    ballEntitys = [];
+    CreateEffect(AllPlayers(), Effect.Ring, Color.Yellow,
+        ballPlayer, 2, EffectRev.VisibleToPositionAndRadius);
+    ballEntitys[0] = LastCreatedEntity();
+    if(TeamOf(ballPlayer) == Team.Team1)
+        CreateIcon(AllPlayers(), ballPlayer, Icon.Asterisk,
+            IconRev.VisibleToAndPosition, Color.Team1, true);
+    else if(TeamOf(ballPlayer) == Team.Team2)
+        CreateIcon(AllPlayers(), ballPlayer, Icon.Asterisk,
+            IconRev.VisibleToAndPosition, Color.Team2, true);
+    ballEntitys[1] = LastCreatedEntity();
+    CreateInWorldText(
+        AllPlayers(), "Has Ball", 
+        ballPlayer, 1, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    ballEntitys[2] = LastTextID();
+}
+
+rule: "Ball/Status/Invisible"
+Event.OngoingGlobal
+if(
+    ballPositon == 0
+){
+    hideBallEntitys();
+}
+
+rule: "Ball/set"
+Event.OngoingGlobal
+if(
+    goalPostPosition1 != 0 &&
+    goalPostPosition2 != 0
+){
+    ballPositon = NearestWalkablePosition((goalPostPosition1 + goalPostPosition2) / 2) ;
+}
+
+// TAG Player Function ----------
+void giveBall(define player)"giveBall"{
+    loseBall(ballPositon);
+    PlayEffect(
+        EventPlayer(), PlayEffect.BuffImpactSound,
+        Color.White, player, MaxLength());
+    ballPositon = player;
+    ballPlayer = player;
+}
+
+void loseBall(define player)"loseBall"{
+    PlayEffect(
+        EventPlayer(), PlayEffect.DebuffImpactSound,
+        Color.White, EventPlayer(), MaxLength());
+    ballPositon = NearestWalkablePosition(EventPlayer());
+    ballPlayer = 0;
+}
+
+rule: "Player/pickupBall"
+Event.OngoingPlayer
+if(
+    ballPlayer == 0 &&
+    ballPositon != 0 &&
+    IsAlive() &&
+    DistanceBetween(EventPlayer(), ballPositon) <= 1.5
+){
+    giveBall(EventPlayer());
+}
+
+rule: "Player/dropBallByDead"
+Event.OngoingPlayer
+if(
+    ballPlayer == EventPlayer() &&
+    IsDead()
+){
+    loseBall(EventPlayer());
+}
+
+rule: "Player/dropBallByPlayerLeave"
+Event.OnPlayerLeave
+if(
+    ballPlayer == EventPlayer()
+){
+    loseBall(EventPlayer());
+}
+
+// for confirm the completion of script generation
+disabled rule: "ScriptEnd" {}
+
