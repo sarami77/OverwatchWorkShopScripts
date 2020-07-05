@@ -1,0 +1,141 @@
+// A script as debug functions
+
+import "Utility.ostw";
+
+// Message display for debugging that can be seen only by the host player
+define dbgMsg(define msg): SmallMessage(HostPlayer(), msg);
+// debugmode
+globalvar define isDebugMode;
+globalvar define debugIconHudEntitys;
+
+// show debug icon and hud
+void ShowDebugHud()"Subroutine/ShowDebugHud"{
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load", ServerLoad()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[0] = LastTextID();
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load Average", ServerLoadAverage()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[1] = LastTextID();
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load Peak", ServerLoadPeak()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[2] = LastTextID();
+}
+
+// Hide debug icon and hud
+void HideDebugHud()"Subroutine/HideDebugHud"{
+    DestroyHudText(debugIconHudEntitys[0]);
+    DestroyHudText(debugIconHudEntitys[1]);
+    DestroyHudText(debugIconHudEntitys[2]);
+}
+
+rule: "Debug/changeDebugMode"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.Jump) 
+){
+    // change debug mode
+    WaitLongPressConfirm();
+    if(isDebugMode){
+        HideDebugHud();
+        DisableInspectorRecording();
+        isDebugMode = false;
+    }
+    else{
+        ShowDebugHud();
+        EnableInspectorRecording();
+        isDebugMode = true;
+    }
+}
+
+rule: "Debug/useCheatOwnTeam //give ult, revive, full health"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.Ultimate)
+){
+    // Give revive, full health, charge ult to all player
+    WaitLongPressConfirm();
+    // If own player dead by abyss, teleport player to map surface
+    if(IsDeadByAbyss()){
+        Teleport(EventPlayer(), NearestWalkablePosition(EventPlayer()));
+        Wait(0.5, WaitBehavior.IgnoreCondition);    // wait teleport
+    }
+    Resurrect(AllPlayers(Team.Team1));
+    Heal(AllPlayers(Team.Team1), null, MaxValue());
+    StopHoldingButton(EventPlayer(), Button.Ultimate);
+    Wait(0.5, WaitBehavior.IgnoreCondition);    // wait release ult button 
+    SetUltimateCharge(AllPlayers(Team.Team1), 100);
+}
+
+rule: "Debug/teleportOwnTeam"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.Melee)
+){
+    // Teleport player to aim center
+    WaitLongPressConfirm();
+    Teleport(AllPlayers(TeamOf()), 
+        AimingPosition()
+    )
+}
+
+rule: "Debug/freezeOtherPlayer"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.Jump) &&
+    IsButtonHeld(EventPlayer(), Button.PrimaryFire)
+){
+    // Teleport player to aim center
+    WaitLongPressConfirm();
+    SetStatus(AllPlayers(Team.All), null, Status.Frozen, 30);
+    WaitChangeState();
+    ClearStatus(EventPlayer(), Status.Frozen);
+}
+
+rule: "Debug/killAimPlayer"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.PrimaryFire)
+){
+    // kill players on aim center
+    WaitLongPressConfirm();
+    Kill(
+        PlayersWithinRadius(
+            AimingPosition(), 5, Team.All, RadiusLOS.Off),
+        EventPlayer());
+}
+

@@ -1,5 +1,14 @@
 // A script as revive player functions
 
+import "Utility.ostw";
+
+// Function enable team
+// Set team in import destination parent file
+globalvar define Revive_enableTeam;
+define Revive_isEnableTeam:
+    Revive_enableTeam == Team.All ||
+    Revive_enableTeam == TeamOf();
+
 playervar define downPosition;
 playervar define reviveTimeLimit;
 playervar define needHelpEntitys;
@@ -9,55 +18,69 @@ define canRevive:
     IsDead(EventPlayer()) &&
     IsOnGround(EventPlayer());
 
-rule: "Player/Revive/_showNeedHelp"
+rule: "Player/Revive/setTimeLimit"
 Event.OngoingPlayer
-Team.All
-Player.All
 if(
-    canRevive &&
-    reviveTimeLimit == 0
+    Revive_isEnableTeam &&
+    !IsAlive()
+){
+    // set revive time limit by player dead
+    reviveTimeLimit = 10;
+}
+
+
+rule: "Player/Revive/resetTimeLimit"
+Event.OngoingPlayer
+if(
+    Revive_isEnableTeam &&
+    IsAlive()
+){
+    // reset revive time limit by player alive
+    reviveTimeLimit = 0;
+}
+
+rule: "Player/Revive/showNeedHelp"
+Event.OngoingPlayer
+if(
+    Revive_isEnableTeam &&
+    canRevive
 ){
     // Display HELP on the downed player's position
     // As for the player position, the appearance position and the down position will not match the dead body where the ragdoll works
     // Therefore, save and use the position when down, not the position of the player
     // If down in the abyss of the map, can not revive, so do not display HELP
-    if(!isDeadByAbyss()){
-        reviveTimeLimit = 10;
+    if(!IsDeadByAbyss()){
         downPosition = PositionOf(EventPlayer());
         needHelpEntitys = [];
         
         CreateInWorldText(
-            AllPlayers(Team.All), <"<0> <1> <2> <3>", "Help", EventPlayer(), HeroIconString(HeroOf(EventPlayer())), reviveTimeLimit>,
+            AllPlayers(Revive_enableTeam), <"<0> <1> <2> <3>", "Help", EventPlayer(), HeroIconString(HeroOf(EventPlayer())), reviveTimeLimit>,
             downPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-            Color.White, Spectators.DefaultVisibility);
+            Color.White, Spectators.VisibleAlways);
 
         needHelpEntitys[0] = LastTextID();
         CreateIcon(
-            AllPlayers(Team.All), downPosition,
+            AllPlayers(Revive_enableTeam), downPosition,
             Icon.Skull, IconRev.VisibleToAndPosition, Color.Red, true);
         needHelpEntitys[1] = LastCreatedEntity();
     }
 }
 
-rule: "Player/Revive/_hideNeedHelp"
+rule: "Player/Revive/hideNeedHelp"
 Event.OngoingPlayer
-Team.All
-Player.All
 if(
+    Revive_isEnableTeam &&
     !canRevive
 ){
     // Hide HELP on the downed player's position
     DestroyIcon(needHelpEntitys[1]);
     DestroyInWorldText(needHelpEntitys[0]);
-    reviveTimeLimit = 0;
 }
 
-rule: "Player/Revive/_countDownTimeLimit"
+rule: "Player/Revive/countDownTimeLimit"
 Event.OngoingPlayer
-Team.All
-Player.All
 if(
-    canRevive &&
+    Revive_isEnableTeam &&
     reviveTimeLimit > 0
 ){
     // Count down revive time limit on the downed player's position
@@ -66,15 +89,14 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Player/Revive/_reviveByTeammate //by near standing"
+rule: "Player/Revive/reviveByTeammate //by near standing"
 Event.OngoingPlayer
-Team.All
-Player.All
 if(
+    Revive_isEnableTeam &&
     canRevive &&
     CountOf(
         FilteredArray(
-            AllPlayers(Team.All), (
+            AllPlayers(Revive_enableTeam), (
                 IsAlive(ArrayElement()) &&
                 HasSpawned(ArrayElement()) &&
                 DistanceBetween(downPosition, ArrayElement()) <= reviveRange
@@ -85,9 +107,9 @@ if(
     // revived when a teammate is nearby
     // The event player is the player who receives the revival.
     WaitConditionConfirmed();
-    if(!isDeadByAbyss()){
+    if(!IsDeadByAbyss()){
         // Save the reviver to display a message to the reviver
-        reviver = ClosestPlayerTo(EventPlayer(), Team.All);
+        reviver = ClosestPlayerTo(EventPlayer(), Revive_enableTeam);
 
         SmallMessage(reviver,
             <"<0> <1> <2>.", "reviving", EventPlayer(), HeroIconString(HeroOf(EventPlayer()))>);

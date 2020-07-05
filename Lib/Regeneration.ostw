@@ -1,0 +1,53 @@
+// A script as player regeneration functions
+
+import "Utility.ostw";
+
+// Function enable team
+// Set team in import destination parent file
+globalvar define Regeneration_enableTeam;
+define Regeneration_isEnableTeam:
+    Regeneration_enableTeam == Team.All ||
+    Regeneration_enableTeam == TeamOf();
+
+globalvar define playerRegenerationRate;
+playervar define waitRegeneration;
+
+rule: "Player/Regeneration/updateRate //if there are few players, incrase regeneration rate for fair play."
+Event.OngoingGlobal
+{
+    // If don't enough players, adjust player regeneration rate to make the game fair
+    WaitUpdateLongCycle();
+    // Multiply heal unit
+    playerRegenerationRate = 5;
+    // Apply balance multiplier
+    playerRegenerationRate *= ConvertToBalancedValue(0.5);  // TAG player regeneration scale
+    LoopIfConditionIsTrue();
+}
+
+rule: "Player/Regeneration/waitRegenerate //by taken damage"
+Event.OnDamageTaken
+if(
+    Regeneration_isEnableTeam &&
+    IsAlive(EventPlayer())
+){
+    // Stop regeneration when player receives damage
+    // Resume regeneration over time
+    waitRegeneration = true;
+    Wait(1, WaitBehavior.RestartWhenTrue);  // TAG wait regenenation timer
+    waitRegeneration = false;
+}
+
+rule: "Player/Regeneration/regenerate //heal if not damaged for a short time"
+Event.OngoingPlayer
+if(
+    Regeneration_isEnableTeam &&
+    !waitRegeneration &&
+    IsAlive(EventPlayer()) &&
+    Health(EventPlayer()) < MaxHealth(EventPlayer())
+){
+    // Heal until the player's health is maximized
+    WaitUpdateShortCycle();
+    Heal(EventPlayer(), null, playerRegenerationRate);
+    LoopIfConditionIsTrue();
+}
+
