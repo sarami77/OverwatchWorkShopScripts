@@ -18,7 +18,7 @@ import "Lib/Revive.ostw";
 import "Lib/Perk.ostw";
 import "Lib/Debug.ostw";
 
-// TAG Signature and infomation
+// TAG Signature and infomation ----------
 disabled rule: "Portal Hunt PORTAL HUNT -AGGRESSIVE PVE ver.1.6"-1{}
 disabled rule: "This script was generated from source code by [Overwatch-Script-To-Workshop]"-1{}
 disabled rule: "Check detail with https://github.com/ItsDeltin/Overwatch-Script-To-Workshop"-1{}
@@ -53,6 +53,10 @@ Event.OngoingGlobal
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
+    // WARNING
+    // If you set setMatchTime right after the game starts, the server becomes unstable and ReturnToLobby and Restart stop working.
+    // StartElapsedTimer should be true after a delay of about 5 seconds.
+    startElapsedTimer = true;
 }
 
 globalvar define gameReseted;
@@ -604,7 +608,7 @@ if(
     ClearStatus(AllPlayers(Team.Team2), Status.Rooted);
 }
 
-globalvar define EnemyReceivedDamageRate;
+globalvar define enemyReceivedDamageRate;
 
 rule: "Enemy/ReceivedDamage/updateRate //for game balance, increase by missing players count"
 Event.OngoingGlobal
@@ -612,15 +616,15 @@ Event.OngoingGlobal
     // If don't enough players, adjust enemy received damage rate to make the game fair
     WaitUpdateLongCycle();
     // Multiply damage rate
-    EnemyReceivedDamageRate = 100;
+    enemyReceivedDamageRate = 100;
     // Apply balance multiplier
-    EnemyReceivedDamageRate *= ConvertToBalancedValue(1.0);     // TAG enemy received damage scale
-    SetDamageReceived(AllPlayers(Team.Team2), EnemyReceivedDamageRate);
+    enemyReceivedDamageRate *= ConvertToBalancedValue(1.0);     // TAG enemy received damage scale
+    SetDamageReceived(AllPlayers(Team.Team2), enemyReceivedDamageRate);
     LoopIfConditionIsTrue();
 }
 
 globalvar define _divideEnemyDealtDamage;
-globalvar define EnemyDealtDamageRate;
+globalvar define enemyDealtDamageRate;
 rule: "Enemy/DealtDamage/updateRate //for game progress, increase by round no, decrease by missing players count"
 Event.OngoingGlobal
 {
@@ -628,14 +632,14 @@ Event.OngoingGlobal
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     WaitUpdateLongCycle();
     // Add damage rate according to the round progress
-    EnemyDealtDamageRate = 40 + (roundNo * 1.5); // TAG addition Enemy dealt damage 
+    enemyDealtDamageRate = 20 + (roundNo * 1.5); // TAG addition Enemy dealt damage 
     // Apply balance multiplier
-    EnemyDealtDamageRate /= ConvertToBalancedValue(0.75);     // TAG enemy dealt damage scale
-    SetDamageDealt(AllPlayers(Team.Team2), EnemyDealtDamageRate);
+    enemyDealtDamageRate /= ConvertToBalancedValue(0.75);     // TAG enemy dealt damage scale
+    SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);
     LoopIfConditionIsTrue();
 }
 
-globalvar define EnemyHiddenSpeedRate;
+globalvar define enemyHiddenSpeedRate;
 playervar define isHiddenSpeed;
 
 rule: "Enemy/HiddenSpeed/updateRate //for round harder, increase by growing portal size"
@@ -646,8 +650,8 @@ if(
 ){
     // Increase enemy hidden speed depending on portal size
     // Portals that have grown significantly over time will send quickly more enemies.
-    EnemyHiddenSpeedRate = 100
-    EnemyHiddenSpeedRate += portalSize * 10;
+    enemyHiddenSpeedRate = 100
+    enemyHiddenSpeedRate += portalSize * 10;
     if(portalSize < maxPortalSize){
         WaitUpdateMediumCycle();
         LoopIfConditionIsTrue();
@@ -667,7 +671,7 @@ if(
     // Hidden Speed is active when the player can't see the enemy
     // Players are surrounded by many enemies, making the game more chaotic and fluid
     WaitConditionConfirmed();
-    SetMoveSpeed(EventPlayer(), EnemyHiddenSpeedRate);
+    SetMoveSpeed(EventPlayer(), enemyHiddenSpeedRate);
     // The portal may growing and changing in size, so repeat speed changes
     WaitUpdateMediumCycle();
     LoopIfConditionIsTrue();
@@ -717,7 +721,7 @@ if(
     StopChasingVariable(portalSize);
     enemySpawnInterval = maxSpawnInterval;
     SetRespawnMaxTime(AllPlayers(Team.Team2), enemySpawnInterval + 1);
-    EnemyHiddenSpeedRate = 100;
+    enemyHiddenSpeedRate = 100;
     isFirstGrowing = true;
     // Hide portal icon and effect
     DestroyIcon(portalEntitys[0]);
@@ -1165,8 +1169,179 @@ if(
     }
 }
 
-// TAG Debug
-// Message display for debugging that can be seen only by the host player
+// TAG Debug ----------
+// debugmode
+globalvar define isDebugMode;
+globalvar define debugIconHudEntitys;
+
+// show debug icon and hud
+void ShowDebugHud()"Subroutine/ShowDebugHud"{
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "player Regeneration Rate", playerRegenerationRate>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Blue, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[0] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "enemy Spawn Interval", enemySpawnInterval>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Red, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[1] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "enemy Hidden Speed Rate", enemyHiddenSpeedRate>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Red, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[2] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "enemy Dealt Damage Rate", enemyDealtDamageRate>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Red, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[3] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "enemy Received Damage Rate", enemyReceivedDamageRate>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Red, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[4] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "portal State", portalState>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Purple, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[5] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "portal Size", portalSize>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Purple, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[6] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "portal Position", portalPosition>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Purple, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[7] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "distance to protal", DistanceBetween(EventPlayer(), portalPosition)>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Purple, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[8] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "sucide Count Of Invalid Area", sucideCountOfInvalidArea>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.White, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[9] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "judge Timer Of Remote Area", judgeTimerOfRemoteArea>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.White, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[10] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load", ServerLoad()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[11] = LastTextID();
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load Average", ServerLoadAverage()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[12] = LastTextID();
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load Peak", ServerLoadPeak()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[13] = LastTextID();
+}
+
+// Hide debug icon and hud
+void HideDebugHud()"Subroutine/HideDebugHud"{
+    DestroyHudText(debugIconHudEntitys[0]);
+    DestroyHudText(debugIconHudEntitys[1]);
+    DestroyHudText(debugIconHudEntitys[2]);
+    DestroyHudText(debugIconHudEntitys[3]);
+    DestroyHudText(debugIconHudEntitys[4]);
+    DestroyHudText(debugIconHudEntitys[5]);
+    DestroyHudText(debugIconHudEntitys[6]);
+    DestroyHudText(debugIconHudEntitys[7]);
+    DestroyHudText(debugIconHudEntitys[8]);
+    DestroyHudText(debugIconHudEntitys[9]);
+    DestroyHudText(debugIconHudEntitys[10]);
+    DestroyHudText(debugIconHudEntitys[11]);
+    DestroyHudText(debugIconHudEntitys[12]);
+    DestroyHudText(debugIconHudEntitys[13]);
+}
+
+rule: "Debug/changeDebugMode"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.Jump) 
+){
+    // change debug mode
+    WaitLongPressConfirm();
+    if(isDebugMode){
+        HideDebugHud();
+        DisableInspectorRecording();
+        isDebugMode = false;
+    }
+    else{
+        ShowDebugHud();
+        EnableInspectorRecording();
+        isDebugMode = true;
+    }
+}
+
 rule: "Debug/increaseTeamLifes"
 Event.OngoingPlayer
 Team.All
