@@ -2280,6 +2280,7 @@ if(
     // reset effect
     DestroyEffect(perkEffectAndText);
     StopChasingVariable(perkPosition);
+    StopChasingVariable(perkPosition2);
     // reset type
     perkType = PerkType.Non;
 }
@@ -2372,6 +2373,9 @@ if(
 }
 
 playervar define perkAbilityCharging;
+// splashDamage
+playervar define aimPosition2;
+playervar define perkPosition2;
 
 rule: "Perk/Player/Juggernaut/shotGravityBomb"
 Event.OngoingPlayer
@@ -2383,20 +2387,19 @@ if(
     IsFiringSecondary(EventPlayer()) &&
     perkAbilityCharging == 100
 ){
+    StopChasingVariable(perkAbilityCharging);
     perkAbilityCharging = 0;
-    aimPosition = AimingPositionIgnorePlayer();
-    perkPosition = EyePosition(EventPlayer());
+    aimPosition2 = AimingPositionIgnorePlayer();
+    perkPosition2 = EyePosition(EventPlayer());
     // show aura
     CreateEffect(AllPlayers(Team.All), Effect.GoodAura, Color.LimeGreen,
-        perkPosition, 1, EffectRev.VisibleToPositionAndRadius);
+        perkPosition2, 1, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText = LastCreatedEntity();
     // follow the original ability effect
-    ChaseVariableAtRate(perkPosition, aimPosition,
+    ChaseVariableAtRate(perkPosition2, aimPosition2,
         20, RateChaseReevaluation.DestinationAndRate);
-
     // wait can trigger
     Wait(0.2, WaitBehavior.IgnoreCondition);    
-    StopChasingVariable(perkAbilityCharging);
     perkAbilityCharging = 1;
 }
 
@@ -2409,8 +2412,8 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.Juggernaut &&
+    perkPosition2 != aimPosition2 &&
     perkAbilityCharging == 1 &&
-    perkPosition != aimPosition &&
     IsButtonHeld(EventPlayer(), Button.SecondaryFire)
 ){
     ExplodeBomb();
@@ -2423,15 +2426,14 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.Juggernaut &&
-    perkAbilityCharging == 1 &&
-    perkPosition == aimPosition
+    perkPosition2 == aimPosition2
 ){
     ExplodeBomb();
 }
 
 void ExplodeBomb()"Subroutine/ExplodeBomb"{
     // stop aura
-    StopChasingVariable(perkPosition);
+    StopChasingVariable(perkPosition2);
     // hide aura
     DestroyEffect(perkEffectAndText);
     // wait builtin ability efect play
@@ -2442,12 +2444,12 @@ void ExplodeBomb()"Subroutine/ExplodeBomb"{
     // get target
     perkTargets = 
         PlayersWithinRadius(
-            perkPosition, bombDamageRange,
+            perkPosition2, bombDamageRange,
             Team.Team2, RadiusLOS.Off);
     // apply Impulse
     for(loopIndex = 0; loopIndex < CountOf(perkTargets); loopIndex++){
         ApplyImpulse(perkTargets[loopIndex],
-            VectorTowards(perkPosition, perkTargets[loopIndex] + PositionOffset()),
+            VectorTowards(perkPosition2, perkTargets[loopIndex] + PositionOffset()),
             30, Relative.ToWorld, ContraryMotion.Cancel);
     }
     // show impulse
@@ -2459,7 +2461,7 @@ void ExplodeBomb()"Subroutine/ExplodeBomb"{
         AllPlayers(Team.All), PlayEffect.RingExplosionSound,
         Color.White, AllPlayers(Team.All), MaxLength());
     // play blast effect
-    PlayContinuousBlast(perkPosition, bombDamageRange,
+    PlayContinuousBlast(perkPosition2, bombDamageRange,
         5, Color.LimeGreen);
 }
 
@@ -2622,7 +2624,7 @@ if(
     perkPosition = EyePosition(EventPlayer()) + 
         -PositionOffset();  // Offset to gun sight
     landPosition = EyePosition(EventPlayer()) + 
-        (FacingDirectionOf(EventPlayer()) * 200);   // max shooting range
+        (FacingDirectionOf(EventPlayer()) * 200);   // max shooting range TODO
 
     perkEffectAndText = [];
     // Ballistics for aiming
