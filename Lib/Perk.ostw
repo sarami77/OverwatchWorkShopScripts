@@ -180,7 +180,8 @@ if(
     }
     // If player already have perk
     else{
-        SmallMessage(playerClosestCrate, "Already have perk. Long hold interact button to cancel current perk.");
+        SmallMessage(playerClosestCrate, "Already have perk.");
+        SmallMessage(playerClosestCrate, "First, Long hold interact button to cancel current perk.");
     }
 }
 
@@ -408,7 +409,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.RallyPoint){
         perkName = "Rally Point";
-        perkDetail = "Place rally point of team. Teammates can deploy from that location when exit respawn room.";
+        perkDetail = "Place rally point. Teammates can deploy from that location when respawn or change hero.";
     }
     else if(perkType == PerkType.ChainExplosion){
         perkName = "Chain Explosion";
@@ -1319,6 +1320,24 @@ if(
     DestroyEffect(perkEffectAndText[2]);
     // reset type
     perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/RallyPoint/disablingByInRespawnRoom"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.RallyPoint
+){
+    if(IsInSpawnRoom()){
+        SmallMessage(EventPlayer(), "Rally Point can't be placed in a respawn room.");
+        WaitChangeState();
+        perkState = PerkState.Non;
+        WaitChangeState();
+        perkState = PerkState.Ready;
+        perkType = PerkType.RallyPoint;
+    }
 }
 
 playervar define isInSpawnRoom;
@@ -2714,4 +2733,22 @@ if(
     WaitChangeState();
     // Use perk by force
     AllPlayers(Team.Team1).perkState = PerkState.Using;
+}
+
+disabled rule: "Debug/forceUsePerk // for bot only"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    IsAlive() &&
+    perkState == PerkState.Ready
+){
+    WaitConditionConfirmed();
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+        Color.White, EventPlayer(), 1);
+    PlayEffect(
+        EventPlayer(), PlayEffect.BuffImpactSound,
+        Color.White, EventPlayer(), MaxLength());
+    perkState = PerkState.Using;
 }
