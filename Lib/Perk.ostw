@@ -437,7 +437,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.LegendalyNinja){
         perkName = "Legendaly Ninja";
-        perkDetail = "A ninja with super mobility, dragon blade, immortality. Can to add activity time by kill enemy.";
+        perkDetail = "A ninja with super mobility, dragon blade, immortality. Can add activity time by kill enemy.";
     }
     else if(perkType == PerkType.MachDelivery){
         perkName = "Mach Delivery";
@@ -2160,7 +2160,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    if(UltimateChargePercent() <= 90){
+    if(UltimateChargePercent() < 90){
         SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 10));
     }
     else{
@@ -2256,6 +2256,27 @@ if(
     isBombDelifering
 ){
     SetUltimateCharge(EventPlayer(), 100);
+}
+
+rule: "Perk/Player/MachDelivery/chargingUlt"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    IsAlive(EventPlayer()) &&
+    perkState == PerkState.Using &&
+    perkType == PerkType.MachDelivery &&
+    !IsUsingUltimate(EventPlayer()) &&
+    UltimateChargePercent() < 100
+){
+    WaitUpdateMediumCycle();
+    if(UltimateChargePercent() < 95){
+        SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 5));
+    }
+    else{
+        SetUltimateCharge(EventPlayer(), 100);
+    }
+    LoopIfConditionIsTrue();
 }
 
 // TAG Juggernaut ----------
@@ -2581,7 +2602,7 @@ if(
     IsFiringSecondary(EventPlayer())
 ){
     perkAbilityCharging = 0;
-    ChaseVariableOverTime(perkAbilityCharging, 100, 1.35,
+    ChaseVariableOverTime(perkAbilityCharging, 100, 1.3,
         TimeChaseReevaluation.DestinationAndDuration);
 }
 
@@ -2641,6 +2662,26 @@ if(
     }
 
     perkAbilityCharging = 0;
+
+    // give hit damage of penetration ballistic
+    perkTargets = FilteredArray(
+        PlayersInViewAngle(EventPlayer(), Team.Team2, 1.0),
+        IsAlive(ArrayElement()));
+    if(perkTargets != []){
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.GoodExplosion,
+            Color.Aqua, perkTargets, 4.0);
+        Damage(perkTargets, EventPlayer(), 400);
+    }
+
+    // give splash damage of landed position
+    perkTargets = FilteredArray(
+        PlayersWithinRadius(aimPosition, 4, Team.Team2, RadiusLOS.Off),
+        IsAlive(ArrayElement()));
+    if(perkTargets != []){
+        Damage(perkTargets, EventPlayer(), 100);
+    }
+
     perkPosition = EyePosition(EventPlayer()) + 
         -PositionOffset();  // Offset to gun sight
     landPosition = EyePosition(EventPlayer()) +
@@ -2663,7 +2704,6 @@ if(
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.RingExplosionSound,
         Color.Aqua, EventPlayer(), 50);
-
     // shot fire
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.BadExplosion,
@@ -2672,25 +2712,6 @@ if(
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.GoodExplosion,
         Color.Aqua, aimPosition, 4.0);
-
-    // give hit damage with penetration
-    perkTargets = FilteredArray(
-        PlayersInViewAngle(EventPlayer(), Team.Team2, 1.0),
-        IsAlive(ArrayElement()));
-    if(perkTargets != []){
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.GoodExplosion,
-            Color.Aqua, perkTargets, 4.0);
-        Damage(perkTargets, EventPlayer(), 400);
-    }
-
-    // give splash damage
-    perkTargets = FilteredArray(
-        PlayersWithinRadius(aimPosition, 4, Team.Team2, RadiusLOS.Off),
-        IsAlive(ArrayElement()));
-    if(perkTargets != []){
-        Damage(perkTargets, EventPlayer(), 100);
-    }
 
     WaitPlayEffect();
     DestroyEffect(perkEffectAndText[0]);

@@ -18,6 +18,17 @@ define canRevive:
     IsDead(EventPlayer()) &&
     IsOnGround(EventPlayer());
 
+define nearTeammate:
+    CountOf(
+        FilteredArray(
+            AllPlayers(TeamOf()), (
+                IsAlive(ArrayElement()) &&
+                HasSpawned(ArrayElement()) &&
+                DistanceBetween(downPosition, ArrayElement()) <= reviveRange
+            )
+        )
+    ) > 0;
+
 rule: "Player/Revive/setTimeLimit"
 Event.OngoingPlayer
 if(
@@ -27,7 +38,6 @@ if(
     // set revive time limit by player dead
     reviveTimeLimit = 10;
 }
-
 
 rule: "Player/Revive/resetTimeLimit"
 Event.OngoingPlayer
@@ -86,6 +96,11 @@ if(
     // Count down revive time limit on the downed player's position
     WaitUpdateMediumCycle();
     reviveTimeLimit -= 1;
+    if(!nearTeammate){
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+            Color.White, EventPlayer(), 1);
+    }
     LoopIfConditionIsTrue();
 }
 
@@ -94,15 +109,7 @@ Event.OngoingPlayer
 if(
     Revive_isEnableTeam &&
     canRevive &&
-    CountOf(
-        FilteredArray(
-            AllPlayers(TeamOf()), (
-                IsAlive(ArrayElement()) &&
-                HasSpawned(ArrayElement()) &&
-                DistanceBetween(downPosition, ArrayElement()) <= reviveRange
-            )
-        )
-    ) > 0
+    nearTeammate
 ){
     // revived when a teammate is nearby
     // The event player is the player who receives the revival.
