@@ -1,0 +1,53 @@
+// A script as damage text functions
+
+// Function enable team
+// Set team in import destination parent file
+globalvar define DamageText_enableTeam;
+define DamageText_isEnableTeam:
+    DamageText_enableTeam == TeamOf() ||
+    DamageText_enableTeam == Team.All;
+
+playervar define damageTextEntity;
+playervar define damageTextPosition;
+playervar define damageTextSize;
+
+rule: "DamageFloatText/popup"
+Event.OnDamageTaken
+if(
+    DamageText_isEnableTeam &&
+    EventDamage() >= 1
+)
+{
+    DestroyInWorldText(damageTextEntity);
+    damageTextPosition = EyePosition(EventPlayer());
+    damageTextSize = 1 + (EventDamage() * 0.01);
+    // show red in 150 damage over
+    if(150 <= EventDamage()){
+        CreateInWorldText(AllPlayers(), RoundToInteger(EventDamage()), damageTextPosition,
+            damageTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            Color.Red, Spectators.DefaultVisibility);
+    }
+    // show orange in 100 damage over
+    else if(100 <= EventDamage()){
+        CreateInWorldText(AllPlayers(), RoundToInteger(EventDamage()), damageTextPosition,
+            damageTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            Color.Orange, Spectators.DefaultVisibility);
+    }
+    // show yellow in 50 damage over
+    else if(50 <= EventDamage()){
+        CreateInWorldText(AllPlayers(), RoundToInteger(EventDamage()), damageTextPosition,
+            damageTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            Color.Yellow, Spectators.DefaultVisibility);
+    }
+    // show white in 50 damage under
+    else{
+        CreateInWorldText(AllPlayers(), RoundToInteger(EventDamage()), damageTextPosition,
+            damageTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            Color.White, Spectators.DefaultVisibility);
+    }
+    damageTextEntity = LastTextID();
+    ChaseVariableOverTime(damageTextPosition, damageTextPosition + (Up() * 10),
+        10, TimeChaseReevaluation.DestinationAndDuration);
+    Wait(damageTextSize, WaitBehavior.RestartWhenTrue);
+    DestroyInWorldText(damageTextEntity);
+}
