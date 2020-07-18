@@ -10,6 +10,8 @@
 // [ToDo]
 // ・add enemy's buff system. [Heavy Armor], [Jet Pack], back stabber
 // ・add perk [Howitzer Support][Guard Dog Drone]
+// ・show portal threat level
+// ・show key pressing text return room and perk
 
 import "Lib/Utility.ostw";
 import "Lib/ElapsedTimer.ostw";
@@ -498,6 +500,8 @@ if(
     Respawn(EventPlayer());
 }
 
+playervar define teleportPosition;
+
 rule: "Enemy/Teleport/teleportToPortalBySpawn //when exist portal"
 Event.OngoingPlayer
 Team.Team2
@@ -505,18 +509,13 @@ Player.All
 if(
     portalState != PortalState.Calculating &&
     portalPosition != 0 &&
-    IsAlive(EventPlayer())
+    IsInSpawnRoom()
 ){
     // Teleport Enemy to portal when portal enable
-    WaitConditionConfirmed();
     // Teleport
-    Teleport(EventPlayer(), portalPosition);
-    // Push to near player for avoid fallout
-    ApplyImpulse(EventPlayer(), VectorTowards(portalPosition,
-        ClosestPlayerTo(portalPosition, Team.Team1) + PositionOffset()),
-        15, Relative.ToWorld, ContraryMotion.Cancel);
-    // Fire pushBack blast
-    FirePortalPushBackBlast();
+    teleportPosition = NearestWalkablePosition(
+        portalPosition + RandomPosition(5, 5, 5));
+    Teleport(EventPlayer(), teleportPosition);
 }
 
 rule: "Enemy/Teleport/teleportToPortalByPlayerEntered //for protect portal"
@@ -535,8 +534,6 @@ if(
         // Teleport Enemy to portal when player enter to portal
         // To protect the portal with the enemy
         TeleportPortalWithBeamEffect();
-        // Fire pushBack blast
-        FirePortalPushBackBlast();
     }
 }
 
@@ -554,35 +551,32 @@ if(
     // Teleport an enemy to player near when player can not contact
     Wait(10, WaitBehavior.AbortWhenFalse); // player not found timer
     TeleportPlayerNearWithBeamEffect();
-    // Fire pushBack blast
-    FirePortalPushBackBlast();
     LoopIfConditionIsTrue();
 }
 
 void TeleportPortalWithBeamEffect()"Subroutine/TeleportPortalWithBeamEffect"{
     DestroyEffect(teleportBeamEntity);
+    // set teleport position
+    teleportPosition = NearestWalkablePosition(
+        portalPosition + RandomPosition(5, 5, 5));
     // show teleport beam
     CreateBeamEffect(AllPlayers(Team.All), BeamType.BadBeam,
-        EventPlayer(), portalPosition,
+        EventPlayer(), teleportPosition,
         Color.Purple, EffectRev.VisibleToPositionAndRadius);
     teleportBeamEntity = LastCreatedEntity();
     WaitPlayEffect();// show beam effect
     DestroyEffect(teleportBeamEntity);
     // Teleport
-    Teleport(EventPlayer(), portalPosition);
-    // Push to near player for avoid fallout
-    ApplyImpulse(EventPlayer(), VectorTowards(portalPosition,
-        ClosestPlayerTo(portalPosition, Team.Team1) + PositionOffset()),
-        15, Relative.ToWorld, ContraryMotion.Cancel);
+    Teleport(EventPlayer(), teleportPosition);
 }
 
-playervar define teleportPosition;
-
 void TeleportPlayerNearWithBeamEffect()"Subroutine/TeleportPlayerNearWithBeamEffect"{
+    DestroyEffect(teleportBeamEntity);
+    // set teleport position
     teleportPosition = (
         ClosestPlayerTo(
             EventPlayer(), Team.Team1
-        ) + RandomPosition(3, 0, 3)
+        ) + RandomPosition(2.5, 0, 2.5)
     );
     // show teleport beam
     CreateBeamEffect(AllPlayers(Team.All), BeamType.BadBeam,
@@ -593,19 +587,6 @@ void TeleportPlayerNearWithBeamEffect()"Subroutine/TeleportPlayerNearWithBeamEff
     DestroyEffect(teleportBeamEntity);
     // Teleport
     Teleport(EventPlayer(), teleportPosition);
-    // Push to near player for avoid fallout
-    ApplyImpulse(EventPlayer(), VectorTowards(portalPosition,
-        ClosestPlayerTo(portalPosition, Team.Team1) + PositionOffset()),
-        15, Relative.ToWorld, ContraryMotion.Cancel);
-}
-
-void FirePortalPushBackBlast()"Subroutine/FirePortalPushBackBlast"{
-    // play ring effect in portal center
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.RingExplosion,
-        Color.Purple, portalPosition, pushBackRange * 1.5);
-    // start push back of portal center
-    isPushBacking = true;
 }
 
 rule: "Enemy/Standby/enable //standby enemy bot when not exist portal"
@@ -773,28 +754,28 @@ if(
         IconRev.VisibleToAndPosition, Color.Purple, true);
     portalEntitys[0] = LastCreatedEntity();
     // set effect
-    CreateEffect(AllPlayers(Team.All), Effect.Orb, Color.Purple,
+    CreateEffect(AllPlayers(Team.All), Effect.Sphere, Color.Purple,
         portalPosition, portalSize, EffectRev.VisibleToPositionAndRadius);
     portalEntitys[1] = LastCreatedEntity();
 
-    CreateEffect(AllPlayers(Team.All), Effect.Sphere, Color.Purple,
-        portalPosition, portalSize, EffectRev.VisibleToPositionAndRadius);
-    portalEntitys[2] = LastCreatedEntity();
-
     CreateEffect(AllPlayers(Team.All), Effect.Cloud, Color.Purple,
         portalPosition, portalSize * 1.5, EffectRev.VisibleToPositionAndRadius);
+    portalEntitys[2] = LastCreatedEntity();
+
+    CreateEffect(AllPlayers(Team.All), Effect.BadAura, Color.Purple,
+        portalPosition, portalSize * 0.5, EffectRev.VisibleToPositionAndRadius);
     portalEntitys[3] = LastCreatedEntity();
 
     CreateEffect(AllPlayers(Team.All), Effect.BadAura, Color.Purple,
-        portalPosition, portalSize, EffectRev.VisibleToPositionAndRadius);
+        portalPosition, portalSize * 1, EffectRev.VisibleToPositionAndRadius);
     portalEntitys[4] = LastCreatedEntity();
+
+    CreateEffect(AllPlayers(Team.All), Effect.BadAura, Color.Purple,
+        portalPosition, portalSize * 1.5, EffectRev.VisibleToPositionAndRadius);
+    portalEntitys[5] = LastCreatedEntity();
 
     CreateEffect(AllPlayers(Team.All), Effect.EnergySound, Color.Purple,
         portalPosition, portalSize, EffectRev.VisibleToPositionAndRadius);
-    portalEntitys[5] = LastCreatedEntity();
-
-    CreateEffect(AllPlayers(Team.All), Effect.GoodAura, Color.Purple,
-        portalPosition, 1, EffectRev.VisibleToPositionAndRadius);
     portalEntitys[6] = LastCreatedEntity();
 
     // show message
@@ -1116,56 +1097,6 @@ if(
     portalState = PortalState.Growing;
 }
 
-define pushBackRange: 10;
-
-globalvar define isPushBacking;
-
-rule: "Portal/PushBack/pushBackPlayerFromCenter //Push back from center of portal immediately after Enemy spawn to reduce player spawn kills"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    (
-        portalState == PortalState.Growing ||
-        portalState == PortalState.Suspended
-    ) &&
-    isPushBacking &&
-    DistanceBetween(portalPosition, EventPlayer()) <= pushBackRange &&
-    IsInLineOfSight(portalPosition,
-        EventPlayer(),
-        BarrierLOS.NoBarriersBlock
-    )
-){
-    // push back the player when the player is near the center of the portal and the flag is ON
-    // To make it difficult for the player to spawn kill the enemy that appeared
-    WaitApplyImpulseCycle();
-    ApplyImpulse(EventPlayer(), VectorTowards(portalPosition, EventPlayer() + PositionOffset()),
-        20, Relative.ToWorld, ContraryMotion.Cancel);
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.RingExplosion,
-        Color.Purple, portalPosition, 20);
-    LoopIfConditionIsTrue();
-}
-
-rule: "Portal/PushBack/releasePushBacking"
-Event.OngoingGlobal
-if(
-    isPushBacking
-){
-    // Disable the knockback flag after a few seconds
-    Wait(1.5, WaitBehavior.RestartWhenTrue);    // wait disable push back
-    isPushBacking = false;
-}
-
-rule: "Portal/PushBack/resetPushBacking"
-Event.OngoingGlobal
-if(
-    portalState == PortalState.Calculating
-){
-    // Disable the knockback flag by portal reset
-    isPushBacking = false;
-}
-
 define maxSpawnInterval:10;
 globalvar define _EnemySpawnScale;
 globalvar define enemySpawnInterval;
@@ -1427,10 +1358,5 @@ if(
     WaitLongPressConfirm();
     portalPosition = AimingPosition();
     portalState = PortalState.Set;
-    Wait(0.5, WaitBehavior.IgnoreCondition);    // wait position calculate complete
-    Teleport(AllPlayers(Team.Team2), portalPosition);
-    // Push to near player for avoid fallout
-    ApplyImpulse(AllPlayers(Team.Team2), VectorTowards(portalPosition,
-        ClosestPlayerTo(portalPosition, Team.Team1) + PositionOffset()),
-        15, Relative.ToWorld, ContraryMotion.Cancel);
+    Respawn(AllPlayers(Team.Team2));
 }
