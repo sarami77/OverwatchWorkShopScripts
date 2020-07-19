@@ -8,6 +8,10 @@
 // [Share Code]
 // YY1N2
 // [ToDo]
+// ・perk's special operation HUD unity center top HUD from small msg
+// ・rework SupportFire to Savior. its add instant revive.
+// ・rework RallyPoint to BattleFlag. its mobility respawn point.
+// ・rework BeamSniper hit scan algorithm. why blind shot is dificult?
 // ・add enemy's buff system. [Heavy Armor], [Jet Pack], back stabber
 // ・add perk [Howitzer Support][Guard Dog Drone]
 // ・show portal threat level
@@ -253,14 +257,16 @@ if(
 ){
     // Remaining lifes reduced by spawn of downed player
     Wait(10, WaitBehavior.AbortWhenFalse);  // wait player spawn
+    teamLifes -= 1;
+    WaitChangeState();  // wait for show big message by newest value
     if(teamLifes > 0){
-        teamLifes -= 1;
+        if(teamLifes > 0){
+            BigMessage(AllPlayers(Team.All),
+                <"<0> <1> <2>", "Our remaining team lifes is", teamLifes, "...">);
+        }
         PlayEffect(
             AllPlayers(Team.All), PlayEffect.DebuffImpactSound,
             Color.White, AllPlayers(Team.All), MaxLength());
-        if(teamLifes > 0){
-            BigMessage(AllPlayers(Team.All), <"<0> <1> <2>", "Our remaining team lifes is", teamLifes, "...">);
-        }
     }
     LoopIfConditionIsTrue();
 }
@@ -280,7 +286,8 @@ if(
     Wait(1, WaitBehavior.AbortWhenFalse);   // show slow
     SetSlowMotion(100);
     WaitNextPhase();
-    BigMessage(AllPlayers(Team.All), <"<0> <1> <2>", "We have reached", roundNo, "round... good game!">);
+    BigMessage(AllPlayers(Team.All),
+        <"<0> <1> <2>", "We have reached", roundNo, "round... good game!">);
     WaitNextPhase();
     DeclareTeamVictory(Team.Team1);
 }
@@ -641,7 +648,7 @@ Event.OngoingGlobal
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     WaitUpdateLongCycle();
     // Add damage rate according to the round progress
-    enemyDealtDamageRate = 15 + (roundNo * 1.0); // TAG addition Enemy dealt damage 
+    enemyDealtDamageRate = 25 + (roundNo * 1.0); // TAG addition Enemy dealt damage 
     // Apply balance multiplier
     enemyDealtDamageRate /= ConvertToBalancedValue(0.75);     // TAG enemy dealt damage scale
     SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);
