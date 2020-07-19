@@ -8,13 +8,8 @@
 // [Share Code]
 // YY1N2
 // [ToDo]
-// ・perk's special operation HUD unity center top HUD from small msg
 // ・rework RallyPoint to BattleFlag. its mobility respawn point.
-// ・rework BeamSniper hit scan algorithm. why blind shot is dificult?
-// ・add enemy's buff system. [Heavy Armor], [Jet Pack], back stabber
-// ・add perk [Howitzer Support][Guard Dog Drone]
-// ・show portal threat level
-// ・show key pressing text return room and perk
+// ・As you get closer, spread the spawn position
 
 import "Lib/Utility.ostw";
 import "Lib/ElapsedTimer.ostw";
@@ -86,7 +81,7 @@ Player.All
 if(
     gameReseted &&
     0 < NumberOfPlayers(Team.Team1) &&
-    IsMoving(EventPlayer())
+    IsMoving()
 ){
     WaitConditionConfirmed();
     elapsedTime = 0;
@@ -169,9 +164,9 @@ Team.Team1
 Player.All
 if(
     (
-        HasSpawned(EventPlayer()) &&
-        IsAlive(EventPlayer()) &&
-        !IsInSpawnRoom(EventPlayer()) &&
+        HasSpawned() &&
+        IsAlive() &&
+        !IsInSpawnRoom() &&
         portalPosition != 0 &&
         DistanceBetween(EventPlayer(), portalPosition) <= portalSize
     )
@@ -187,9 +182,9 @@ Team.Team1
 Player.All
 if(
     !(
-        HasSpawned(EventPlayer()) &&
-        IsAlive(EventPlayer()) &&
-        !IsInSpawnRoom(EventPlayer()) &&
+        HasSpawned() &&
+        IsAlive() &&
+        !IsInSpawnRoom() &&
         portalPosition != 0 &&
         DistanceBetween(EventPlayer(), portalPosition) <= portalSize
     ) ||
@@ -217,13 +212,13 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    IsAlive(EventPlayer()) &&
-    !IsInSpawnRoom(EventPlayer()) &&
+    IsAlive() &&
+    !IsInSpawnRoom() &&
     IsButtonHeld(EventPlayer(), Button.Reload)
 ){
     // Return to spawn room with long hold on reload button
     WaitCancelPressConfirm();
-    Respawn(EventPlayer());
+    Respawn();
 }
 
 define initalTeamLifes: 6;
@@ -252,7 +247,7 @@ Event.OnDeath
 Team.Team1
 Player.All
 if(
-    IsDead(EventPlayer())
+    IsDead()
 ){
     // Remaining lifes reduced by spawn of downed player
     Wait(10, WaitBehavior.AbortWhenFalse);  // wait player spawn
@@ -381,8 +376,8 @@ Team.Team1
 Player.All
 if(
     isInsidePortal &&
-    HeroOf(EventPlayer()) == Hero.Sombra &&
-    IsUsingAbility1(EventPlayer())
+    HeroOf() == Hero.Sombra &&
+    IsUsingAbility1()
 ){
     // Some abilities are disabled inside the portal to make the game fair
     // Sombra stealth is exactly that
@@ -451,7 +446,7 @@ Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
-    IsDead(EventPlayer())
+    IsDead()
 ){
     // Play blast effect when enemy dead
     // It's easier to understand if you killed an enemy, and you'll feel better
@@ -500,12 +495,12 @@ if(
         portalState == PortalState.Calculating ||
         portalState == PortalState.Closed
     ) &&
-    !IsInSpawnRoom(EventPlayer())
+    !IsInSpawnRoom()
 ){
     // Teleport Enemy to spawn room when portal disable
     WaitConditionConfirmed();
     // Teleport
-    Respawn(EventPlayer());
+    Respawn();
 }
 
 playervar define teleportPosition;
@@ -520,7 +515,7 @@ if(
     IsInSpawnRoom()
 ){
     // Teleport Enemy to portal when portal enable
-    // Teleport
+    // set teleport position
     teleportPosition = NearestWalkablePosition(
         portalPosition + RandomPosition(5, 5, 5));
     Teleport(EventPlayer(), teleportPosition);
@@ -533,36 +528,35 @@ Player.All
 if(
     portalState == PortalState.Suspended &&
     portalPosition != 0 &&
-    IsAlive(EventPlayer())
+    IsAlive() &&
+    !IsInLineOfSight(EventPlayer(),
+        ClosestPlayerTo(portalPosition, Team.Team1),
+        BarrierLOS.NoBarriersBlock)
 ){
-    WaitConditionConfirmed();
-    if(
-        DistanceBetween(EventPlayer(), portalPosition) > portalSize
-    ){
-        // Teleport Enemy to portal when player enter to portal
-        // To protect the portal with the enemy
-        TeleportPortalWithBeamEffect();
-    }
+    // Teleport Enemy to portal when player enter to portal
+    // To protect the portal with the enemy
+    TeleportPortalWithBeamEffect();
 }
 
-rule: "Enemy/Teleport/teleportToPortalByPlayerNotFound //when player not found"
+rule: "Enemy/Teleport/teleportToPortalByCamperDetected //when player not found"
 Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
     portalState == PortalState.Suspended &&
     portalPosition != 0 &&
+    IsAlive() &&
     !IsInLineOfSight(EventPlayer(),
-        ClosestPlayerTo(EventPlayer(), Team.Team1),
+        ClosestPlayerTo(portalPosition, Team.Team1),
         BarrierLOS.NoBarriersBlock)
 ){
-    // Teleport an enemy to player near when player can not contact
+    // Teleport an enemy to camping player
     Wait(10, WaitBehavior.AbortWhenFalse); // player not found timer
     TeleportPlayerNearWithBeamEffect();
     LoopIfConditionIsTrue();
 }
 
-void TeleportPortalWithBeamEffect()"Subroutine/TeleportPortalWithBeamEffect"{
+void TeleportPortalWithBeamEffect() "Subroutine/TeleportPortalWithBeamEffect"{
     DestroyEffect(teleportBeamEntity);
     // set teleport position
     teleportPosition = NearestWalkablePosition(
@@ -583,7 +577,7 @@ void TeleportPlayerNearWithBeamEffect()"Subroutine/TeleportPlayerNearWithBeamEff
     // set teleport position
     teleportPosition = (
         ClosestPlayerTo(
-            EventPlayer(), Team.Team1
+            portalPosition, Team.Team1
         ) + RandomPosition(2.5, 0, 2.5)
     );
     // show teleport beam
@@ -874,11 +868,11 @@ Player.All
 if(
     initCompleted &&
     spawnPosition1 == 0 &&
-    IsInSpawnRoom(EventPlayer())
+    IsInSpawnRoom()
 ){
     WaitConditionConfirmed();
     // Set Team1's spawn points as spawnPosition1
-    spawnPosition1 = PositionOf(EventPlayer());
+    spawnPosition1 = PositionOf();
 }
 
 rule: "Portal/Positioner/setSpawnPosition2 //a starting point for understanding the approximate center of the map"
@@ -888,11 +882,11 @@ Player.All
 if(
     initCompleted &&
     spawnPosition2 == 0 &&
-    IsInSpawnRoom(EventPlayer())
+    IsInSpawnRoom()
 ){
     WaitConditionConfirmed();
     // Set Team2's spawn points as spawnPosition2
-    spawnPosition2 = PositionOf(EventPlayer());
+    spawnPosition2 = PositionOf();
 }
 
 rule: "Portal/Positioner/setCenterPosition //approximate center of the map. _set between two spawn position"
