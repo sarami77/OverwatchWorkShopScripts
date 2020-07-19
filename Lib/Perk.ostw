@@ -21,7 +21,7 @@ enum PerkType{  // TAG perk type
     HighJump,
     GrapplingBeam,
     Sprinter,
-    SupportFire,
+    Savior,
     Fearless,
     SteelFormation,
     PersonalShelter,
@@ -55,7 +55,7 @@ Event.OngoingGlobal
         PerkType.HighJump,
         PerkType.GrapplingBeam,
         PerkType.Sprinter,
-        PerkType.SupportFire,
+        PerkType.Savior,
         PerkType.Fearless,
         PerkType.SteelFormation,
         PerkType.PersonalShelter,
@@ -383,9 +383,9 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
         perkName = "Sprinter";
         perkDetail = "Moving speed increasing by keep moving. reset by stop or received damage.";
     }
-    else if(perkType == PerkType.SupportFire){
-        perkName = "Support Fire";
-        perkDetail = "When deal damage to enemy near teammate of low health or downed, it stuns the enemy.";
+    else if(perkType == PerkType.Savior){
+        perkName = "Savior";
+        perkDetail = "Stuns when attacking an enemy near weakened teammate. Instantly revives teammate.";
     }
     else if(perkType == PerkType.Fearless){
         perkName = "Fearless";
@@ -393,7 +393,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.SteelFormation){
         perkName = "Steel Formation";
-        perkDetail = "Reduce 50% received damage of self and near teammate.";
+        perkDetail = "Reduce half received damage of self and near teammate.";
     }
     else if(perkType == PerkType.PersonalShelter){
         perkName = "Personal Shelter";
@@ -778,16 +778,16 @@ if(
     perkEffectStatus = 100;
     SetMoveSpeed(EventPlayer(), perkEffectStatus);
 }
-// TAG SupportFire ----------
-define supportRange: 10;
+// TAG Savior ----------
+define saviorStunRange: 10;
 
-rule: "Perk/Player/SupportFire/activate"
+rule: "Perk/Player/Savior/activate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
     perkState == PerkState.Using &&
-    perkType == PerkType.SupportFire
+    perkType == PerkType.Savior
 ){
     // set time limit
     perkTimeLimit = 300;
@@ -795,25 +795,25 @@ if(
     perkTargets = EmptyArray();
 }
 
-rule: "Perk/Player/SupportFire/deactivate"
+rule: "Perk/Player/Savior/deactivate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
     perkState == PerkState.Non &&
-    perkType == PerkType.SupportFire
+    perkType == PerkType.Savior
 ){
     // reset type
     perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/SupportFire/stunEnemy"
+rule: "Perk/Player/Savior/stunEnemy"
 Event.OnDamageDealt
 Team.Team1
 Player.All
 if(
     perkState == PerkState.Using &&
-    perkType == PerkType.SupportFire
+    perkType == PerkType.Savior
 ){
     if(!HasStatus(Victim(), Status.Stunned)){
         perkTargets = FilteredArray(
@@ -821,7 +821,7 @@ if(
             (
                 ArrayElement() != EventPlayer() &&
                 Health(ArrayElement()) <= MaxHealth(ArrayElement()) / 2 &&
-                supportRange >= DistanceBetween(Victim(), ArrayElement())
+                saviorStunRange >= DistanceBetween(Victim(), ArrayElement())
             )
         );
         if(perkTargets != EmptyArray()){
@@ -834,6 +834,46 @@ if(
                 Color.Yellow, Victim(), 1.0);
         }
     }
+}
+
+playervar define savior;
+define saviorReviveRange: 2.5;
+
+rule: "Perk/Player/Savior/instantyRevive"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    IsDead(EventPlayer()) &&
+    IsOnGround(EventPlayer())&&
+    CountOf(
+        FilteredArray(
+            AllPlayers(TeamOf()), (
+                IsAlive(ArrayElement()) &&
+                HasSpawned(ArrayElement()) &&
+                ArrayElement().perkState == PerkState.Using &&
+                ArrayElement().perkType == PerkType.Savior &&
+                DistanceBetween(EventPlayer(), ArrayElement()) <= saviorReviveRange
+            )
+        )
+    ) > 0
+){
+    savior = ClosestPlayerTo(EventPlayer(), Team.Team1);
+
+    // revive effect and sound
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+        Color.Yellow, EventPlayer(), 1);
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.BuffExplosionSound,
+        Color.White, EventPlayer(), MaxLength());
+
+    Resurrect(EventPlayer());
+
+    SmallMessage(savior,
+        <"<0> <1> <2>.", "revived", EventPlayer(), HeroIconString(HeroOf(EventPlayer()))>);
+    SmallMessage(EventPlayer(),
+        <"<0> <1> <2>.", savior, HeroIconString(HeroOf(savior)), "revivied">);
 }
 
 // TAG Fearless ----------
@@ -2041,7 +2081,7 @@ if(
         PlayersWithinRadius(
             aimPosition + perkPosition, splashDamageRange,
             Team.Team2, RadiusLOS.Off),
-        EventPlayer(), 30);
+        EventPlayer(), 45);
     // play blast
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.BadExplosion,
@@ -2295,7 +2335,7 @@ if(
     perkHero.hero = Hero.Orisa;
     perkHero.statusUnkillable = true;
     perkHero.maxHealth = 300;
-    perkHero.healingReceived = 10;
+    perkHero.healingReceived = 2.5;
     perkHero.damageDealt = 150;
     perkHero.gravity = 300;
     perkHero.moveSpeed = 75;
