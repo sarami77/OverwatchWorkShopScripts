@@ -125,7 +125,7 @@ if(
         SetObjectiveDescription(EventPlayer(), "Keep stay inside and survive!", ObjectiveRev.VisibleToSortOrderAndString);
     }
     else{
-        SetObjectiveDescription(EventPlayer(), "Find portal and enter it.", ObjectiveRev.VisibleToSortOrderAndString);
+        SetObjectiveDescription(EventPlayer(), "Find portal and attack it.", ObjectiveRev.VisibleToSortOrderAndString);
     }
     LoopIfConditionIsTrue();
 }
@@ -505,6 +505,16 @@ if(
 }
 
 playervar define teleportPosition;
+define randomPortalAreaPosition:
+    portalPosition + 
+    RandomPosition(portalSize / 2, portalSize / 2, portalSize / 2);
+define randomPortalCenterPosition:
+    portalPosition +
+    RandomPosition(2, 2, 2);
+define randomClosestPlayerPosition: 
+    ClosestPlayerTo(
+        portalPosition, Team.Team1
+    ) + RandomPosition(2.0, 0, 2.0);
 
 rule: "Enemy/Teleport/teleportToPortalBySpawn //when exist portal"
 Event.OngoingPlayer
@@ -517,8 +527,12 @@ if(
 ){
     // Teleport Enemy to portal when portal enable
     // set teleport position
-    teleportPosition = NearestWalkablePosition(
-        portalPosition + RandomPosition(5, 5, 5));
+    if(portalState == PortalState.Suspended){
+        teleportPosition = NearestWalkablePosition(randomPortalAreaPosition);
+    }
+    else{
+        teleportPosition = NearestWalkablePosition(randomPortalCenterPosition);
+    }
     Teleport(EventPlayer(), teleportPosition);
 }
 
@@ -560,8 +574,12 @@ if(
 void TeleportPortalWithBeamEffect() "Subroutine/TeleportPortalWithBeamEffect"{
     DestroyEffect(teleportBeamEntity);
     // set teleport position
-    teleportPosition = NearestWalkablePosition(
-        portalPosition + RandomPosition(5, 5, 5));
+    if(portalState == PortalState.Suspended){
+        teleportPosition = NearestWalkablePosition(randomPortalAreaPosition);
+    }
+    else{
+        teleportPosition = NearestWalkablePosition(randomPortalCenterPosition);
+    }
     // show teleport beam
     CreateBeamEffect(AllPlayers(Team.All), BeamType.BadBeam,
         EventPlayer(), teleportPosition,
@@ -576,11 +594,7 @@ void TeleportPortalWithBeamEffect() "Subroutine/TeleportPortalWithBeamEffect"{
 void TeleportPlayerNearWithBeamEffect()"Subroutine/TeleportPlayerNearWithBeamEffect"{
     DestroyEffect(teleportBeamEntity);
     // set teleport position
-    teleportPosition = (
-        ClosestPlayerTo(
-            portalPosition, Team.Team1
-        ) + RandomPosition(2.5, 0, 2.5)
-    );
+    teleportPosition = (randomClosestPlayerPosition);
     // show teleport beam
     CreateBeamEffect(AllPlayers(Team.All), BeamType.BadBeam,
         EventPlayer(), teleportPosition,
@@ -781,7 +795,7 @@ if(
     portalEntitys[6] = LastCreatedEntity();
 
     // show message
-    BigMessage(AllPlayers(Team.All), "Detected more portal... find and close it!");
+    BigMessage(AllPlayers(Team.All), "Detected more portal... find and attack it!");
     WaitBigMessageHide();
     // Hide icon to let the player search the portal
     DestroyIcon(portalEntitys[0]);
