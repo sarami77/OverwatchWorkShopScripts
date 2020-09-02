@@ -116,8 +116,7 @@ if(
     // Change the message of the target HUD at the top of the screen according to the state of the game
     WaitUpdateMediumCycle();
     if(
-        portalState == PortalState.Calculating ||
-        portalState == PortalState.Closed
+        !portalEnable
     ){
         SetObjectiveDescription(EventPlayer(), "Stand by...", ObjectiveRev.VisibleToSortOrderAndString);
     }
@@ -486,16 +485,28 @@ if(
 
 playervar define teleportBeamEntity;
 
+playervar define teleportPosition;
+
+define randomPortalAreaPosition:
+    portalPosition + 
+    RandomPosition(portalSize / 2, portalSize / 2, portalSize / 2);
+
+define randomPortalCenterPosition:
+    portalPosition +
+    RandomPosition(2, 2, 2);
+
+define randomClosestPlayerPosition: 
+    ClosestPlayerTo(
+        portalPosition, Team.Team1
+    ) + RandomPosition(2.0, 0, 2.0);
+
 rule: "Enemy/Teleport/teleportToSpawnRoom //when not exit portal"
 Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
     initCompleted &&
-    (
-        portalState == PortalState.Calculating ||
-        portalState == PortalState.Closed
-    ) &&
+    !portalEnable &&
     !IsInSpawnRoom()
 ){
     // Teleport Enemy to spawn room when portal disable
@@ -504,28 +515,30 @@ if(
     Respawn();
 }
 
-playervar define teleportPosition;
-define randomPortalAreaPosition:
-    portalPosition + 
-    RandomPosition(portalSize / 2, portalSize / 2, portalSize / 2);
-define randomPortalCenterPosition:
-    portalPosition +
-    RandomPosition(2, 2, 2);
-define randomClosestPlayerPosition: 
-    ClosestPlayerTo(
-        portalPosition, Team.Team1
-    ) + RandomPosition(2.0, 0, 2.0);
+rule: "Enemy/Teleport/teleportToPortalBySet //when set portal"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    portalState == PortalState.Set &&
+    portalPosition != 0
+){
+    // Teleport Enemy to portal when portal set
+    // set teleport position
+    teleportPosition = NearestWalkablePosition(randomPortalCenterPosition);
+    Teleport(EventPlayer(), teleportPosition);
+}
 
 rule: "Enemy/Teleport/teleportToPortalBySpawn //when exist portal"
 Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
-    portalState != PortalState.Calculating &&
+    portalEnable &&
     portalPosition != 0 &&
     IsInSpawnRoom()
 ){
-    // Teleport Enemy to portal when portal enable
+    // Teleport Enemy to portal when spawn
     // set teleport position
     if(portalState == PortalState.Suspended){
         teleportPosition = NearestWalkablePosition(randomPortalAreaPosition);
@@ -609,10 +622,7 @@ void TeleportPlayerNearWithBeamEffect()"Subroutine/TeleportPlayerNearWithBeamEff
 rule: "Enemy/Standby/enable //standby enemy bot when not exist portal"
 Event.OngoingGlobal
 if(
-    (
-        portalState == PortalState.Calculating ||
-        portalState == PortalState.Closed
-    )
+    !portalEnable
 ){
     // Lock enemies when portal is disable so they can't leave the spawn room
     WaitConditionConfirmed();
@@ -622,10 +632,7 @@ if(
 rule: "Enemy/Standby/disable //not standby enemy bot when exist portal"
 Event.OngoingGlobal
 if(
-    !(
-        portalState == PortalState.Calculating ||
-        portalState == PortalState.Closed
-    )
+    portalEnable
 ){
     // Release lock enemies when portal is enable
     WaitConditionConfirmed();
@@ -655,7 +662,7 @@ Event.OngoingGlobal
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     WaitUpdateLongCycle();
     // Add damage rate according to the round progress
-    enemyDealtDamageRate = 30 + (roundNo * 1); // TAG add Enemy dealt damage by roundNo
+    enemyDealtDamageRate = 25 + (roundNo * 1); // TAG add Enemy dealt damage by roundNo
     // Apply balance multiplier
     enemyDealtDamageRate /= ConvertToBalancedValue(0.75);     // TAG enemy dealt damage scale
     SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);
@@ -731,6 +738,11 @@ globalvar define portalPosition;
 globalvar define portalSize;
 globalvar define portalEntitys;
 globalvar define isFirstGrowing;
+
+define portalEnable:
+    portalState == PortalState.Set ||
+    portalState == PortalState.Growing ||
+    portalState == PortalState.Suspended;
 
 rule: "Portal/State/Calculating //invisible, init param"
 Event.OngoingGlobal
@@ -956,8 +968,7 @@ Event.OnDeath
 Team.Team2
 Player.All
 if(
-    portalState != PortalState.Calculating &&
-    portalState != PortalState.Closed &&
+    portalEnable &&
     Attacker() == EventPlayer()
 ){
     // Count the number of enemy suicides caused by invalid areas
@@ -967,7 +978,9 @@ if(
 
 rule: "Portal/Positioner/DetectInvalidArea/resetSucideCount //count reset by portal reset"
 Event.OngoingGlobal
-if(portalState == PortalState.Calculating){
+if(
+    !portalEnable
+){
     // Reset count by portal reset
     sucideCountOfInvalidArea = 0;
 }
@@ -975,8 +988,7 @@ if(portalState == PortalState.Calculating){
 rule: "Portal/Positioner/DetectInvalidArea/reduceSucideCount //count reduce over time to avoid over-detection"
 Event.OngoingGlobal
 if(
-    portalState != PortalState.Calculating &&
-    portalState != PortalState.Closed &&
+    portalEnable &&
     sucideCountOfInvalidArea > 0
 ){
     // Reduce over time to avoid over detection
@@ -988,8 +1000,7 @@ if(
 rule: "Portal/Positioner/DetectInvalidArea/resetPortal //if _suicide occurs frequently, portal is in invalid area"
 Event.OngoingGlobal
 if(
-    portalState != PortalState.Calculating &&
-    portalState != PortalState.Closed &&
+    portalEnable &&
     sucideCountOfInvalidArea >= 3 &&
     portalClosingCount > 0 // Don't detect to all kill by portal closed
 ){
@@ -1001,7 +1012,7 @@ if(
 rule: "Portal/Positioner/DetectSpawnArea/resetPortal //if enemy immediately after spawn is in spawn, portal is in spawn"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Set
+    portalEnable
 ){
     // If the portal position is in the enemy spawn area,
     //  it is determined that the portal position is incorrect and the portal is recreate
@@ -1016,8 +1027,7 @@ globalvar define judgeTimerOfRemoteArea;
 rule: "Portal/Positioner/DetectRemoteArea/countupJudgeTimer //detect portal position that can't encount to player"
 Event.OngoingGlobal
 if(
-    portalState != PortalState.Calculating &&
-    portalState != PortalState.Closed
+    portalEnable
 ){
     // start count up countupJudgeTimer
     ChaseVariableAtRate(judgeTimerOfRemoteArea, MaxValue(), 1,
@@ -1027,7 +1037,7 @@ if(
 rule: "Portal/Positioner/DetectRemoteArea/resetJudgeTimer //timer reset by portal reset"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Calculating
+    !portalEnable
 ){
     // stop count up and reset countupJudgeTimer by portal reset
     StopChasingVariable(judgeTimerOfRemoteArea);
@@ -1039,8 +1049,7 @@ Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
-    portalState != PortalState.Calculating &&
-    portalState != PortalState.Closed &&
+    portalEnable &&
     IsInLineOfSight(EventPlayer(),
         ClosestPlayerTo(EventPlayer(), Team.Team1),
         BarrierLOS.NoBarriersBlock
@@ -1054,8 +1063,7 @@ if(
 rule: "Portal/Positioner/DetectRemoteArea/resetPortal //if not player encount within a certain time, portal is in remote area"
 Event.OngoingGlobal
 if(
-    portalState != PortalState.Calculating &&
-    portalState != PortalState.Closed &&
+    portalEnable &&
     judgeTimerOfRemoteArea >= 40
 ){
     // If the player and the enemy haven't been met for some time,
@@ -1130,7 +1138,7 @@ if(
     _EnemySpawnScale /= maxPortalSize;
     enemySpawnInterval = maxSpawnInterval;
     enemySpawnInterval *= _EnemySpawnScale;// TAG enemy spawn interval
-    enemySpawnInterval -= (roundNo / 10);  
+    enemySpawnInterval -= (roundNo / 7);  
     if(0 > enemySpawnInterval){
         enemySpawnInterval = 0;
     }
