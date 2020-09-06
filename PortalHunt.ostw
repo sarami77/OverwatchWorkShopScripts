@@ -222,12 +222,14 @@ if(
 
 define initalTeamLifes: 6;
 globalvar define teamLifes;
+globalvar define lostLifeCount;
 
 rule: "Player/TeamLifes/initalCount"
 Event.OngoingGlobal
 {
     // Set initial team lifes number
     teamLifes = initalTeamLifes;
+    lostLifeCount = 0;
 }
 
 rule: "Player/TeamLifes/showTeamLifesHUD"
@@ -251,6 +253,7 @@ if(
     // Remaining lifes reduced by spawn of downed player
     Wait(10, WaitBehavior.AbortWhenFalse);  // wait player spawn
     teamLifes -= 1;
+    lostLifeCount ++;
     WaitChangeState();  // wait for show big message by newest value
     if(teamLifes > 0){
         if(teamLifes > 0){
@@ -662,7 +665,9 @@ Event.OngoingGlobal
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     WaitUpdateLongCycle();
     // Add damage rate according to the round progress
-    enemyDealtDamageRate = 20 + (roundNo * 1.25); // TAG add Enemy dealt damage by roundNo
+    enemyDealtDamageRate = 30;                      // TAG enemy dealt damage
+    enemyDealtDamageRate += (roundNo * 1.5);        // Add damage depending on the number of rounds for progress
+    enemyDealtDamageRate -= (lostLifeCount * 0.5);    // Remove damage depending on the number of lost life for balance
     // Apply balance multiplier
     enemyDealtDamageRate /= ConvertToBalancedValue(0.75);     // TAG enemy dealt damage scale
     SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);
@@ -1168,16 +1173,16 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Spawn Interval", enemySpawnInterval>,
+        <"<0> <1>", "lost Life Count", lostLifeCount>,
         null,
         Location.Left, -1,
-        Color.White, Color.Red, Color.White,
+        Color.White, Color.Blue, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
     debugIconHudEntitys[1] = LastTextID();
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Hidden Speed Rate", enemyHiddenSpeedRate>,
+        <"<0> <1>", "enemy Spawn Interval", enemySpawnInterval>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1186,7 +1191,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Dealt Damage Rate", enemyDealtDamageRate>,
+        <"<0> <1>", "enemy Hidden Speed Rate", enemyHiddenSpeedRate>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1195,7 +1200,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Received Damage Rate", enemyReceivedDamageRate>,
+        <"<0> <1>", "enemy Dealt Damage Rate", enemyDealtDamageRate>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1204,16 +1209,16 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "portal State", portalState>,
+        <"<0> <1>", "enemy Received Damage Rate", enemyReceivedDamageRate>,
         null,
         Location.Left, -1,
-        Color.White, Color.Purple, Color.White,
+        Color.White, Color.Red, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
     debugIconHudEntitys[5] = LastTextID();
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "portal Size", portalSize>,
+        <"<0> <1>", "portal State", portalState>,
         null,
         Location.Left, -1,
         Color.White, Color.Purple, Color.White,
@@ -1222,7 +1227,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "portal Position", portalPosition>,
+        <"<0> <1>", "portal Size", portalSize>,
         null,
         Location.Left, -1,
         Color.White, Color.Purple, Color.White,
@@ -1231,7 +1236,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "distance to protal", DistanceBetween(EventPlayer(), portalPosition)>,
+        <"<0> <1>", "portal Position", portalPosition>,
         null,
         Location.Left, -1,
         Color.White, Color.Purple, Color.White,
@@ -1240,16 +1245,16 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "sucide Count Of Invalid Area", sucideCountOfInvalidArea>,
+        <"<0> <1>", "distance to protal", DistanceBetween(EventPlayer(), portalPosition)>,
         null,
         Location.Left, -1,
-        Color.White, Color.White, Color.White,
+        Color.White, Color.Purple, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
     debugIconHudEntitys[9] = LastTextID();
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "judge Timer Of Remote Area", judgeTimerOfRemoteArea>,
+        <"<0> <1>", "sucide Count Of Invalid Area", sucideCountOfInvalidArea>,
         null,
         Location.Left, -1,
         Color.White, Color.White, Color.White,
@@ -1258,15 +1263,16 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "Server Load", ServerLoad()>,
+        <"<0> <1>", "judge Timer Of Remote Area", judgeTimerOfRemoteArea>,
         null,
         Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
+        Color.White, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
     debugIconHudEntitys[11] = LastTextID();
+
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "Server Load Average", ServerLoadAverage()>,
+        <"<0> <1>", "Server Load", ServerLoad()>,
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
@@ -1274,12 +1280,20 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
     debugIconHudEntitys[12] = LastTextID();
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "Server Load Peak", ServerLoadPeak()>,
+        <"<0> <1>", "Server Load Average", ServerLoadAverage()>,
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
     debugIconHudEntitys[13] = LastTextID();
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load Peak", ServerLoadPeak()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[14] = LastTextID();
 }
 
 // Hide debug icon and hud
@@ -1298,6 +1312,7 @@ void HideDebugHud()"Subroutine/HideDebugHud"{
     DestroyHudText(debugIconHudEntitys[11]);
     DestroyHudText(debugIconHudEntitys[12]);
     DestroyHudText(debugIconHudEntitys[13]);
+    DestroyHudText(debugIconHudEntitys[14]);
 }
 
 rule: "Debug/changeDebugMode"
