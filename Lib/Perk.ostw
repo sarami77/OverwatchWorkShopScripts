@@ -37,7 +37,8 @@ enum PerkType{  // TAG perk type
     LegendalyNinja,
     MachDelivery,
     Juggernaut,
-    BeamSniper
+    BeamSniper,
+    DragonStormer
 }
 playervar define perkState;
 enum PerkState{
@@ -46,7 +47,7 @@ enum PerkState{
     Using
 }
 
-playervar define perkEntitys;
+playervar define perkHudEntitys;
 
 rule: "Perk/lotteryPerkList // list of parks you can pick up"
 Event.OngoingGlobal
@@ -73,7 +74,8 @@ Event.OngoingGlobal
         PerkType.LegendalyNinja,
         PerkType.MachDelivery,
         PerkType.Juggernaut,
-        PerkType.BeamSniper
+        PerkType.BeamSniper,
+        PerkType.DragonStormer
     ];
 }
 
@@ -448,20 +450,24 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     else if(perkType == PerkType.BeamSniper){
         perkName = "Beam Sniper";
         perkDetail = "Sniper with a beam rifle. Penetrates wall and enemy body when max charge shot.";
+    }else if(perkType == PerkType.DragonStormer){
+        perkName = "Dragon Stormer";
+        perkDetail = "Many dragons fall from sky, damage wide range of enemies. Can add activity time by kill enemy.";
     }
 
+
     // TAG perk HUD common action
-    perkEntitys = [];
+    perkHudEntitys = [];
     WaitRedraw();
 
     // show title hud
     CreatePerkTitleHud(perkName);
-    perkEntitys[0] = LastTextID();
+    perkHudEntitys[0] = LastTextID();
     WaitRedraw();
 
     // show detail hud
     CreatePerkDetailHud(<" <0>", perkDetail>);
-    perkEntitys[1] = LastTextID();
+    perkHudEntitys[1] = LastTextID();
     WaitRedraw();
 
     // show status hud
@@ -471,31 +477,31 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     else if(perkState == PerkState.Using){
         CreatePerkActiveHud();
     }
-    perkEntitys[2] = LastTextID();
+    perkHudEntitys[2] = LastTextID();
     WaitRedraw();
 
     // show head up text
     if(perkState == PerkState.Using){
         CreateHeadUpText(perkName);
     }
-    perkEntitys[3] = LastTextID();
+    perkHudEntitys[3] = LastTextID();
     WaitRedraw();
 
     // show Aura effct
     if(perkState == PerkState.Using){
         CreateEffect(AllPlayers(Team.All), Effect.BadAura, Color.White,
             EventPlayer(), 1, EffectRev.VisibleToPositionAndRadius);
-        perkEntitys[4] = LastCreatedEntity();
+        perkHudEntitys[4] = LastCreatedEntity();
         WaitRedraw();
     }
 }
 
 void HidePerkHUD()"Subroutine/HidePerkHUD"{
-    DestroyHudText(perkEntitys[0]);
-    DestroyHudText(perkEntitys[1]);
-    DestroyHudText(perkEntitys[2]);
-    DestroyInWorldText(perkEntitys[3]);
-    DestroyEffect(perkEntitys[4]);
+    DestroyHudText(perkHudEntitys[0]);
+    DestroyHudText(perkHudEntitys[1]);
+    DestroyHudText(perkHudEntitys[2]);
+    DestroyInWorldText(perkHudEntitys[3]);
+    DestroyEffect(perkHudEntitys[4]);
 }
 
 rule: "Perk/Player/usePerk"
@@ -1980,9 +1986,6 @@ if(
     Health() <= 1
 ){
     WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.BadExplosion,
-        Color.Yellow, PositionOf(), 5);
     perkState = PerkState.Non;
 }
 
@@ -2141,7 +2144,6 @@ if(
     perkHero.damageDealt = 150;
     perkHero.gravity = 75;
     perkHero.moveSpeed = 150;
-    perkHero.projectileSpeed = 150;
     perkHero.ultimateCharge = 100;
     ForcePlayerPerkHero(EventPlayer(), perkHero);
     // use ult
@@ -2358,7 +2360,7 @@ if(
     perkHero.moveSpeed = 75;
     ForcePlayerPerkHero(EventPlayer(), perkHero);
     // set param
-    perkAbilityCharging = 100;
+    perkAbilityStatus = 100;
 
 }
 
@@ -2371,7 +2373,7 @@ if(
     perkType == PerkType.Juggernaut
 ){
     // reset param
-    perkAbilityCharging = 0;
+    perkAbilityStatus = 0;
     // reset perk hero
     StopForcingPerkHero(EventPlayer());
     // reset effect
@@ -2392,9 +2394,6 @@ if(
     Health() <= 1
 ){
     WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.BadExplosion,
-        Color.Yellow, PositionOf(), 5);
     perkState = PerkState.Non;
 }
 
@@ -2465,7 +2464,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-playervar define perkAbilityCharging;
+playervar define perkAbilityStatus;
 // splashDamage
 playervar define aimPosition2;
 playervar define perkPosition2;
@@ -2478,10 +2477,10 @@ if(
     perkState == PerkState.Using &&
     perkType == PerkType.Juggernaut &&
     IsFiringSecondary() &&
-    perkAbilityCharging == 100
+    perkAbilityStatus == 100
 ){
-    StopChasingVariable(perkAbilityCharging);
-    perkAbilityCharging = 0;
+    StopChasingVariable(perkAbilityStatus);
+    perkAbilityStatus = 0;
     aimPosition2 = AimingPositionIgnorePlayer();
     perkPosition2 = EyePosition();
     // show aura
@@ -2493,7 +2492,7 @@ if(
         30, RateChaseReevaluation.DestinationAndRate);
     // wait can trigger
     Wait(0.2, WaitBehavior.IgnoreCondition);    
-    perkAbilityCharging = 1;
+    perkAbilityStatus = 1;
 }
 
 define bombDamageRange: 6;
@@ -2505,7 +2504,7 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.Juggernaut &&
-    perkAbilityCharging == 1 &&
+    perkAbilityStatus == 1 &&
     IsButtonHeld(EventPlayer(), Button.SecondaryFire)
 ){
     ExplodeBomb();
@@ -2518,7 +2517,7 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.Juggernaut &&
-    perkAbilityCharging == 1 &&
+    perkAbilityStatus == 1 &&
     perkPosition2 == aimPosition2
 ){
     ExplodeBomb();
@@ -2531,14 +2530,14 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.Juggernaut &&
-    perkAbilityCharging == 1
+    perkAbilityStatus == 1
 ){
     Wait(3, WaitBehavior.AbortWhenFalse);
     ExplodeBomb();
 }
 
 void ExplodeBomb()"Subroutine/ExplodeBomb"{
-    perkAbilityCharging = 2;
+    perkAbilityStatus = 2;
     // stop aura
     StopChasingVariable(perkPosition2);
     // hide aura
@@ -2546,7 +2545,7 @@ void ExplodeBomb()"Subroutine/ExplodeBomb"{
     // wait builtin ability efect play
     Wait(0.9, WaitBehavior.IgnoreCondition);
     // start change as cooldown
-    ChaseVariableOverTime(perkAbilityCharging, 100, 5.25,
+    ChaseVariableOverTime(perkAbilityStatus, 100, 5.25,
         TimeChaseReevaluation.DestinationAndDuration);
     // get target
     perkTargets = 
@@ -2605,7 +2604,7 @@ if(
     StopForcingPerkHero(EventPlayer());
     // reset effect
     DestroyEffect(perkEffectAndText);
-    StopChasingVariable(perkAbilityCharging);
+    StopChasingVariable(perkAbilityStatus);
     // reset type
     perkType = PerkType.Non;
 }
@@ -2661,8 +2660,8 @@ if(
     IsButtonHeld(EventPlayer(), Button.SecondaryFire) &&
     IsFiringSecondary()
 ){
-    perkAbilityCharging = 0;
-    ChaseVariableOverTime(perkAbilityCharging, 100, 1.3,
+    perkAbilityStatus = 0;
+    ChaseVariableOverTime(perkAbilityStatus, 100, 1.3,
         TimeChaseReevaluation.DestinationAndDuration);
 }
 
@@ -2675,8 +2674,8 @@ if(
     perkType == PerkType.BeamSniper &&
     !IsButtonHeld(EventPlayer(), Button.SecondaryFire)
 ){
-    StopChasingVariable(perkAbilityCharging);
-    perkAbilityCharging = 0;
+    StopChasingVariable(perkAbilityStatus);
+    perkAbilityStatus = 0;
 }
 
 rule: "Perk/Player/BeamSniper/markTarget"
@@ -2686,7 +2685,7 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.BeamSniper &&
-    perkAbilityCharging == 100
+    perkAbilityStatus == 100
 ){
     perkTargets = FilteredArray(
         PlayersInViewAngle(EventPlayer(), Team.Team2, 0.75),
@@ -2717,12 +2716,12 @@ if(
     IsButtonHeld(EventPlayer(), Button.SecondaryFire) &&
     IsButtonHeld(EventPlayer(), Button.PrimaryFire)
 ){
-    if(perkAbilityCharging < 100){
-        perkAbilityCharging = 0;
+    if(perkAbilityStatus < 100){
+        perkAbilityStatus = 0;
         Abort();
     }
 
-    perkAbilityCharging = 0;
+    perkAbilityStatus = 0;
 
     // give hit damage of penetration ballistic
     if(perkTargets != []){
@@ -2774,6 +2773,190 @@ if(
     WaitPlayEffect();
     DestroyEffect(perkEffectAndText[0]);
     DestroyEffect(perkEffectAndText[1]);
+}
+
+// TAG DragonStormer ----------
+rule: "Perk/Player/DragonStormer/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.DragonStormer
+){
+    // set time limit
+    perkTimeLimit = 120;
+    // set perk hero
+    PerkHero perkHero = new PerkHero();
+    perkHero.hero = Hero.Hanzo;
+    perkHero.statusUnkillable = true;
+    perkHero.damageDealt = 150;
+    perkHero.gravity = 75;
+    perkHero.moveSpeed = 150;
+    perkHero.ultimateCharge = 100;
+    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    // use ult
+    PressButton(EventPlayer(), Button.Ultimate);
+    // set param
+    perkAbilityStatus = 0;
+}
+
+rule: "Perk/Player/DragonStormer/deactivate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Non &&
+    perkType == PerkType.DragonStormer
+){
+    // reset param
+    perkAbilityStatus = 0;
+    // reset perk hero
+    StopForcingPerkHero(EventPlayer());
+    // reset effect
+    DestroyEffect(perkEffectAndText);
+    StopChasingVariable(perkAbilityStatus);
+    // reset stuatus
+    ClearStatus(EventPlayer(), Status.Rooted);
+    SetInvisible(EventPlayer(), InvisibleTo.None);
+
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/DragonStormer/brokenPerk //by helth 1"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.DragonStormer &&
+    Health() <= 1
+){
+    WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
+    perkState = PerkState.Non;
+}
+
+define maxOfDragon: 9;
+
+rule: "Perk/Player/DragonStormer/shotDragonStorm"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.DragonStormer &&
+    IsUsingUltimate() &&
+    perkAbilityStatus == 0
+){
+    CancelPrimaryAction();
+    SetDamageDealt(EventPlayer(), 300);
+
+    SetStatus(EventPlayer(), null, Status.Rooted, MaxValue());
+    Wait(0.1, WaitBehavior.IgnoreCondition);
+
+    ApplyImpulse(EventPlayer(), Up(),
+        10, Relative.ToWorld, ContraryMotion.Cancel);
+    Wait(0.5, WaitBehavior.IgnoreCondition);
+
+    landPosition = PositionOf(EventPlayer());
+    Teleport(EventPlayer(), landPosition + Vector(0, 60, 0));
+    ApplyImpulse(EventPlayer(), Down() + Backward(),
+        0.001, Relative.ToWorld, ContraryMotion.Cancel);
+    SetGravity(EventPlayer(), 0);
+    SetInvisible(EventPlayer(), InvisibleTo.Enemies);
+
+    StartFacing(EventPlayer(), 
+            DirectionTowards(
+                EventPlayer(),
+                ClosestPlayerTo(EventPlayer(), Team.Team2)
+            ),
+        MaxValue(),
+        Relative.ToWorld,
+        FacingRev.DirectionAndTurnRate
+    );
+    Wait(0.1, WaitBehavior.IgnoreCondition);
+    StopFacing();
+
+    Wait(0.25, WaitBehavior.IgnoreCondition);
+    perkAbilityStatus = 1;
+}
+
+rule: "Perk/Player/DragonStormer/deployDragons"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.DragonStormer &&
+    !IsUsingUltimate() &&
+    perkAbilityStatus >= 1 &&
+    perkAbilityStatus <= maxOfDragon
+){
+    SetProjectileSpeed(EventPlayer(), 4 + perkAbilityStatus);
+    SetUltimateCharge(EventPlayer(), 100);
+    PressButton(EventPlayer(), Button.Ultimate);
+    perkAbilityStatus ++;
+}
+
+rule: "Perk/Player/DragonStormer/finishDragonStorm"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.DragonStormer &&
+    perkAbilityStatus > maxOfDragon
+){
+    Wait(5.5, WaitBehavior.IgnoreCondition);
+    ClearStatus(EventPlayer(), Status.Rooted);
+    SetProjectileSpeed(EventPlayer(), DefaultPercentage());
+    SetGravity(EventPlayer(), DefaultPercentage());
+    SetInvisible(EventPlayer(), InvisibleTo.None);
+    Teleport(EventPlayer(), landPosition);
+    
+    StartFacing(EventPlayer(), 
+            DirectionTowards(
+                EventPlayer(),
+                ClosestPlayerTo(EventPlayer(), Team.Team2)
+            ),
+        MaxValue(),
+        Relative.ToWorld,
+        FacingRev.DirectionAndTurnRate
+    );
+    Wait(0.1, WaitBehavior.IgnoreCondition);
+    StopFacing();
+
+    Wait(10, WaitBehavior.IgnoreCondition);
+    SetDamageDealt(EventPlayer(), 150);
+
+    perkAbilityStatus = 0;
+}
+
+rule: "Perk/Player/DragonStormer/addActivityTime"
+Event.OnElimination
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.DragonStormer
+){
+    perkTimeLimit += 4;
+}
+
+rule: "Perk/Player/DragonStormer/chargingUlt"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.DragonStormer &&
+    !IsUsingUltimate() &&
+    UltimateChargePercent() < 100
+){
+    WaitUpdateMediumCycle();
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 2.5));
+    LoopIfConditionIsTrue();
 }
 
 // TAG Debug ----------
