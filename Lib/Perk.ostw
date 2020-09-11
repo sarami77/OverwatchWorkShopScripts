@@ -53,28 +53,29 @@ rule: "Perk/lotteryPerkList // list of parks you can pick up"
 Event.OngoingGlobal
 {
     lotteryPerkList = [     // TAG lottery perk list
-        PerkType.HighJump,
-        PerkType.GrapplingBeam,
-        PerkType.Sprinter,
-        PerkType.Savior,
-        PerkType.Fearless,
-        PerkType.SteelFormation,
-        PerkType.PersonalShelter,
-        PerkType.BioticStation,
-        PerkType.BioticStation,
-        PerkType.TrapBeam,
-        PerkType.ChainExplosion,
-        PerkType.AimHack,
-        PerkType.Vampire,
-        PerkType.ShotCaller,
-        PerkType.BattleFlag,
-        PerkType.CruisingMissile,
-        PerkType.CruisingMissile,
-        PerkType.DeathFromAbove,
-        PerkType.LegendalyNinja,
-        PerkType.MachDelivery,
-        PerkType.Juggernaut,
-        PerkType.BeamSniper,
+        // PerkType.HighJump,
+        // PerkType.GrapplingBeam,
+        // PerkType.Sprinter,
+        // PerkType.Savior,
+        // PerkType.Fearless,
+        // PerkType.SteelFormation,
+        // PerkType.PersonalShelter,
+        // PerkType.BioticStation,
+        // PerkType.BioticStation,
+        // PerkType.TrapBeam,
+        // PerkType.ChainExplosion,
+        // PerkType.AimHack,
+        // PerkType.Vampire,
+        // PerkType.ShotCaller,
+        // PerkType.BattleFlag,
+        // PerkType.CruisingMissile,
+        // PerkType.CruisingMissile,
+        // PerkType.DeathFromAbove,
+        // PerkType.LegendalyNinja,
+        // PerkType.MachDelivery,
+        // PerkType.Juggernaut,
+        // PerkType.BeamSniper,
+        PerkType.DragonStormer,
         PerkType.DragonStormer
     ];
 }
@@ -142,7 +143,7 @@ if(
     perkCrateState == PerkCrateState.Dropped
 ){
     // delete perk crate after a some time
-    Wait(40, WaitBehavior.AbortWhenFalse);  // wait clear perk
+    Wait(30, WaitBehavior.AbortWhenFalse);  // wait clear perk
     perkCrateState = PerkCrateState.NotDropped;
 }
 
@@ -2489,7 +2490,7 @@ if(
     perkEffectAndText = LastCreatedEntity();
     // follow the original ability effect
     ChaseVariableAtRate(perkPosition2, aimPosition2,
-        30, RateChaseReevaluation.DestinationAndRate);
+        28, RateChaseReevaluation.DestinationAndRate);
     // wait can trigger
     Wait(0.2, WaitBehavior.IgnoreCondition);    
     perkAbilityStatus = 1;
@@ -2811,14 +2812,22 @@ if(
 ){
     // reset param
     perkAbilityStatus = 0;
+    isDeployingDragon = false;
     // reset perk hero
     StopForcingPerkHero(EventPlayer());
-    // reset effect
-    DestroyEffect(perkEffectAndText);
-    StopChasingVariable(perkAbilityStatus);
-    // reset stuatus
+    // reset status
     ClearStatus(EventPlayer(), Status.Rooted);
+    SetProjectileSpeed(EventPlayer(), DefaultPercentage());
+    SetGravity(EventPlayer(), DefaultPercentage());
     SetInvisible(EventPlayer(), InvisibleTo.None);
+    if(isDeployingDragon){
+        Teleport(EventPlayer(), landPosition);
+    }
+
+    // reset enemy icons
+    // for(loopIndex = 0; loopIndex < CountOf(perkEffectAndText); loopIndex++){
+    //     DestroyIcon(perkEffectAndText[loopIndex]);
+    // }
 
     // reset type
     perkType = PerkType.Non;
@@ -2838,10 +2847,11 @@ if(
 }
 
 define maxOfDragon: 9;
+playervar define isDeployingDragon;
 
 rule: "Perk/Player/DragonStormer/shotDragonStorm"
 Event.OngoingPlayer
-Team.All
+Team.Team1
 Player.All
 if(
     perkState == PerkState.Using &&
@@ -2849,23 +2859,33 @@ if(
     IsUsingUltimate() &&
     perkAbilityStatus == 0
 ){
+    isDeployingDragon = true;
     CancelPrimaryAction();
     SetDamageDealt(EventPlayer(), 300);
-
+    // set rooted
     SetStatus(EventPlayer(), null, Status.Rooted, MaxValue());
     Wait(0.1, WaitBehavior.IgnoreCondition);
-
+    // stop movement
     ApplyImpulse(EventPlayer(), Up(),
         10, Relative.ToWorld, ContraryMotion.Cancel);
     Wait(0.5, WaitBehavior.IgnoreCondition);
-
-    landPosition = PositionOf(EventPlayer());
+    // set status
+    landPosition = PositionOf();
     Teleport(EventPlayer(), landPosition + Vector(0, 60, 0));
-    ApplyImpulse(EventPlayer(), Down() + Backward(),
-        0.001, Relative.ToWorld, ContraryMotion.Cancel);
+    perkPosition = PositionOf();
     SetGravity(EventPlayer(), 0);
     SetInvisible(EventPlayer(), InvisibleTo.Enemies);
 
+    // show enemy icons
+    // perkTargets = AllPlayers(Team.Team2);
+    // perkEffectAndText = [];
+    // for(loopIndex = 0; loopIndex < CountOf(perkTargets); loopIndex++){
+    //     CreateIcon(EventPlayer(), PositionOf(perkTargets[loopIndex]), Icon.Asterisk,
+    //         IconRev.VisibleToAndPosition, Color.Red, true);
+    //     perkEffectAndText[loopIndex] = LastCreatedEntity();
+    // }
+
+    // face enemy
     StartFacing(EventPlayer(), 
             DirectionTowards(
                 EventPlayer(),
@@ -2877,14 +2897,30 @@ if(
     );
     Wait(0.1, WaitBehavior.IgnoreCondition);
     StopFacing();
-
+    // wait
     Wait(0.25, WaitBehavior.IgnoreCondition);
+
     perkAbilityStatus = 1;
+}
+
+rule: "Perk/Player/DragonStormer/keepPosition"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    isDeployingDragon &&
+    DistanceBetween(EventPlayer(), perkPosition) >= 0.25
+){
+    ApplyImpulse(EventPlayer(),
+        VectorTowards(EventPlayer(), perkPosition),
+        0.25, Relative.ToWorld, ContraryMotion.Cancel);
+    WaitApplyImpulseCycle();
+    LoopIfConditionIsTrue();
 }
 
 rule: "Perk/Player/DragonStormer/deployDragons"
 Event.OngoingPlayer
-Team.All
+Team.Team1
 Player.All
 if(
     perkState == PerkState.Using &&
@@ -2901,20 +2937,29 @@ if(
 
 rule: "Perk/Player/DragonStormer/finishDragonStorm"
 Event.OngoingPlayer
-Team.All
+Team.Team1
 Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.DragonStormer &&
     perkAbilityStatus > maxOfDragon
 ){
+    // wait  final deploy
     Wait(5.5, WaitBehavior.IgnoreCondition);
+    // reset status
     ClearStatus(EventPlayer(), Status.Rooted);
     SetProjectileSpeed(EventPlayer(), DefaultPercentage());
     SetGravity(EventPlayer(), DefaultPercentage());
     SetInvisible(EventPlayer(), InvisibleTo.None);
     Teleport(EventPlayer(), landPosition);
-    
+    isDeployingDragon = false;
+
+    // reset enemy icons
+    // for(loopIndex = 0; loopIndex < CountOf(perkEffectAndText); loopIndex++){
+    //     DestroyIcon(perkEffectAndText[loopIndex]);
+    // }
+
+    // face enemy
     StartFacing(EventPlayer(), 
             DirectionTowards(
                 EventPlayer(),
@@ -2926,8 +2971,8 @@ if(
     );
     Wait(0.1, WaitBehavior.IgnoreCondition);
     StopFacing();
-
-    Wait(10, WaitBehavior.IgnoreCondition);
+    // reset damage buff
+    Wait(10, WaitBehavior.AbortWhenFalse);
     SetDamageDealt(EventPlayer(), 150);
 
     perkAbilityStatus = 0;
