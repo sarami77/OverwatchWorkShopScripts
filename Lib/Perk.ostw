@@ -38,7 +38,8 @@ enum PerkType{  // TAG perk type
     MachDelivery,
     Juggernaut,
     BeamSniper,
-    DragonStorm
+    DragonStorm,
+    Titan
 }
 playervar define perkState;
 enum PerkState{
@@ -76,8 +77,9 @@ Event.OngoingGlobal
         PerkType.Juggernaut,
         PerkType.BeamSniper,
         PerkType.DragonStorm,
-        PerkType.DragonStorm,
-        PerkType.DragonStorm
+        PerkType.Titan,
+        PerkType.Titan,
+        PerkType.Titan
     ];
 }
 
@@ -462,12 +464,14 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.BeamSniper){
         perkName = "Beam Sniper";
-        perkDetail = "Sniper with a beam rifle. Penetrates wall and enemy body when max charge shot.";
+        perkDetail = "Sniper with powerful beam rifle. Penetrates wall and enemy body when max charge shot.";
     }else if(perkType == PerkType.DragonStorm){
         perkName = "Dragon Storm";
         perkDetail = "Many dragons fall from sky, massive damage enemy of wide area. Can add activity time by kill enemy.";
+    }else if(perkType == PerkType.Titan){
+        perkName = "Titan";
+        perkDetail = "Giant with big shield and hammer. Let protect team and rampage!";
     }
-
 
     // TAG perk HUD common action
     perkHudEntitys = [];
@@ -856,22 +860,25 @@ if(
     perkState == PerkState.Using &&
     perkType == PerkType.Savior
 ){
-    if(!HasStatus(Victim(), Status.Stunned)){
-        perkTargets = FilteredArray(
-            AllPlayers(Team.Team1),
-            (
-                ArrayElement() != EventPlayer() &&
-                Health(ArrayElement()) <= MaxHealth(ArrayElement()) / 2 &&
-                saviorStunRange >= DistanceBetween(Victim(), ArrayElement())
-            )
-        );
-        if(perkTargets != EmptyArray()){
-            // set stun
-            SetStatus(Victim(), EventPlayer(), Status.Stunned, 3.0);
-            // play blast
-            PlayEffect(
-                AllPlayers(Team.All), PlayEffect.GoodExplosion,
-                Color.Yellow, Victim(), 1.0);
+    if(Victim() != EventPlayer()){
+        if(!HasStatus(Victim(), Status.Stunned)){
+            perkTargets = FilteredArray(
+                AllPlayers(Team.Team1),
+                (
+                    ArrayElement() != EventPlayer() &&
+                    Health(ArrayElement()) <= MaxHealth(ArrayElement()) / 2 &&
+                    saviorStunRange >= DistanceBetween(Victim(), ArrayElement())
+                )
+            );
+            if(perkTargets != EmptyArray()){
+                
+                // set stun
+                SetStatus(Victim(), EventPlayer(), Status.Stunned, 3.0);
+                // play blast
+                PlayEffect(
+                    AllPlayers(Team.All), PlayEffect.GoodExplosion,
+                    Color.Yellow, Victim(), 1.0);
+            }
         }
     }
 }
@@ -1511,20 +1518,21 @@ if(
     perkState == PerkState.Using &&
     perkType == PerkType.ChainExplosion
 ){
-    WaitPlayEffect();
-    // splash damage
-    Damage(
-        PlayersWithinRadius(
-            Victim(), chainExplosionRange, Team.Team2, RadiusLOS.Off),
-        EventPlayer(), 300);
-    // play blast
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.GoodExplosion,
-        Color.Orange, Victim(), chainExplosionRange);
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.RingExplosion,
-        Color.Orange, Victim(), chainExplosionRange);
-
+    if(Victim() != EventPlayer()){
+        WaitPlayEffect();
+        // splash damage
+        Damage(
+            PlayersWithinRadius(
+                Victim(), chainExplosionRange, Team.Team2, RadiusLOS.Off),
+            EventPlayer(), 300);
+        // play blast
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.GoodExplosion,
+            Color.Orange, Victim(), chainExplosionRange);
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.RingExplosion,
+            Color.Orange, Victim(), chainExplosionRange);
+    }
 }
 
 // TAG AimHack ----------
@@ -2366,7 +2374,7 @@ if(
     perkHero.hero = Hero.Orisa;
     perkHero.statusUnkillable = true;
     perkHero.maxHealth = 300;
-    perkHero.healingReceived = 1.0;
+    perkHero.healingReceived = 2.0;
     perkHero.damageDealt = 150;
     perkHero.gravity = 300;
     perkHero.moveSpeed = 75;
@@ -2700,7 +2708,7 @@ if(
     perkAbilityStatus == 100
 ){
     perkTargets = FilteredArray(
-        PlayersInViewAngle(EventPlayer(), Team.Team2, 0.75),
+        PlayersInViewAngle(EventPlayer(), Team.Team2, 0.8),
         IsAlive(ArrayElement()));
     if(perkTargets != []){
         PlayEffect(
@@ -3030,6 +3038,137 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.DragonStorm &&
+    !IsUsingUltimate() &&
+    UltimateChargePercent() < 100
+){
+    WaitUpdateMediumCycle();
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 1.0));
+    LoopIfConditionIsTrue();
+}
+
+// TAG Titan ----------
+rule: "Perk/Player/Titan/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.Titan
+){
+    // set time limit
+    perkTimeLimit = 180;
+    // set perk hero
+    PerkHero perkHero = new PerkHero();
+    perkHero.hero = Hero.Reinhardt;
+    perkHero.statusUnkillable = true;
+    perkHero.maxHealth = 200;
+    perkHero.healingReceived = 5;
+    perkHero.damageDealt = 300;
+    perkHero.gravity = 1000;
+    perkHero.ultimateCharge = 100;
+    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    AddHealthPoolToPlayer(EventPlayer(), HealthType.Armor, 2000, true, false);
+    usedPerk = LastCreatedHealthPool();
+    // reset param
+    perkAbilityStatus = 0;
+    // grow big
+    while(perkAbilityStatus < 1){
+        StartScalingPlayer(EventPlayer(), 1 + (perkAbilityStatus * 1.25), false);
+        perkAbilityStatus += 0.1;
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+rule: "Perk/Player/Titan/deactivate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Non &&
+    perkType == PerkType.Titan
+){
+    // reset param
+    perkAbilityStatus = 0;
+    // reset perk hero
+    StopForcingPerkHero(EventPlayer());
+    // reset status
+    StopScalingPlayer(EventPlayer());
+    RemoveHealthPoolFromPlayer(usedPerk);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/Titan/brokenPerk //by helth 1"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.Titan &&
+    Health() <= 1
+){
+    WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
+    perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/Titan/showOperationChangeSize"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.Titan
+){
+    SmallMessage(EventPlayer(), "Hold crouch or crouch button to change normal size.");
+    WaitUpdateLongCycle();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/Titan/growBig"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.Titan &&
+    !(IsCrouching() || IsButtonHeld(EventPlayer(), Button.Crouch))
+){
+    while(perkAbilityStatus < 1){
+        StartScalingPlayer(EventPlayer(), 1 + (perkAbilityStatus * 1.25), false);
+        perkAbilityStatus += 0.1;
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+            Color.White, EventPlayer(), 1);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+rule: "Perk/Player/Titan/suspendBig"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.Titan &&
+    (IsCrouching() || IsButtonHeld(EventPlayer(), Button.Crouch))
+){
+    while(perkAbilityStatus > 0){
+        StartScalingPlayer(EventPlayer(), 1 + (perkAbilityStatus * 1.25), false);
+        perkAbilityStatus -= 0.1;
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+            Color.White, EventPlayer(), 1);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+rule: "Perk/Player/Titan/chargingUlt"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.Titan &&
     !IsUsingUltimate() &&
     UltimateChargePercent() < 100
 ){
