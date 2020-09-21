@@ -4,6 +4,16 @@ import "Utility.ostw";
 
 // Function enable team is Team1
 
+// TAG System ----------
+rule: "System/ServerLoadFullMeasures"
+Event.OngoingGlobal
+if(
+    ServerLoad() >= 250
+){
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    AllPlayers(Team.Team1).perkState = PerkState.Non;   // reset perk
+    dbgMsg("!!! Player's perks was force reset by server load full !!!");
+}
 
 globalvar define loopIndex;
 globalvar define lotteryPerkList;
@@ -77,7 +87,6 @@ Event.OngoingGlobal
         PerkType.Juggernaut,
         PerkType.BeamSniper,
         PerkType.DragonStorm,
-        PerkType.Titan,
         PerkType.Titan,
         PerkType.Titan
     ];
@@ -1181,7 +1190,7 @@ if(
 }
 
 // TAG BioticStation ----------
-define healRange : 7;
+define healRange : 6;
 
 rule: "Perk/Player/BioticStation/activate"
 Event.OngoingPlayer
@@ -1208,7 +1217,10 @@ if(
     perkEffectAndText[1] = LastCreatedEntity();
     CreateEffect(AllPlayers(Team.All), Effect.GoodAura, Color.Yellow,
         perkPosition, healRange, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[2] = LastCreatedEntity();        
+    perkEffectAndText[2] = LastCreatedEntity();
+    CreateEffect(AllPlayers(Team.All), Effect.LightShaft, Color.Yellow,
+        perkPosition, 0.25, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[3] = LastCreatedEntity();   
 }
 
 rule: "Perk/Player/BioticStation/deactivate"
@@ -1224,6 +1236,7 @@ if(
     // reset effect
     DestroyEffect(perkEffectAndText[1]);
     DestroyEffect(perkEffectAndText[2]);
+    DestroyEffect(perkEffectAndText[3]);
     // reset param
     perkPosition = 0;
     // reset type
@@ -1349,7 +1362,7 @@ if(
     perkType == PerkType.TrapBeam &&
     // Since the position of the player is judged by the feet,
     //  an offset is added and the collision judgment is shifted to the body.
-    DistanceBetween(ClosestPlayerTo(detecterPosition, Team.Team2) + PositionOffset(), detecterPosition) <= 1.0
+    DistanceBetween(ClosestPlayerTo(detecterPosition, Team.Team2) + PositionOffset(), detecterPosition) <= 1.25
 ){
     perkTargets = ClosestPlayerTo(detecterPosition, Team.Team2);
     if(IsAlive(perkTargets) &&
@@ -1723,6 +1736,8 @@ if(
 ){
     // set time limit
     perkTimeLimit = 300;
+
+    SetUltimateCharge(EventPlayer(), 100);
 }
 
 rule: "Perk/Player/ShotCaller/deactivate"
@@ -1746,7 +1761,15 @@ if(
     perkType == PerkType.ShotCaller &&
     IsUsingUltimate()
 ){
-    perkTargets = AllPlayers(Team.Team1);
+    perkTargets = 
+        FilteredArray(
+            AllPlayers(Team.Team1),
+                !(
+                    ArrayElement().perkState == PerkState.Using &&
+                    ArrayElement().perkType == PerkType.ShotCaller
+                )
+        );
+
     for(loopIndex = 0; loopIndex < CountOf(perkTargets); loopIndex++){
         if(perkTargets[loopIndex] != EventPlayer()){
             SetUltimateCharge(perkTargets[loopIndex], 100);
@@ -3063,18 +3086,11 @@ if(
     ForcePlayerPerkHero(EventPlayer(), perkHero);
 
     // set pool health
-    AddHealthPoolToPlayer(EventPlayer(), HealthType.Armor, 2000, true, false);
+    AddHealthPoolToPlayer(EventPlayer(), HealthType.Armor, 1500, true, false);
     healthPoolID = LastCreatedHealthPool();
 
-    // grow big
-    while(perkEffectStatus < 1){
-        StartScalingPlayer(EventPlayer(), 1 + (perkEffectStatus * 1.25), false);
-        perkEffectStatus += 0.1;
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
-            Color.White, EventPlayer(), 1);
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
-    }
+    // start grow big
+    PressButton(EventPlayer(), Button.Crouch);
 }
 
 rule: "Perk/Player/Titan/deactivate"
@@ -3129,12 +3145,14 @@ if(
     perkType == PerkType.Titan &&
     !(IsCrouching() || IsButtonHeld(EventPlayer(), Button.Crouch))
 ){
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+        Color.White, EventPlayer(), 1);
+
     while(perkEffectStatus < 1){
+        if(!( 0 <= perkEffectStatus && perkEffectStatus <= 1)) perkEffectStatus = 0;
         StartScalingPlayer(EventPlayer(), 1 + (perkEffectStatus * 1.25), false);
         perkEffectStatus += 0.1;
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
-            Color.White, EventPlayer(), 1);
         Wait(0.1, WaitBehavior.AbortWhenFalse);
     }
 }
@@ -3148,12 +3166,14 @@ if(
     perkType == PerkType.Titan &&
     (IsCrouching() || IsButtonHeld(EventPlayer(), Button.Crouch))
 ){
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+        Color.White, EventPlayer(), 1);
+
     while(perkEffectStatus > 0){
+        if(!( 0 <= perkEffectStatus && perkEffectStatus <= 1)) perkEffectStatus = 1;
         StartScalingPlayer(EventPlayer(), 1 + (perkEffectStatus * 1.25), false);
         perkEffectStatus -= 0.1;
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
-            Color.White, EventPlayer(), 1);
         Wait(0.1, WaitBehavior.AbortWhenFalse);
     }
 }
@@ -3186,7 +3206,7 @@ if(
     // Give perk to own player
     WaitLongPressConfirm();
     perkState = PerkState.Non;   
-    WaitChangeState();
+    Wait(0.5, WaitBehavior.IgnoreCondition);
     perkType = RandomValueInArray(lotteryPerkList);
     perkState = PerkState.Ready;   
 }
@@ -3203,10 +3223,10 @@ if(
     // Give perk to all player
     WaitLongPressConfirm();
     AllPlayers(Team.Team1).perkState = PerkState.Non;   
-    WaitChangeState();
+    Wait(0.5, WaitBehavior.IgnoreCondition);
     AllPlayers(Team.Team1).perkType = RandomValueInArray(lotteryPerkList);
     AllPlayers(Team.Team1).perkState = PerkState.Ready;
-    WaitChangeState();
+    Wait(0.5, WaitBehavior.IgnoreCondition);
     // Use perk by force
     AllPlayers(Team.Team1).perkState = PerkState.Using;
 }
