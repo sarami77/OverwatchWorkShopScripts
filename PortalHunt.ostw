@@ -43,12 +43,16 @@ if(
 
 // TAG Game Function ----------
 globalvar define initCompleted;
+globalvar define gameInProgress;
 
 rule: "Game/initGameSetting //wait 3 _seconds because some scripts fail immediately after loading the _server"
 Event.OngoingGlobal
 {
     // Stop records to reduce server load
     DisableInspectorRecording();
+
+    // Set game not in progress
+    gameInProgress = false;
 
     // Set imported function enable team
     Regeneration_enableTeam = Team.Team1;
@@ -76,27 +80,16 @@ Event.OngoingGlobal
     startElapsedTimer = true;
 }
 
-globalvar define gameReseted;
-
-rule: "Game/resetGame // by no player"
-Event.OngoingGlobal
-if(
-    initCompleted &&
-    0 >= NumberOfPlayers(Team.Team1)
-){
-    WaitConditionConfirmed();
-    BigMessage(AllPlayers(Team.All), "Game was reset by no player");
-    gameReseted = true;
-}
-
-rule: "Game/restartGame // by start game of new player"
+rule: "Game/startGame // by start game of first respawn room exit "
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    gameReseted &&
-    0 < NumberOfPlayers(Team.Team1) &&
-    IsMoving()
+    !gameInProgress &&
+    initCompleted &&
+    createRange != 0 &&
+    HasSpawned() &&
+    !IsInSpawnRoom()
 ){
     WaitConditionConfirmed();
     elapsedTime = 0;
@@ -105,7 +98,18 @@ if(
     Heal(AllPlayers(Team.Team2), null, MaxValue());
     // If player start moving, recreate portal
     portalState = PortalState.Calculating;
-    gameReseted = false;
+    gameInProgress = true;
+}
+
+rule: "Game/resetGame // by no player"
+Event.OngoingGlobal
+if(
+    0 >= NumberOfPlayers(Team.Team1)
+){
+    WaitConditionConfirmed();
+    gameInProgress = false;
+    BigMessage(AllPlayers(Team.All), "Game was reset by no player");
+    SetObjectiveDescription(AllPlayers(), "Stand by...", ObjectiveRev.VisibleToSortOrderAndString);
 }
 
 rule: "Game/ShareCode/showShareCode"
@@ -178,11 +182,11 @@ Team.Team1
 Player.All
 if(
     (
+        portalEnable &&
+        DistanceBetween(EventPlayer(), portalPosition) <= portalSize &&
         HasSpawned() &&
         IsAlive() &&
-        !IsInSpawnRoom() &&
-        portalPosition != 0 &&
-        DistanceBetween(EventPlayer(), portalPosition) <= portalSize
+        !IsInSpawnRoom()
     )
 ){
     // Set flag when player entered to portal
@@ -196,13 +200,12 @@ Team.Team1
 Player.All
 if(
     !(
+        portalEnable &&
+        DistanceBetween(EventPlayer(), portalPosition) <= portalSize &&
         HasSpawned() &&
         IsAlive() &&
-        !IsInSpawnRoom() &&
-        portalPosition != 0 &&
-        DistanceBetween(EventPlayer(), portalPosition) <= portalSize
-    ) ||
-    portalState == PortalState.Calculating
+        !IsInSpawnRoom()
+    )
 ){
     // Release flag when player exited from portal
     // This flag is used for functions related to portal
@@ -254,7 +257,7 @@ Event.OngoingGlobal
     CreateHudText(AllPlayers(Team.All),
         <"<0> <1>", "Team lifes", teamLifes>, null, null,
         Location.Top, 1,
-        Color.Yellow, Color.White, Color.White,
+        Color.Team1, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
 }
 
@@ -279,7 +282,6 @@ if(
             AllPlayers(Team.All), PlayEffect.DebuffImpactSound,
             Color.White, AllPlayers(Team.All), MaxLength());
     }
-    LoopIfConditionIsTrue();
 }
 
 rule: "Player/TeamLifes/finishGame //by team lifes out"
@@ -288,7 +290,7 @@ if(
     teamLifes <= 0
 ){
     // When the team lifes out, the game ends
-    portalState = PortalState.Calculating;
+    portalState = PortalState.Idle;
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.RingExplosionSound,
         Color.White, AllPlayers(Team.All), MaxLength());
@@ -448,17 +450,87 @@ if(
 }
 
 // TAG Enemy Function ----------
-rule: "Enemy/Effect/showAppearanceEffect //by start enemy bot entity"
+enum EnemyType{
+    NotSet,
+    Minion,
+    Elite,
+    Boss
+}
+
+playervar define enemyType;
+
+rule: "Enemy/Effect/setEnemyType"
 Event.OngoingPlayer
 Team.Team2
 Player.All
-{
-    // Set purple smoke to enemy
-    CreateEffect(AllPlayers(Team.All), Effect.Cloud, Color.Purple,
-        EventPlayer(), 1.5, EffectRev.VisibleToPositionAndRadius);
+if(
+    HasSpawned(EventPlayer())
+){
+    // Set class text
+    switch(HeroOf(EventPlayer())){
+        case Hero.Ana:
+        case Hero.Lucio:
+        case Hero.Torbjorn:
+        case Hero.Zenyatta:
+            enemyType = EnemyType.Minion;
+            break;
+        case Hero.Soldier76:
+        case Hero.Reaper:
+        case Hero.Mei:
+        case Hero.Mccree:
+        case Hero.Sombra:
+            enemyType = EnemyType.Elite;
+            break;
+        case Hero.Roadhog:
+        case Hero.Zarya:
+        case Hero.Bastion:
+            enemyType = EnemyType.Boss;
+            break;
+        default:
+            break;
+    }
 }
 
-rule: "Enemy/Effect/playDeadEffect //by enemy bot dead"
+rule: "Enemy/Effect/setEnemyTypeAppearance"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    enemyType != EnemyType.NotSet
+){
+    if(enemyType == EnemyType.Minion){
+        CreateEffect(AllPlayers(Team.All), Effect.Cloud, Color.Purple,
+            EventPlayer(), 1.5, EffectRev.VisibleToPositionAndRadius);
+        CreateInWorldText(
+            AllPlayers(Team.All), "Minion", 
+            EventPlayer(), 1.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            Color.White, Spectators.DefaultVisibility);
+        StartScalingPlayer(EventPlayer(), 1.0, false);
+        StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
+    }
+    else if(enemyType == EnemyType.Elite){
+        CreateEffect(AllPlayers(Team.All), Effect.Cloud, Color.Purple,
+            EventPlayer(), 1.75, EffectRev.VisibleToPositionAndRadius);
+        CreateInWorldText(
+            AllPlayers(Team.All), "Elite", 
+            EventPlayer(), 1.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            Color.Yellow, Spectators.DefaultVisibility);
+        StartScalingPlayer(EventPlayer(), 1.3, false);
+        StartModifyingHeroVoiceLines(EventPlayer(), 0.6, false);
+    }
+    else if(enemyType == EnemyType.Boss){
+        CreateEffect(AllPlayers(Team.All), Effect.Cloud, Color.Purple,
+            EventPlayer(), 2.0, EffectRev.VisibleToPositionAndRadius);
+        CreateInWorldText(
+            AllPlayers(Team.All), "Boss", 
+            EventPlayer(), 2.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            Color.Red, Spectators.DefaultVisibility);
+        StartScalingPlayer(EventPlayer(), 1.6, false);
+        StartModifyingHeroVoiceLines(EventPlayer(), 0.4, false);
+    }
+}
+
+rule: "Enemy/Effect/playDeadEffect"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -467,12 +539,30 @@ if(
 ){
     // Play blast effect when enemy dead
     // It's easier to understand if you killed an enemy, and you'll feel better
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.GoodExplosion,
-        Color.Red, EventPlayer(), 4);
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.RingExplosion,
-        Color.Red, EventPlayer(), 4);
+    if(enemyType == EnemyType.Minion){
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.GoodExplosion,
+            Color.Red, EventPlayer(), 4);
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.RingExplosion,
+            Color.Red, EventPlayer(), 4);
+    }
+    else if(enemyType == EnemyType.Elite){
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.GoodExplosion,
+            Color.Red, EventPlayer(), 7);
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.RingExplosion,
+            Color.Red, EventPlayer(), 7);
+    }
+    else if(enemyType == EnemyType.Boss){
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.GoodExplosion,
+            Color.Red, EventPlayer(), 10);
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.RingExplosion,
+            Color.Red, EventPlayer(), 10);
+    }
 }
 
 rule: "Enemy/RandomJump/jump"
@@ -488,7 +578,7 @@ if(
         BarrierLOS.NoBarriersBlock)
 ){
     WaitConditionConfirmed();
-    if(40 >= RandomInteger(1,100)){
+    if(50 >= RandomInteger(1,100)){
         ApplyImpulse(EventPlayer(),
             Vector(
                 RandomReal(-1, 1),
@@ -502,7 +592,6 @@ if(
 }
 
 playervar define teleportBeamEntity;
-
 playervar define teleportPosition;
 
 define randomPortalAreaPosition:
@@ -516,7 +605,7 @@ define randomPortalCenterPosition:
 define randomClosestPlayerPosition: 
     ClosestPlayerTo(
         portalPosition, Team.Team1
-    ) + RandomPosition(2.0, 0, 2.0);
+    ) + RandomPosition(1.0, 0, 1.0);
 
 rule: "Enemy/Teleport/teleportToSpawnRoom //when not exit portal"
 Event.OngoingPlayer
@@ -528,7 +617,7 @@ if(
     !IsInSpawnRoom()
 ){
     // Teleport Enemy to spawn room when portal disable
-    WaitConditionConfirmed();
+    Wait(1, WaitBehavior.AbortWhenFalse);   // wait show dead effect
     // Teleport
     Respawn();
 }
@@ -695,17 +784,16 @@ playervar define isHiddenSpeed;
 rule: "Enemy/HiddenSpeed/updateRate //for round harder, increase by growing portal size"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Growing ||
-    portalSize >= maxPortalSize
+    portalState == PortalState.Growing
 ){
+    WaitUpdateMediumCycle();
+
     // Increase enemy hidden speed depending on portal size
     // Portals that have grown significantly over time will send quickly more enemies.
     enemyHiddenSpeedRate = 100
     enemyHiddenSpeedRate += portalSize * 7;
-    if(portalSize < maxPortalSize){
-        WaitUpdateMediumCycle();
-        LoopIfConditionIsTrue();
-    }
+
+    LoopIf(portalSize < maxPortalSize);
 }
 
 rule: "Enemy/HiddenSpeed/enable //when not visible from players, quickly approach the player and hunt down"
@@ -743,6 +831,48 @@ if(
     SetMoveSpeed(EventPlayer(), 100);
 }
 
+define maxSpawnInterval: 10;
+globalvar define _EnemySpawnScale;
+playervar define enemySpawnInterval;
+
+rule: "Enemy/SpawnInterval/updateRate //portal get bigger, interval get shorter and game getter harder"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    portalState == PortalState.Growing
+){
+    WaitUpdateMediumCycle();
+    // Shortens enemy spawn interval depending on portal size
+    // Portals that have grown significantly over time will spawn more enemies.
+    _EnemySpawnScale = maxPortalSize;
+    _EnemySpawnScale -= portalSize;
+    _EnemySpawnScale /= maxPortalSize;
+    enemySpawnInterval = maxSpawnInterval;
+    enemySpawnInterval *= _EnemySpawnScale;// TAG enemy spawn interval
+
+    enemySpawnInterval -= (roundNo / 10);
+
+    if(0 > enemySpawnInterval){
+        enemySpawnInterval = 0;
+    }
+
+    // Add respawn time according to enemy type
+    if(enemyType == EnemyType.Minion){
+        enemySpawnInterval *= 0.75;
+    }
+    else if(enemyType == EnemyType.Elite){
+        enemySpawnInterval *= 1.0;
+    }
+    else if(enemyType == EnemyType.Boss){
+        enemySpawnInterval *= 1.25;
+    }
+    // set +1 enemySpawnInterval for show dead effect
+    SetRespawnMaxTime(EventPlayer(), enemySpawnInterval + 1);
+
+    LoopIf(portalSize < maxPortalSize);
+}
+
 // TAG Portal Function ----------
 globalvar define portalState;
 enum PortalState{
@@ -775,8 +905,8 @@ if(
     portalPosition = 0;
     portalSize = 0;
     StopChasingVariable(portalSize);
-    enemySpawnInterval = maxSpawnInterval;
-    SetRespawnMaxTime(AllPlayers(Team.Team2), enemySpawnInterval + 1);
+    AllPlayers(Team.Team1).enemySpawnInterval = maxSpawnInterval;
+    SetRespawnMaxTime(AllPlayers(Team.Team2), maxSpawnInterval);
     enemyHiddenSpeedRate = 100;
     isFirstGrowing = true;
     // Hide portal icon and effect
@@ -959,10 +1089,8 @@ if(
 rule: "Portal/Positioner/createPortalInRange //repeat random positioning until close to map surface"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Calculating &&
-    centerPosition != 0 &&
     createRange != 0 &&
-    teamLifes > 0
+    portalState == PortalState.Calculating
 ){
     // Create portal in createRange
     // Get candidate position by random position within the create range from the center of the map
@@ -1142,35 +1270,6 @@ if(
     portalState = PortalState.Growing;
 }
 
-define maxSpawnInterval: 10;
-globalvar define _EnemySpawnScale;
-globalvar define enemySpawnInterval;
-
-rule: "Portal/SpawnEnemyInterval/updateRate //portal get bigger, interval get shorter and game getter harder"
-Event.OngoingGlobal
-if(
-    portalState == PortalState.Growing ||
-    portalSize >= maxPortalSize
-){
-    // Shortens enemy spawn interval depending on portal size
-    // Portals that have grown significantly over time will spawn more enemies.
-    _EnemySpawnScale = maxPortalSize;
-    _EnemySpawnScale -= portalSize;
-    _EnemySpawnScale /= maxPortalSize;
-    enemySpawnInterval = maxSpawnInterval;
-    enemySpawnInterval *= _EnemySpawnScale;// TAG enemy spawn interval
-    // enemySpawnInterval -= (roundNo / 7);  
-    if(0 > enemySpawnInterval){
-        enemySpawnInterval = 0;
-    }
-    // wait show dead effect when EnemySpawnInterval 0
-    SetRespawnMaxTime(AllPlayers(Team.Team2), enemySpawnInterval + 1);
-    if(portalSize < maxPortalSize){
-        WaitUpdateMediumCycle();
-        LoopIfConditionIsTrue();
-    }
-}
-
 // TAG Debug ----------
 // debugmode
 globalvar define isDebugMode;
@@ -1198,7 +1297,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Spawn Interval", enemySpawnInterval>,
+        <"<0> <1>", "boss enemy Spawn Interval (boss)", PlayersInSlot(0, Team.Team2).enemySpawnInterval>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1207,7 +1306,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Hidden Speed Rate", enemyHiddenSpeedRate>,
+        <"<0> <1>", "enemy Spawn Interval (elite)", PlayersInSlot(1, Team.Team2).enemySpawnInterval>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1216,7 +1315,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Dealt Damage Rate", enemyDealtDamageRate>,
+        <"<0> <1>", "enemy Spawn Interval (minion)", PlayersInSlot(3, Team.Team2).enemySpawnInterval>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1225,7 +1324,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Received Damage Rate", enemyReceivedDamageRate>,
+        <"<0> <1>", "enemy Hidden Speed Rate", enemyHiddenSpeedRate>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1234,25 +1333,25 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "portal State", portalState>,
+        <"<0> <1>", "enemy Dealt Damage Rate", enemyDealtDamageRate>,
         null,
         Location.Left, -1,
-        Color.White, Color.Purple, Color.White,
+        Color.White, Color.Red, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
     debugIconHudEntitys[6] = LastTextID();
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "portal Size", portalSize>,
+        <"<0> <1>", "enemy Received Damage Rate", enemyReceivedDamageRate>,
         null,
         Location.Left, -1,
-        Color.White, Color.Purple, Color.White,
+        Color.White, Color.Red, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
     debugIconHudEntitys[7] = LastTextID();
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "portal Position", portalPosition>,
+        <"<0> <1>", "portal State", portalState>,
         null,
         Location.Left, -1,
         Color.White, Color.Purple, Color.White,
@@ -1261,7 +1360,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "distance to protal", DistanceBetween(EventPlayer(), portalPosition)>,
+        <"<0> <1>", "portal Size", portalSize>,
         null,
         Location.Left, -1,
         Color.White, Color.Purple, Color.White,
@@ -1270,12 +1369,30 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
+        <"<0> <1>", "portal Position", portalPosition>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Purple, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[10] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "distance to protal", DistanceBetween(EventPlayer(), portalPosition)>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Purple, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[11] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
         <"<0> <1>", "sucide Count Of Invalid Area", sucideCountOfInvalidArea>,
         null,
         Location.Left, -1,
         Color.White, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-    debugIconHudEntitys[10] = LastTextID();
+    debugIconHudEntitys[12] = LastTextID();
 
     CreateHudText(HostPlayer(),
         null,
@@ -1284,7 +1401,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
         Location.Left, -1,
         Color.White, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-    debugIconHudEntitys[11] = LastTextID();
+    debugIconHudEntitys[13] = LastTextID();
 
     CreateHudText(HostPlayer(),
         null,
@@ -1293,7 +1410,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-    debugIconHudEntitys[12] = LastTextID();
+    debugIconHudEntitys[14] = LastTextID();
     CreateHudText(HostPlayer(),
         null,
         <"<0> <1>", "Server Load Average", ServerLoadAverage()>,
@@ -1301,7 +1418,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-    debugIconHudEntitys[13] = LastTextID();
+    debugIconHudEntitys[15] = LastTextID();
     CreateHudText(HostPlayer(),
         null,
         <"<0> <1>", "Server Load Peak", ServerLoadPeak()>,
@@ -1309,7 +1426,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-    debugIconHudEntitys[14] = LastTextID();
+    debugIconHudEntitys[16] = LastTextID();
 }
 
 // Hide debug icon and hud
@@ -1329,6 +1446,8 @@ void HideDebugHud()"Subroutine/HideDebugHud"{
     DestroyHudText(debugIconHudEntitys[12]);
     DestroyHudText(debugIconHudEntitys[13]);
     DestroyHudText(debugIconHudEntitys[14]);
+    DestroyHudText(debugIconHudEntitys[15]);
+    DestroyHudText(debugIconHudEntitys[16]);
 }
 
 rule: "Debug/changeDebugMode"
