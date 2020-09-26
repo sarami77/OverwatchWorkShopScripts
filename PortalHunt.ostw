@@ -93,9 +93,6 @@ if(
 ){
     WaitConditionConfirmed();
     elapsedTime = 0;
-    roundNo = 0;
-    teamLifes = 6;
-    Heal(AllPlayers(Team.Team2), null, MaxValue());
     // If player start moving, recreate portal
     portalState = PortalState.Calculating;
     gameInProgress = true;
@@ -107,7 +104,10 @@ if(
     0 >= NumberOfPlayers(Team.Team1)
 ){
     WaitConditionConfirmed();
-    gameInProgress = false;
+    elapsedTime = 0;
+    roundNo = 0;
+    teamLifes = initalTeamLifes;
+    Heal(AllPlayers(Team.Team2), null, MaxValue());
     BigMessage(AllPlayers(Team.All), "Game was reset by no player");
     SetObjectiveDescription(AllPlayers(), "Stand by...", ObjectiveRev.VisibleToSortOrderAndString);
 }
@@ -240,14 +240,12 @@ if(
 
 define initalTeamLifes: 6;
 globalvar define teamLifes;
-globalvar define lostLifeCount;
 
 rule: "Player/TeamLifes/initalCount"
 Event.OngoingGlobal
 {
     // Set initial team lifes number
     teamLifes = initalTeamLifes;
-    lostLifeCount = 0;
 }
 
 rule: "Player/TeamLifes/showTeamLifesHUD"
@@ -271,7 +269,6 @@ if(
     // Remaining lifes reduced by spawn of downed player
     Wait(10, WaitBehavior.AbortWhenFalse);  // wait player spawn
     teamLifes -= 1;
-    lostLifeCount ++;
     WaitChangeState();  // wait for show big message by newest value
     if(teamLifes > 0){
         if(teamLifes > 0){
@@ -774,7 +771,6 @@ Event.OngoingGlobal
     // Add damage rate according to the round progress
     enemyDealtDamageRate = 30;                      // basic enemy dealt damage
     enemyDealtDamageRate += (roundNo * 2.0);        // Add damage depending on the number of rounds for progress
-    enemyDealtDamageRate -= (lostLifeCount * 0.5);    // Remove damage depending on the number of lost life for balance
     // Apply balance multiplier
     enemyDealtDamageRate /= ConvertToBalancedValue(0.75);     // TAG enemy dealt damage scale
     SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);
@@ -1291,15 +1287,6 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "lost Life Count", lostLifeCount>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Blue, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-    debugIconHudEntitys[1] = LastTextID();
-
-    CreateHudText(HostPlayer(),
-        null,
         <"<0> <1>", "boss enemy Spawn Interval (boss)", PlayersInSlot(0, Team.Team2).enemySpawnInterval>,
         null,
         Location.Left, -1,
@@ -1435,7 +1422,6 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 // Hide debug icon and hud
 void HideDebugHud()"Subroutine/HideDebugHud"{
     DestroyHudText(debugIconHudEntitys[0]);
-    DestroyHudText(debugIconHudEntitys[1]);
     DestroyHudText(debugIconHudEntitys[2]);
     DestroyHudText(debugIconHudEntitys[3]);
     DestroyHudText(debugIconHudEntitys[4]);
