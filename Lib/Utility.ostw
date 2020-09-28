@@ -35,7 +35,7 @@ define WaitCancelPressConfirm(): Wait(2.0, WaitBehavior.AbortWhenFalse);
 
 // Timer for drawing objects such as text HUD
 // If many HUDs are created at once, they will be dropped.
-define WaitRedraw(): Wait(0.1, WaitBehavior.AbortWhenFalse);
+define WaitRedraw(): Wait(0.01, WaitBehavior.AbortWhenFalse);
 
 // The fixed wait time from when the bound conditions are met until the action is executed.
 // If the condition changes frequently, the server load will be high, so wait for the action to be executed.
@@ -100,18 +100,37 @@ define IsDeadByAbyss() :
 
 // Buff scale value determined according to the unbalance of the teamscale value determined according to the unbalance of the team
 // You can change the buff amount by changing the scale value.
-define ConvertToBalancedValue(define scale)"Subroutine/ConvertToBalancedValue"{
-    define enemyNum = NumberOfPlayers(Team.Team2); 
-    define activePlayerNum = 
+define ConvertToBalancedValue(define scale, define team)"Subroutine/ConvertToBalancedValue"{
+    define activePlayerNum1 = 
         CountOf(
             FilteredArray(
                 AllPlayers(Team.Team1),
-                HasSpawned(ArrayElement()) &&
-                !IsInSpawnRoom(ArrayElement())
+                HasSpawned(ArrayElement())
             )
         );
-    activePlayerNum = activePlayerNum <= 0 ? 1 : activePlayerNum;
-    define amount = enemyNum / activePlayerNum;
+    activePlayerNum1 = activePlayerNum1 <= 0 ? 1 : activePlayerNum1;
+
+    define activePlayerNum2 = 
+        CountOf(
+            FilteredArray(
+                AllPlayers(Team.Team2),
+                HasSpawned(ArrayElement())
+            )
+        );
+    activePlayerNum2 = activePlayerNum2 <= 0 ? 1 : activePlayerNum2;
+
+    define amount;
+    if(team == Team.Team1){
+        amount = activePlayerNum2 / activePlayerNum1;
+    }
+    else if(team == Team.Team1){
+        amount = activePlayerNum1 / activePlayerNum2;
+    }
+    else{
+        amount = 0;
+    }
+
+    amount -= 1;
     amount *= scale;
     amount += 1;
     return amount;
