@@ -10,7 +10,7 @@
 // [ToDo]
 // add Disarmament
 // add Assassination
-// ??????????????????????????
+// add DropPerk
 
 import "Lib/Utility.ostw";
 import "Lib/ElapsedTimer.ostw";
@@ -26,18 +26,18 @@ disabled rule: "This script was generated from source code by [Overwatch-Script-
 disabled rule: "Check detail with https://github.com/ItsDeltin/Overwatch-Script-To-Workshop"-1{}
 disabled rule: "Original source code was created by [sarami77]"-1{}
 disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopScripts"-1{}
-
+disabled rule: "You allowed copy or modify code."-1{}
 
 // TAG System ----------
 rule: "System/ServerLoadFullMeasures"
 Event.OngoingGlobal
 if(
-    ServerLoad() >= 250
+    ServerLoad() >= 255
 ){
     Wait(3, WaitBehavior.AbortWhenFalse);
     portalState = PortalState.Idle;   // abort portal
     dbgMsg("!!! Enemy's portal was force reset by server load full !!!");
-    Wait(3, WaitBehavior.IgnoreCondition);
+    Wait(5, WaitBehavior.IgnoreCondition);
     portalState = PortalState.Calculating;   // restart portal
     
 }
@@ -393,7 +393,7 @@ if(
     portalState = PortalState.Calculating;  // start next portal create
 }
 
-rule: "Player/ClosePortal/disableAbilityWhenInside //sombra's stealth for fair play"
+rule: "Player/ClosePortal/disableStealthWhenInside //sombra's stealth for fair play"
 Event.OngoingPlayer
 Team.Team1
 Player.All
@@ -404,9 +404,26 @@ if(
 ){
     // Some abilities are disabled inside the portal to make the game fair
     // Sombra stealth is exactly that
-    Wait(2.0, WaitBehavior.AbortWhenFalse); // disable ability check cycle
-    PressButton(EventPlayer(), Button.Ability1);
-    SmallMessage(EventPlayer(), "Stealth disabled by magnetic stom of portal.");
+    Wait(5.0, WaitBehavior.AbortWhenFalse); // disable ability check cycle
+    SetStatus(EventPlayer(), null, Status.Stunned, 0.1);
+    SmallMessage(EventPlayer(), "Stealth disabled by magnetic storm of portal.");
+    LoopIfConditionIsTrue();
+}
+
+rule: "Player/ClosePortal/disableGrappleClawWhenInside //sombra's stealth for fair play"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    isInsidePortal &&
+    HeroOf() == Hero.WreckingBall &&
+    IsFiringSecondary()
+){
+    // Some abilities are disabled inside the portal to make the game fair
+    // WreckingBall Grapple is exactly that
+    Wait(5.0, WaitBehavior.AbortWhenFalse); // disable ability check cycle
+    SetStatus(EventPlayer(), null, Status.Stunned, 0.1);
+    SmallMessage(EventPlayer(), "Grapple claw disabled by magnetic storm of portal.");
     LoopIfConditionIsTrue();
 }
 
@@ -586,12 +603,12 @@ if(
         ApplyImpulse(EventPlayer(),
             Vector(
                 RandomReal(-1, 1),
-                RandomReal(0.5, 1),
+                RandomReal(1, 1),
                 RandomReal(-0.5, 1)
             ),
-            6, Relative.ToPlayer, ContraryMotion.Cancel);
+            8, Relative.ToPlayer, ContraryMotion.Cancel);
     }
-    Wait(5, WaitBehavior.AbortWhenFalse);
+    Wait(3, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -693,7 +710,7 @@ if(
         BarrierLOS.NoBarriersBlock)
 ){
     // Teleport an enemy to camping player
-    Wait(10, WaitBehavior.AbortWhenFalse); // player not found timer
+    Wait(10 - (roundNo / 5), WaitBehavior.AbortWhenFalse); // player not found timer
     TeleportPlayerNearWithBeamEffect();
     LoopIfConditionIsTrue();
 }
@@ -776,8 +793,8 @@ Event.OngoingGlobal
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     WaitUpdateLongCycle();
     // Add damage rate according to the round progress
-    enemyDealtDamageRate = 30;                      // basic enemy dealt damage
-    enemyDealtDamageRate += (roundNo * 1.5);        // Add damage depending on the number of rounds for progress
+    enemyDealtDamageRate = 20;                      // basic enemy dealt damage
+    enemyDealtDamageRate += (roundNo * 1.0);        // Add damage depending on the number of rounds for progress
     // Apply balance multiplier
     enemyDealtDamageRate /= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy dealt damage scale
     SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);
