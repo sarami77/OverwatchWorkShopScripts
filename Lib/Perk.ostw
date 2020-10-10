@@ -2788,7 +2788,7 @@ if(
 }
 
 // TAG DragonStorm ----------
-playervar define isDeployingDragon;
+playervar define isInAir;
 
 rule: "Perk/Player/DragonStorm/activate"
 Event.OngoingPlayer
@@ -2802,7 +2802,7 @@ if(
     perkTimeLimit = 120;
     // set param
     perkEffectStatus = 0;
-    isDeployingDragon = false;
+    isInAir = false;
     // set perk hero
     PerkHero perkHero = new PerkHero();
     perkHero.hero = Hero.Hanzo;
@@ -2828,7 +2828,7 @@ if(
     ClearStatus(EventPlayer(), Status.Rooted);
     SetInvisible(EventPlayer(), InvisibleTo.None);
     StopFacing();
-    if(isDeployingDragon)
+    if(isInAir)
         Teleport(EventPlayer(), PositionOf() + Vector(0, -60, 0));
 
     // reset enemy icon
@@ -2856,7 +2856,7 @@ if(
 
 define maxOfDragon: 9;
 
-rule: "Perk/Player/DragonStorm/shotDragonStorm"
+rule: "Perk/Player/DragonStorm/startDragonStorm"
 Event.OngoingPlayer
 Team.Team1
 Player.All
@@ -2874,7 +2874,7 @@ if(
         AbortIf(!(perkState == PerkState.Using && perkType == PerkType.DragonStorm));
     // set position
     Teleport(EventPlayer(), PositionOf() + Vector(0, 60, 0));
-    isDeployingDragon = true;
+    isInAir = true;
     perkPosition = PositionOf();
     // set status
     SetStatus(EventPlayer(), null, Status.Rooted, MaxValue());
@@ -2925,7 +2925,7 @@ if(
         AbortIf(!(perkState == PerkState.Using && perkType == PerkType.DragonStorm));
     StopFacing();
     // wait
-    Wait(0.25, WaitBehavior.IgnoreCondition);
+    Wait(0.5, WaitBehavior.IgnoreCondition);
         AbortIf(!(perkState == PerkState.Using && perkType == PerkType.DragonStorm));
 
     perkEffectStatus = 1;
@@ -2939,13 +2939,14 @@ if(
     perkState == PerkState.Using &&
     perkType == PerkType.DragonStorm &&
     !IsUsingUltimate() &&
-    perkEffectStatus >= 1 &&
-    perkEffectStatus <= maxOfDragon
+    (1 <= perkEffectStatus && perkEffectStatus <= maxOfDragon)
 ){
     perkEffectStatus ++;
-    SetProjectileSpeed(EventPlayer(), 3 + perkEffectStatus);
     SetUltimateCharge(EventPlayer(), 100);
+    SetProjectileSpeed(EventPlayer(), 3 + perkEffectStatus);
     PressButton(EventPlayer(), Button.Ultimate);
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    perkEffectStatus = maxOfDragon + 1;
 }
 
 rule: "Perk/Player/DragonStorm/keepPosition"
@@ -2955,7 +2956,7 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.DragonStorm &&
-    isDeployingDragon &&
+    isInAir &&
     DistanceBetween(EventPlayer(), perkPosition) >= 0.001
 ){
     ApplyImpulse(EventPlayer(), VectorTowards(EventPlayer(), perkPosition),
@@ -2972,14 +2973,14 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.DragonStorm &&
-    perkEffectStatus > maxOfDragon
+    !(1 <= perkEffectStatus && perkEffectStatus <= maxOfDragon)
 ){
     // wait  final deploy
     Wait(5.5, WaitBehavior.AbortWhenFalse);
         AbortIf(!(perkState == PerkState.Using && perkType == PerkType.DragonStorm));
     // reset position
     Teleport(EventPlayer(), PositionOf() + Vector(0, -60, 0));
-    isDeployingDragon = false;
+    isInAir = false;
     // reset status
     ClearStatus(EventPlayer(), Status.Rooted);
     SetProjectileSpeed(EventPlayer(), DefaultPercentage());
