@@ -508,7 +508,7 @@ if(
     }
 }
 
-rule: "Enemy/Effect/setEnemyTypeAppearance"
+rule: "Enemy/Effect/setEnemyBodyScale"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -516,35 +516,72 @@ if(
     enemyType != EnemyType.NotSet
 ){
     if(enemyType == EnemyType.Minion){
-        CreateEffect(AllPlayers(Team.All), Effect.Cloud, Color.Purple,
-            EventPlayer(), 1.5, EffectRev.VisibleToPositionAndRadius);
-        CreateInWorldText(
-            AllPlayers(Team.All), "Minion", 
-            EventPlayer(), 1.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
-            Color.White, Spectators.DefaultVisibility);
         StartScalingPlayer(EventPlayer(), 1.0, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
     }
     else if(enemyType == EnemyType.Elite){
-        CreateEffect(AllPlayers(Team.All), Effect.Cloud, Color.Purple,
-            EventPlayer(), 1.75, EffectRev.VisibleToPositionAndRadius);
-        CreateInWorldText(
-            AllPlayers(Team.All), "Elite", 
-            EventPlayer(), 1.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
-            Color.Yellow, Spectators.DefaultVisibility);
         StartScalingPlayer(EventPlayer(), 1.3, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.6, false);
     }
     else if(enemyType == EnemyType.Boss){
+        StartScalingPlayer(EventPlayer(), 1.6, false);
+        StartModifyingHeroVoiceLines(EventPlayer(), 0.4, false);
+    }
+}
+
+playervar define enemyAppearanceEntitys;
+
+rule: "Enemy/Effect/showEnemyAppearance"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    enemyType != EnemyType.NotSet &&
+    IsAlive()
+){
+    enemyAppearanceEntitys = [];
+    if(enemyType == EnemyType.Minion){
+        CreateEffect(AllPlayers(Team.All), Effect.Cloud, Color.Purple,
+            EventPlayer(), 1.5, EffectRev.VisibleToPositionAndRadius);
+        enemyAppearanceEntitys[0] = LastCreatedEntity();
+        CreateInWorldText(
+            AllPlayers(Team.All), "Minion", 
+            EventPlayer(), 1.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            Color.White, Spectators.DefaultVisibility);
+        enemyAppearanceEntitys[1] = LastTextID();
+    }
+    else if(enemyType == EnemyType.Elite){
+        CreateEffect(AllPlayers(Team.All), Effect.Cloud, Color.Purple,
+            EventPlayer(), 1.75, EffectRev.VisibleToPositionAndRadius);
+        enemyAppearanceEntitys[0] = LastCreatedEntity();
+        CreateInWorldText(
+            AllPlayers(Team.All), "Elite", 
+            EventPlayer(), 1.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            Color.Yellow, Spectators.DefaultVisibility);
+        enemyAppearanceEntitys[1] = LastTextID();
+    }
+    else if(enemyType == EnemyType.Boss){
         CreateEffect(AllPlayers(Team.All), Effect.Cloud, Color.Purple,
             EventPlayer(), 2.0, EffectRev.VisibleToPositionAndRadius);
+        enemyAppearanceEntitys[0] = LastCreatedEntity();
         CreateInWorldText(
             AllPlayers(Team.All), "Boss", 
             EventPlayer(), 2.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.Red, Spectators.DefaultVisibility);
-        StartScalingPlayer(EventPlayer(), 1.6, false);
-        StartModifyingHeroVoiceLines(EventPlayer(), 0.4, false);
+        enemyAppearanceEntitys[1] = LastTextID();
     }
+}
+
+rule: "Enemy/Effect/hideEnemyAppearance"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    enemyType != EnemyType.NotSet &&
+    !IsAlive()
+){
+    DestroyEffect(enemyAppearanceEntitys[0]);
+    DestroyInWorldText(enemyAppearanceEntitys[1]);
 }
 
 rule: "Enemy/Effect/playDeadEffect"
@@ -557,28 +594,13 @@ if(
     // Play blast effect when enemy dead
     // It's easier to understand if you killed an enemy, and you'll feel better
     if(enemyType == EnemyType.Minion){
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.GoodExplosion,
-            Color.Red, EventPlayer(), 4);
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.RingExplosion,
-            Color.Red, EventPlayer(), 4);
+        PlayContinuousBlast(PositionOf(), 2, 1, Color.Red);
     }
     else if(enemyType == EnemyType.Elite){
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.GoodExplosion,
-            Color.Red, EventPlayer(), 7);
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.RingExplosion,
-            Color.Red, EventPlayer(), 7);
+        PlayContinuousBlast(PositionOf(), 3, 2, Color.Red);
     }
     else if(enemyType == EnemyType.Boss){
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.GoodExplosion,
-            Color.Red, EventPlayer(), 10);
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.RingExplosion,
-            Color.Red, EventPlayer(), 10);
+        PlayContinuousBlast(PositionOf(), 5, 4, Color.Red);
     }
 }
 
@@ -613,7 +635,7 @@ playervar define teleportPosition;
 
 define randomPortalAreaPosition:
     portalPosition + 
-    RandomPosition(portalSize / 2, portalSize / 2, portalSize / 2);
+    RandomPosition(portalSize / 1.5, portalSize / 1.5, portalSize / 1.5);
 
 define randomPortalCenterPosition:
     portalPosition +
@@ -706,7 +728,7 @@ if(
         BarrierLOS.NoBarriersBlock)
 ){
     // Teleport an enemy to camping player
-    Wait(10 - (roundNo / 5), WaitBehavior.AbortWhenFalse); // player not found timer
+    Wait(10 - (roundNo / 4), WaitBehavior.AbortWhenFalse); // player not found timer
     TeleportPlayerNearWithBeamEffect();
     LoopIfConditionIsTrue();
 }
