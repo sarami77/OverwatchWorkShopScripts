@@ -633,46 +633,65 @@ if(
 playervar define teleportBeamEntity;
 playervar define teleportPosition;
 
-define randomPortalAreaPosition:
-    portalPosition + 
-    RandomPosition(portalSize / 1.5, portalSize / 1.5, portalSize / 1.5);
+void PlayTeleportBeam()"Subroutine/PlayTeleportBeam"{
+    // show beam
+    CreateBeamEffect(AllPlayers(Team.All), BeamType.BadBeam,
+        EventPlayer(), teleportPosition,
+        Color.Purple, EffectRev.VisibleToPositionAndRadius);
+    teleportBeamEntity = LastCreatedEntity();
+    // show beam effect
+    WaitPlayEffect();
+    // hide beam
+    DestroyEffect(teleportBeamEntity);
+}
 
-define randomPortalCenterPosition:
-    portalPosition +
-    RandomPosition(2, 2, 2);
+void SetTeleportPositionToBlindSpot()"Subroutine/SetTeleportPositionToBlindSpot"{
+    // set teleport position by blind spot from player
+    // find place that will be a blind spot up to 10 times
+    for(loopIndex = 0; loopIndex < 10; loopIndex++){
+        teleportPosition = NearestWalkablePosition(
+            portalPosition + 
+            RandomPosition(portalSize * 0.7, portalSize * 0.7, portalSize * 0.7)
+        );
+        if(
+            !IsInLineOfSight(teleportPosition,
+                ClosestPlayerTo(EventPlayer(), Team.Team1),
+                BarrierLOS.NoBarriersBlock)
+        ){
+            break;
+        }
+    }
+}
 
-define randomClosestPlayerPosition: 
-    ClosestPlayerTo(
-        portalPosition, Team.Team1
-    ) + RandomPosition(1.0, 0, 1.0);
+void SetTeleportPositionToCamper()"Subroutine/SetTeleportPositionToCamper"{
+    // set teleport position by blind spot from player
+    teleportPosition = ClosestPlayerTo(
+        portalPosition, Team.Team1) +
+        RandomPosition(1.0, 0, 1.0);
+}
 
-rule: "Enemy/Teleport/teleportToSpawnRoom //when not exit portal"
+rule: "Enemy/Teleport/teleportToSpawnRoomWhenPortalDisabled"
+Event.OngoingGlobal
+if(
+    initCompleted &&
+    !portalEnable
+){
+    // Teleport Enemy to spawn room when portal disable
+    Wait(1, WaitBehavior.AbortWhenFalse);   // wait show dead effect
+    // Teleport to spawn room
+    Respawn(AllPlayers(Team.Team2));
+}
+
+rule: "Enemy/Teleport/teleportToSpawnRoomWhenPortalEnabled"
 Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
     initCompleted &&
-    !portalEnable &&
-    !IsInSpawnRoom()
+    portalEnable
 ){
-    // Teleport Enemy to spawn room when portal disable
-    Wait(1, WaitBehavior.AbortWhenFalse);   // wait show dead effect
-    // Teleport
+    // Teleport to spawn room
     Respawn();
-}
-
-rule: "Enemy/Teleport/teleportToPortalBySet //when set portal"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    portalState == PortalState.Set &&
-    portalPosition != 0
-){
-    // Teleport Enemy to portal when portal set
-    // set teleport position
-    teleportPosition = NearestWalkablePosition(randomPortalCenterPosition);
-    Teleport(EventPlayer(), teleportPosition);
 }
 
 rule: "Enemy/Teleport/teleportToPortalBySpawn //when exist portal"
@@ -685,13 +704,10 @@ if(
     IsInSpawnRoom()
 ){
     // Teleport Enemy to portal when spawn
-    // set teleport position
-    if(portalState == PortalState.Suspended){
-        teleportPosition = NearestWalkablePosition(randomPortalAreaPosition);
-    }
-    else{
-        teleportPosition = NearestWalkablePosition(randomPortalCenterPosition);
-    }
+
+    // set teleport position tp blind spot from player
+    SetTeleportPositionToBlindSpot();
+    // Teleport
     Teleport(EventPlayer(), teleportPosition);
 }
 
@@ -711,7 +727,13 @@ if(
     ){
         // Teleport Enemy to portal when player enter to portal
         // To protect the portal with the enemy
-        TeleportPortalWithBeamEffect();
+
+        // set teleport position tp blind spot from player
+        SetTeleportPositionToBlindSpot();
+        // show teleport beam
+        PlayTeleportBeam();
+        // Teleport
+        Teleport(EventPlayer(), teleportPosition);
     }
 }
 
@@ -729,44 +751,17 @@ if(
 ){
     // Teleport an enemy to camping player
     Wait(10 - (roundNo / 4), WaitBehavior.AbortWhenFalse); // player not found timer
-    TeleportPlayerNearWithBeamEffect();
+    // set teleport position to camper
+    SetTeleportPositionToCamper();
+    // show teleport beam
+    PlayTeleportBeam();
+    // Teleport
+    Teleport(EventPlayer(), teleportPosition);
+
     LoopIfConditionIsTrue();
 }
 
-void TeleportPortalWithBeamEffect() "Subroutine/TeleportPortalWithBeamEffect"{
-    DestroyEffect(teleportBeamEntity);
-    // set teleport position
-    if(portalState == PortalState.Suspended){
-        teleportPosition = NearestWalkablePosition(randomPortalAreaPosition);
-    }
-    else{
-        teleportPosition = NearestWalkablePosition(randomPortalCenterPosition);
-    }
-    // show teleport beam
-    CreateBeamEffect(AllPlayers(Team.All), BeamType.BadBeam,
-        EventPlayer(), teleportPosition,
-        Color.Purple, EffectRev.VisibleToPositionAndRadius);
-    teleportBeamEntity = LastCreatedEntity();
-    WaitPlayEffect();// show beam effect
-    DestroyEffect(teleportBeamEntity);
-    // Teleport
-    Teleport(EventPlayer(), teleportPosition);
-}
 
-void TeleportPlayerNearWithBeamEffect()"Subroutine/TeleportPlayerNearWithBeamEffect"{
-    DestroyEffect(teleportBeamEntity);
-    // set teleport position
-    teleportPosition = (randomClosestPlayerPosition);
-    // show teleport beam
-    CreateBeamEffect(AllPlayers(Team.All), BeamType.BadBeam,
-        EventPlayer(), teleportPosition,
-        Color.Purple, EffectRev.VisibleToPositionAndRadius);
-    teleportBeamEntity = LastCreatedEntity();
-    WaitPlayEffect();// show beam effect
-    DestroyEffect(teleportBeamEntity);
-    // Teleport
-    Teleport(EventPlayer(), teleportPosition);
-}
 
 rule: "Enemy/Standby/enable //standby enemy bot when not exist portal"
 Event.OngoingGlobal
@@ -1193,19 +1188,6 @@ if(
     // If the suicide count reaches a some number,
     //  it is determined that the portal position is incorrect and the portal is recreate
     portalState = PortalState.Calculating;
-}
-
-rule: "Portal/Positioner/DetectSpawnArea/resetPortal //if enemy immediately after spawn is in spawn, portal is in spawn"
-Event.OngoingGlobal
-if(
-    portalEnable
-){
-    // If the portal position is in the enemy spawn area,
-    //  it is determined that the portal position is incorrect and the portal is recreate
-    Wait(1, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
-    if(IsInSpawnRoom(ClosestPlayerTo(portalPosition, Team.Team2))){
-        portalState = PortalState.Calculating;
-    }
 }
 
 globalvar define judgeTimerOfRemoteArea;
