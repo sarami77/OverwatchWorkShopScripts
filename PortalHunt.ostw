@@ -794,13 +794,13 @@ globalvar define enemyReceivedDamageRate;
 rule: "Enemy/ReceivedDamage/updateRate //for game balance, increase by missing players count"
 Event.OngoingGlobal
 {
+    WaitUpdateLongCycle();
     // If don't enough players, adjust enemy received damage rate to make the game fair
     // Multiply damage rate
     enemyReceivedDamageRate = 100;
     // Apply balance multiplier
     enemyReceivedDamageRate *= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy received damage scale
     SetDamageReceived(AllPlayers(Team.Team2), enemyReceivedDamageRate);
-    WaitUpdateLongCycle();
     LoopIfConditionIsTrue();
 }
 
@@ -808,15 +808,16 @@ globalvar define enemyDealtDamageRate;
 rule: "Enemy/DealtDamage/updateRate //for game progress, increase by round no, decrease by missing players count"
 Event.OngoingGlobal
 {
+    WaitUpdateLongCycle();
     // If don't enough players, adjust enemy dealt damage rate to make the game fair
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    enemyDealtDamageRate = 30;                    // basic enemy dealt damage
+    enemyDealtDamageRate = 25;                    // basic enemy dealt damage
     enemyDealtDamageRate += (roundNo * 1);        // Add damage depending on the number of rounds for progress
     // Apply balance multiplier
     enemyDealtDamageRate /= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy dealt damage scale
     SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);
-    WaitUpdateLongCycle();
+
     LoopIfConditionIsTrue();
 }
 
@@ -830,6 +831,7 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Growing
 ){
+    WaitUpdateMediumCycle();
     // Increase enemy hidden speed depending on portal size
     // Portals that have grown significantly over time will send quickly more enemies.
     _EnemySpeedScale = portalSize;
@@ -837,7 +839,6 @@ if(
     enemyHiddenSpeedRate = maxHiddenSpeed;
     enemyHiddenSpeedRate *= _EnemySpeedScale;
     enemyHiddenSpeedRate += 100;
-    WaitUpdateMediumCycle();
     LoopIf(portalSize < maxPortalSize);
 }
 
@@ -887,6 +888,7 @@ Player.All
 if(
     portalState == PortalState.Growing
 ){
+    WaitUpdateMediumCycle();
     // Shortens enemy spawn interval depending on portal size
     // Portals that have grown significantly over time will spawn more enemies.
     _EnemySpawnScale = maxPortalSize;
@@ -903,17 +905,16 @@ if(
     
     // Add respawn time according to enemy type
     if(enemyType == EnemyType.Minion){
-        enemySpawnInterval *= 0.3;
+        enemySpawnInterval *= 0.5;
     }
     else if(enemyType == EnemyType.Elite){
-        enemySpawnInterval *= 0.6;
+        enemySpawnInterval *= 0.7;
     }
     else if(enemyType == EnemyType.Boss){
         enemySpawnInterval *= 1.0;
     }
     // set +1 enemySpawnInterval for show dead effect
     SetRespawnMaxTime(EventPlayer(), enemySpawnInterval + 1);
-    WaitUpdateMediumCycle();
     LoopIf(portalSize < maxPortalSize);
 }
 
@@ -1009,8 +1010,9 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Growing
 ){
-    // Start growing portal with warning message
+    // Hide icon to let the player search the portal
     DestroyIcon(portalEntitys[0]);
+    // Start growing portal with warning message
     ChaseVariableAtRate(
         portalSize, maxPortalSize, 1 + (roundNo / 5),   //TAG portal grow speed
         RateChaseReevaluation.DestinationAndRate);
@@ -1028,6 +1030,8 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Suspended
 ){
+    // Hide icon to let the player search the portal
+    DestroyIcon(portalEntitys[0]);
     // Stop growing portal
     StopChasingVariable(portalSize);
 }
@@ -1245,7 +1249,7 @@ if(
     portalState = PortalState.Calculating;
 }
 
-define maxPortalSize: 60;
+define maxPortalSize: 70;
 
 rule: "Portal/Growing/startGrowingByPlayerFound"
 Event.OngoingGlobal
@@ -1313,7 +1317,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "boss enemy Spawn Interval (boss)", PlayersInSlot(0, Team.Team2).enemySpawnInterval>,
+        <"<0> <1>", "enemy Spawn Interval (boss)", PlayersInSlot(0, Team.Team2).enemySpawnInterval>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
