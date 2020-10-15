@@ -32,6 +32,7 @@ enum PerkType{  // TAG perk type
     HighJump,
     GrapplingBeam,
     Sprinter,
+    Adrenaline,
     Savior,
     Fearless,
     SteelFormation,
@@ -69,6 +70,7 @@ Event.OngoingGlobal
         PerkType.HighJump, 
         PerkType.GrapplingBeam,
         PerkType.Sprinter,
+        PerkType.Adrenaline,
         PerkType.Savior,
         PerkType.Fearless,
         PerkType.SteelFormation,
@@ -94,7 +96,7 @@ Event.OngoingGlobal
         PerkType.Titan
         
         //  for debug
-        // PerkType.DeathFromAbove
+        // PerkType.Adrenaline
     ];
 }
 
@@ -420,6 +422,10 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     else if(perkType == PerkType.Sprinter){
         perkName = "Sprinter";
         perkDetail = "Can move faster when keep moving. Reset by stop or received damage.";
+    }
+    else if(perkType == PerkType.Adrenaline){
+        perkName = "Adrenaline";
+        perkDetail = "The less health you have, the faster you move.";
     }
     else if(perkType == PerkType.Savior){
         perkName = "Savior";
@@ -787,7 +793,7 @@ if(
     perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/Sprinter/incraseingMoveSpeed"
+rule: "Perk/Player/Sprinter/updateMoveSpeed"
 Event.OngoingPlayer
 Team.Team1
 Player.All
@@ -833,6 +839,70 @@ if(
     1 <= EventDamage()
 ){
     keepMovingSecond = 0;
+    perkEffectStatus = 100;
+    SetMoveSpeed(EventPlayer(), perkEffectStatus);
+}
+
+// TAG Adrenaline ----------
+rule: "Perk/Player/Adrenaline/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.Adrenaline
+){
+    // set time limit
+    perkTimeLimit = 300;
+    // set param
+    perkEffectStatus = 100;
+    // set hud
+    perkEffectAndText = [];
+    CreatePerkEffectHud(<"Move speed <0>%", perkEffectStatus>);
+    perkEffectAndText[0] = LastTextID();
+}
+
+rule: "Perk/Player/Adrenaline/deactivate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Non &&
+    perkType == PerkType.Adrenaline
+){
+    // reset hud
+    DestroyHudText(perkEffectAndText[0]);
+    // reset status
+    SetMoveSpeed(EventPlayer(), 100);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/Adrenaline/updateMoveSpeed"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.Adrenaline &&
+    Health() < MaxHealth()
+){
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    perkEffectStatus = RoundToInteger((1 - (Health() / MaxHealth())) * 150);
+    perkEffectStatus += 100;
+    SetMoveSpeed(EventPlayer(), perkEffectStatus);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/Adrenaline/resetMoveSpeedByFullHealth"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.Adrenaline &&
+    Health() == MaxHealth()
+){
     perkEffectStatus = 100;
     SetMoveSpeed(EventPlayer(), perkEffectStatus);
 }
