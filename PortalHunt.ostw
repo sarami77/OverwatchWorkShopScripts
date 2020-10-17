@@ -509,7 +509,7 @@ if(
     }
 }
 
-rule: "Enemy/Effect/setEnemyBodyScale"
+rule: "Enemy/Effect/setEnemyPropety"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -519,14 +519,17 @@ if(
     if(enemyType == EnemyType.Minion){
         StartScalingPlayer(EventPlayer(), 1.0, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
+        maxSpawnInterval = 5;
     }
     else if(enemyType == EnemyType.Elite){
         StartScalingPlayer(EventPlayer(), 1.3, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.6, false);
+        maxSpawnInterval = 10;
     }
     else if(enemyType == EnemyType.Boss){
         StartScalingPlayer(EventPlayer(), 1.6, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.4, false);
+        maxSpawnInterval = 15;
     }
 }
 
@@ -635,6 +638,7 @@ playervar define teleportBeamEntity;
 playervar define teleportPosition;
 
 void PlayTeleportBeam()"Subroutine/PlayTeleportBeam"{
+    DestroyEffect(teleportBeamEntity);
     // show beam
     CreateBeamEffect(AllPlayers(Team.All), BeamType.BadBeam,
         EventPlayer(), teleportPosition,
@@ -655,7 +659,8 @@ void SetTeleportPositionToBlindSpot()"Subroutine/SetTeleportPositionToBlindSpot"
             RandomPosition(portalSize * 0.7, portalSize * 0.7, portalSize * 0.7)
         );
         if(
-            !IsInLineOfSight(teleportPosition,
+            !IsInLineOfSight(
+                teleportPosition,
                 ClosestPlayerTo(EventPlayer(), Team.Team1),
                 BarrierLOS.NoBarriersBlock)
         ){
@@ -666,9 +671,20 @@ void SetTeleportPositionToBlindSpot()"Subroutine/SetTeleportPositionToBlindSpot"
 
 void SetTeleportPositionToCamper()"Subroutine/SetTeleportPositionToCamper"{
     // set teleport position by blind spot from player
+    // find place that will be a blind spot up to 10 times
+    for(loopIndex = 0; loopIndex < 10; loopIndex++){
     teleportPosition = ClosestPlayerTo(
         portalPosition, Team.Team1) +
         RandomPosition(1.0, 0, 1.0);
+        if(
+            !IsInViewAngle(
+                ClosestPlayerTo(EventPlayer(), Team.Team1),
+                teleportPosition,
+                90)
+        ){
+            break;
+        }
+    }
 }
 
 rule: "Enemy/Teleport/teleportToSpawnRoomWhenPortalDisabled"
@@ -767,8 +783,6 @@ if(
     LoopIfConditionIsTrue();
 }
 
-
-
 rule: "Enemy/Standby/enable //standby enemy bot when not exist portal"
 Event.OngoingGlobal
 if(
@@ -791,7 +805,7 @@ if(
 
 globalvar define enemyReceivedDamageRate;
 
-rule: "Enemy/ReceivedDamage/updateRate //for game balance, increase by missing players count"
+rule: "Enemy/ReceivedDamage/updateByBalance //for game balance, increase by missing players count"
 Event.OngoingGlobal
 {
     WaitUpdateLongCycle();
@@ -805,7 +819,7 @@ Event.OngoingGlobal
 }
 
 globalvar define enemyDealtDamageRate;
-rule: "Enemy/DealtDamage/updateRate //for game progress, increase by round no, decrease by missing players count"
+rule: "Enemy/DealtDamage/updateByBalance //for game progress, increase by round no, decrease by missing players count"
 Event.OngoingGlobal
 {
     WaitUpdateLongCycle();
@@ -826,7 +840,7 @@ globalvar define _EnemySpeedScale;
 globalvar define enemyHiddenSpeedRate;
 playervar define isHiddenSpeed;
 
-rule: "Enemy/HiddenSpeed/updateRate //for round harder, increase by growing portal size"
+rule: "Enemy/HiddenSpeed/updateByPortalSize //for round harder, increase by growing portal size"
 Event.OngoingGlobal
 if(
     portalState == PortalState.Growing
@@ -842,7 +856,7 @@ if(
     LoopIf(portalSize < maxPortalSize);
 }
 
-rule: "Enemy/HiddenSpeed/enable //when not visible from players, quickly approach the player and hunt down"
+rule: "Enemy/HiddenSpeed/enableByGetInSight //when not visible from players, quickly approach the player and hunt down"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -861,7 +875,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Enemy/HiddenSpeed/disable //when visible from players, fight at basic speed"
+rule: "Enemy/HiddenSpeed/disableByGetOutOfSight //when visible from players, fight at basic speed"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -877,11 +891,11 @@ if(
     SetMoveSpeed(EventPlayer(), 100);
 }
 
-define maxSpawnInterval: 10;
+playervar define maxSpawnInterval;
 globalvar define _EnemySpawnScale;
 playervar define enemySpawnInterval;
 
-rule: "Enemy/SpawnInterval/updateRate //portal get bigger, interval get shorter and game getter harder"
+rule: "Enemy/SpawnInterval/updateByPortalSizeAndRoundNo //portal get bigger, interval get shorter and game getter harder"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -903,19 +917,22 @@ if(
         enemySpawnInterval = 0;
     }
     
-    // Add respawn time according to enemy type
-    if(enemyType == EnemyType.Minion){
-        enemySpawnInterval *= 0.5;
-    }
-    else if(enemyType == EnemyType.Elite){
-        enemySpawnInterval *= 0.7;
-    }
-    else if(enemyType == EnemyType.Boss){
-        enemySpawnInterval *= 1.0;
-    }
+
     // set +1 enemySpawnInterval for show dead effect
     SetRespawnMaxTime(EventPlayer(), enemySpawnInterval + 1);
     LoopIf(portalSize < maxPortalSize);
+}
+
+rule: "Enemy/SpawnInterval/resetByPortalReset"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    portalState == PortalState.Calculating
+){
+    // Shortens enemy spawn interval depending on portal size
+    enemySpawnInterval = maxSpawnInterval;
+    SetRespawnMaxTime(EventPlayer(), enemySpawnInterval);
 }
 
 // TAG Portal Function ----------
@@ -950,8 +967,6 @@ if(
     portalPosition = 0;
     portalSize = 0;
     StopChasingVariable(portalSize);
-    AllPlayers(Team.Team2).enemySpawnInterval = maxSpawnInterval;
-    SetRespawnMaxTime(AllPlayers(Team.Team2), maxSpawnInterval);
     enemyHiddenSpeedRate = 100;
     isFirstGrowing = true;
     // Hide portal icon and effect
@@ -967,6 +982,7 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Set
 ){
+    DestroyIcon(portalEntitys[0]);
     // show Portal Entity by portal state changed to Show
     // Init param
     portalClosingCount = MaxValue();
