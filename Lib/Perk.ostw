@@ -67,37 +67,35 @@ rule: "Perk/lotteryPerkList // list of parks you can pick up"
 Event.OngoingGlobal
 {
     lotteryPerkList = [     // TAG lottery perk list
-        // PerkType.HighJump, 
-        // PerkType.GrapplingBeam,
-        // PerkType.Sprinter,
-        // PerkType.Adrenaline,
-        // PerkType.Savior,
-        // PerkType.Fearless,
-        // PerkType.SteelFormation,
-        // PerkType.PersonalShelter,
-        // PerkType.BioticStation,
-        // PerkType.BioticStation,
-        // PerkType.TrapBeam,
-        // PerkType.ChainExplosion,
-        // PerkType.AimHack,
-        // PerkType.Vampire,
-        // PerkType.ShotCaller,
-        // PerkType.BattleFlag,
-        // PerkType.CruisingMissile,
-        // PerkType.CruisingMissile,
-        // PerkType.CarePackage,
-        // PerkType.CarePackage,
-        // PerkType.DeathFromAbove,
-        // PerkType.LegendalyNinja,
-        // PerkType.MachDelivery,
-        // PerkType.Juggernaut,
-        // PerkType.BeamSniper,
-        // PerkType.DragonStorm,
-        // PerkType.Titan
+        PerkType.HighJump, 
+        PerkType.GrapplingBeam,
+        PerkType.Sprinter,
+        PerkType.Adrenaline,
+        PerkType.Savior,
+        PerkType.Fearless,
+        PerkType.SteelFormation,
+        PerkType.PersonalShelter,
+        PerkType.BioticStation,
+        PerkType.BioticStation,
+        PerkType.TrapBeam,
+        PerkType.ChainExplosion,
+        PerkType.AimHack,
+        PerkType.Vampire,
+        PerkType.ShotCaller,
+        PerkType.BattleFlag,
+        PerkType.CruisingMissile,
+        PerkType.CruisingMissile,
+        PerkType.CarePackage,
+        PerkType.DeathFromAbove,
+        PerkType.LegendalyNinja,
+        PerkType.MachDelivery,
+        PerkType.Juggernaut,
+        PerkType.BeamSniper,
+        PerkType.DragonStorm,
+        PerkType.Titan
         
         //  for debug
-        PerkType.AimHack,
-        PerkType.CruisingMissile
+        // PerkType.HighJump
     ];
 }
 
@@ -411,18 +409,18 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     perkName = "";
     perkDetail = "";
 
-    // TAG perk HUD specification action
+    // TAG perk detail text HUD
     if(perkType == PerkType.HighJump){
         perkName = "High Jump";
-        perkDetail = "Can jump higher. It can Avoid danger or move to higher place.";
+        perkDetail = "jump more higher and can stay in air a little.";
     }
     else if(perkType == PerkType.GrapplingBeam){
         perkName = "Grappling Beam";
-        perkDetail = "Can use grappling beam. It can move quickly in air.";
+        perkDetail = "Shot grappling beam and move quickly in air.";
     }
     else if(perkType == PerkType.Sprinter){
         perkName = "Sprinter";
-        perkDetail = "Can move faster when keep moving. Reset by stop or received damage.";
+        perkDetail = "Move faster when keep moving. Reset by stop or received damage.";
     }
     else if(perkType == PerkType.Adrenaline){
         perkName = "Adrenaline";
@@ -507,7 +505,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
         perkDetail = "Giant with big shield and hammer. Let protect team and rampage!";
     }
 
-    // TAG perk HUD common action
+    // TAG perk common action
     perkHudEntitys = [];
     WaitRedraw();
 
@@ -645,9 +643,12 @@ if(
     perkEffectStatus = false;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(<"Hold jump button <0> to use high jump.", ButtonGuide(Button.Jump)>);
+    CreatePerkEffectHud(<"More hold jump button <0> to hover in air.", ButtonGuide(Button.Jump)>);
     perkEffectAndText[0] = LastTextID();
+    CreatePerkEffectHud(<"Hold jump button <0> to high jump.", ButtonGuide(Button.Jump)>);
+    perkEffectAndText[1] = LastTextID();
 }
+
 rule: "Perk/Player/HighJump/deactivate"
 Event.OngoingPlayer
 Team.Team1
@@ -658,6 +659,7 @@ if(
 ){
     // reset hud
     DestroyHudText(perkEffectAndText[0]);
+    DestroyHudText(perkEffectAndText[1]);
     // reset type
     perkType = PerkType.Non;
 }
@@ -673,10 +675,27 @@ if(
     IsButtonHeld(EventPlayer(), Button.Jump)
 ){
     WaitLongPressConfirm();
-    ApplyImpulse(EventPlayer(), Up(), 20,
-        Relative.ToPlayer, ContraryMotion.Incorporate);
-        perkEffectStatus = true;
+    ApplyImpulse(EventPlayer(), Up(), 18,
+        Relative.ToPlayer, ContraryMotion.Cancel);
     perkEffectStatus = true;
+}
+
+rule: "Perk/Player/HighJump/hover"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.HighJump &&
+    perkEffectStatus &&
+    IsButtonHeld(EventPlayer(), Button.Jump)
+){
+    Wait(0.9, WaitBehavior.AbortWhenFalse);
+    for(define hovringCount = 0; hovringCount < 15; hovringCount++){
+        ApplyImpulse(EventPlayer(), Up(), 1,
+            Relative.ToPlayer, ContraryMotion.Cancel);
+        WaitApplyImpulseCycle();
+    }
 }
 
 rule: "Perk/Player/HighJump/resetUsedFlag"
@@ -1672,8 +1691,10 @@ if(
     perkTargets = 0;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(<"Hold melee button <0> to toggle aim hack.", ButtonGuide(Button.Melee)>);
+    CreatePerkEffectHud(perkEffectStatus ? "Aim hack Enable." : "Aim hack Disable.");
     perkEffectAndText[0] = LastTextID();
+    CreatePerkEffectHud(<"Hold melee button <0> to toggle aim hack.", ButtonGuide(Button.Melee)>);
+    perkEffectAndText[1] = LastTextID();
 }
 
 rule: "Perk/Player/AimHack/deactivate"
@@ -1688,6 +1709,7 @@ if(
     StopFacing();
     // reset hud
     DestroyHudText(perkEffectAndText[0]);
+    DestroyHudText(perkEffectAndText[1]);
     // reset type
     perkType = PerkType.Non;
 }
@@ -1703,11 +1725,9 @@ if(
 ){
     WaitLongPressConfirm();
     if(perkEffectStatus){
-        SmallMessage(EventPlayer(), "Aim hack disabled.");
         perkEffectStatus = false;
     }
     else{
-        SmallMessage(EventPlayer(), "Aim hack enabled.");
         perkEffectStatus = true;
     }
 }
@@ -1933,9 +1953,10 @@ if(
         IconRev.VisibleToAndPosition, Color.Yellow, true);
     perkEffectAndText[7] = LastCreatedEntity();
     // set hud
-    CreatePerkEffectHud(<"Hold melee button <0> to lock landing point.", ButtonGuide(Button.Melee)>);
+    CreatePerkEffectHud(perkEffectStatus ? "locked landing point." : "guiding landing point.");
     perkEffectAndText[8] = LastTextID();
-  
+    CreatePerkEffectHud(<"Hold melee button <0> to lock landing point.", ButtonGuide(Button.Melee)>);
+    perkEffectAndText[9] = LastTextID();  
 }
 rule: "Perk/Player/CruisingMissile/deactivate"
 Event.OngoingPlayer
@@ -1960,6 +1981,7 @@ if(
     DestroyIcon(perkEffectAndText[7]);
     // reset hud
     DestroyHudText(perkEffectAndText[8]);
+    DestroyHudText(perkEffectAndText[9]);
     // reset type
     perkType = PerkType.Non;
 }
@@ -1975,11 +1997,9 @@ if(
 ){
     WaitLongPressConfirm();
     if(perkEffectStatus){
-        SmallMessage(EventPlayer(), "landing point unlocked.");
         perkEffectStatus = false;
     }
     else{
-        SmallMessage(EventPlayer(), "landing point locked.");
         perkEffectStatus = true;
     }
 }
@@ -2179,7 +2199,7 @@ if(
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.Orange, (
+        Color.LimeGreen, (
             PositionOf(
                 perkPosition + (DirectionTowards(landPosition, perkPosition) * 0.5)
             )
@@ -2207,7 +2227,7 @@ if(
 ){
     // set package at horizontal positions over 250
     perkPosition = EventPlayer() +
-        Vector(0, 250, 0) + RandomPosition(125, 0, 125);
+        Vector(0, 125, 0) + RandomPosition(0, 0, 0);
     // set package land position to player position
     landPosition = PositionOf();
     // start package move
@@ -2230,10 +2250,10 @@ if(
     // play landing effect
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosion,
-        Color.White, perkPosition, 10);
+        Color.Turquoise, perkPosition, 10);
     PlayEffect(
         AllPlayers(), PlayEffect.GoodExplosion,
-        Color.White, perkPosition, 10);
+        Color.Turquoise, perkPosition, 10);
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
         Color.White, AllPlayers(), MaxLength());
