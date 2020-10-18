@@ -67,36 +67,37 @@ rule: "Perk/lotteryPerkList // list of parks you can pick up"
 Event.OngoingGlobal
 {
     lotteryPerkList = [     // TAG lottery perk list
-        PerkType.HighJump, 
-        PerkType.GrapplingBeam,
-        PerkType.Sprinter,
-        PerkType.Adrenaline,
-        PerkType.Savior,
-        PerkType.Fearless,
-        PerkType.SteelFormation,
-        PerkType.PersonalShelter,
-        PerkType.BioticStation,
-        PerkType.BioticStation,
-        PerkType.TrapBeam,
-        PerkType.ChainExplosion,
-        PerkType.AimHack,
-        PerkType.Vampire,
-        PerkType.ShotCaller,
-        PerkType.BattleFlag,
-        PerkType.CruisingMissile,
-        PerkType.CruisingMissile,
-        PerkType.CarePackage,
-        PerkType.CarePackage,
-        PerkType.DeathFromAbove,
-        PerkType.LegendalyNinja,
-        PerkType.MachDelivery,
-        PerkType.Juggernaut,
-        PerkType.BeamSniper,
-        PerkType.DragonStorm,
-        PerkType.Titan
+        // PerkType.HighJump, 
+        // PerkType.GrapplingBeam,
+        // PerkType.Sprinter,
+        // PerkType.Adrenaline,
+        // PerkType.Savior,
+        // PerkType.Fearless,
+        // PerkType.SteelFormation,
+        // PerkType.PersonalShelter,
+        // PerkType.BioticStation,
+        // PerkType.BioticStation,
+        // PerkType.TrapBeam,
+        // PerkType.ChainExplosion,
+        // PerkType.AimHack,
+        // PerkType.Vampire,
+        // PerkType.ShotCaller,
+        // PerkType.BattleFlag,
+        // PerkType.CruisingMissile,
+        // PerkType.CruisingMissile,
+        // PerkType.CarePackage,
+        // PerkType.CarePackage,
+        // PerkType.DeathFromAbove,
+        // PerkType.LegendalyNinja,
+        // PerkType.MachDelivery,
+        // PerkType.Juggernaut,
+        // PerkType.BeamSniper,
+        // PerkType.DragonStorm,
+        // PerkType.Titan
         
         //  for debug
-        // PerkType.Adrenaline
+        PerkType.AimHack,
+        PerkType.CruisingMissile
     ];
 }
 
@@ -1691,33 +1692,24 @@ if(
     perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/AimHack/changeAimHackEnable"
+rule: "Perk/Player/AimHack/toggleAimHack"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.AimHack &&
-    !perkEffectStatus &&
     IsButtonHeld(EventPlayer(), Button.Melee)
 ){
     WaitLongPressConfirm();
-    SmallMessage(EventPlayer(), "Aim hack enabled.");
-    perkEffectStatus = true;
-}
-rule: "Perk/Player/AimHack/changeAimHackDisable"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkState == PerkState.Using &&
-    perkType == PerkType.AimHack &&
-    perkEffectStatus &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
-){
-    WaitLongPressConfirm();
-    SmallMessage(EventPlayer(), "Aim hack disabled.");
-    perkEffectStatus = false;
+    if(perkEffectStatus){
+        SmallMessage(EventPlayer(), "Aim hack disabled.");
+        perkEffectStatus = false;
+    }
+    else{
+        SmallMessage(EventPlayer(), "Aim hack enabled.");
+        perkEffectStatus = true;
+    }
 }
 
 rule: "Perk/Player/AimHack/startAutoAim"
@@ -1899,6 +1891,9 @@ if(
 ){
     // set time limit
     perkTimeLimit = 10;
+    // set status
+    perkTargets = 0;
+    perkEffectStatus = false;
     // show text
     // landing zone text
     CreateInWorldText(
@@ -1931,12 +1926,16 @@ if(
     perkEffectAndText[5] = LastCreatedEntity();
     // landing zone position
     CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
-        landPosition, 0.25, EffectRev.VisibleToPositionAndRadius);
+        landPosition, 0.1, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[6] = LastCreatedEntity();  
     // landing zone warning icon
     CreateIcon(AllPlayers(), landPosition + PositionOffset(), Icon.Warning,
         IconRev.VisibleToAndPosition, Color.Yellow, true);
-    perkEffectAndText[7] = LastCreatedEntity(); 
+    perkEffectAndText[7] = LastCreatedEntity();
+    // set hud
+    CreatePerkEffectHud(<"Hold melee button <0> to lock landing point.", ButtonGuide(Button.Melee)>);
+    perkEffectAndText[8] = LastTextID();
+  
 }
 rule: "Perk/Player/CruisingMissile/deactivate"
 Event.OngoingPlayer
@@ -1959,8 +1958,30 @@ if(
     StopChasingVariable(landPosition);
     // reset icon
     DestroyIcon(perkEffectAndText[7]);
+    // reset hud
+    DestroyHudText(perkEffectAndText[8]);
     // reset type
     perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/CruisingMissile/toggleLockPoint"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.CruisingMissile &&
+    IsButtonHeld(EventPlayer(), Button.Melee)
+){
+    WaitLongPressConfirm();
+    if(perkEffectStatus){
+        SmallMessage(EventPlayer(), "landing point unlocked.");
+        perkEffectStatus = false;
+    }
+    else{
+        SmallMessage(EventPlayer(), "landing point locked.");
+        perkEffectStatus = true;
+    }
 }
 
 rule: "Perk/Player/CruisingMissile/playMissleBooster"
@@ -2018,7 +2039,7 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.CruisingMissile &&
-    !IsCrouching()
+    !perkEffectStatus
 ){
     // chase missile land position to aiming position
     WaitUpdateShortCycle();
@@ -3326,7 +3347,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 1.0));
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 2.0));
     LoopIfConditionIsTrue();
 }
 

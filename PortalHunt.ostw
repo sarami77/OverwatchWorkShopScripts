@@ -12,6 +12,8 @@
 // add Drone
 // add Assassination
 // add DropPerk
+// add hovering to HighJump
+// add lock landing point to CrusingMissile
 
 import "Lib/Utility.ostw";
 import "Lib/ElapsedTimer.ostw";
@@ -22,7 +24,7 @@ import "Lib/Perk.ostw";
 import "Lib/Debug.ostw";
 
 // TAG Signature and infomation ----------
-disabled rule: "PORTAL HUNT -HORDE PVE [ver 1.9]"-1{}
+disabled rule: "PORTAL HUNT -HORDE PVE [ver 2.0] Share code [YY1N2]"-1{}
 disabled rule: "You allowed copy or modify code."-1{}
 disabled rule: "This script was generated from source code by [Overwatch-Script-To-Workshop]"-1{}
 disabled rule: "Check detail with https://github.com/ItsDeltin/Overwatch-Script-To-Workshop"-1{}
@@ -116,17 +118,15 @@ if(
     roundNo = 0;
     teamLifes = initalTeamLifes;
     Heal(AllPlayers(Team.Team2), null, MaxValue());
-    BigMessage(AllPlayers(Team.All), "Game was reset by no player");
-    SetObjectiveDescription(AllPlayers(), "Stand by...", ObjectiveRev.VisibleToSortOrderAndString);
     gameInProgress = false;
 }
 
-rule: "Game/ShareCode/showShareCode"
+rule: "Game/ShareCode/showGameCode"
 Event.OngoingGlobal
 {
     // show ver and share code
     CreateHudText(AllPlayers(Team.Team1),
-        null, "PORTAL HUNT -HORDE PVE [ver 1.9] Share code [YY1N2]", null,
+        null, "PORTAL HUNT -HORDE PVE [ver 2.0] Share code [YY1N2]", null,
         Location.Left, -3,
         Color.White, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
@@ -305,9 +305,14 @@ if(
     Wait(1, WaitBehavior.AbortWhenFalse);   // show slow
     SetSlowMotion(100);
     WaitNextPhase();
+
     BigMessage(AllPlayers(Team.All),
         <"<0> <1> <2>", "We have reached", roundNo, "round... good game!">);
+    PlayRandomEmote(AllPlayers(Team.Team1));
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    PlayRandomVoiceLine(AllPlayers(Team.Team1));
     WaitNextPhase();
+
     DeclareTeamVictory(Team.Team1);
 }
 
@@ -391,6 +396,7 @@ if(
     teamLifes += 1;
     WaitNextPhase();
 
+    PlayRandomVoiceLine(AllPlayers(Team.Team1));
     roundNo += 1;
     portalState = PortalState.Calculating;  // start next portal create
 }
@@ -519,7 +525,7 @@ if(
     if(enemyType == EnemyType.Minion){
         StartScalingPlayer(EventPlayer(), 1.0, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
-        maxSpawnInterval = 5;
+        maxSpawnInterval = 5;       // TAG maxSpawnInterval
     }
     else if(enemyType == EnemyType.Elite){
         StartScalingPlayer(EventPlayer(), 1.3, false);
@@ -656,7 +662,7 @@ void SetTeleportPositionToBlindSpot()"Subroutine/SetTeleportPositionToBlindSpot"
     for(loopIndex = 0; loopIndex < 10; loopIndex++){
         teleportPosition = NearestWalkablePosition(
             portalPosition + 
-            RandomPosition(portalSize * 0.7, portalSize * 0.7, portalSize * 0.7)
+            RandomPosition(portalSize * 0.5, portalSize * 0.5, portalSize * 0.5)
         );
         if(
             !IsInLineOfSight(
