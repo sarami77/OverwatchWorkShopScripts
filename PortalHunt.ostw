@@ -1212,12 +1212,25 @@ rule: "Portal/Positioner/DetectInvalidArea/resetPortal //if _suicide occurs freq
 Event.OngoingGlobal
 if(
     portalEnable &&
-    sucideCountOfInvalidArea >= 3 &&
+    sucideCountOfInvalidArea >= (NumberOfPlayers(Team.Team2) / 2) &&
     portalClosingCount > 0 // Don't detect to all kill by portal closed
 ){
     // If the suicide count reaches a some number,
     //  it is determined that the portal position is incorrect and the portal is recreate
     portalState = PortalState.Calculating;
+}
+
+rule: "Portal/Positioner/DetectSpawnArea/resetPortal //if enemy immediately after spawn is in spawn, portal is in spawn"
+Event.OngoingGlobal
+if(
+    portalEnable
+){
+    // If the portal position is in the enemy spawn area,
+    //  it is determined that the portal position is incorrect and the portal is recreate
+    Wait(1, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
+    if(IsInSpawnRoom(ClosestPlayerTo(portalPosition, Team.Team2))){
+        portalState = PortalState.Calculating;
+    }
 }
 
 globalvar define judgeTimerOfRemoteArea;
@@ -1262,7 +1275,7 @@ rule: "Portal/Positioner/DetectRemoteArea/resetPortal //if not player encount wi
 Event.OngoingGlobal
 if(
     portalEnable &&
-    judgeTimerOfRemoteArea >= 40
+    judgeTimerOfRemoteArea >= (portalStableTime - 1)
 ){
     // If the player and the enemy haven't been met for some time,
     //  it is determined that the portal position is incorrect and the portal is recreate
@@ -1270,6 +1283,7 @@ if(
 }
 
 define maxPortalSize: 70;
+define portalStableTime: 40;
 
 rule: "Portal/Growing/startGrowingByPlayerFound"
 Event.OngoingGlobal
@@ -1289,7 +1303,7 @@ rule: "Portal/Growing/startGrowingByTimeout"
 Event.OngoingGlobal
 if(portalState == PortalState.Set){
     // Start portal growing by search time limit out
-    Wait(40, WaitBehavior.AbortWhenFalse);  //wait time to start growing
+    Wait(portalStableTime, WaitBehavior.AbortWhenFalse);  //wait time to start growing
     portalState = PortalState.Growing;
 }
 
@@ -1558,7 +1572,7 @@ if(
     portalState = PortalState.Calculating;
 }
 
-rule: "Debug/setPortalOnAimCenter // reset portal position by aim center"
+rule: "Debug/setPortalPositionOnAimCenter // reset portal position by aim center"
 Event.OngoingPlayer
 Team.All
 Player.All
