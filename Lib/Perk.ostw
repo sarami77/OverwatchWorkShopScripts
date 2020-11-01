@@ -11,8 +11,8 @@ Event.OngoingGlobal
 if(
     ServerLoad() >= 255
 ){
-    Wait(5, WaitBehavior.AbortWhenFalse);
-    dbgMsg("!!! Player's perk was force reset by server load full !!!");
+    Wait(4, WaitBehavior.AbortWhenFalse);
+    dbgMsg("!!! Player's perk was force reset by server over load !!!");
     AllPlayers(Team.Team1).perkState = PerkState.Non;   // reset perk
 }
 
@@ -550,7 +550,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.Annihilator){
         perkName = "Annihilator";
-        perkDetail = "Execute one after another nearby enemies with tremendous high-speed movement.";
+        perkDetail = "Execute nearby enemies one after another at super high speed like lightning.";
     }
 
     // TAG perk common action
@@ -2656,7 +2656,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 10));
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 8));
     LoopIfConditionIsTrue();
 }
 
@@ -2760,7 +2760,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 5));
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 6));
     LoopIfConditionIsTrue();
 }
 
@@ -3056,7 +3056,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 10));
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 6));
     LoopIfConditionIsTrue();
 }
 
@@ -3427,7 +3427,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 2.0));
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 3));
     LoopIfConditionIsTrue();
 }
 
@@ -3557,7 +3557,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 2.0));
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 3));
     LoopIfConditionIsTrue();
 }
 
@@ -3597,6 +3597,7 @@ if(
     perkType == PerkType.Annihilator
 ){
     // reset param
+    StopCamera(EventPlayer());
     perkEffectStatus = false;
     // reset perk hero
     StopForcingPerkHero(EventPlayer());
@@ -3626,9 +3627,29 @@ if(
     perkType == PerkType.Annihilator &&
     IsUsingUltimate()
 ){
-    SetDamageDealt(EventPlayer(), 1000);
+    SetDamageDealt(EventPlayer(), 300);
     SetMoveSpeed(EventPlayer(), 500);
-    perkPosition = EyePosition();
+    perkEffectStatus = true;
+
+    // get inline sight target
+    perkTargets = 
+        FirstOf(
+            SortedArray(
+                FilteredArray(
+                    AllPlayers(Team.Team2), 
+                    (
+                        IsAlive(ArrayElement()) &&
+                        IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock)
+                    )
+                ),
+                DistanceBetween(EventPlayer(), ArrayElement())
+            )
+        );
+    if(perkTargets != 0){
+        // set camera
+        perkPosition = EyePosition();
+        StartCamera(EventPlayer(), perkPosition, EyePosition(), 10);
+    }
 }
 
 rule: "Perk/Player/Annihilator/chaseNextTarget"
@@ -3654,7 +3675,7 @@ if(
                 DistanceBetween(EventPlayer(), ArrayElement())
             )
         );
-    
+
     if(perkTargets == 0){
         // get near target
         perkTargets = 
@@ -3664,7 +3685,7 @@ if(
                         AllPlayers(Team.Team2), 
                         (
                             IsAlive(ArrayElement()) &&
-                            DistanceBetween(EventPlayer(), ArrayElement()) <= 9
+                            DistanceBetween(EventPlayer(), ArrayElement()) <= 10
                         )
                     ),
                     DistanceBetween(EventPlayer(), ArrayElement())
@@ -3673,6 +3694,21 @@ if(
     }
 
     if(perkTargets != 0){
+        // update camera
+        if(
+            !IsInLineOfSight(perkPosition, EventPlayer(), BarrierLOS.NoBarriersBlock) ||
+            DistanceBetween(perkPosition, EyePosition()) > 20
+        ){
+            perkPosition = (perkPosition + EyePosition()) / 2;
+            // if camera too close to player
+            if(DistanceBetween(perkPosition, EyePosition()) < 10){
+                // camera backword
+                perkPosition = perkPosition + (VectorTowards(perkTargets, perkPosition) * 1.5);
+            }
+
+            StartCamera(EventPlayer(), perkPosition, EyePosition(), 10);
+        }
+
         // chase target
         ApplyImpulse(EventPlayer(),
             VectorTowards(EventPlayer(), perkTargets+ RandomPosition(1, 1, 1)),
@@ -3681,36 +3717,6 @@ if(
         PlayEffect(
             AllPlayers(), PlayEffect.BadPickupEffect,
             Color.Red, EventPlayer(), 1.0);
-    }
-
-     // get near target
-    perkTargets = 
-        FirstOf(
-            SortedArray(
-                FilteredArray(
-                    AllPlayers(Team.Team2), 
-                    (
-                        IsAlive(ArrayElement()) &&
-                        DistanceBetween(EventPlayer(), ArrayElement()) <= 3
-                    )
-                ),
-                DistanceBetween(EventPlayer(), ArrayElement())
-            )
-        );
-
-    // play enemy blood pulse
-    PlayEffect(
-        AllPlayers(), PlayEffect.BadPickupEffect,
-        Color.Red, perkTargets, 1.0);
-
-    if(
-        DistanceBetween(
-            EventPlayer(),
-            NearestWalkablePosition(EventPlayer())
-        ) >= 7
-    ){
-        // return to safe ground
-        Teleport(EventPlayer(), NearestWalkablePosition(EventPlayer()));
     }
 
     WaitApplyImpulseCycle();
@@ -3726,11 +3732,17 @@ if(
     perkType == PerkType.Annihilator &&
     !IsUsingUltimate()
 ){
+    // finish damage
+    Damage(
+        PlayersWithinRadius(EventPlayer(), 10, Team.Team2, RadiusLOS.Off ),
+        EventPlayer(), MaxValue()
+    );
+
     SetDamageDealt(EventPlayer(), 200);
     SetMoveSpeed(EventPlayer(), 150);
-    DestroyEffect(perkEffectAndText[0]);
-    perkEffectStatus = true;
-    Wait(3, WaitBehavior.IgnoreCondition);
+    StopCamera(EventPlayer());
+
+    Wait(5, WaitBehavior.IgnoreCondition);
     perkEffectStatus = false;
 }
 
@@ -3741,14 +3753,19 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.Annihilator &&
-    perkEffectStatus == true &&
-    DistanceBetween(
-        EventPlayer(),
-        NearestWalkablePosition(EventPlayer())
-    ) >= 6
+    perkEffectStatus == true
 ){
-    // return to safe ground
-    Teleport(EventPlayer(), NearestWalkablePosition(EventPlayer()));
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    if(
+        DistanceBetween(
+            EventPlayer(),
+            NearestWalkablePosition(EventPlayer())
+        ) >= 5
+    ){
+        // return to safe ground
+        Teleport(EventPlayer(), NearestWalkablePosition(EventPlayer()));
+    }
+    LoopIfConditionIsTrue();
 }
 
 rule: "Perk/Player/Annihilator/chargingUlt"
@@ -3762,7 +3779,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 10));
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 6));
     LoopIfConditionIsTrue();
 }
 
