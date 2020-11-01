@@ -178,38 +178,76 @@ Team.Team2
 Player.All
 if(
     perkCrateState == PerkCrateState.Dropped &&
-    DistanceBetween(
-        perkCratePosition,
-        ClosestPlayerTo(perkCratePosition, Team.Team1)
-    ) <= pickupRange
+    CountOf(
+        FilteredArray(
+            AllPlayers(Team.Team1),
+            (
+                ArrayElement().perkState == PerkState.Non &&
+                DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
+            )
+        )
+    ) > 0
 ){
     // When a player approaches the position where the perk crate drops,
     //  give the player a random perk
     WaitConditionConfirmed();
-    playerClosestCrate =
-        ClosestPlayerTo(perkCratePosition, Team.Team1);
-    // If player don't have perk
-    if(
-        playerClosestCrate.perkState == PerkState.Non &&
-        IsAlive(playerClosestCrate)
-    ){
-        playerClosestCrate.perkType = RandomValueInArray(lotteryPerkList);
-        playerClosestCrate.perkState = PerkState.Ready;
-        PlayEffect(
-            AllPlayers(), PlayEffect.GoodPickupEffect,
-            Color.White, playerClosestCrate, 1);
-        PlayEffect(
-            playerClosestCrate, PlayEffect.BuffExplosionSound,
-            Color.White, playerClosestCrate, MaxLength());
-        SmallMessage(playerClosestCrate, "Got perk. Check detail from left list.");
-        // delete perk crate when picked up
-        perkCrateState = PerkCrateState.NotDropped;
-    }
+    playerClosestCrate = 
+        FirstOf(
+            FilteredArray(
+                AllPlayers(Team.Team1),
+                (
+                    ArrayElement().perkState == PerkState.Non &&
+                    DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
+                )
+            )
+        );
+
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodPickupEffect,
+        Color.White, playerClosestCrate, 1);
+    PlayEffect(
+        playerClosestCrate, PlayEffect.BuffExplosionSound,
+        Color.White, playerClosestCrate, MaxLength());
+    SmallMessage(playerClosestCrate, "Got perk. Check detail from left list.");
+    playerClosestCrate.perkType = RandomValueInArray(lotteryPerkList);
+    playerClosestCrate.perkState = PerkState.Ready;
+    // delete perk crate when picked up
+    perkCrateState = PerkCrateState.NotDropped;
+
+
+}
+
+rule: "Perk/Enemy/alreadykPickUpByPlayer"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    perkCrateState == PerkCrateState.Dropped &&
+    CountOf(
+        FilteredArray(
+            AllPlayers(Team.Team1),
+            (
+                ArrayElement().perkState != PerkState.Non &&
+                DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
+            )
+        )
+    ) > 0
+){
+    WaitConditionConfirmed();
+    playerClosestCrate = 
+        FirstOf(
+            FilteredArray(
+                AllPlayers(Team.Team1),
+                (
+                    ArrayElement().perkState != PerkState.Non &&
+                    DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
+                )
+            )
+        );
+
     // If player already have perk
-    else{
-        SmallMessage(playerClosestCrate, "Already have perk.");
-        SmallMessage(playerClosestCrate, "First, consume or cancel current perk. Check detail from left list.");
-    }
+    SmallMessage(playerClosestCrate, "Already have perk.");
+    SmallMessage(playerClosestCrate, "First, consume or cancel current perk. Check detail from left list.");
 }
 
 rule: "Perk/Player/ParkState/Non"
