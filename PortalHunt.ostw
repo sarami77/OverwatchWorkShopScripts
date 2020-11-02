@@ -376,13 +376,13 @@ if(
 rule: "Player/ClosePortal/finishClose //on count down finished"
 Event.OngoingGlobal
 if(
-    teamLifes > 0 &&
-    portalClosingCount <= 0 &&
     (
         portalState == PortalState.Suspended ||
         portalState == PortalState.Closing ||
         portalState == PortalState.Closed
-    )
+    ) &&
+    portalClosingCount <= 0 &&
+    teamLifes > 0
 ){
     // When the countdown is complete, clear the portal and give team lifes.
     // Later, we will generate a new portal and start the next round.
@@ -390,6 +390,7 @@ if(
     WaitPlayEffect();   //wait portal closing effect
     portalState = PortalState.Closed;
     WaitNextPhase();
+
     BigMessage(AllPlayers(Team.All), "We got new team lifes!");
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.BuffImpactSound,
@@ -662,11 +663,15 @@ void SetTeleportPositionToBlindSpot()"Subroutine/SetTeleportPositionToBlindSpot"
     for(loopIndex = 0; loopIndex < 10; loopIndex++){
         teleportPosition = NearestWalkablePosition(
             portalPosition + 
-            RandomPosition(portalSize * 0.5, portalSize * 0.5, portalSize * 0.5)
+            RandomPosition(portalSize * 1.0, portalSize * 1.0, portalSize * 1.0)
         );
         if(
-            !IsInLineOfSight(
-                teleportPosition,
+            DistanceBetween(    // Within the portal
+                portalPosition, teleportPosition + PositionOffset())
+                <= portalSize * 1.0
+                    &&
+            !IsInLineOfSight(   // Blind spot from the player 
+                teleportPosition + PositionOffset(),
                 ClosestPlayerTo(EventPlayer(), Team.Team1),
                 BarrierLOS.NoBarriersBlock)
         ){
@@ -679,14 +684,18 @@ void SetTeleportPositionToCamper()"Subroutine/SetTeleportPositionToCamper"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
     for(loopIndex = 0; loopIndex < 10; loopIndex++){
-    teleportPosition = ClosestPlayerTo(
-        portalPosition, Team.Team1) +
-        RandomPosition(1.0, 0, 1.0);
+        teleportPosition = ClosestPlayerTo(
+            portalPosition, Team.Team1) +
+            RandomPosition(1.0, 0, 1.0);
         if(
-            !IsInViewAngle(
+            IsInLineOfSight(    // Not buried in the wall
+                teleportPosition + PositionOffset(),
                 ClosestPlayerTo(EventPlayer(), Team.Team1),
-                teleportPosition,
-                90)
+                BarrierLOS.NoBarriersBlock)
+                    &&
+            !IsInViewAngle(    // Out of the player's field of view
+                ClosestPlayerTo(EventPlayer(), Team.Team1),
+                teleportPosition + PositionOffset(), 90)
         ){
             break;
         }
@@ -913,13 +922,12 @@ if(
 
     enemySpawnInterval = maxSpawnInterval;
     enemySpawnInterval *= _EnemySpawnScale;// TAG enemy spawn interval
-    enemySpawnInterval -= (roundNo / 10);
 
-    if(0 > enemySpawnInterval){
-        enemySpawnInterval = 0;
-    }
+    // enemySpawnInterval -= (roundNo / 10);
+    // if(0 > enemySpawnInterval){
+    //     enemySpawnInterval = 0;
+    // }
     
-
     // set +1 enemySpawnInterval for show dead effect
     SetRespawnMaxTime(EventPlayer(), enemySpawnInterval + 1);
     LoopIf(portalSize < maxPortalSize);
@@ -935,6 +943,17 @@ if(
     // Shortens enemy spawn interval depending on portal size
     enemySpawnInterval = maxSpawnInterval;
     SetRespawnMaxTime(EventPlayer(), enemySpawnInterval);
+}
+
+rule: "Enemy/SpawnInterval/respawnBySucide"
+Event.OnDeath
+Team.Team2
+Player.All
+if(
+    Attacker() == EventPlayer()
+){
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    Respawn();
 }
 
 // TAG Portal Function ----------
@@ -1169,9 +1188,9 @@ if(
     portalState = PortalState.Set;
 }
 
-globalvar define sucideCountOfInvalidArea;
+globalvar define countOfInvalidArea;
 
-rule: "Portal/Positioner/DetectInvalidArea/countupSucideCount // detect portal position by enemy sucide count"
+rule: "Portal/Positioner/DetectInvalidArea/countdownSuicides"
 Event.OnDeath 
 Team.Team2
 Player.All
@@ -1181,43 +1200,40 @@ if(
 ){
     // Count the number of enemy suicides caused by invalid areas
     // Player team spawn areas and instability at cliffs, etc.
-    sucideCountOfInvalidArea += 1;
+    countOfInvalidArea --;
 }
 
-rule: "Portal/Positioner/DetectInvalidArea/resetSucideCount //count reset by portal reset"
+rule: "Portal/Positioner/DetectInvalidArea/resetCount"
 Event.OngoingGlobal
 if(
     !portalEnable
 ){
     // Reset count by portal reset
-    sucideCountOfInvalidArea = 0;
+    countOfInvalidArea = (NumberOfPlayers(Team.Team2) / 2);
 }
 
-rule: "Portal/Positioner/DetectInvalidArea/reduceSucideCount //count reduce over time to avoid over-detection"
+rule: "Portal/Positioner/DetectInvalidArea/reduceCount"
 Event.OngoingGlobal
 if(
-    portalEnable &&
-    sucideCountOfInvalidArea > 0
+    countOfInvalidArea < (NumberOfPlayers(Team.Team2) / 2)
 ){
     // Reduce over time to avoid over detection
-    Wait(2, WaitBehavior.AbortWhenFalse);   // wait reduce sucide count
-    sucideCountOfInvalidArea -= 1;
+    Wait(1, WaitBehavior.AbortWhenFalse);   // wait reduce sucide count
+    countOfInvalidArea ++;
     LoopIfConditionIsTrue();
 }
 
-rule: "Portal/Positioner/DetectInvalidArea/resetPortal //if _suicide occurs frequently, portal is in invalid area"
+rule: "Portal/Positioner/DetectInvalidArea/resetPortal"
 Event.OngoingGlobal
 if(
-    portalEnable &&
-    sucideCountOfInvalidArea >= (NumberOfPlayers(Team.Team2) / 2) &&
-    portalClosingCount > 0 // Don't detect to all kill by portal closed
+    countOfInvalidArea <= 0
 ){
-    // If the suicide count reaches a some number,
+    // If the suicide count reaches 0,
     //  it is determined that the portal position is incorrect and the portal is recreate
     portalState = PortalState.Calculating;
 }
 
-rule: "Portal/Positioner/DetectSpawnArea/resetPortal //if enemy immediately after spawn is in spawn, portal is in spawn"
+rule: "Portal/Positioner/DetectSpawnArea/resetPortal"
 Event.OngoingGlobal
 if(
     portalEnable
@@ -1230,29 +1246,32 @@ if(
     }
 }
 
-globalvar define judgeTimerOfRemoteArea;
+globalvar define timerOfRemoteArea;
+globalvar define contactHappened;
 
-rule: "Portal/Positioner/DetectRemoteArea/countupJudgeTimer //detect portal position that can't encount to player"
+rule: "Portal/Positioner/DetectRemoteArea/countdownNonContactTimer"
 Event.OngoingGlobal
 if(
-    portalEnable
+    portalEnable &&
+    !contactHappened
 ){
-    // start count up countupJudgeTimer
-    ChaseVariableAtRate(judgeTimerOfRemoteArea, MaxValue(), 1,
-        RateChaseReevaluation.DestinationAndRate);
+    // start count down
+    timerOfRemoteArea --;
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
 }
 
-rule: "Portal/Positioner/DetectRemoteArea/resetJudgeTimer //timer reset by portal reset"
+rule: "Portal/Positioner/DetectRemoteArea/resetTimer"
 Event.OngoingGlobal
 if(
     !portalEnable
 ){
-    // stop count up and reset countupJudgeTimer by portal reset
-    StopChasingVariable(judgeTimerOfRemoteArea);
-    judgeTimerOfRemoteArea = 0;
+    // stop count down and reset timer
+    contactHappened = false;
+    timerOfRemoteArea = portalStableTime - 1;
 }
 
-rule: "Portal/Positioner/DetectRemoteArea/stopJudgeTimer //timer stop by player encount"
+rule: "Portal/Positioner/DetectRemoteArea/stopTimer"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -1263,18 +1282,72 @@ if(
         BarrierLOS.NoBarriersBlock
     )
 ){
-    // If the player and the enemy have been met, stop count up of judgeTimerOfRemoteArea
+    // If the player and enemy have been met, stop count down
     WaitConditionConfirmed();
-    StopChasingVariable(judgeTimerOfRemoteArea);
+    contactHappened = true;
 }
 
-rule: "Portal/Positioner/DetectRemoteArea/resetPortal //if not player encount within a certain time, portal is in remote area"
+rule: "Portal/Positioner/DetectRemoteArea/resetPortal"
+Event.OngoingGlobal
+if(
+    timerOfRemoteArea <= 0
+){
+    // If the player and enemy haven't been met for some time,
+    //  it is determined that the portal position is incorrect and the portal is recreate
+    portalState = PortalState.Calculating;
+}
+
+globalvar define isCheckingNotMoving;
+globalvar define countOfClosedArea;
+
+rule: "Portal/Positioner/DetectClosedArea/startChecking"
+Event.OngoingGlobal
+if(
+    portalEnable
+){
+    countOfClosedArea = MaxValue();
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    isCheckingNotMoving = true;
+}
+
+rule: "Portal/Positioner/DetectClosedArea/resetChecking"
+Event.OngoingGlobal
+if(
+    !portalEnable ||
+    contactHappened
+){
+    isCheckingNotMoving = false;
+    countOfClosedArea = MaxValue();
+}
+
+rule: "Portal/Positioner/DetectClosedArea/countdownNotMovingEnemys"
 Event.OngoingGlobal
 if(
     portalEnable &&
-    judgeTimerOfRemoteArea >= (portalStableTime - 1)
+    isCheckingNotMoving
 ){
-    // If the player and the enemy haven't been met for some time,
+    // Count the number of moving enemy caused by closed areas
+    // non activated respawn room, etc.
+    countOfClosedArea =
+        NumberOfPlayers(Team.Team2) - CountOf(
+            FilteredArray(
+                AllPlayers(Team.Team2),
+                (
+                    IsAlive(ArrayElement()) &&
+                    !IsMoving(ArrayElement())
+                )
+            )
+    );
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue()
+}
+
+rule: "Portal/Positioner/DetectClosedArea/resetPortal"
+Event.OngoingGlobal
+if(
+    countOfClosedArea <= 3
+){
+    // If the portal position is in the cloased area,
     //  it is determined that the portal position is incorrect and the portal is recreate
     portalState = PortalState.Calculating;
 }
@@ -1438,7 +1511,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "sucide Count Of Invalid Area", sucideCountOfInvalidArea>,
+        <"<0> <1>", "count Of Invalid Area", countOfInvalidArea>,
         null,
         Location.Left, -1,
         Color.White, Color.White, Color.White,
@@ -1447,7 +1520,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "judge Timer Of Remote Area", judgeTimerOfRemoteArea>,
+        <"<0> <1>", "timer Of Remote Area", timerOfRemoteArea>,
         null,
         Location.Left, -1,
         Color.White, Color.White, Color.White,
@@ -1456,12 +1529,49 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
+        <"<0> <1>", "count Of Closed Area", countOfClosedArea>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.White, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[14] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "perk Effect Status", perkEffectStatus>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Turquoise, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[15] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "perk Targets", perkTargets>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Turquoise, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[16] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "perk Position", perkPosition>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Turquoise, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugIconHudEntitys[17] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
         <"<0> <1>", "Server Load", ServerLoad()>,
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-    debugIconHudEntitys[14] = LastTextID();
+    debugIconHudEntitys[18] = LastTextID();
+
     CreateHudText(HostPlayer(),
         null,
         <"<0> <1>", "Server Load Average", ServerLoadAverage()>,
@@ -1469,7 +1579,8 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-    debugIconHudEntitys[15] = LastTextID();
+    debugIconHudEntitys[19] = LastTextID();
+
     CreateHudText(HostPlayer(),
         null,
         <"<0> <1>", "Server Load Peak", ServerLoadPeak()>,
@@ -1477,7 +1588,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-    debugIconHudEntitys[16] = LastTextID();
+    debugIconHudEntitys[20] = LastTextID();
 }
 
 // Hide debug icon and hud
@@ -1498,6 +1609,10 @@ void HideDebugHud()"Subroutine/HideDebugHud"{
     DestroyHudText(debugIconHudEntitys[14]);
     DestroyHudText(debugIconHudEntitys[15]);
     DestroyHudText(debugIconHudEntitys[16]);
+    DestroyHudText(debugIconHudEntitys[17]);
+    DestroyHudText(debugIconHudEntitys[18]);
+    DestroyHudText(debugIconHudEntitys[19]);
+    DestroyHudText(debugIconHudEntitys[20]);
 }
 
 rule: "Debug/changeDebugMode"
@@ -1581,6 +1696,7 @@ if(
     // Set portal position to aim center
     WaitLongPressConfirm();
     portalPosition = AimingPosition();
-    portalState = PortalState.Set;
+    portalClosingCount = RoundToInteger(portalSize, Rounding.Nearest);  // TAG portal closing count
+    portalClosingCount += roundNo * 2;
     Respawn(AllPlayers(Team.Team2));
 }
