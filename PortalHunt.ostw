@@ -528,7 +528,7 @@ if(
     if(enemyType == EnemyType.Minion){
         StartScalingPlayer(EventPlayer(), 1.0, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
-        maxSpawnInterval = 3;       // TAG maxSpawnInterval
+        maxSpawnInterval = 5;       // TAG maxSpawnInterval
     }
     else if(enemyType == EnemyType.Elite){
         StartScalingPlayer(EventPlayer(), 1.3, false);
@@ -662,9 +662,8 @@ void SetTeleportPositionToBlindSpot()"Subroutine/SetTeleportPositionToBlindSpot"
     // find place that will be a blind spot up to 10 times
     for(loopIndex = 0; loopIndex < 10; loopIndex++){
         teleportPosition = NearestWalkablePosition(
-            portalPosition + 
-            RandomPosition(portalSize * 1.0, portalSize * 1.0, portalSize * 1.0)
-        );
+            portalPosition + RandomPosition(
+                portalSize * 1.0, portalSize * 1.0, portalSize * 1.0));
         if(
             DistanceBetween(    // Within the portal
                 portalPosition, teleportPosition + PositionOffset())
@@ -686,7 +685,7 @@ void SetTeleportPositionToCamper()"Subroutine/SetTeleportPositionToCamper"{
     for(loopIndex = 0; loopIndex < 10; loopIndex++){
         teleportPosition = ClosestPlayerTo(
             portalPosition, Team.Team1) +
-            RandomPosition(1.0, 0, 1.0);
+            RandomPosition(3.0, 0, 3.0);
         if(
             IsInLineOfSight(    // Not buried in the wall
                 teleportPosition + PositionOffset(),
@@ -783,7 +782,7 @@ if(
         BarrierLOS.NoBarriersBlock)
 ){
     // Teleport an enemy to camping player
-    Wait(10 - (roundNo / 7), WaitBehavior.AbortWhenFalse); // player not found timer
+    Wait(10 - (roundNo / 10), WaitBehavior.AbortWhenFalse); // TAG player not found timer
     // set teleport position to camper
     SetTeleportPositionToCamper();
     // show teleport beam
@@ -837,7 +836,7 @@ Event.OngoingGlobal
     // If don't enough players, adjust enemy dealt damage rate to make the game fair
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    enemyDealtDamageRate = 25;                    // basic enemy dealt damage
+    enemyDealtDamageRate = 30;                    // basic enemy dealt damage
     enemyDealtDamageRate += (roundNo * 1.5);      // Add damage depending on the number of rounds for progress
     // Apply balance multiplier
     enemyDealtDamageRate /= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy dealt damage scale
@@ -938,7 +937,7 @@ Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
-    portalState == PortalState.Calculating
+    portalState == PortalState.Set
 ){
     // Shortens enemy spawn interval depending on portal size
     enemySpawnInterval = maxSpawnInterval;
@@ -1174,30 +1173,53 @@ if(
     // Create portal in createRange
     // Get candidate position by random position within the create range from the center of the map
     // reduce coordinateY for will not select a different location than the player's location in control map
-    candidatePosition = centerPosition + RandomPosition(createRange, createRange / 4, createRange);
-    MinWait();   // calculale location cycle
-    // Repeat random position determination until within 10 meters of the map's walkable surface
-    LoopIf(
-        DistanceBetween(
-            candidatePosition,
-            NearestWalkablePosition(candidatePosition)
-        ) > 15
-    ); 
+    // Repeat random position determination until within 15 meters of the map's walkable surface
+    for(define gLoopIndex = 0; loopIndex < 30; loopIndex++){
+        candidatePosition = centerPosition + 
+            RandomPosition(createRange, createRange / 4, createRange);
+        if(
+            DistanceBetween(    // Near the surface
+                candidatePosition, NearestWalkablePosition(candidatePosition))
+                <= 15
+                    &&
+            !IsInLineOfSight(   // Blind spot from the player 
+                candidatePosition + PositionOffset(),
+                ClosestPlayerTo(candidatePosition, Team.Team1),
+                BarrierLOS.NoBarriersBlock)
+        ){
+            break;
+        }
+    }
     // change to walkable position
     portalPosition = NearestWalkablePosition(candidatePosition) + PositionOffset();
     // create portal entity
     portalState = PortalState.Set;
 }
 
+rule: "Portal/Positioner/DetectSpawnArea/resetPortal"
+Event.OngoingGlobal
+if(
+    portalEnable
+){
+    // If the portal position is in the enemy spawn area,
+    //  it is determined that the portal position is incorrect and the portal is recreate
+    Wait(1, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
+    if(IsInSpawnRoom(ClosestPlayerTo(portalPosition, Team.Team2))){
+        dbgMsg("resetPortal by Detect Spawn Area");
+        portalState = PortalState.Calculating;
+    }
+}
+
 globalvar define countOfInvalidArea;
 
-rule: "Portal/Positioner/DetectInvalidArea/countdownSuicides"
+rule: "Portal/Positioner/DetectInvalidArea/countdownSuicide"
 Event.OnDeath 
 Team.Team2
 Player.All
 if(
     portalEnable &&
-    Attacker() == EventPlayer()
+    Attacker() == EventPlayer() &&
+    countOfInvalidArea > 0
 ){
     // Count the number of enemy suicides caused by invalid areas
     // Player team spawn areas and instability at cliffs, etc.
@@ -1235,20 +1257,6 @@ if(
     portalState = PortalState.Calculating;
 }
 
-rule: "Portal/Positioner/DetectSpawnArea/resetPortal"
-Event.OngoingGlobal
-if(
-    portalEnable
-){
-    // If the portal position is in the enemy spawn area,
-    //  it is determined that the portal position is incorrect and the portal is recreate
-    Wait(1, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
-    if(IsInSpawnRoom(ClosestPlayerTo(portalPosition, Team.Team2))){
-        dbgMsg("resetPortal by Detect Spawn Area");
-        portalState = PortalState.Calculating;
-    }
-}
-
 globalvar define timerOfRemoteArea;
 globalvar define contactHappened;
 
@@ -1256,7 +1264,8 @@ rule: "Portal/Positioner/DetectRemoteArea/countdownNonContactTimer"
 Event.OngoingGlobal
 if(
     portalEnable &&
-    !contactHappened
+    !contactHappened &&
+    timerOfRemoteArea > 0
 ){
     // start count down
     timerOfRemoteArea --;
