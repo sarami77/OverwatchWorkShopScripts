@@ -247,7 +247,7 @@ if(
 
     // If player already have perk
     SmallMessage(playerClosestCrate, "Already have perk.");
-    SmallMessage(playerClosestCrate, "First, consume or cancel current perk. Check detail from left list.");
+    SmallMessage(playerClosestCrate, <"First, long hold interact button <0> to cancel current perk.", ButtonGuide(Button.Interact)> );
 }
 
 rule: "Perk/Player/ParkState/Non"
@@ -662,6 +662,19 @@ if(
         EventPlayer(), PlayEffect.DebuffImpactSound,
         Color.White, EventPlayer(), MaxLength());
     perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/remindPerk"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Ready
+){
+    // remind use perk.
+    Wait(30, WaitBehavior.AbortWhenFalse);
+    SmallMessage(playerClosestCrate, <"Forgotten perk?, hold interact button <0> to activate perk.", ButtonGuide(Button.Interact)> );
+    LoopIfConditionIsTrue();
 }
 
 rule: "Perk/Player/losePerk //by dead"
@@ -1818,7 +1831,8 @@ void AutoAim()"Subroutine/AutoAim"{
                     PlayersInViewAngle(EventPlayer(), Team.Team2, 90),
                     (
                         IsAlive(ArrayElement()) &&
-                        IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock)
+                        IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock) &&
+                        !HasStatus(ArrayElement(), Status.Asleep)
                     )
                 ),
                 DistanceBetween(EventPlayer(), ArrayElement())
@@ -3155,13 +3169,12 @@ if(
         (FacingDirectionOf() * MaxLength());
 
     // Ballistics for aiming
-    CreateBeamEffect(EventPlayer(),
+    CreateBeamEffect(AllPlayers(),
         BeamType.GoodBeam, perkPosition, aimPosition,
         Color.Aqua, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[1] = LastCreatedEntity();
     // Ballistic for penetration
-    CreateBeamEffect(
-        AllPlayers(),
+    CreateBeamEffect(AllPlayers(),
         BeamType.GoodBeam, aimPosition, landPosition,
         Color.Aqua, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[2] = LastCreatedEntity();
@@ -3169,7 +3182,7 @@ if(
     // shot sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.Aqua, EventPlayer(), 50);
+        Color.Aqua, EventPlayer(), 100);
     // shot fire
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,

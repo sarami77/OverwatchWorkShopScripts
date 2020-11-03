@@ -21,8 +21,8 @@ import "Lib/Utility.ostw";
 import "Lib/ElapsedTimer.ostw";
 import "Lib/Regeneration.ostw";
 import "Lib/Revive.ostw";
-import "Lib/DamageText.ostw";
 import "Lib/Perk.ostw";
+import "Lib/DamageText.ostw";
 import "Lib/Debug.ostw";
 
 // TAG Signature and infomation ----------
@@ -837,8 +837,8 @@ Event.OngoingGlobal
     // If don't enough players, adjust enemy dealt damage rate to make the game fair
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    enemyDealtDamageRate = 24;                    // basic enemy dealt damage
-    enemyDealtDamageRate += (roundNo * 2.0);      // Add damage depending on the number of rounds for progress
+    enemyDealtDamageRate = 25;                    // basic enemy dealt damage
+    enemyDealtDamageRate += (roundNo * 1.5);      // Add damage depending on the number of rounds for progress
     // Apply balance multiplier
     enemyDealtDamageRate /= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy dealt damage scale
     SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);
@@ -1036,8 +1036,8 @@ if(
 
     // show message
     BigMessage(AllPlayers(Team.All), "Detected more portal... find and attack it!");
-    WaitBigMessageHide();
     // Hide icon to let the player search the portal
+    Wait(6, WaitBehavior.AbortWhenFalse);
     DestroyIcon(portalEntitys[0]);
 }
 
@@ -1046,11 +1046,9 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Growing
 ){
-    // Hide icon to let the player search the portal
-    DestroyIcon(portalEntitys[0]);
     // Start growing portal with warning message
     ChaseVariableAtRate(
-        portalSize, maxPortalSize, 1 + (roundNo / 5),   //TAG portal grow speed
+        portalSize, maxPortalSize, 1 + (roundNo / 10),   //TAG portal grow speed
         RateChaseReevaluation.DestinationAndRate);
     // If first growing, show message
     if(isFirstGrowing == true){
@@ -1059,6 +1057,9 @@ if(
         WaitBigMessageHide();
         BigMessage(AllPlayers(Team.All), "Growed portals spawn more enemys and got tough ...");
     }
+    // Hide icon to let the player search the portal
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    DestroyIcon(portalEntitys[0]);
 }
 
 rule: "Portal/State/Suspended //when player entered, stop growing and count down start"
@@ -1230,6 +1231,7 @@ if(
 ){
     // If the suicide count reaches 0,
     //  it is determined that the portal position is incorrect and the portal is recreate
+    dbgMsg("resetPortal by Detect Invalid Area");
     portalState = PortalState.Calculating;
 }
 
@@ -1242,6 +1244,7 @@ if(
     //  it is determined that the portal position is incorrect and the portal is recreate
     Wait(1, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
     if(IsInSpawnRoom(ClosestPlayerTo(portalPosition, Team.Team2))){
+        dbgMsg("resetPortal by Detect Spawn Area");
         portalState = PortalState.Calculating;
     }
 }
@@ -1294,6 +1297,7 @@ if(
 ){
     // If the player and enemy haven't been met for some time,
     //  it is determined that the portal position is incorrect and the portal is recreate
+    dbgMsg("resetPortal by Detect Remote Area");
     portalState = PortalState.Calculating;
 }
 
@@ -1306,7 +1310,6 @@ if(
     portalEnable
 ){
     countOfClosedArea = MaxValue();
-    Wait(3, WaitBehavior.AbortWhenFalse);
     isCheckingNotMoving = true;
 }
 
@@ -1316,8 +1319,8 @@ if(
     !portalEnable ||
     contactHappened
 ){
-    isCheckingNotMoving = false;
     countOfClosedArea = MaxValue();
+    isCheckingNotMoving = false;
 }
 
 rule: "Portal/Positioner/DetectClosedArea/countdownNotMovingEnemys"
@@ -1349,6 +1352,8 @@ if(
 ){
     // If the portal position is in the cloased area,
     //  it is determined that the portal position is incorrect and the portal is recreate
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    dbgMsg("resetPortal by Detect Closed Area");
     portalState = PortalState.Calculating;
 }
 
@@ -1684,6 +1689,8 @@ if(
     portalState = PortalState.Calculating;
 }
 
+globalvar define debugAimingPosition;
+
 rule: "Debug/setPortalPositionOnAimCenter // reset portal position by aim center"
 Event.OngoingPlayer
 Team.All
@@ -1695,8 +1702,11 @@ if(
 ){
     // Set portal position to aim center
     WaitLongPressConfirm();
-    portalPosition = AimingPosition();
-    portalClosingCount = RoundToInteger(portalSize, Rounding.Nearest);  // TAG portal closing count
-    portalClosingCount += roundNo * 2;
+    portalState = PortalState.Idle;
+    debugAimingPosition = AimingPosition();
+    Wait(0.5, WaitBehavior.IgnoreCondition);  // Wait for the changed status to be processed first
+    portalState = PortalState.Calculating;
+    while(portalState == PortalState.Calculating){Wait(0.1, WaitBehavior.IgnoreCondition)}
+    portalPosition = debugAimingPosition;
     Respawn(AllPlayers(Team.Team2));
 }
