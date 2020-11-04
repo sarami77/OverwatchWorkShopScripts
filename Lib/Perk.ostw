@@ -3584,7 +3584,7 @@ if(
     // set time limit
     perkTimeLimit = 150;
     // set param
-    perkEffectStatus = false;
+    perkEffectStatus = 0;
     // set perk hero
     PerkHero perkHero = new PerkHero();
     perkHero.hero = Hero.Reaper;
@@ -3609,7 +3609,7 @@ if(
 ){
     // reset param
     StopCamera(EventPlayer());
-    perkEffectStatus = false;
+    perkEffectStatus = 0;
     // reset perk hero
     StopForcingPerkHero(EventPlayer());
     // reset type
@@ -3640,28 +3640,28 @@ if(
 ){
     SetDamageDealt(EventPlayer(), 300);
     SetMoveSpeed(EventPlayer(), 300);
-    perkEffectStatus = true;
 
-    // get inline sight target
     perkTargets = 
-        FirstOf(
-            SortedArray(
-                FilteredArray(
-                    AllPlayers(Team.Team2), 
-                    (
-                        IsAlive(ArrayElement()) &&
-                        IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock)
-                    )
-                ),
-                DistanceBetween(EventPlayer(), ArrayElement())
-            )
+        SortedArray(
+            FilteredArray(
+                AllPlayers(Team.Team2), 
+                (
+                    IsAlive(ArrayElement()) &&
+                    IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock)
+                )
+            ),
+            Health(ArrayElement())
         );
+    // get target with insight and lowest health
+    perkTargets = FirstOf(perkTargets);
 
     perkPosition = EyePosition();
     if(perkTargets != 0){
         // set camera
         StartCamera(EventPlayer(), perkPosition, EyePosition(), 10);
     }
+
+    perkEffectStatus = 0;
 }
 
 rule: "Perk/Player/Annihilator/chaseNextTarget"
@@ -3673,34 +3673,38 @@ if(
     perkType == PerkType.Annihilator &&
     IsUsingUltimate()
 ){
-    // get inline sight target
+    perkEffectStatus ++;
+
     perkTargets = 
-        FirstOf(
-            SortedArray(
+        SortedArray(
+            FilteredArray(
+                AllPlayers(Team.Team2), 
+                (
+                    IsAlive(ArrayElement()) &&
+                    IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock)
+                )
+            ),
+            Health(ArrayElement())
+        );
+    if(perkEffectStatus <= 22){
+        // get target with insight and lowest health for kill more
+        perkTargets = FirstOf(perkTargets);
+    }
+    else{
+        // get target with insight and highst health for deal finish damage
+        perkTargets = LastOf(perkTargets);
+    }
+
+    if(perkTargets == 0){
+        // get target with near random
+        perkTargets = RandomValueInArray(perkTargets);
+            RandomValueInArray(
                 FilteredArray(
                     AllPlayers(Team.Team2), 
                     (
                         IsAlive(ArrayElement()) &&
-                        IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock)
+                        DistanceBetween(EventPlayer(), ArrayElement()) <= 10
                     )
-                ),
-                DistanceBetween(EventPlayer(), ArrayElement())
-            )
-        );
-
-    if(perkTargets == 0){
-        // get near target
-        perkTargets = 
-            FirstOf(
-                SortedArray(
-                    FilteredArray(
-                        AllPlayers(Team.Team2), 
-                        (
-                            IsAlive(ArrayElement()) &&
-                            DistanceBetween(EventPlayer(), ArrayElement()) <= 10
-                        )
-                    ),
-                    DistanceBetween(EventPlayer(), ArrayElement())
                 )
             );
     }
@@ -3711,7 +3715,7 @@ if(
             !IsInLineOfSight(perkPosition, EventPlayer(), BarrierLOS.NoBarriersBlock) ||
             DistanceBetween(perkPosition, EyePosition()) > 20
         ){
-            // set middle point
+            // camera set to middle point
             perkPosition = (perkPosition + EyePosition()) / 2;
             // if camera too close to player
             if(DistanceBetween(perkPosition, EyePosition()) < 10){
@@ -3721,7 +3725,6 @@ if(
             // update camera
             StartCamera(EventPlayer(), perkPosition, EyePosition(), 10);
         }
-
         // chase target
         ApplyImpulse(EventPlayer(),
             VectorTowards(EventPlayer(), perkTargets+ RandomPosition(1, 1, 1)),
@@ -3757,7 +3760,7 @@ if(
 
     Wait(4, WaitBehavior.AbortWhenFalse);
 
-    perkEffectStatus = false;
+    perkEffectStatus = 0;
     SetDamageDealt(EventPlayer(), 200);
     SetMoveSpeed(EventPlayer(), 150);
     StopCamera(EventPlayer());
@@ -3770,7 +3773,7 @@ Player.All
 if(
     perkState == PerkState.Using &&
     perkType == PerkType.Annihilator &&
-    perkEffectStatus == true
+    perkEffectStatus > 0
 ){
     Wait(0.5, WaitBehavior.AbortWhenFalse);
     if(
@@ -3781,6 +3784,10 @@ if(
     ){
         // return to safe ground
         Teleport(EventPlayer(), NearestWalkablePosition(EventPlayer()));
+        // play movement pulse
+        PlayEffect(
+            AllPlayers(), PlayEffect.BadPickupEffect,
+            Color.Red, EventPlayer(), 1.0);
     }
     LoopIfConditionIsTrue();
 }

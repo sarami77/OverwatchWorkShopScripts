@@ -590,7 +590,6 @@ Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
-    enemyType != EnemyType.NotSet &&
     !IsAlive()
 ){
     DestroyEffect(enemyAppearanceEntitys[0]);
@@ -1205,7 +1204,7 @@ if(
     //  it is determined that the portal position is incorrect and the portal is recreate
     Wait(1, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
     if(IsInSpawnRoom(ClosestPlayerTo(portalPosition, Team.Team2))){
-        dbgMsg("resetPortal by Detect Spawn Area");
+        dbgMsg("reset Portal by Detect Spawn Area");
         portalState = PortalState.Calculating;
     }
 }
@@ -1253,7 +1252,7 @@ if(
 ){
     // If the suicide count reaches 0,
     //  it is determined that the portal position is incorrect and the portal is recreate
-    dbgMsg("resetPortal by Detect Invalid Area");
+    dbgMsg("reset Portal by Detect Invalid Area");
     portalState = PortalState.Calculating;
 }
 
@@ -1306,7 +1305,7 @@ if(
 ){
     // If the player and enemy haven't been met for some time,
     //  it is determined that the portal position is incorrect and the portal is recreate
-    dbgMsg("resetPortal by Detect Remote Area");
+    dbgMsg("reset Portal by Detect Remote Area");
     portalState = PortalState.Calculating;
 }
 
@@ -1336,9 +1335,10 @@ rule: "Portal/Positioner/DetectClosedArea/countdownNotMovingEnemys"
 Event.OngoingGlobal
 if(
     portalEnable &&
+    portalState != PortalState.Suspended &&
     isCheckingNotMoving
 ){
-    // Count the number of moving enemy caused by closed areas
+    // Count the number of not moving enemy caused by closed areas
     // non activated respawn room, etc.
     countOfClosedArea =
         NumberOfPlayers(Team.Team2) - CountOf(
@@ -1362,7 +1362,7 @@ if(
     // If the portal position is in the cloased area,
     //  it is determined that the portal position is incorrect and the portal is recreate
     Wait(3, WaitBehavior.AbortWhenFalse);
-    dbgMsg("resetPortal by Detect Closed Area");
+    dbgMsg("reset Portal by Detect Closed Area");
     portalState = PortalState.Calculating;
 }
 
@@ -1689,6 +1689,7 @@ Player.All
 if(
     HostPlayer() == EventPlayer() &&
     IsButtonHeld(EventPlayer(), Button.Interact) &&
+    !IsButtonHeld(EventPlayer(), Button.Reload) &&
     IsButtonHeld(EventPlayer(), Button.Crouch)
 ){
     // Recalculate portal
@@ -1707,7 +1708,8 @@ Player.All
 if(
     HostPlayer() == EventPlayer() &&
     IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.Reload)
+    IsButtonHeld(EventPlayer(), Button.Reload) &&
+    !IsButtonHeld(EventPlayer(), Button.Crouch)
 ){
     // Set portal position to aim center
     WaitLongPressConfirm();
@@ -1718,4 +1720,23 @@ if(
     while(portalState == PortalState.Calculating){Wait(0.1, WaitBehavior.IgnoreCondition)}
     portalPosition = debugAimingPosition;
     Respawn(AllPlayers(Team.Team2));
+}
+
+rule: "Debug/setPortalMaxSize"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.Reload) &&
+    IsButtonHeld(EventPlayer(), Button.Crouch)
+){
+    // Set portal position to aim center
+    WaitLongPressConfirm();
+    portalSize = maxPortalSize;
+    enemyHiddenSpeedRate = maxHiddenSpeed;
+    SetMoveSpeed(AllPlayers(Team.Team2), enemyHiddenSpeedRate);
+    AllPlayers(Team.Team2).enemySpawnInterval = 0;
+    SetRespawnMaxTime(AllPlayers(Team.Team2), 1);
 }
