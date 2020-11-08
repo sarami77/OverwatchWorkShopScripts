@@ -39,7 +39,7 @@ Event.OngoingGlobal
 if(
     ServerLoad() >= 255
 ){
-    Wait(5, WaitBehavior.AbortWhenFalse);
+    Wait(4, WaitBehavior.AbortWhenFalse);
     portalState = PortalState.Idle;   // abort portal
     dbgMsg("!!! Enemy's portal was force reset by server over load !!!");
     Wait(5, WaitBehavior.IgnoreCondition);
@@ -77,6 +77,8 @@ Event.OngoingGlobal
     // Cancel unnecessary default settings
     PauseMatchTime();
     DisableScoring();
+    // DisableGameModeHud(AllPlayers());
+    DisableGameModeInworldUI(AllPlayers());
     DisableCompletion();
 
     // Calculate the approximate center position of the map from the spawn room position.
@@ -93,15 +95,11 @@ Event.OngoingGlobal
 }
 
 rule: "Game/startGame // by start game of first respawn room exit "
-Event.OngoingPlayer
-Team.Team1
-Player.All
+Event.OngoingGlobal
 if(
     !gameInProgress &&
     initCompleted &&
-    createRange != 0 &&
-    HasSpawned() &&
-    !IsInSpawnRoom()
+    createRange != 0
 ){
     WaitConditionConfirmed();
     elapsedTime = 0;
@@ -115,7 +113,6 @@ Event.OngoingGlobal
 if(
     0 >= NumberOfPlayers(Team.Team1)
 ){
-    WaitConditionConfirmed();
     elapsedTime = 0;
     roundNo = 0;
     teamLifes = initalTeamLifes;
@@ -143,20 +140,7 @@ Player.All
 if(
     initCompleted
 ){
-    // Change the message of the target HUD at the top of the screen according to the state of the game
-    WaitUpdateMediumCycle();
-    if(
-        !portalEnable
-    ){
-        SetObjectiveDescription(EventPlayer(), "Stand by...", ObjectiveRev.VisibleToSortOrderAndString);
-    }
-    else if(isInsidePortal){
-        SetObjectiveDescription(EventPlayer(), "Stay inside and survive!", ObjectiveRev.VisibleToSortOrderAndString);
-    }
-    else{
-        SetObjectiveDescription(EventPlayer(), "Find portal and attack it.", ObjectiveRev.VisibleToSortOrderAndString);
-    }
-    LoopIfConditionIsTrue();
+    SetObjectiveDescription(EventPlayer(), "Find portal and attack it.", ObjectiveRev.VisibleToSortOrderAndString);
 }
 
 rule: "Game/RoundNo/showRoundHUD"
@@ -690,12 +674,16 @@ Team.Team2
 Player.All
 if(
     IsAlive() &&
-    IsInLineOfSight(EventPlayer(),
-        ClosestPlayerTo(EventPlayer(), Team.Team1),
-        BarrierLOS.NoBarriersBlock)
+    DistanceBetween(EventPlayer(),
+        ClosestPlayerTo(EventPlayer(), Team.Team1)) <= 10
 ){
     WaitConditionConfirmed();
-    if(IsMoving() && IsOnGround()){
+    if(
+        !HasStatus(EventPlayer(), Status.Asleep) &&
+        !HasStatus(EventPlayer(), Status.KnockedDown) &&
+        !HasStatus(EventPlayer(), Status.Stunned) &&
+        !HasStatus(EventPlayer(), Status.Frozen)
+    ){
         ApplyImpulse(EventPlayer(),
             Vector(
                 RandomReal(-1, 1),
@@ -903,8 +891,8 @@ Event.OngoingGlobal
     // If don't enough players, adjust enemy dealt damage rate to make the game fair
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    enemyDealtDamageRate = 30;                    // basic enemy dealt damage
-    enemyDealtDamageRate += (roundNo * 1.25);     // Add damage depending on the number of rounds for progress
+    enemyDealtDamageRate = 25;                  // basic enemy dealt damage
+    enemyDealtDamageRate += (roundNo * 1.5);     // Add damage depending on the number of rounds for progress
     // Apply balance multiplier
     enemyDealtDamageRate /= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy dealt damage scale
     SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);

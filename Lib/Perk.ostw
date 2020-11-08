@@ -11,7 +11,7 @@ Event.OngoingGlobal
 if(
     ServerLoad() >= 255
 ){
-    Wait(5, WaitBehavior.AbortWhenFalse);
+    Wait(4, WaitBehavior.AbortWhenFalse);
     dbgMsg("!!! Player's perk was force reset by server over load !!!");
     AllPlayers(Team.Team1).perkState = PerkState.Non;   // reset perk
 }
@@ -44,6 +44,7 @@ enum PerkType{  // TAG perk type
     AimHack,
     Vampire,
     ShotCaller,
+    SupportArtillery,
     CruisingMissile,
     CarePackage,
     DeathFromAbove,
@@ -68,36 +69,40 @@ rule: "Perk/lotteryPerkList // list of parks you can pick up"
 Event.OngoingGlobal
 {
     lotteryPerkList = [     // TAG lottery perk list
-        PerkType.HighJump, 
-        PerkType.GrapplingBeam,
-        PerkType.Sprinter,
-        PerkType.Adrenaline,
-        PerkType.Savior,
-        PerkType.Fearless,
-        PerkType.SteelFormation,
-        PerkType.PersonalShelter,
-        PerkType.BioticStation,
-        PerkType.BioticStation,
-        PerkType.TrapBeam,
-        PerkType.ChainExplosion,
-        PerkType.AimHack,
-        PerkType.Vampire,
-        PerkType.ShotCaller,
-        PerkType.BattleFlag,
-        PerkType.CruisingMissile,
-        PerkType.CruisingMissile,
-        PerkType.CarePackage,
-        PerkType.DeathFromAbove,
-        PerkType.LegendalyNinja,
-        PerkType.MachDelivery,
-        PerkType.Juggernaut,
-        PerkType.BeamSniper,
-        PerkType.DragonStorm,
-        PerkType.Titan,
-        PerkType.Annihilator
+        // PerkType.HighJump, 
+        // PerkType.GrapplingBeam,
+        // PerkType.Sprinter,
+        // PerkType.Adrenaline,
+        // PerkType.Savior,
+        // PerkType.Fearless,
+        // PerkType.SteelFormation,
+        // PerkType.PersonalShelter,
+        // PerkType.BioticStation,
+        // PerkType.BioticStation,
+        // PerkType.TrapBeam,
+        // PerkType.ChainExplosion,
+        // PerkType.AimHack,
+        // PerkType.Vampire,
+        // PerkType.ShotCaller,
+        // PerkType.BattleFlag,
+        // PerkType.SupportArtillery,
+        // PerkType.SupportArtillery,
+        // PerkType.CruisingMissile,
+        // PerkType.CruisingMissile,
+        // PerkType.CarePackage,
+        // PerkType.DeathFromAbove,
+        // PerkType.LegendalyNinja,
+        // PerkType.MachDelivery,
+        // PerkType.Juggernaut,
+        // PerkType.BeamSniper,
+        // PerkType.DragonStorm,
+        // PerkType.Titan,
+        // PerkType.Annihilator
         
         //  for debug
-        // PerkType.Annihilator
+        PerkType.CruisingMissile,
+        PerkType.SupportArtillery,
+        PerkType.CarePackage
     ];
 }
 
@@ -211,8 +216,6 @@ if(
     playerClosestCrate.perkState = PerkState.Ready;
     // delete perk crate when picked up
     perkCrateState = PerkCrateState.NotDropped;
-
-
 }
 
 rule: "Perk/Enemy/alreadykPickUpByPlayer"
@@ -392,6 +395,7 @@ playervar define perkEffectStatus;
 playervar define aimPosition;
 playervar define aimPosition2;
 playervar define landPosition;
+playervar define landPosition2;
 playervar define perkPosition;
 playervar define perkPosition2;
 playervar define perkTargets;
@@ -486,10 +490,6 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
         perkName = "Biotic Station";
         perkDetail = "Place powerful healing field. But effective time is short.";
     }
-    else if(perkType == PerkType.CarePackage){
-        perkName = "Care Package";
-        perkDetail = "Request drop of support supplies. Can get multiple perk crates.";
-    }
     else if(perkType == PerkType.TrapBeam){
         perkName = "Trap Beam";
         perkDetail = "Place beam to between own position and aiming position. It stuns the touched enemy.";
@@ -514,9 +514,17 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
         perkName = "Shot Caller";
         perkDetail = "When use ultimate ability, teammate's ultimate ability be instantly full charged.";
     }
+    else if(perkType == PerkType.SupportArtillery){
+        perkName = "Support Artillery";
+        perkDetail = "Request artillery support to aim position. Attack wide area with 10-second barrage.";
+    }
     else if(perkType == PerkType.CruisingMissile){
         perkName = "Cruising Missile";
         perkDetail = "Large missile that guiding to aim position. Destroy enemies of wide area.";
+    }
+    else if(perkType == PerkType.CarePackage){
+        perkName = "Care Package";
+        perkDetail = "Request drop of support supplies. Can get multiple perk crates.";
     }
     else if(perkType == PerkType.DeathFromAbove){
         perkName = "Death From Above";
@@ -671,7 +679,7 @@ if(
 ){
     // remind use perk.
     Wait(30, WaitBehavior.AbortWhenFalse);
-    SmallMessage(playerClosestCrate, <"Forgotten perk?, hold interact button <0> to activate perk.", ButtonGuide(Button.Interact)> );
+    SmallMessage(EventPlayer(), <"Forgotten perk? Hold interact button <0> to activate perk.", ButtonGuide(Button.Interact)> );
     LoopIfConditionIsTrue();
 }
 
@@ -1958,6 +1966,182 @@ if(
     LoopIfConditionIsTrue();
 }
 
+// TAG SupportArtillery ----------
+define artilleryLandingRange: 20;
+define artilleryDamageRange: 5;
+playervar define landZonePosition;
+
+rule: "Perk/Player/SupportArtillery/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.SupportArtillery
+){
+    // set time limit
+    perkTimeLimit = 13;
+    // set status
+    perkPosition = 0;
+    perkPosition2 = 0;
+    landPosition = -1;
+    landPosition2 = -1;  
+    perkEffectStatus = 0; 
+    // show text
+    // landing zone text
+    perkEffectAndText = [];
+    CreateInWorldText(
+        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Support Artillery">,
+        landZonePosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    perkEffectAndText[0] = LastTextID();
+    CreateInWorldText(
+        AllPlayers(), <"Support artillery incoming.">,
+        landZonePosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    perkEffectAndText[1] = LastTextID();
+    // set effect
+    // shell body1
+    CreateEffect(AllPlayers(), Effect.Orb, Color.White,
+        perkPosition, 1, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[2] = LastCreatedEntity();
+    // shell body2
+    CreateEffect(AllPlayers(), Effect.Orb, Color.White,
+        perkPosition2, 1, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[3] = LastCreatedEntity();
+    // landing zone blast range
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
+        landZonePosition, artilleryLandingRange, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[4] = LastCreatedEntity();
+}
+rule: "Perk/Player/SupportArtillery/deactivate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Non &&
+    perkType == PerkType.SupportArtillery
+){
+    // reset text
+    DestroyInWorldText(perkEffectAndText[0]);
+    DestroyInWorldText(perkEffectAndText[1]);
+    // reset effect
+    DestroyEffect(perkEffectAndText[2]);
+    DestroyEffect(perkEffectAndText[3]);
+    DestroyEffect(perkEffectAndText[4]);
+    StopChasingVariable(perkPosition);
+    StopChasingVariable(perkPosition2);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/SupportArtillery/setLandingZone"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.SupportArtillery
+){
+    // set shell land position to aiming position
+    landZonePosition = AimingPosition();
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    DestroyEffect(perkEffectAndText[4]);
+    perkEffectStatus = 40;
+}
+
+rule: "Perk/Player/SupportArtillery/launchShell"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.SupportArtillery &&
+    perkEffectStatus > 0
+){
+    // set shell at random horizontal positions over 50
+    perkPosition = landZonePosition +
+        Vector(0, 50, 0) + RandomPosition(10, 0, 10);
+    // start shell move
+    landPosition = landZonePosition + RandomPosition(artilleryLandingRange/2, 0, artilleryLandingRange/2);
+    ChaseVariableOverTime(
+        perkPosition, landPosition, 0.25,
+        TimeChaseReevaluation.DestinationAndDuration);
+    Wait(0.25, WaitBehavior.AbortWhenFalse);
+    perkEffectStatus -- ;
+
+    // set shell at random horizontal positions over 50
+    perkPosition2 = landZonePosition +
+        Vector(0, 50, 0) + RandomPosition(10, 0, 10);
+    // start shell move
+    landPosition2 = landZonePosition + RandomPosition(artilleryLandingRange/2, 0, artilleryLandingRange/2);
+    ChaseVariableOverTime(
+        perkPosition2, landPosition2, 0.25,
+        TimeChaseReevaluation.DestinationAndDuration);
+    Wait(0.25, WaitBehavior.AbortWhenFalse);
+    perkEffectStatus -- ;
+
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/SupportArtillery/landedToPoint"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.SupportArtillery &&
+    perkPosition == landPosition
+){
+    // get target
+    perkTargets = 
+        PlayersWithinRadius(
+            perkPosition, artilleryDamageRange,
+            Team.All, RadiusLOS.Off);
+    // damage
+    Damage(
+        PlayersWithinRadius(
+            landPosition, artilleryDamageRange,
+            Team.Team2, RadiusLOS.Off
+        ), EventPlayer(), 500);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White, landPosition, 300);
+    // play blast effect
+    PlayContinuousBlast(landPosition, artilleryDamageRange,
+        2, Color.Yellow);
+}
+
+rule: "Perk/Player/SupportArtillery/landedToPoint2"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.SupportArtillery &&
+    perkPosition2 == landPosition2
+){
+    // get target
+    perkTargets = 
+        PlayersWithinRadius(
+            perkPosition2, artilleryDamageRange,
+            Team.All, RadiusLOS.Off);
+    // damage
+    Damage(
+        PlayersWithinRadius(
+            landPosition2, artilleryDamageRange,
+            Team.Team2, RadiusLOS.Off
+        ), EventPlayer(), 500);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White, landPosition2, 300);
+    // play blast effect
+    PlayContinuousBlast(landPosition2, artilleryDamageRange,
+        2, Color.Yellow);
+}
+
 // TAG CruisingMissile ----------
 define missleDamageRange: 20;
 rule: "Perk/Player/CruisingMissile/activate"
@@ -1975,15 +2159,15 @@ if(
     perkEffectStatus = false;
     // show text
     // landing zone text
+    perkEffectAndText = [];
     CreateInWorldText(
-        AllPlayers(), <"Missle landing at <0> second. Brace for impact!", perkTimeLimit>,
+        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Cruising Missile">,
         landPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[0] = LastTextID();
-    // missile text
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Cruising Missile">,
-        perkPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        AllPlayers(), <"Cruising missile landing at <0> second. Brace for impact!", perkTimeLimit>,
+        landPosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[1] = LastTextID();
     // set effect
@@ -2008,7 +2192,7 @@ if(
         landPosition, 0.1, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[6] = LastCreatedEntity();  
     // landing zone warning icon
-    CreateIcon(AllPlayers(), landPosition + PositionOffset(), Icon.Warning,
+    CreateIcon(AllPlayers(), landPosition + (PositionOffset()*2), Icon.Warning,
         IconRev.VisibleToAndPosition, Color.Yellow, true);
     perkEffectAndText[7] = LastCreatedEntity();
     // set hud
@@ -2074,19 +2258,7 @@ if(
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.Orange, (
-            PositionOf(
-                perkPosition + (DirectionTowards(landPosition, perkPosition) * 1)
-            )
-        ), 3.0);
-    // play blast
-    PlayEffect(
-        AllPlayers(), PlayEffect.BadExplosion,
-        Color.White, (
-            PositionOf(
-                perkPosition + (DirectionTowards(landPosition, perkPosition) * 4)
-            )
-        ), 1.5);
+        Color.Orange, perkPosition, 3.0);
 
     WaitContinuousBlastCycle();
     LoopIfConditionIsTrue();
@@ -2141,12 +2313,17 @@ if(
     StopChasingVariable(perkPosition);
     StopChasingVariable(landPosition);
 
-    // get target
+    // apply knockout
+    SetStatus(
+        PlayersWithinRadius(
+            perkPosition, missleDamageRange,
+            Team.Team1, RadiusLOS.Off
+        ), null, Status.KnockedDown, 3);
+    // apply Impulse
     perkTargets = 
         PlayersWithinRadius(
             aimPosition, missleDamageRange,
-            Team.All, RadiusLOS.Off);
-    // apply Impulse
+            Team.Team2, RadiusLOS.Off);
     for(loopIndex = 0; loopIndex < CountOf(perkTargets); loopIndex++){
         ApplyImpulse(perkTargets[loopIndex],
             VectorTowards(perkPosition, perkTargets[loopIndex] + PositionOffset()),
@@ -2186,14 +2363,13 @@ if(
     // landing zone text
     perkEffectAndText = [];
     CreateInWorldText(
-        AllPlayers(), <"Care package arrival at <0> second...", perkTimeLimit>,
-        landPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Care Package">,
+        landPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[0] = LastTextID();
-    // package text
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Care Package">,
-        perkPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        AllPlayers(), <"Care package arrival at <0> second. Stand by...", perkTimeLimit>,
+        landPosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[1] = LastTextID();
     // set effect
@@ -2258,19 +2434,7 @@ if(
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.LimeGreen, (
-            PositionOf(
-                perkPosition + (DirectionTowards(landPosition, perkPosition) * 0.5)
-            )
-        ), 1.5);
-    // play blast
-    PlayEffect(
-        AllPlayers(), PlayEffect.BadExplosion,
-        Color.White, (
-            PositionOf(
-                perkPosition + (DirectionTowards(landPosition, perkPosition) * 2)
-            )
-        ), 0.75);
+        Color.Orange, perkPosition, 1.0);
 
     WaitContinuousBlastCycle();
     LoopIfConditionIsTrue();
@@ -3837,7 +4001,7 @@ if(
         DistanceBetween(
             EventPlayer(),
             ClosestPlayerTo(EventPlayer(), Team.Team2)) <= 10 &&
-        RandomInteger(1, 100) <= 40
+        RandomInteger(1, 100) <= 50
     ){
         PlayEffect(
             AllPlayers(), PlayEffect.GoodPickupEffect,

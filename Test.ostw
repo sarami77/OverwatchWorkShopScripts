@@ -2,13 +2,52 @@ import "Lib/Utility.ostw";
 import "Lib/Debug.ostw";
 
 // Common -----------------------------------------------
+playervar define perkTimeLimit;
+
+playervar define perkType;
+enum PerkType{  // TAG perk type
+    Non,
+    HighJump,
+    GrapplingBeam,
+    Sprinter,
+    Adrenaline,
+    Savior,
+    Fearless,
+    SteelFormation,
+    PersonalShelter,
+    BioticStation,
+    TrapBeam,
+    BattleFlag,
+    ChainExplosion,
+    AimHack,
+    Vampire,
+    ShotCaller,
+    SupportArtillery,
+    CruisingMissile,
+    CarePackage,
+    DeathFromAbove,
+    LegendalyNinja,
+    MachDelivery,
+    Juggernaut,
+    BeamSniper,
+    DragonStorm,
+    Titan,
+    Annihilator
+}
+playervar define perkState;
+enum PerkState{
+    Non,
+    Ready,
+    Using
+}
 playervar define perkEffectAndText;
 playervar define perkEffectStatus;
 playervar define aimPosition;
 playervar define aimPosition2;
-playervar define landPosition;
 playervar define perkPosition;
 playervar define perkPosition2;
+playervar define landPosition;
+playervar define landPosition2;
 playervar define perkTargets;
 
 
@@ -34,259 +73,276 @@ if(
     SetUltimateCharge(EventPlayer(), 0);
 
     SetRespawnMaxTime(AllPlayers(), 0);
-    SetStatus(AllPlayers(Team.Team2), null, Status.Rooted, 99999);
-    ForcePlayerHero(EventPlayer(), Hero.Widowmaker);
-    CreateEffect(EventPlayer(), Effect.Ring, Color.White,
-        EventPlayer(), 10, EffectRev.VisibleToPositionAndRadius);
-    CreateEffect(EventPlayer(), Effect.Ring, Color.White,
-        EventPlayer(), 20, EffectRev.VisibleToPositionAndRadius);
-    CreateEffect(EventPlayer(), Effect.Ring, Color.White,
-        EventPlayer(), 30, EffectRev.VisibleToPositionAndRadius);
+    // SetStatus(AllPlayers(Team.Team2), null, Status.Rooted, 99999);
+    // ForcePlayerHero(EventPlayer(), Hero.Widowmaker);
+
+    // CreateEffect(EventPlayer(), Effect.Ring, Color.White,
+    //     EventPlayer(), 10, EffectRev.VisibleToPositionAndRadius);
+    // CreateEffect(EventPlayer(), Effect.Ring, Color.White,
+    //     EventPlayer(), 20, EffectRev.VisibleToPositionAndRadius);
+    // CreateEffect(EventPlayer(), Effect.Ring, Color.White,
+    //     EventPlayer(), 30, EffectRev.VisibleToPositionAndRadius);
+}
+
+rule: "Perk/Player/usePerk"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    IsAlive() &&
+    IsButtonHeld(EventPlayer(), Button.Interact)
+){
+    WaitLongPressConfirm();
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodPickupEffect,
+        Color.White, EventPlayer(), 1);
+    PlayEffect(
+        EventPlayer(), PlayEffect.BuffImpactSound,
+        Color.White, EventPlayer(), MaxLength());
+    perkType = PerkType.SupportArtillery;    
+    perkState = PerkState.Using;
+}
+
+rule: "Perk/Player/countDownTimeLimit"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkTimeLimit > 0
+){
+    // count down perk active limit time
+    WaitUpdateMediumCycle();
+    perkTimeLimit -= 1;
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/timeLimitOut"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkTimeLimit <= 0
+){
+    // lose perk by active limit time out
+    WaitConditionConfirmed();
+    perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/cancelPerk"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    IsAlive() &&
+    perkState == PerkState.Using &&
+    IsButtonHeld(EventPlayer(), Button.Interact)
+){
+    // lose perk by cancel operation of interact key hold
+    WaitCancelPressConfirm();
+    PlayEffect(
+        EventPlayer(), PlayEffect.DebuffImpactSound,
+        Color.White, EventPlayer(), MaxLength());
+    perkState = PerkState.Non;
+}
+
+disabled rule: "Debug/forceUsePerk // for bot"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    IsAlive()
+){
+    if(
+        DistanceBetween(
+            EventPlayer(),
+            ClosestPlayerTo(EventPlayer(), Team.Team2)) <= 10 &&
+        RandomInteger(1, 100) <= 50
+    ){
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodPickupEffect,
+            Color.White, EventPlayer(), 1);
+        PlayEffect(
+            EventPlayer(), PlayEffect.BuffImpactSound,
+            Color.White, EventPlayer(), MaxLength());
+        perkType = PerkType.SupportArtillery;  
+        perkState = PerkState.Using;
+    }
+    Wait(5, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();    
 }
 
 // Test Code -----------------------------------------------
-rule: "Perk/Player/BeamSniper/activate"
+// TAG SupportArtillery ----------
+define artilleryLandingRange: 20;
+define artilleryDamageRange: 5;
+playervar define landZonePosition;
+
+rule: "Perk/Player/SupportArtillery/activate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    true
-    // perkState == PerkState.Using &&
-    // perkType == PerkType.BeamSniper
+    perkState == PerkState.Using &&
+    perkType == PerkType.SupportArtillery
 ){
     // set time limit
-    // perkTimeLimit = 300;
-    // set param
-    perkEffectStatus = 0;
-    // set hud
-    perkEffectAndText = [];
-    // CreatePerkEffectHud("Critical damage chance when blinking blue");
+    perkTimeLimit = 13;
+    // set status
+    perkPosition = 0;
+    perkPosition2 = 0;
+    landPosition = -1;
+    landPosition2 = -1;  
+    perkEffectStatus = 0; 
+    // show text
+    // landing zone text
+    CreateInWorldText(
+        AllPlayers(), "Support artillery incoming.",
+        landZonePosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[0] = LastTextID();
-    // set perk hero
-    // PerkHero perkHero = new PerkHero();
-    // perkHero.hero = Hero.Widowmaker;
-    // perkHero.statusUnkillable = true;
-    // perkHero.damageDealt = 200;
-    // perkHero.ultimateCharge = 100;
-    // ForcePlayerPerkHero(EventPlayer(), perkHero);
-    // use ult
-    PressButton(EventPlayer(), Button.Ultimate);
+    // set effect
+    // shell body1
+    CreateEffect(AllPlayers(), Effect.Orb, Color.White,
+        perkPosition, 1, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[1] = LastCreatedEntity();
+    // shell body2
+    CreateEffect(AllPlayers(), Effect.Orb, Color.White,
+        perkPosition2, 1, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[2] = LastCreatedEntity();
+    // landing zone blast range
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
+        landZonePosition, artilleryLandingRange, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[3] = LastCreatedEntity();
 }
-
-rule: "Perk/Player/BeamSniper/deactivate"
+rule: "Perk/Player/SupportArtillery/deactivate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    true
-    // perkState == PerkState.Non &&
-    // perkType == PerkType.BeamSniper
+    perkState == PerkState.Non &&
+    perkType == PerkType.SupportArtillery
 ){
+    // reset text
+    DestroyInWorldText(perkEffectAndText[0]);
     // reset effect
     DestroyEffect(perkEffectAndText[1]);
     DestroyEffect(perkEffectAndText[2]);
-    StopChasingVariable(perkEffectStatus);
-    // reset hud
-    DestroyHudText(perkEffectAndText[0]);
-    // reset perk hero
-    // StopForcingPerkHero(EventPlayer());
+    DestroyEffect(perkEffectAndText[3]);
+    StopChasingVariable(perkPosition);
+    StopChasingVariable(perkPosition2);
     // reset type
-    // perkType = PerkType.Non;
+    perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/BeamSniper/brokenPerk //by helth 1"
+rule: "Perk/Player/SupportArtillery/setLandingZone"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    // perkState == PerkState.Using &&
-    // perkType == PerkType.BeamSniper &&
-    Health() <= 1
+    perkState == PerkState.Using &&
+    perkType == PerkType.SupportArtillery
 ){
-    WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
-    // perkState = PerkState.Non;
+    // set shell land position to aiming position
+    landZonePosition = AimingPosition();
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    DestroyEffect(perkEffectAndText[3]);
+    perkEffectStatus = 40;
 }
 
-rule: "Perk/Player/BeamSniper/chargingUlt"
+rule: "Perk/Player/SupportArtillery/launchShell"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    // perkState == PerkState.Using &&
-    // perkType == PerkType.BeamSniper &&
-    !IsUsingUltimate() &&
-    UltimateChargePercent() < 100
+    perkState == PerkState.Using &&
+    perkType == PerkType.SupportArtillery &&
+    perkEffectStatus > 0
 ){
-    WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 6));
-    LoopIfConditionIsTrue();
-}
-
-rule: "Perk/Player/BeamSniper/startCharge"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    // perkState == PerkState.Using &&
-    // perkType == PerkType.BeamSniper &&
-    IsButtonHeld(EventPlayer(), Button.SecondaryFire) &&
-    IsFiringSecondary()
-){
-    perkEffectStatus = 0;
-    ChaseVariableOverTime(perkEffectStatus, 100, 1.3,
+    // set shell at random horizontal positions over 50
+    perkPosition = landZonePosition +
+        Vector(0, 50, 0) + RandomPosition(10, 0, 10);
+    // start shell move
+    landPosition = landZonePosition + RandomPosition(artilleryLandingRange/2, 0, artilleryLandingRange/2);
+    ChaseVariableOverTime(
+        perkPosition, landPosition, 0.25,
         TimeChaseReevaluation.DestinationAndDuration);
-}
+    Wait(0.25, WaitBehavior.AbortWhenFalse);
+    perkEffectStatus -- ;
 
-rule: "Perk/Player/BeamSniper/cancelCharge"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    // perkState == PerkState.Using &&
-    // perkType == PerkType.BeamSniper &&
-    !IsButtonHeld(EventPlayer(), Button.SecondaryFire)
-){
-    StopChasingVariable(perkEffectStatus);
-    perkEffectStatus = 0;
-}
+    // set shell at random horizontal positions over 50
+    perkPosition2 = landZonePosition +
+        Vector(0, 50, 0) + RandomPosition(10, 0, 10);
+    // start shell move
+    landPosition2 = landZonePosition + RandomPosition(artilleryLandingRange/2, 0, artilleryLandingRange/2);
+    ChaseVariableOverTime(
+        perkPosition2, landPosition2, 0.25,
+        TimeChaseReevaluation.DestinationAndDuration);
+    Wait(0.25, WaitBehavior.AbortWhenFalse);
+    perkEffectStatus -- ;
 
-rule: "Perk/Player/BeamSniper/markTarget"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    // perkState == PerkState.Using &&
-    // perkType == PerkType.BeamSniper &&
-    perkEffectStatus == 100
-){
-    perkTargets = FilteredArray(
-        PlayersInViewAngle(EventPlayer(), Team.Team2, 3.2),
-        (
-            IsAlive(ArrayElement()) &&
-            DistanceBetween(ArrayElement(), EventPlayer()) > 0 &&
-            DistanceBetween(ArrayElement(), EventPlayer()) <= 10
-        )
-    );
-
-    if(perkTargets != []){
-        PlayEffect(
-            EventPlayer(), PlayEffect.GoodPickupEffect,
-            Color.Blue, perkTargets, 1.0);
-        PlayEffect(
-            EventPlayer(), PlayEffect.GoodExplosion,
-            Color.Blue, AimingPosition(), 0.01);
-    }
-
-    perkTargets += FilteredArray(
-        PlayersInViewAngle(EventPlayer(), Team.Team2, 1.8),
-        (
-            IsAlive(ArrayElement()) &&
-            DistanceBetween(ArrayElement(), EventPlayer()) > 10 &&
-            DistanceBetween(ArrayElement(), EventPlayer()) <= 20
-        )
-    );
-
-    if(perkTargets != []){
-        PlayEffect(
-            EventPlayer(), PlayEffect.GoodPickupEffect,
-            Color.Yellow, perkTargets, 1.0);
-        PlayEffect(
-            EventPlayer(), PlayEffect.GoodExplosion,
-            Color.Yellow, AimingPosition(), 0.01);
-    }
-
-    perkTargets += FilteredArray(
-        PlayersInViewAngle(EventPlayer(), Team.Team2, 1.1),
-        (
-            IsAlive(ArrayElement()) &&
-            DistanceBetween(ArrayElement(), EventPlayer()) > 20 &&
-            DistanceBetween(ArrayElement(), EventPlayer()) <= 99999
-        )
-    );
-    if(perkTargets != []){
-        PlayEffect(
-            EventPlayer(), PlayEffect.GoodPickupEffect,
-            Color.Red, perkTargets, 1.0);
-        PlayEffect(
-            EventPlayer(), PlayEffect.GoodExplosion,
-            Color.Red, AimingPosition(), 0.01);
-    }
-
-
-    // Since the impact point will shift due to the recoil when shooting, get the position before shooting
-    aimPosition = AimingPosition();     
-
-    WaitUpdateShortCycle();
     LoopIfConditionIsTrue();
+    
 }
 
-rule: "Perk/Player/BeamSniper/shotSniperBeam"
+rule: "Perk/Player/SupportArtillery/landedToPoint"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    // perkState == PerkState.Using &&
-    // perkType == PerkType.BeamSniper &&
-    IsButtonHeld(EventPlayer(), Button.SecondaryFire) &&
-    IsButtonHeld(EventPlayer(), Button.PrimaryFire)
+    perkState == PerkState.Using &&
+    perkType == PerkType.SupportArtillery &&
+    perkPosition == landPosition
 ){
-    if(perkEffectStatus < 100){
-        perkEffectStatus = 0;
-        Abort();
-    }
-
-    perkEffectStatus = 0;
-
-    // give hit damage of penetration ballistic
-    if(perkTargets != []){
-        PlayEffect(
-            AllPlayers(), PlayEffect.GoodExplosion,
-            Color.Aqua, perkTargets, 4.0);
-        Damage(perkTargets, EventPlayer(), 300);
-    }
-
-    // give splash damage of landed position
-    perkTargets = FilteredArray(
-        PlayersWithinRadius(aimPosition, 4, Team.Team2, RadiusLOS.Off),
-        IsAlive(ArrayElement()));
-    if(perkTargets != []){
-        Damage(perkTargets, EventPlayer(), 100);
-    }
-
-    perkPosition = EyePosition() + 
-        -PositionOffset();  // Offset to gun sight
-    landPosition = EyePosition() +
-        (FacingDirectionOf() * MaxLength());
-
-    // Ballistics for aiming
-    CreateBeamEffect(AllPlayers(),
-        BeamType.GoodBeam, perkPosition, aimPosition,
-        Color.Aqua, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[1] = LastCreatedEntity();
-    // Ballistic for penetration
-    CreateBeamEffect(AllPlayers(),
-        BeamType.GoodBeam, aimPosition, landPosition,
-        Color.Aqua, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[2] = LastCreatedEntity();
-
-    // shot sound
+    // get target
+    perkTargets = 
+        PlayersWithinRadius(
+            perkPosition, artilleryDamageRange,
+            Team.All, RadiusLOS.Off);
+    // damage
+    Damage(
+        PlayersWithinRadius(
+            landPosition, artilleryDamageRange,
+            Team.Team2, RadiusLOS.Off
+        ), EventPlayer(), 500);
+    // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.Aqua, EventPlayer(), 100);
-    // shot fire
-    PlayEffect(
-        AllPlayers(), PlayEffect.BadExplosion,
-        Color.Aqua, perkPosition + (FacingDirectionOf() * 0.5), 1.0);
-    // landed position blast
-    PlayEffect(
-        AllPlayers(), PlayEffect.GoodExplosion,
-        Color.Aqua, aimPosition, 4.0);
-
-    WaitPlayEffect();
-    DestroyEffect(perkEffectAndText[1]);
-    DestroyEffect(perkEffectAndText[2]);
+        Color.White, landPosition, 300);
+    // play blast effect
+    PlayContinuousBlast(landPosition, artilleryDamageRange,
+        2, Color.Yellow);
 }
 
+rule: "Perk/Player/SupportArtillery/landedToPoint2"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.SupportArtillery &&
+    perkPosition2 == landPosition2
+){
+    // get target
+    perkTargets = 
+        PlayersWithinRadius(
+            perkPosition2, artilleryDamageRange,
+            Team.All, RadiusLOS.Off);
+    // damage
+    Damage(
+        PlayersWithinRadius(
+            landPosition2, artilleryDamageRange,
+            Team.Team2, RadiusLOS.Off
+        ), EventPlayer(), 500);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White, landPosition2, 300);
+    // play blast effect
+    PlayContinuousBlast(landPosition2, artilleryDamageRange,
+        2, Color.Yellow);
+}
 
 // Debug -----------------------------------------------
 globalvar define param = 1;
