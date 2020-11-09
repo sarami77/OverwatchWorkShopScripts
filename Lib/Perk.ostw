@@ -41,6 +41,7 @@ enum PerkType{  // TAG perk type
     TrapBeam,
     BattleFlag,
     ChainExplosion,
+    IceAge,
     AimHack,
     Vampire,
     ShotCaller,
@@ -81,6 +82,8 @@ Event.OngoingGlobal
         PerkType.BioticStation,
         PerkType.TrapBeam,
         PerkType.ChainExplosion,
+        PerkType.IceAge,
+        PerkType.IceAge,
         PerkType.AimHack,
         PerkType.Vampire,
         PerkType.ShotCaller,
@@ -500,7 +503,11 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.ChainExplosion){
         perkName = "Chain Explosion";
-        perkDetail = "Killed enemy explodes and splash damage to around. Explosion is chain around.";
+        perkDetail = "Killed enemy explodes and splash addtinal damage to around. Explosion is chain around.";
+    }
+    else if(perkType == PerkType.IceAge){
+        perkName = "Ice Age";
+        perkDetail = "killed enemy explode and splash freeze effect to around. Freeze time is short but range is wide.";
     }
     else if(perkType == PerkType.AimHack){
         perkName = "Aim Hack";
@@ -1738,6 +1745,58 @@ if(
         PlayEffect(
             AllPlayers(), PlayEffect.RingExplosion,
             Color.Orange, Victim(), chainExplosionRange);
+    }
+}
+
+// TAG IceAge ----------
+rule: "Perk/Player/IceAge/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.IceAge
+){
+    // set time limit
+    perkTimeLimit = 240;
+}
+
+rule: "Perk/Player/IceAge/deactivate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Non &&
+    perkType == PerkType.IceAge
+){
+    // reset type
+    perkType = PerkType.Non;
+}
+
+define IceAgeRange: 12;
+
+rule: "Perk/Player/IceAge/explosion"
+Event.OnFinalBlow
+Team.Team1
+Player.All
+if(
+    perkState == PerkState.Using &&
+    perkType == PerkType.IceAge
+){
+    if(Victim() != EventPlayer()){
+        WaitPlayEffect();
+        // splash freeze
+        SetStatus(
+            PlayersWithinRadius(
+                Victim(), IceAgeRange, Team.Team2, RadiusLOS.Off),
+            EventPlayer(), Status.Frozen, 1.5);
+        // play blast
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodExplosion,
+            Color.Aqua, Victim(), IceAgeRange);
+        PlayEffect(
+            AllPlayers(), PlayEffect.RingExplosion,
+            Color.Aqua, Victim(), IceAgeRange);
     }
 }
 
