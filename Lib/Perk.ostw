@@ -13,7 +13,7 @@ Event.OngoingGlobal
 if(
     ServerLoad() >= 255
 ){
-    Wait(5, WaitBehavior.AbortWhenFalse);
+    Wait(4, WaitBehavior.AbortWhenFalse);
     // abort perk
     dbgMsg("!!! Player's perk was force reset by server over load !!!");
     reservePerkPlayer = 
@@ -25,7 +25,7 @@ if(
         reservePerkPlayer[loopIndex].reservePerkType = reservePerkPlayer[loopIndex].perkType;
         reservePerkPlayer[loopIndex].perkState = PerkState.Non;
     }
-    Wait(3, WaitBehavior.IgnoreCondition);
+    Wait(4, WaitBehavior.IgnoreCondition);
     // reset perk
     for(loopIndex = 0; loopIndex < CountOf(reservePerkPlayer); loopIndex++){
         reservePerkPlayer[loopIndex].perkType = reservePerkPlayer[loopIndex].reservePerkType;
@@ -87,43 +87,42 @@ rule: "Perk/lotteryPerkList // list of parks you can pick up"
 Event.OngoingGlobal
 {
     lotteryPerkList = [     // TAG lottery perk list
-        // PerkType.HighJump, 
-        // PerkType.GrapplingBeam,
-        // PerkType.Sprinter,
-        // PerkType.Adrenaline,
-        // PerkType.Savior,
-        // PerkType.Fearless,
-        // PerkType.SteelFormation,
-        // PerkType.PersonalShelter,
-        // PerkType.BioticStation,
-        // PerkType.BioticStation,
-        // PerkType.TrapBeam,
-        // PerkType.ChainExplosion,
-        // PerkType.IceAge,
-        // PerkType.IceAge,
-        // PerkType.AimHack,
-        // PerkType.Vampire,
-        // PerkType.ShotCaller,
-        // PerkType.BattleFlag,
-        // PerkType.SupportArtillery,
-        // PerkType.SupportArtillery,
-        // PerkType.SupportArtillery,
-        // PerkType.CruisingMissile,
-        // PerkType.CruisingMissile,
-        // PerkType.CarePackage,
-        // PerkType.DeathFromAbove,
-        // PerkType.LegendalyNinja,
-        // PerkType.MachDelivery,
-        // PerkType.Juggernaut,
-        // PerkType.BeamSniper,
-        // PerkType.DragonStorm,
-        // PerkType.Titan,
-        // PerkType.Annihilator
+        PerkType.HighJump, 
+        PerkType.GrapplingBeam,
+        PerkType.Sprinter,
+        PerkType.Adrenaline,
+        PerkType.Savior,
+        PerkType.Fearless,
+        PerkType.SteelFormation,
+        PerkType.PersonalShelter,
+        PerkType.BioticStation,
+        PerkType.BioticStation,
+        PerkType.TrapBeam,
+        PerkType.ChainExplosion,
+        PerkType.IceAge,
+        PerkType.AimHack,
+        PerkType.Vampire,
+        PerkType.ShotCaller,
+        PerkType.BattleFlag,
+        PerkType.SupportArtillery,
+        PerkType.SupportArtillery,
+        PerkType.SupportArtillery,
+        PerkType.CruisingMissile,
+        PerkType.CruisingMissile,
+        PerkType.CarePackage,
+        PerkType.DeathFromAbove,
+        PerkType.LegendalyNinja,
+        PerkType.MachDelivery,
+        PerkType.Juggernaut,
+        PerkType.BeamSniper,
+        PerkType.DragonStorm,
+        PerkType.Titan,
+        PerkType.Annihilator
         
         //  for debug
-        PerkType.SupportArtillery,
-        PerkType.SupportArtillery,
-        PerkType.SupportArtillery
+        // PerkType.SupportArtillery,
+        // PerkType.CruisingMissile,
+        // PerkType.CarePackage
     ];
 }
 
@@ -2145,6 +2144,7 @@ if(
         perkPosition, landPosition, 0.25,
         TimeChaseReevaluation.DestinationAndDuration);
     Wait(0.25, WaitBehavior.AbortWhenFalse);
+    async ExplodeShell(landPosition);
     perkEffectStatus -- ;
 
     // set shell at random horizontal positions over 50
@@ -2156,66 +2156,30 @@ if(
         perkPosition2, landPosition2, 0.25,
         TimeChaseReevaluation.DestinationAndDuration);
     Wait(0.25, WaitBehavior.AbortWhenFalse);
+    async ExplodeShell(landPosition2);
     perkEffectStatus -- ;
 
     LoopIfConditionIsTrue();
 }
 
-rule: "Perk/Player/SupportArtillery/landedToPoint"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.SupportArtillery &&
-    perkState == PerkState.Using &&
-    perkPosition == landPosition
-){
+void ExplodeShell(define position)"Subroutine/ExplodeShell"{
     // get target
     perkTargets = 
         PlayersWithinRadius(
-            perkPosition, artilleryDamageRange,
+            position, artilleryDamageRange,
             Team.All, RadiusLOS.Off);
     // damage
     Damage(
         PlayersWithinRadius(
-            landPosition, artilleryDamageRange,
+            position, artilleryDamageRange,
             Team.Team2, RadiusLOS.Off
         ), EventPlayer(), 300);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.White, landPosition, 300);
+        Color.White, position, 300);
     // play blast effect
-    PlayContinuousBlast(landPosition, artilleryDamageRange,
-        2, Color.Yellow);
-}
-
-rule: "Perk/Player/SupportArtillery/landedToPoint2"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.SupportArtillery &&
-    perkState == PerkState.Using &&
-    perkPosition2 == landPosition2
-){
-    // get target
-    perkTargets = 
-        PlayersWithinRadius(
-            perkPosition2, artilleryDamageRange,
-            Team.All, RadiusLOS.Off);
-    // damage
-    Damage(
-        PlayersWithinRadius(
-            landPosition2, artilleryDamageRange,
-            Team.Team2, RadiusLOS.Off
-        ), EventPlayer(), 300);
-    // play blast sound
-    PlayEffect(
-        AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.White, landPosition2, 300);
-    // play blast effect
-    PlayContinuousBlast(landPosition2, artilleryDamageRange,
+    PlayContinuousBlast(position, artilleryDamageRange,
         2, Color.Yellow);
 }
 
@@ -2385,7 +2349,7 @@ Player.All
 if(
     perkType == PerkType.CruisingMissile &&
     perkState == PerkState.Using &&
-    perkPosition == landPosition
+    perkTimeLimit <= 0
 ){
     StopChasingVariable(perkPosition);
     StopChasingVariable(landPosition);
@@ -2543,7 +2507,7 @@ Player.All
 if(
     perkType == PerkType.CarePackage &&
     perkState == PerkState.Using &&
-    perkPosition == landPosition
+    perkTimeLimit <= 0
 ){
     StopChasingVariable(perkPosition);
 
