@@ -6,34 +6,58 @@ import "Debug.ostw";
 // Function enable team is Team1
 
 // TAG System ----------
-globalvar define reservePerkPlayer;
-playervar define reservePerkType;
+define enableOverLoadMeasures: true;
+define overloadSecondLimit: 4;
+globalvar define overloadSecond;
+globalvar define resetPerkPlayer;
+playervar define resetPerkType;
+
 rule: "System/ServerOverLoadMeasures"
 Event.OngoingGlobal
 if(
-    ServerLoad() >= 255
+    enableOverLoadMeasures
 ){
-    Wait(4, WaitBehavior.AbortWhenFalse);
-    // abort perk
-    dbgMsg("!!! Player's perk was force reset by server over load !!!");
-    reservePerkPlayer = 
-        FilteredArray(
-            AllPlayers(Team.Team1),
-            ArrayElement().perkState == PerkState.Using
-    );
-    for(loopIndex = 0; loopIndex < CountOf(reservePerkPlayer); loopIndex++){
-        reservePerkPlayer[loopIndex].reservePerkType = reservePerkPlayer[loopIndex].perkType;
-        reservePerkPlayer[loopIndex].perkState = PerkState.Non;
+    // To avoid shutdown due to server overload,
+    //  reset the perk to reduce the load
+    //  if the overload continues for a certain period of time.
+    
+    // Since the value of ServerLoad() changes frequently,
+    // do not bind it to "Condition" and monitor it by polling.
+    Wait(1, WaitBehavior.AbortWhenFalse);
+
+    // count duration of overload
+    if(255 <= ServerLoad()){
+        overloadSecond ++;
     }
-    Wait(4, WaitBehavior.IgnoreCondition);
-    // reset perk
-    for(loopIndex = 0; loopIndex < CountOf(reservePerkPlayer); loopIndex++){
-        reservePerkPlayer[loopIndex].perkType = reservePerkPlayer[loopIndex].reservePerkType;
-        reservePerkPlayer[loopIndex].perkState = PerkState.Ready;
+    else{
+        overloadSecond = 0;
     }
+
+    if(overloadSecond >= overloadSecondLimit){
+        overloadSecond = 0;
+
+        // abort perk
+        dbgMsg("!!! Player's perk was force reset by server over load !!!");
+        resetPerkPlayer = 
+            FilteredArray(
+                AllPlayers(Team.Team1),
+                ArrayElement().perkState == PerkState.Using
+        );
+        for(gLoopIndex = 0; gLoopIndex < CountOf(resetPerkPlayer); gLoopIndex++){
+            resetPerkPlayer[gLoopIndex].resetPerkType = resetPerkPlayer[gLoopIndex].perkType;
+            resetPerkPlayer[gLoopIndex].perkState = PerkState.Non;
+        }
+        Wait(4, WaitBehavior.IgnoreCondition);
+        // reset perk
+        for(gLoopIndex = 0; gLoopIndex < CountOf(resetPerkPlayer); gLoopIndex++){
+            resetPerkPlayer[gLoopIndex].perkType = resetPerkPlayer[gLoopIndex].resetPerkType;
+            resetPerkPlayer[gLoopIndex].perkState = PerkState.Ready;
+        }
+    }
+
+    LoopIfConditionIsTrue();
 }
 
-globalvar define loopIndex;
 globalvar define lotteryPerkList;
 playervar define perkCratePosition;
 playervar define perkCrateState;
@@ -42,7 +66,6 @@ enum PerkCrateState{
     Dropped
 }
 playervar define perkCrateEntitys;
-playervar define playerClosestCrate;
 playervar define perkType;
 enum PerkType{  // TAG perk type
     Non,
@@ -62,7 +85,7 @@ enum PerkType{  // TAG perk type
     AimHack,
     Vampire,
     ShotCaller,
-    SupportArtillery,
+    ArtillerySupport,
     CruisingMissile,
     CarePackage,
     DeathFromAbove,
@@ -81,49 +104,53 @@ enum PerkState{
     Using
 }
 
+define enableDebugPerk: false;
 playervar define perkHudEntitys;
 
 rule: "Perk/lotteryPerkList // list of parks you can pick up"
 Event.OngoingGlobal
 {
-    lotteryPerkList = [     // TAG lottery perk list
-        PerkType.HighJump, 
-        PerkType.GrapplingBeam,
-        PerkType.Sprinter,
-        PerkType.Adrenaline,
-        PerkType.Savior,
-        PerkType.Fearless,
-        PerkType.SteelFormation,
-        PerkType.PersonalShelter,
-        PerkType.BioticStation,
-        PerkType.BioticStation,
-        PerkType.TrapBeam,
-        PerkType.ChainExplosion,
-        PerkType.IceAge,
-        PerkType.AimHack,
-        PerkType.Vampire,
-        PerkType.ShotCaller,
-        PerkType.BattleFlag,
-        PerkType.SupportArtillery,
-        PerkType.SupportArtillery,
-        PerkType.SupportArtillery,
-        PerkType.CruisingMissile,
-        PerkType.CruisingMissile,
-        PerkType.CarePackage,
-        PerkType.DeathFromAbove,
-        PerkType.LegendalyNinja,
-        PerkType.MachDelivery,
-        PerkType.Juggernaut,
-        PerkType.BeamSniper,
-        PerkType.DragonStorm,
-        PerkType.Titan,
-        PerkType.Annihilator
-        
-        //  for debug
-        // PerkType.SupportArtillery,
-        // PerkType.CruisingMissile,
-        // PerkType.CarePackage
-    ];
+    if(!enableDebugPerk){
+        lotteryPerkList = [     // TAG lottery perk list
+            PerkType.HighJump, 
+            PerkType.GrapplingBeam,
+            PerkType.Sprinter,
+            PerkType.Adrenaline,
+            PerkType.Savior,
+            PerkType.Fearless,
+            PerkType.SteelFormation,
+            PerkType.PersonalShelter,
+            PerkType.BioticStation,
+            PerkType.BioticStation,
+            PerkType.TrapBeam,
+            PerkType.ChainExplosion,
+            PerkType.IceAge,
+            PerkType.AimHack,
+            PerkType.Vampire,
+            PerkType.ShotCaller,
+            PerkType.BattleFlag,
+            PerkType.ArtillerySupport,
+            PerkType.ArtillerySupport,
+            PerkType.ArtillerySupport,
+            PerkType.CruisingMissile,
+            PerkType.CruisingMissile,
+            PerkType.CarePackage,
+            PerkType.DeathFromAbove,
+            PerkType.LegendalyNinja,
+            PerkType.MachDelivery,
+            PerkType.Juggernaut,
+            PerkType.BeamSniper,
+            PerkType.DragonStorm,
+            PerkType.Titan,
+            PerkType.Annihilator
+        ];
+    }
+    else{
+        lotteryPerkList = [     // TAG lottery perk list for debug
+            PerkType.ArtillerySupport
+            // PerkType.CruisingMissile
+        ];
+    }
 }
 
 rule: "Perk/CreatState/NotDropped"
@@ -194,6 +221,7 @@ if(
 }
 
 define pickupRange : 2.5;
+playervar define playerClosestCrate;
 
 rule: "Perk/Enemy/perkPickUpByPlayer //Giving a park to the player who touched the crate"
 Event.OngoingPlayer
@@ -224,7 +252,7 @@ if(
                 )
             )
         );
-
+    // play pickup effect, message
     PlayEffect(
         AllPlayers(), PlayEffect.GoodPickupEffect,
         Color.White, playerClosestCrate, 1);
@@ -232,6 +260,7 @@ if(
         playerClosestCrate, PlayEffect.BuffExplosionSound,
         Color.White, playerClosestCrate, MaxLength());
     SmallMessage(playerClosestCrate, "Got perk. Check detail from left list.");
+    // set perk
     playerClosestCrate.perkType = RandomValueInArray(lotteryPerkList);
     playerClosestCrate.perkState = PerkState.Ready;
     // delete perk crate when picked up
@@ -476,11 +505,11 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     // TAG perk detail text HUD
     if(perkType == PerkType.HighJump){
         perkName = "High Jump";
-        perkDetail = "jump more higher and can stay in air a little.";
+        perkDetail = "jump more higher and can stay in air a little. Can avoid danger or move to high places.";
     }
     else if(perkType == PerkType.GrapplingBeam){
         perkName = "Grappling Beam";
-        perkDetail = "Shot grappling beam and move quickly in air.";
+        perkDetail = "Shot grappling beam and move quickly in air. If use well, can move without touching the ground.";
     }
     else if(perkType == PerkType.Sprinter){
         perkName = "Sprinter";
@@ -488,7 +517,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.Adrenaline){
         perkName = "Adrenaline";
-        perkDetail = "The less health you have, the faster you move.";
+        perkDetail = "The less health you have, the faster you move. Ideal for avoiding danger.";
     }
     else if(perkType == PerkType.Savior){
         perkName = "Savior";
@@ -500,7 +529,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.SteelFormation){
         perkName = "Steel Formation";
-        perkDetail = "Reduce half received damage of near teammate and self.";
+        perkDetail = "Reduce half received damage of near teammate and self. Let's unite.";
     }
     else if(perkType == PerkType.PersonalShelter){
         perkName = "Personal Shelter";
@@ -528,7 +557,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.AimHack){
         perkName = "Aim Hack";
-        perkDetail = "Automatically aim at enemy's head. No problem, Bot can't report.";
+        perkDetail = "Automatically aim at enemy's head. No problem, bot can't report.";
     }
     else if(perkType == PerkType.Vampire){
         perkName = "Vampire";
@@ -538,8 +567,8 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
         perkName = "Shot Caller";
         perkDetail = "When use ultimate ability, teammate's ultimate ability be instantly full charged.";
     }
-    else if(perkType == PerkType.SupportArtillery){
-        perkName = "Support Artillery";
+    else if(perkType == PerkType.ArtillerySupport){
+        perkName = "Artillery Support";
         perkDetail = "Request artillery support to aim position. Attack wide area with 10-second barrage.";
     }
     else if(perkType == PerkType.CruisingMissile){
@@ -556,7 +585,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.LegendalyNinja){
         perkName = "Legendaly Ninja";
-        perkDetail = "A ninja with super agility, dragon blade, immortality. Can add activity time by kill enemy.";
+        perkDetail = "Ninja with super agility, dragon blade, immortality. Can add activity time by kill enemy.";
     }
     else if(perkType == PerkType.MachDelivery){
         perkName = "Mach Delivery";
@@ -580,7 +609,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.Annihilator){
         perkName = "Annihilator";
-        perkDetail = "Execute nearby enemies one after another at super high speed like lightning.";
+        perkDetail = "Executes nearby enemies one after another like super-fast lightning bolt.";
     }
 
     // TAG perk common action
@@ -1375,11 +1404,11 @@ if(
     WaitApplyImpulseCycle();
     perkTargets = PlayersWithinRadius(
                 perkPosition, shelterRange, Team.Team1, RadiusLOS.Off);
-    for(loopIndex = 0; loopIndex < CountOf(perkTargets); loopIndex++){
-        if(perkTargets[loopIndex] !=
+    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
+        if(perkTargets[pLoopIndex] !=
             ClosestPlayerTo(perkPosition, Team.Team1)){
-            ApplyImpulse(perkTargets[loopIndex],
-                VectorTowards(perkPosition, perkTargets[loopIndex] + PositionOffset()),
+            ApplyImpulse(perkTargets[pLoopIndex],
+                VectorTowards(perkPosition, perkTargets[pLoopIndex] + PositionOffset()),
                 10, Relative.ToWorld, ContraryMotion.Cancel);
         }
     }
@@ -1522,7 +1551,6 @@ if(
 ){
     perkPosition = PositionOf() + PositionOffset();
     aimPosition = AimingPositionIgnorePlayer();
-    detecterPosition = perkPosition;
 }
 
 rule: "Perk/Player/TrapBeam/moveDetectorToAimPosition"
@@ -1531,24 +1559,13 @@ Team.Team1
 Player.All
 if(
     perkType == PerkType.TrapBeam &&
-    perkState == PerkState.Using &&
-    detecterPosition == perkPosition
+    perkState == PerkState.Using
 ){
+    detecterPosition = perkPosition;
     ChaseVariableOverTime(detecterPosition, aimPosition,
         patrolCycle, TimeChaseReevaluation.DestinationAndDuration);
-}
-
-rule: "Perk/Player/TrapBeam/moveDetectorToPerkPosition"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.TrapBeam &&
-    perkState == PerkState.Using &&
-    detecterPosition == aimPosition
-){
-    ChaseVariableOverTime(detecterPosition, perkPosition,
-        patrolCycle, TimeChaseReevaluation.DestinationAndDuration);
+    Wait(patrolCycle, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
 }
 
 rule: "Perk/Player/TrapBeam/stunByTouched"
@@ -2020,9 +2037,9 @@ if(
                 )
         );
 
-    for(loopIndex = 0; loopIndex < CountOf(perkTargets); loopIndex++){
-        if(perkTargets[loopIndex] != EventPlayer()){
-            SetUltimateCharge(perkTargets[loopIndex], 100);
+    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
+        if(perkTargets[pLoopIndex] != EventPlayer()){
+            SetUltimateCharge(perkTargets[pLoopIndex], 100);
         }
     }
 }
@@ -2042,17 +2059,19 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG SupportArtillery ----------
+// TAG ArtillerySupport ----------
 define artilleryLandingRange: 20;
-define artilleryDamageRange: 5;
+define artilleryDamageRange: 7;
 playervar define landZonePosition;
+define attackTime: 10;
+define attackNumber: 20;
 
-rule: "Perk/Player/SupportArtillery/activate"
+rule: "Perk/Player/ArtillerySupport/activate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.SupportArtillery &&
+    perkType == PerkType.ArtillerySupport &&
     perkState == PerkState.Using
 ){
     // set time limit
@@ -2067,12 +2086,12 @@ if(
     // landing zone text
     perkEffectAndText = [];
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Support Artillery">,
+        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Artillery Support">,
         landZonePosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[0] = LastTextID();
     CreateInWorldText(
-        AllPlayers(), <"Support artillery incoming.">,
+        AllPlayers(), <"Artillery Support incoming.">,
         landZonePosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[1] = LastTextID();
@@ -2090,12 +2109,12 @@ if(
         landZonePosition, artilleryLandingRange, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[4] = LastCreatedEntity();
 }
-rule: "Perk/Player/SupportArtillery/deactivate"
+rule: "Perk/Player/ArtillerySupport/deactivate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.SupportArtillery &&
+    perkType == PerkType.ArtillerySupport &&
     perkState == PerkState.Non
 ){
     // reset text
@@ -2111,27 +2130,27 @@ if(
     perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/SupportArtillery/setLandingZone"
+rule: "Perk/Player/ArtillerySupport/setLandingZone"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.SupportArtillery &&
+    perkType == PerkType.ArtillerySupport &&
     perkState == PerkState.Using
 ){
     // set shell land position to aiming position
     landZonePosition = AimingPosition();
     Wait(3, WaitBehavior.AbortWhenFalse);
     DestroyEffect(perkEffectAndText[4]);
-    perkEffectStatus = 40;
+    perkEffectStatus = attackNumber;
 }
 
-rule: "Perk/Player/SupportArtillery/launchShell"
+rule: "Perk/Player/ArtillerySupport/launchShell"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.SupportArtillery &&
+    perkType == PerkType.ArtillerySupport &&
     perkState == PerkState.Using &&
     perkEffectStatus > 0
 ){
@@ -2139,11 +2158,13 @@ if(
     perkPosition = landZonePosition +
         Vector(0, 50, 0) + RandomPosition(10, 0, 10);
     // start shell move
-    landPosition = landZonePosition + RandomPosition(artilleryLandingRange/2, 0, artilleryLandingRange/2);
+    landPosition = landZonePosition + RandomPosition(artilleryLandingRange / 2, 0, artilleryLandingRange / 2);
     ChaseVariableOverTime(
-        perkPosition, landPosition, 0.25,
+        perkPosition, landPosition, attackTime / attackNumber,
         TimeChaseReevaluation.DestinationAndDuration);
-    Wait(0.25, WaitBehavior.AbortWhenFalse);
+    Wait(attackTime / attackNumber, WaitBehavior.AbortWhenFalse);
+    StopChasingVariable(perkPosition);
+    perkPosition = 0;
     async ExplodeShell(landPosition);
     perkEffectStatus -- ;
 
@@ -2151,11 +2172,13 @@ if(
     perkPosition2 = landZonePosition +
         Vector(0, 50, 0) + RandomPosition(10, 0, 10);
     // start shell move
-    landPosition2 = landZonePosition + RandomPosition(artilleryLandingRange/2, 0, artilleryLandingRange/2);
+    landPosition2 = landZonePosition + RandomPosition(artilleryLandingRange / 2, 0, artilleryLandingRange / 2);
     ChaseVariableOverTime(
-        perkPosition2, landPosition2, 0.25,
+        perkPosition2, landPosition2, attackTime / attackNumber,
         TimeChaseReevaluation.DestinationAndDuration);
-    Wait(0.25, WaitBehavior.AbortWhenFalse);
+    Wait(attackTime / attackNumber, WaitBehavior.AbortWhenFalse);
+    StopChasingVariable(perkPosition2);
+    perkPosition = 0;
     async ExplodeShell(landPosition2);
     perkEffectStatus -- ;
 
@@ -2365,9 +2388,9 @@ if(
         PlayersWithinRadius(
             aimPosition, missleDamageRange,
             Team.Team2, RadiusLOS.Off);
-    for(loopIndex = 0; loopIndex < CountOf(perkTargets); loopIndex++){
-        ApplyImpulse(perkTargets[loopIndex],
-            VectorTowards(perkPosition, perkTargets[loopIndex] + PositionOffset()),
+    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
+        ApplyImpulse(perkTargets[pLoopIndex],
+            VectorTowards(perkPosition, perkTargets[pLoopIndex] + PositionOffset()),
             2000, Relative.ToWorld, ContraryMotion.Cancel);
     }
     WaitEntityImpulse();
@@ -2523,7 +2546,7 @@ if(
         Color.White, AllPlayers(), MaxLength());
     
     // delploy perk crate around of landPosition
-    perkEffectStatus = RandomInteger(3, 6);
+    perkEffectStatus = RandomInteger(4, 6);
     // Use variables of enemy players who have not dropped the crate
     perkTargets = FilteredArray(
         AllPlayers(Team.Team2),
@@ -2532,10 +2555,10 @@ if(
         perkEffectStatus = CountOf(perkTargets);
     }
     // Set perk crate position to around of landPosition
-    for(loopIndex = 0; loopIndex < perkEffectStatus; loopIndex++){
-        perkTargets[loopIndex].perkCratePosition = NearestWalkablePosition(
+    for(pLoopIndex = 0; pLoopIndex < perkEffectStatus; pLoopIndex++){
+        perkTargets[pLoopIndex].perkCratePosition = NearestWalkablePosition(
             landPosition + RandomPosition(3, 0, 3)) + PositionOffset();    
-        perkTargets[loopIndex].perkCrateState = PerkCrateState.Dropped;
+        perkTargets[pLoopIndex].perkCrateState = PerkCrateState.Dropped;
     }
     perkState = PerkState.Non;
 }
@@ -3172,9 +3195,9 @@ void ExplodeBomb()"Subroutine/ExplodeBomb"{
             perkPosition2, bombDamageRange,
             Team.Team2, RadiusLOS.Off);
     // apply Impulse
-    for(loopIndex = 0; loopIndex < CountOf(perkTargets); loopIndex++){
-        ApplyImpulse(perkTargets[loopIndex],
-            VectorTowards(perkPosition2, perkTargets[loopIndex] + PositionOffset()),
+    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
+        ApplyImpulse(perkTargets[pLoopIndex],
+            VectorTowards(perkPosition2, perkTargets[pLoopIndex] + PositionOffset()),
             30, Relative.ToWorld, ContraryMotion.Cancel);
     }
     // show impulse
@@ -3362,12 +3385,12 @@ if(
 
     // Ballistics for aiming
     CreateBeamEffect(AllPlayers(),
-        BeamType.GoodBeam, perkPosition, aimPosition,
+        BeamType.BadBeam, perkPosition, aimPosition,
         Color.Aqua, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[1] = LastCreatedEntity();
     // Ballistic for penetration
     CreateBeamEffect(AllPlayers(),
-        BeamType.GoodBeam, aimPosition, landPosition,
+        BeamType.BadBeam, aimPosition, landPosition,
         Color.Aqua, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[2] = LastCreatedEntity();
 
@@ -3434,8 +3457,8 @@ if(
         Teleport(EventPlayer(), PositionOf() + Vector(0, -60, 0));
 
     // reset enemy icon
-    for(loopIndex = 0; loopIndex < CountOf(perkTargets); loopIndex++){
-        DestroyIcon(perkEffectAndText[loopIndex]);
+    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
+        DestroyIcon(perkEffectAndText[pLoopIndex]);
     }
     // reset perk hero
     StopForcingPerkHero(EventPlayer());
@@ -3590,8 +3613,8 @@ if(
     SetInvisible(EventPlayer(), InvisibleTo.None);
     SetDamageDealt(EventPlayer(), 150);
     // reset enemy icon
-    for(loopIndex = 0; loopIndex < CountOf(perkTargets); loopIndex++){
-        DestroyIcon(perkEffectAndText[loopIndex]);
+    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
+        DestroyIcon(perkEffectAndText[pLoopIndex]);
     }
     // face enemy
     StartFacing(EventPlayer(), 
