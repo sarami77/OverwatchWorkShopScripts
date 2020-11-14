@@ -1025,6 +1025,7 @@ globalvar define portalState;
 enum PortalState{
     Idle,
     Calculating,
+    Checking,
     Set,
     Growing,
     Suspended,
@@ -1038,6 +1039,7 @@ globalvar define portalEntitys;
 globalvar define isFirstGrowing;
 
 define portalEnable:
+    portalState == PortalState.Checking ||
     portalState == PortalState.Set ||
     portalState == PortalState.Growing ||
     portalState == PortalState.Suspended;
@@ -1229,6 +1231,8 @@ if(
     createRange = DistanceBetween(spawnPosition1, spawnPosition2) * 1.0;   // TAG create range
 }
 
+globalvar define prevPortalPosition;
+
 rule: "Portal/Positioner/createPortalInRange //repeat random positioning until close to map surface"
 Event.OngoingGlobal
 if(
@@ -1239,13 +1243,17 @@ if(
     // Get candidate position by random position within the create range from the center of the map
     // reduce coordinateY for will not select a different location than the player's location in control map
     // Repeat random position determination until within 15 meters of the map's walkable surface
-    for(gLoopIndex = 0; gLoopIndex < 30; gLoopIndex++){
+    for(gLoopIndex = 0; gLoopIndex < 50; gLoopIndex++){
         candidatePosition = centerPosition + 
             RandomPosition(createRange, createRange / 4, createRange);
         if(
             DistanceBetween(    // Near the surface
                 candidatePosition, NearestWalkablePosition(candidatePosition))
                 <= 15
+                    &&
+            DistanceBetween(    // far from prev position
+                candidatePosition, prevPortalPosition)
+                > 40
                     &&
             !IsInLineOfSight(   // Blind spot from the player 
                 candidatePosition + PositionOffset(),
@@ -1257,7 +1265,20 @@ if(
     }
     // change to walkable position
     portalPosition = NearestWalkablePosition(candidatePosition) + PositionOffset();
-    // create portal entity
+    // create portal, next check position
+    portalState = PortalState.Checking;
+}
+
+rule: "Portal/Positioner/checking"
+Event.OngoingGlobal
+if(
+    portalState == PortalState.Checking
+){
+    // Waiting for Positioner/DetectXXX judgment described later
+    Wait(2.5, WaitBehavior.AbortWhenFalse);
+    // save prev position
+    prevPortalPosition = portalPosition;
+    // confirm portal position
     portalState = PortalState.Set;
 }
 
@@ -1383,11 +1404,13 @@ if(
 rule: "Portal/Positioner/DetectClosedArea/resetPortal"
 Event.OngoingGlobal
 if(
+    !contactHappened &&
+    notContactTime <= 5 &&
     stoppedCount >= (NumberOfPlayers(Team.Team2) / 2)
 ){
     // If the portal position is in the cloased area,
     //  it is determined that the portal position is incorrect and the portal is recreate
-    Wait(4, WaitBehavior.AbortWhenFalse);
+    Wait(2, WaitBehavior.AbortWhenFalse);
     dbgMsg("reset Portal by Detect Closed Area");
     portalState = PortalState.Calculating;
 }
