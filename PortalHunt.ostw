@@ -1269,30 +1269,28 @@ if(
     portalState = PortalState.Checking;
 }
 
-rule: "Portal/Positioner/checking"
+rule: "Portal/Positioner/positionChecking"
 Event.OngoingGlobal
 if(
     portalState == PortalState.Checking
 ){
     // Waiting for Positioner/DetectXXX judgment described later
-    Wait(2.5, WaitBehavior.AbortWhenFalse);
+    Wait(3, WaitBehavior.AbortWhenFalse);
     // save prev position
     prevPortalPosition = portalPosition;
     // confirm portal position
     portalState = PortalState.Set;
 }
 
-rule: "Portal/Positioner/DetectSpawnRoom/resetPortal"
+rule: "Portal/Positioner/resetCheckingParam"
 Event.OngoingGlobal
 if(
-    portalEnable &&
-    IsInSpawnRoom(ClosestPlayerTo(portalPosition, Team.Team2))
+    !portalEnable
 ){
-    // If the portal position is in the enemy spawn area,
-    //  it is determined that the portal position is incorrect and the portal is recreate
-    Wait(2, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
-    dbgMsg("reset Portal by Detect Spawn Room");
-    portalState = PortalState.Calculating;
+    contactHappened = false;
+    sucideCount = 0;
+    notContactTime = 0;
+    stoppedCount = 0;
 }
 
 globalvar define sucideCount;
@@ -1302,7 +1300,7 @@ Event.OnDeath
 Team.Team2
 Player.All
 if(
-    portalEnable &&
+    portalState != PortalState.Closing &&   // Excludes kills when the portal is closed
     Attacker() == EventPlayer() &&
     sucideCount < (NumberOfPlayers(Team.Team2) / 2)
 ){
@@ -1330,6 +1328,55 @@ if(
     // If the suicide count reaches 0,
     //  it is determined that the portal position is incorrect and the portal is recreate
     dbgMsg("reset Portal by Detect Invalid Area");
+    portalState = PortalState.Calculating;
+}
+
+globalvar define stoppedCount;
+
+rule: "Portal/Positioner/DetectClosedArea/countStopped"
+Event.OngoingGlobal
+if(
+    portalState == PortalState.Checking
+){
+    // Count the number of not moving enemy caused by closed areas
+    // non activated respawn room, etc.
+    stoppedCount =
+        CountOf(
+            FilteredArray(
+                AllPlayers(Team.Team2),
+                (
+                    IsAlive(ArrayElement()) &&
+                    !IsMoving(ArrayElement())
+                )
+            )
+        );
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Portal/Positioner/DetectClosedArea/resetPortal"
+Event.OngoingGlobal
+if(
+    portalState == PortalState.Checking &&
+    stoppedCount >= (NumberOfPlayers(Team.Team2) / 2)
+){
+    // If the portal position is in the cloased area,
+    //  it is determined that the portal position is incorrect and the portal is recreate
+    Wait(2, WaitBehavior.AbortWhenFalse);
+    dbgMsg("reset Portal by Detect Closed Area");
+    portalState = PortalState.Calculating;
+}
+
+rule: "Portal/Positioner/DetectSpawnArea/resetPortal"
+Event.OngoingGlobal
+if(
+    portalState == PortalState.Checking &&
+    IsInSpawnRoom(ClosestPlayerTo(portalPosition, Team.Team2))
+){
+    // If the portal position is in the enemy spawn area,
+    //  it is determined that the portal position is incorrect and the portal is recreate
+    Wait(2, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
+    dbgMsg("reset Portal by Detect Spawn Area");
     portalState = PortalState.Calculating;
 }
 
@@ -1374,56 +1421,6 @@ if(
     //  it is determined that the portal position is incorrect and the portal is recreate
     dbgMsg("reset Portal by Detect Remote Area");
     portalState = PortalState.Calculating;
-}
-
-globalvar define stoppedCount;
-
-rule: "Portal/Positioner/DetectClosedArea/countStopped"
-Event.OngoingGlobal
-if(
-    portalEnable &&
-    portalState != PortalState.Suspended && // not count When portal suspended
-    !contactHappened
-){
-    // Count the number of not moving enemy caused by closed areas
-    // non activated respawn room, etc.
-    stoppedCount =
-        CountOf(
-            FilteredArray(
-                AllPlayers(Team.Team2),
-                (
-                    IsAlive(ArrayElement()) &&
-                    !IsMoving(ArrayElement())
-                )
-            )
-        );
-    WaitUpdateMediumCycle();
-    LoopIfConditionIsTrue()
-}
-
-rule: "Portal/Positioner/DetectClosedArea/resetPortal"
-Event.OngoingGlobal
-if(
-    !contactHappened &&
-    notContactTime <= 5 &&
-    stoppedCount >= (NumberOfPlayers(Team.Team2) / 2)
-){
-    // If the portal position is in the cloased area,
-    //  it is determined that the portal position is incorrect and the portal is recreate
-    Wait(2, WaitBehavior.AbortWhenFalse);
-    dbgMsg("reset Portal by Detect Closed Area");
-    portalState = PortalState.Calculating;
-}
-
-rule: "Portal/Positioner/DetectClosedArea/resetParam"
-Event.OngoingGlobal
-if(
-    !portalEnable
-){
-    contactHappened = false;
-    sucideCount = 0;
-    notContactTime = 0;
-    stoppedCount = 0;
 }
 
 define maxPortalSize: 70;
@@ -1796,7 +1793,7 @@ if(
     debugAimingPosition = AimingPosition();
     Wait(0.5, WaitBehavior.IgnoreCondition);  // Wait for the changed status to be processed first
     portalState = PortalState.Calculating;
-    while(portalState == PortalState.Calculating){Wait(0.1, WaitBehavior.IgnoreCondition)}
+    while(portalState == PortalState.Calculating){Wait(0.1, WaitBehavior.IgnoreCondition);}
     portalPosition = debugAimingPosition;
     Respawn(AllPlayers(Team.Team2));
 }
