@@ -7,7 +7,7 @@ import "Debug.ostw";
 
 // TAG System ----------
 define enableOverLoadMeasures: true;
-define overloadSecondLimit: 4;
+define overloadSecondLimit: 5;
 globalvar define overloadSecond;
 globalvar define resetPerkPlayer;
 playervar define resetPerkType;
@@ -147,8 +147,8 @@ Event.OngoingGlobal
     }
     else{
         lotteryPerkList = [     // TAG lottery perk list for debug
-            PerkType.ArtillerySupport
-            // PerkType.CruisingMissile
+            PerkType.LegendalyNinja,
+            PerkType.GrapplingBeam
         ];
     }
 }
@@ -509,7 +509,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.GrapplingBeam){
         perkName = "Grappling Beam";
-        perkDetail = "Shot grappling beam and move quickly in air. If use well, can move without touching the ground.";
+        perkDetail = "Shot grappling beam and move quickly in air. If aiming enemy, pull enemy to you.";
     }
     else if(perkType == PerkType.Sprinter){
         perkName = "Sprinter";
@@ -529,7 +529,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.SteelFormation){
         perkName = "Steel Formation";
-        perkDetail = "Reduce half received damage of near teammate and self. Let's unite.";
+        perkDetail = "Reduce half received damage of near teammate and you. Let's unite.";
     }
     else if(perkType == PerkType.PersonalShelter){
         perkName = "Personal Shelter";
@@ -541,11 +541,11 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.TrapBeam){
         perkName = "Trap Beam";
-        perkDetail = "Place beam to between own position and aiming position. It stuns the touched enemy.";
+        perkDetail = "Place beam to between own position and aiming position, and stun touched enemy.";
     }
     else if(perkType == PerkType.BattleFlag){
         perkName = "Battle Flag";
-        perkDetail = "Teammate can teleport at you from spawn room. Promote ultimate charge of near teammates and self.";
+        perkDetail = "Teammate can teleport at you from spawn room. Promote ultimate charge of near teammates and you.";
     }
     else if(perkType == PerkType.ChainExplosion){
         perkName = "Chain Explosion";
@@ -585,7 +585,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.LegendalyNinja){
         perkName = "Legendaly Ninja";
-        perkDetail = "Ninja with super agility, dragon blade, immortality. Can add activity time by kill enemy.";
+        perkDetail = "Ninja with super agility, gdragon blade, immortality. Can add activity time by kill enemy.";
     }
     else if(perkType == PerkType.MachDelivery){
         perkName = "Mach Delivery";
@@ -763,7 +763,7 @@ if(
     perkEffectStatus = false;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(<"More hold jump button <0> to hover in air.", ButtonGuide(Button.Jump)>);
+    CreatePerkEffectHud("More hold to hover in air.");
     perkEffectAndText[0] = LastTextID();
     CreatePerkEffectHud(<"Hold jump button <0> to high jump.", ButtonGuide(Button.Jump)>);
     perkEffectAndText[1] = LastTextID();
@@ -848,7 +848,7 @@ if(
     perkEffectStatus = false;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(<"Hold jump button <0> to use grapple beam.", ButtonGuide(Button.Jump)>);
+    CreatePerkEffectHud(<"Hold jump button <0> to shot grapple beam.", ButtonGuide(Button.Jump)>);
     perkEffectAndText[0] = LastTextID();
 }
 
@@ -878,21 +878,40 @@ if(
     IsButtonHeld(EventPlayer(), Button.Jump)
 ){
     WaitLongPressConfirm();
-    // get aimPosition
-    aimPosition = AimingPosition();
     
-    if(DistanceBetween(EventPlayer(), aimPosition) <= 100 && !perkEffectStatus){
-        CreateBeamEffect(AllPlayers(), BeamType.GoodBeam, EventPlayer(), aimPosition,
-            Color.Green, EffectRev.VisibleToPositionAndRadius);
-        perkEffectAndText[1] = LastCreatedEntity();
-        ApplyImpulse(EventPlayer(), VectorTowards(EventPlayer(), aimPosition),
-            30, Relative.ToWorld, ContraryMotion.Cancel);
-        perkEffectStatus = true;
-
-        WaitPlayEffect();// show beam effect
-        DestroyEffect(perkEffectAndText[1]);
-        perkEffectStatus = false;
+    perkTargets = AimingPlayer();
+    if(perkTargets != null){
+        SetStatus(perkTargets, EventPlayer(), Status.Stunned, 1.0);
+        WaitEntityImpulse();
+        // pull target
+        if(DistanceBetween(EventPlayer(), perkTargets) <= 100 && !perkEffectStatus){
+            CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
+                EventPlayer(), perkTargets,
+                Color.Green, EffectRev.VisibleToPositionAndRadius);
+            perkEffectAndText[1] = LastCreatedEntity();
+            ApplyImpulse(perkTargets, 
+                VectorTowards(perkTargets, EventPlayer() + Up()),
+                DistanceBetween(perkTargets, EventPlayer()) * 2.0,
+                Relative.ToWorld, ContraryMotion.Cancel);
+        }
     }
+    else{
+        // move in air
+        aimPosition = AimingPosition();
+        if(DistanceBetween(EventPlayer(), aimPosition) <= 100 && !perkEffectStatus){
+            CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
+                EventPlayer(), aimPosition,
+                Color.Green, EffectRev.VisibleToPositionAndRadius);
+            perkEffectAndText[1] = LastCreatedEntity();
+            ApplyImpulse(EventPlayer(), VectorTowards(EventPlayer(), aimPosition),
+                40, Relative.ToWorld, ContraryMotion.Cancel);
+        }
+    }
+    perkEffectStatus = true;
+
+    WaitPlayEffect();// show beam effect
+    DestroyEffect(perkEffectAndText[1]);
+    perkEffectStatus = false;
 }
 
 // TAG Sprinter ----------
@@ -2802,7 +2821,7 @@ if(
     perkEffectStatus = false;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(<"Hold jump button <0> to use grapple hook.", ButtonGuide(Button.Jump)>);
+    CreatePerkEffectHud(<"Hold jump button <0> to shot grapple hook.", ButtonGuide(Button.Jump)>);
     perkEffectAndText[0] = LastTextID();
     // set perk hero
     PerkHero perkHero = new PerkHero();
@@ -2845,22 +2864,40 @@ if(
     IsButtonHeld(EventPlayer(), Button.Jump)
 ){
     WaitLongPressConfirm();
-    // get aimPosition
-    aimPosition = AimingPosition();
 
-    if(DistanceBetween(EventPlayer(), aimPosition) <= 100 && !perkEffectStatus){
-        CreateBeamEffect(AllPlayers(), BeamType.GrappleBeam,
-            EventPlayer(), aimPosition,
-            Color.Green, EffectRev.VisibleToPositionAndRadius);
-        perkEffectAndText[1] = LastCreatedEntity();
-        ApplyImpulse(EventPlayer(), VectorTowards(EventPlayer(), aimPosition),
-            50, Relative.ToWorld, ContraryMotion.Cancel);
-        perkEffectStatus = true;
-
-        WaitPlayEffect();// show beam effect
-        DestroyEffect(perkEffectAndText[1]);
-        perkEffectStatus = false;
+    perkTargets = AimingPlayer();
+    if(perkTargets != null){
+        SetStatus(perkTargets, EventPlayer(), Status.Stunned, 1.0);
+        WaitEntityImpulse();
+        // pull target
+        if(DistanceBetween(EventPlayer(), perkTargets) <= 100 && !perkEffectStatus){
+            CreateBeamEffect(AllPlayers(), BeamType.GrappleBeam,
+                EventPlayer(), perkTargets,
+                Color.Green, EffectRev.VisibleToPositionAndRadius);
+            perkEffectAndText[1] = LastCreatedEntity();
+            ApplyImpulse(perkTargets, 
+                VectorTowards(perkTargets, EventPlayer() + Up()),
+                DistanceBetween(perkTargets, EventPlayer()) * 2.0,
+                Relative.ToWorld, ContraryMotion.Cancel);
+        }
     }
+    else{
+        // move in air
+        aimPosition = AimingPosition();
+        if(DistanceBetween(EventPlayer(), aimPosition) <= 100 && !perkEffectStatus){
+            CreateBeamEffect(AllPlayers(), BeamType.GrappleBeam,
+                EventPlayer(), aimPosition,
+                Color.Green, EffectRev.VisibleToPositionAndRadius);
+            perkEffectAndText[1] = LastCreatedEntity();
+            ApplyImpulse(EventPlayer(), VectorTowards(EventPlayer(), aimPosition),
+                40, Relative.ToWorld, ContraryMotion.Cancel);
+        }
+    }
+    perkEffectStatus = true;
+
+    WaitPlayEffect();// show beam effect
+    DestroyEffect(perkEffectAndText[1]);
+    perkEffectStatus = false;
 }
 
 rule: "Perk/Player/LegendalyNinja/addActivityTime"

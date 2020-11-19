@@ -83,7 +83,8 @@ define AimingPosition():
         EyePosition(EventPlayer()),
         EyePosition(EventPlayer()) +
             (FacingDirectionOf(EventPlayer()) * MaxLength()),
-        AllPlayers(Team.Team2), EventPlayer(), false);
+        AllPlayers(OppositeTeamOf(TeamOf(EventPlayer()))),
+        EventPlayer(), false);
 
 // Aiming position of EventPlayer
 define AimingPositionWithLimit(define limit):
@@ -91,7 +92,8 @@ define AimingPositionWithLimit(define limit):
         EyePosition(EventPlayer()),
         EyePosition(EventPlayer()) +
             (FacingDirectionOf(EventPlayer()) * limit),
-        AllPlayers(Team.Team2), EventPlayer(), false);
+        AllPlayers(OppositeTeamOf(TeamOf(EventPlayer()))),
+        EventPlayer(), false);
 
 // Aiming position of EventPlayer. but sight line collision ignore player entity
 define AimingPositionIgnorePlayer():
@@ -99,15 +101,34 @@ define AimingPositionIgnorePlayer():
         EyePosition(EventPlayer()),
         EyePosition(EventPlayer()) + (
             FacingDirectionOf(EventPlayer()) * MaxLength()),
-        null, EventPlayer(), false);
+        null,
+        EventPlayer(), false);
 
 // Aiming Player of EventPlayer.
 define AimingPlayer():
-    RayCastHitPlayer(
-        EyePosition(EventPlayer()),
-        EyePosition(EventPlayer()) +
-            (FacingDirectionOf(EventPlayer()) * MaxLength()),
-        AllPlayers(), EventPlayer(), false);
+    FirstOf(
+        SortedArray(
+            FilteredArray(
+                PlayersInViewAngle(
+                    EventPlayer(),
+                    OppositeTeamOf(TeamOf(EventPlayer())),
+                    8
+                ),
+                (
+                    IsAlive(ArrayElement()) &&
+                    IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock)
+                )
+            ),
+            DistanceBetween(EventPlayer(), ArrayElement())
+        )
+    );
+
+    // RayCastHitPlayer(
+    //     EyePosition(EventPlayer()),
+    //     EyePosition(EventPlayer()) +
+    //         (FacingDirectionOf(EventPlayer()) * MaxLength()),
+    //     AllPlayers(OppositeTeamOf(TeamOf(EventPlayer()))),
+    //     EventPlayer(), false);
 
 define ButtonGuide(Button button):
     <"[<0>]",InputBindingString(button)>;
