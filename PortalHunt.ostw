@@ -287,19 +287,45 @@ if(
     DeclareTeamVictory(Team.Team1);
 }
 
-globalvar define portalClosingCount;
+globalvar define initalCount;
+globalvar define closingCount;
+globalvar define closingProgress;
 globalvar define closestPlayerToPortal;
+globalvar define progressHudEntity;
+
+define currentClosingProgress:
+    100 - ((closingCount / initalCount) * 100);
+
+define showClosingProgress:
+    (
+        portalState == PortalState.Suspended ||
+        portalState == PortalState.Closing
+    ) 
+    &&
+    teamLifes > 0;
 
 rule: "Player/ClosePortal/startClosing //on enter any player"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Suspended &&
-    teamLifes > 0
+    showClosingProgress
 ){
-    // When a player enters a portal, show message
-    portalClosingCount = RoundToInteger(portalSize, Rounding.Nearest);  // TAG portal closing count
-    portalClosingCount += roundNo * 2;
+    // When a player enters a portal, set progress hud and show message
     WaitConditionConfirmed();
+    // kick progress
+    initalCount = RoundToInteger(portalSize, Rounding.Nearest);  // TAG portal closing count
+    initalCount += roundNo * 2;
+    closingCount = initalCount;
+    closingProgress = currentClosingProgress;
+    // show progress hud
+    if(progressHudEntity == null){
+        CreateProgressBarHudText(AllPlayers(),
+            closingProgress,
+            "Until portal closes...", Location.Top, MaxValue(),
+            Color.White, Color.White,
+            ProgressBarEvaluation.VisibleToValuesAndColor,
+            Spectators.DefaultVisibility );
+        progressHudEntity = LastTextID();
+    }
     // get closest surviver to portal center
     closestPlayerToPortal = 
         FirstOf(
@@ -310,50 +336,48 @@ if(
                 DistanceBetween(portalPosition, ArrayElement())
             )
         );
-
-    BigMessage(closestPlayerToPortal,
+    // show big message
+    BigMessage(
+        closestPlayerToPortal,
         <"<0> <1> <2>", 
             closestPlayerToPortal,
             HeroIconString(HeroOf(closestPlayerToPortal)),
-            "Closing portal ... stay inside and Survive!">);
-    BigMessage(FilteredArray(AllPlayers(Team.Team1), (closestPlayerToPortal != ArrayElement())),
+            "Closing portal... Stay inside and Survive!">);
+    BigMessage(
+        FilteredArray(AllPlayers(Team.Team1), (closestPlayerToPortal != ArrayElement())),
         <"<0> <1> <2>",    
             closestPlayerToPortal,
             HeroIconString(HeroOf(closestPlayerToPortal)),
-            "Closing portal ... Cover one!">);     
+            "Closing portal... Cover one!">);
+}
 
-    SmallMessage(AllPlayers(Team.All), "Until portal closes...");
+rule: "Player/ClosePortal/cancelClosing //on exit every player"
+Event.OngoingGlobal
+if(
+    !showClosingProgress
+){
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    DestroyProgressBarHudText(progressHudEntity);
+    progressHudEntity = null;
 }
 
 rule: "Player/ClosePortal/countDownClosing //while enter any player"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Suspended &&
-    portalClosingCount > 0 &&
-    teamLifes > 0
+    showClosingProgress &&
+    closingProgress < 100
 ){
     // When a player enters a portal, start the countdown to close the portal
     WaitUpdateMediumCycle();
-    portalClosingCount -= 1;
-    SmallMessage(AllPlayers(Team.All), portalClosingCount);
-    if(portalClosingCount <= 5){
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.DebuffImpactSound,
-            Color.White, AllPlayers(Team.All), MaxLength());
-    }
+    closingCount -= 1;
+    closingProgress = currentClosingProgress;
     LoopIfConditionIsTrue();
 }
 
 rule: "Player/ClosePortal/finishClose //on count down finished"
 Event.OngoingGlobal
 if(
-    (
-        portalState == PortalState.Suspended ||
-        portalState == PortalState.Closing ||
-        portalState == PortalState.Closed
-    ) &&
-    portalClosingCount <= 0 &&
-    teamLifes > 0
+    closingProgress >= 100
 ){
     // When the countdown is complete, clear the portal and give team lifes.
     // Later, we will generate a new portal and start the next round.
@@ -1059,7 +1083,7 @@ if(
     DestroyIcon(portalEntitys[0]);
     // show Portal Entity by portal state changed to Show
     // Init param
-    portalClosingCount = MaxValue();
+    closingCount = MaxValue();
     // show icon
     portalEntitys = [];
     CreateIcon(AllPlayers(Team.All), portalPosition, Icon.Spiral,
