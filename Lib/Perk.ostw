@@ -146,10 +146,8 @@ Event.OngoingGlobal
     }
     else{
         lotteryPerkList = [     // TAG lottery perk list for debug
-            PerkType.Juggernaut,
-            // PerkType.CruisingMissile
-            // PerkType.ArtillerySupport
-            PerkType.BeamSniper
+            // PerkType.DragonStorm,
+            PerkType.AimHack
         ];
     }
 }
@@ -1862,6 +1860,7 @@ if(
 }
 
 // TAG AimHack ----------
+playervar define autoAimingTarget;
 rule: "Perk/Player/AimHack/activate"
 Event.OngoingPlayer
 Team.Team1
@@ -1874,6 +1873,7 @@ if(
     perkTimeLimit = 240;
     // set status
     perkEffectStatus = true;
+    autoAimingTarget = null;
     perkTargets = 0;
     // set hud
     perkEffectAndText = [];
@@ -1941,8 +1941,9 @@ if(
     perkState == PerkState.Using &&
     !perkEffectStatus
 ){
+    StopFacing(EventPlayer());
+    autoAimingTarget = null;
     perkTargets = 0;
-    StopFacing();
 }
 
 void AutoAim()"Subroutine/AutoAim"{
@@ -1965,20 +1966,26 @@ void AutoAim()"Subroutine/AutoAim"{
             )
         );
     }
-
+    // has target
     if(perkTargets != 0){
-        StartFacing(EventPlayer(), 
-            DirectionTowards(
-                EyePosition(),
-                EyePosition(perkTargets) + (Up() * 0.175)
-            ),
-            MaxValue(),
-            Relative.ToWorld,
-            FacingRev.DirectionAndTurnRate
-        );
+        // target changed
+        if(autoAimingTarget != perkTargets){
+            autoAimingTarget = perkTargets;
+            StartFacing(
+                EventPlayer(), 
+                DirectionTowards(
+                    EyePosition(),
+                    EyePosition(autoAimingTarget) + (Up() * 0.175)
+                ),
+                MaxValue(),
+                Relative.ToWorld,
+                FacingRev.DirectionAndTurnRate
+            );
+        }
     }
     else{
-        StopFacing();
+        StopFacing(EventPlayer());
+        autoAimingTarget = null;
     }
 }
 
@@ -3440,8 +3447,7 @@ if(
     }
 
     // set offset for gun sight
-    perkPosition = EyePosition() + 
-        -PositionOffset(); 
+    perkPosition = EyePosition() - PositionOffset(); 
 
     // set landing position for penetration
     landPosition = EyePosition() +
@@ -3514,11 +3520,10 @@ if(
 ){
     // reset status
     ClearStatus(EventPlayer(), Status.Rooted);
-    SetInvisible(EventPlayer(), InvisibleTo.None);
     StopFacing();
-    if(isInAir)
+    if(isInAir){
         Teleport(EventPlayer(), PositionOf() + Vector(0, -60, 0));
-
+    }
     // reset enemy icon
     for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
         DestroyIcon(perkEffectAndText[pLoopIndex]);
@@ -3567,49 +3572,48 @@ if(
     // set status
     SetStatus(EventPlayer(), null, Status.Rooted, MaxValue());
     SetGravity(EventPlayer(), 0);
-    SetInvisible(EventPlayer(), InvisibleTo.Enemies);
     SetDamageDealt(EventPlayer(), 600);
     // show enemy icon
-    perkTargets = AllPlayers(Team.Team2);
     perkEffectAndText = [];
-    switch(CountOf(perkTargets)){
+    switch(CountOf(AllPlayers(Team.Team2))){
         case 6:
-            CreateIcon(EventPlayer(), perkTargets[5], Icon.Asterisk,
+            CreateIcon(EventPlayer(), PlayersInSlot(5, Team.Team2), Icon.Asterisk,
             IconRev.VisibleToAndPosition, Color.Red, true);
             perkEffectAndText[5] = LastCreatedEntity();
         case 5:
-            CreateIcon(EventPlayer(), perkTargets[4], Icon.Asterisk,
+            CreateIcon(EventPlayer(), PlayersInSlot(4, Team.Team2), Icon.Asterisk,
             IconRev.VisibleToAndPosition, Color.Red, true);
             perkEffectAndText[4] = LastCreatedEntity();
         case 4:
-            CreateIcon(EventPlayer(), perkTargets[3], Icon.Asterisk,
+            CreateIcon(EventPlayer(), PlayersInSlot(3, Team.Team2), Icon.Asterisk,
             IconRev.VisibleToAndPosition, Color.Red, true);
             perkEffectAndText[3] = LastCreatedEntity();
         case 3:
-            CreateIcon(EventPlayer(), perkTargets[2], Icon.Asterisk,
+            CreateIcon(EventPlayer(), PlayersInSlot(2, Team.Team2), Icon.Asterisk,
             IconRev.VisibleToAndPosition, Color.Red, true);
             perkEffectAndText[2] = LastCreatedEntity();
         case 2:
-            CreateIcon(EventPlayer(), perkTargets[1], Icon.Asterisk,
+            CreateIcon(EventPlayer(), PlayersInSlot(1, Team.Team2), Icon.Asterisk,
             IconRev.VisibleToAndPosition, Color.Red, true);
             perkEffectAndText[1] = LastCreatedEntity();
         case 1:
-            CreateIcon(EventPlayer(), perkTargets[0], Icon.Asterisk,
+            CreateIcon(EventPlayer(), PlayersInSlot(0, Team.Team2), Icon.Asterisk,
             IconRev.VisibleToAndPosition, Color.Red, true);
             perkEffectAndText[0] = LastCreatedEntity();
         default:
     }
     // face enemy
-    StartFacing(EventPlayer(), 
-            DirectionTowards(
-                EventPlayer(),
-                ClosestPlayerTo(EventPlayer(), Team.Team2)
-            ),
-        MaxValue(),
-        Relative.ToWorld,
+    perkTargets = ClosestPlayerTo(EventPlayer(), Team.Team2);
+    StartFacing(
+        EventPlayer(), 
+        DirectionTowards(
+            EventPlayer(),
+            perkTargets
+        ),
+        MaxValue(), Relative.ToWorld,
         FacingRev.DirectionAndTurnRate
     );
-    Wait(0.25, WaitBehavior.IgnoreCondition);
+    Wait(0.5, WaitBehavior.IgnoreCondition);
         AbortIf(!(perkType == PerkType.DragonStorm && perkState == PerkState.Using));
     StopFacing();
     // wait
@@ -3670,26 +3674,26 @@ if(
     Teleport(EventPlayer(), PositionOf() - Vector(0, 60, 0));
     isInAir = false;
     // reset status
-    ClearStatus(EventPlayer(), Status.Rooted);
     SetProjectileSpeed(EventPlayer(), DefaultPercentage());
+    ClearStatus(EventPlayer(), Status.Rooted);
     SetGravity(EventPlayer(), DefaultPercentage());
-    SetInvisible(EventPlayer(), InvisibleTo.None);
     SetDamageDealt(EventPlayer(), 150);
     // reset enemy icon
-    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
+    for(pLoopIndex = 0; pLoopIndex < CountOf(AllPlayers(Team.Team2)); pLoopIndex++){
         DestroyIcon(perkEffectAndText[pLoopIndex]);
     }
     // face enemy
-    StartFacing(EventPlayer(), 
-            DirectionTowards(
-                EventPlayer(),
-                ClosestPlayerTo(EventPlayer(), Team.Team2)
-            ),
-        MaxValue(),
-        Relative.ToWorld,
+    perkTargets = ClosestPlayerTo(EventPlayer(), Team.Team2);
+    StartFacing(
+        EventPlayer(), 
+        DirectionTowards(
+            EventPlayer(),
+            perkTargets
+        ),
+        MaxValue(), Relative.ToWorld,
         FacingRev.DirectionAndTurnRate
     );
-    Wait(0.25, WaitBehavior.AbortWhenFalse);
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
         AbortIf(!(perkState == PerkState.Using && perkType == PerkType.DragonStorm));
     StopFacing();
 

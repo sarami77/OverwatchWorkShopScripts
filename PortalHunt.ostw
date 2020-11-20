@@ -291,6 +291,8 @@ globalvar define closingCount;
 globalvar define closingProgress;
 globalvar define closestPlayerToPortal;
 globalvar define progressHudEntity;
+globalvar define playerNumInsidePortal;
+
 define enableClosingProgress:
     portalState == PortalState.Suspended &&
     teamLifes > 0;
@@ -311,7 +313,7 @@ if(
     if(progressHudEntity == null){
         CreateProgressBarHudText(AllPlayers(),
             closingProgress,
-            "Until portal closes...", Location.Top, MaxValue(),
+            <"<0> player stays in portal. Until portal closes...", playerNumInsidePortal >, Location.Top, MaxValue(),
             Color.White, Color.White,
             ProgressBarEvaluation.VisibleToValuesAndColor,
             Spectators.DefaultVisibility );
@@ -343,6 +345,21 @@ if(
     // Wait closingCount
     Wait(closingCount, WaitBehavior.AbortWhenFalse);
     portalState = PortalState.Closing;
+}
+
+rule: "Player/ClosePortal/updatePlayerNumInsidePortal"
+Event.OngoingGlobal
+if(
+    enableClosingProgress
+){
+    playerNumInsidePortal = CountOf(
+        FilteredArray(
+            AllPlayers(Team.Team1),
+            ArrayElement().isInsidePortal
+        )
+    );
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue();
 }
 
 rule: "Player/ClosePortal/cancelClosing //on exit every player"
@@ -387,40 +404,6 @@ if(
     portalState = PortalState.Calculating;  // start next portal create
 }
 
-rule: "Player/ClosePortal/disableStealthWhenInside //sombra's stealth for fair play"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    isInsidePortal &&
-    HeroOf() == Hero.Sombra &&
-    IsUsingAbility1()
-){
-    // Some abilities are disabled inside the portal to make the game fair
-    // Sombra stealth is exactly that
-    Wait(5.0, WaitBehavior.AbortWhenFalse); // disable ability check cycle
-    SetStatus(EventPlayer(), null, Status.Stunned, 0.1);
-    SmallMessage(EventPlayer(), "Stealth disabled by magnetic storm of portal.");
-    LoopIfConditionIsTrue();
-}
-
-rule: "Player/ClosePortal/disableGrappleClawWhenInside //sombra's stealth for fair play"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    isInsidePortal &&
-    HeroOf() == Hero.WreckingBall &&
-    IsFiringSecondary()
-){
-    // Some abilities are disabled inside the portal to make the game fair
-    // WreckingBall Grapple is exactly that
-    Wait(5.0, WaitBehavior.AbortWhenFalse); // disable ability check cycle
-    SetStatus(EventPlayer(), null, Status.Stunned, 0.1);
-    SmallMessage(EventPlayer(), "Grapple claw disabled by magnetic storm of portal.");
-    LoopIfConditionIsTrue();
-}
-
 playervar define inPortalEffectEntitys;
 
 rule: "Player/ClosePortal/showInsidePortalEffect //heavy fog and energy sound in the portal"
@@ -457,6 +440,40 @@ if(
     DestroyEffect(inPortalEffectEntitys[0]);
     DestroyEffect(inPortalEffectEntitys[1]);
     DestroyEffect(inPortalEffectEntitys[2]);
+}
+
+rule: "Player/FairPlay/disableStealthWhenInside //sombra's stealth for fair play"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    isInsidePortal &&
+    HeroOf() == Hero.Sombra &&
+    IsUsingAbility1()
+){
+    // Some abilities are disabled inside the portal to make the game fair
+    // Sombra stealth is exactly that
+    Wait(5.0, WaitBehavior.AbortWhenFalse); // disable ability check cycle
+    SetStatus(EventPlayer(), null, Status.Stunned, 0.1);
+    SmallMessage(EventPlayer(), "Stealth disabled by magnetic storm of portal.");
+    LoopIfConditionIsTrue();
+}
+
+rule: "Player/FairPlay/disableGrappleClawWhenInside // wreckingBball's grapple claw for fair play"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    isInsidePortal &&
+    HeroOf() == Hero.WreckingBall &&
+    IsFiringSecondary()
+){
+    // Some abilities are disabled inside the portal to make the game fair
+    // WreckingBall Grapple is exactly that
+    Wait(5.0, WaitBehavior.AbortWhenFalse); // disable ability check cycle
+    SetStatus(EventPlayer(), null, Status.Stunned, 0.1);
+    SmallMessage(EventPlayer(), "Grapple claw disabled by magnetic storm of portal.");
+    LoopIfConditionIsTrue();
 }
 
 disabled rule: "Player/Communicate/playVoiceOnPortalSet"
@@ -900,7 +917,7 @@ Event.OngoingGlobal
     // If don't enough players, adjust enemy dealt damage rate to make the game fair
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    enemyDealtDamageRate = 30;                  // basic enemy dealt damage
+    enemyDealtDamageRate = 35;                  // basic enemy dealt damage
     enemyDealtDamageRate += (roundNo * 1.0);     // Add damage depending on the number of rounds for progress
     // Apply balance multiplier
     enemyDealtDamageRate /= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy dealt damage scale
