@@ -165,10 +165,10 @@ Player.All
 if(
     (
         portalEnable &&
-        DistanceBetween(EventPlayer(), portalPosition) <= portalSize &&
         HasSpawned() &&
         IsAlive() &&
-        !IsInSpawnRoom()
+        !IsInSpawnRoom() &&
+        DistanceBetween(EventPlayer(), portalPosition) <= portalSize
     )
 ){
     // Set flag when player entered to portal
@@ -183,10 +183,10 @@ Player.All
 if(
     !(
         portalEnable &&
-        DistanceBetween(EventPlayer(), portalPosition) <= portalSize &&
         HasSpawned() &&
         IsAlive() &&
-        !IsInSpawnRoom()
+        !IsInSpawnRoom() &&
+        DistanceBetween(EventPlayer(), portalPosition) <= portalSize
     )
 ){
     // Release flag when player exited from portal
@@ -287,35 +287,26 @@ if(
     DeclareTeamVictory(Team.Team1);
 }
 
-globalvar define initalCount;
 globalvar define closingCount;
 globalvar define closingProgress;
 globalvar define closestPlayerToPortal;
 globalvar define progressHudEntity;
-
-define currentClosingProgress:
-    100 - ((closingCount / initalCount) * 100);
-
-define showClosingProgress:
-    (
-        portalState == PortalState.Suspended ||
-        portalState == PortalState.Closing
-    ) 
-    &&
+define enableClosingProgress:
+    portalState == PortalState.Suspended &&
     teamLifes > 0;
 
 rule: "Player/ClosePortal/startClosing //on enter any player"
 Event.OngoingGlobal
 if(
-    showClosingProgress
+    enableClosingProgress
 ){
     // When a player enters a portal, set progress hud and show message
     WaitConditionConfirmed();
     // kick progress
-    initalCount = RoundToInteger(portalSize, Rounding.Nearest);  // TAG portal closing count
-    initalCount += roundNo * 2;
-    closingCount = initalCount;
-    closingProgress = currentClosingProgress;
+    closingCount = RoundToInteger(portalSize, Rounding.Nearest);  // TAG portal closing count
+    closingCount += roundNo * 2;
+    closingProgress = 0;
+    ChaseVariableOverTime(closingProgress, 100, closingCount, TimeChaseReevaluation.DestinationAndDuration);
     // show progress hud
     if(progressHudEntity == null){
         CreateProgressBarHudText(AllPlayers(),
@@ -349,39 +340,36 @@ if(
             closestPlayerToPortal,
             HeroIconString(HeroOf(closestPlayerToPortal)),
             "Closing portal... Cover one!">);
+    // Wait closingCount
+    Wait(closingCount, WaitBehavior.AbortWhenFalse);
+    portalState = PortalState.Closing;
 }
 
 rule: "Player/ClosePortal/cancelClosing //on exit every player"
 Event.OngoingGlobal
 if(
-    !showClosingProgress
+    !enableClosingProgress
 ){
-    Wait(1, WaitBehavior.AbortWhenFalse);
+    StopChasingVariable(closingProgress);
+    // wait hide hud when progress completed
+    if(closingProgress == 100){
+        Wait(1.5, WaitBehavior.AbortWhenFalse);
+    }
     DestroyProgressBarHudText(progressHudEntity);
     progressHudEntity = null;
-}
-
-rule: "Player/ClosePortal/countDownClosing //while enter any player"
-Event.OngoingGlobal
-if(
-    showClosingProgress &&
-    closingProgress < 100
-){
-    // When a player enters a portal, start the countdown to close the portal
-    WaitUpdateMediumCycle();
-    closingCount -= 1;
-    closingProgress = currentClosingProgress;
-    LoopIfConditionIsTrue();
 }
 
 rule: "Player/ClosePortal/finishClose //on count down finished"
 Event.OngoingGlobal
 if(
-    closingProgress >= 100
+    (
+        portalState == PortalState.Closing ||
+        portalState == PortalState.Closed
+    ) &&
+    teamLifes > 0
 ){
     // When the countdown is complete, clear the portal and give team lifes.
     // Later, we will generate a new portal and start the next round.
-    portalState = PortalState.Closing;
     WaitPlayEffect();   //wait portal closing effect
     portalState = PortalState.Closed;
     WaitNextPhase();
@@ -1083,7 +1071,7 @@ if(
     DestroyIcon(portalEntitys[0]);
     // show Portal Entity by portal state changed to Show
     // Init param
-    closingCount = MaxValue();
+    closingCount = 0;
     // show icon
     portalEntitys = [];
     CreateIcon(AllPlayers(Team.All), portalPosition, Icon.Spiral,
