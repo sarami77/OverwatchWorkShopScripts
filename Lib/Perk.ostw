@@ -146,10 +146,10 @@ Event.OngoingGlobal
     }
     else{
         lotteryPerkList = [     // TAG lottery perk list for debug
-            // PerkType.Juggernaut,
-            PerkType.CruisingMissile
+            PerkType.Juggernaut,
+            // PerkType.CruisingMissile
             // PerkType.ArtillerySupport
-            // PerkType.TrapBeam
+            PerkType.BeamSniper
         ];
     }
 }
@@ -442,6 +442,12 @@ playervar define perkDetail = "";
 
 playervar define perkEffectAndText;
 playervar define perkEffectStatus;
+enum PerkEffectStatus{
+    Ready,
+    Launched,
+    Triggered,
+    Cooldown
+}
 playervar define aimPosition;
 playervar define aimPosition2;
 playervar define landPosition;
@@ -3223,6 +3229,19 @@ if(
     ExplodeBomb();
 }
 
+rule: "Perk/Player/Juggernaut/coolDownGravityBomb"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == 3
+){
+    Wait(5.25, WaitBehavior.AbortWhenFalse);
+    perkEffectStatus = 100;
+}
+
 void ExplodeBomb()"Subroutine/ExplodeBomb"{
     perkEffectStatus = 2;
     // stop aura
@@ -3232,8 +3251,7 @@ void ExplodeBomb()"Subroutine/ExplodeBomb"{
     // wait builtin ability efect play
     Wait(0.9, WaitBehavior.IgnoreCondition);
     // start change as cooldown
-    ChaseVariableOverTime(perkEffectStatus, 100, 5.25,
-        TimeChaseReevaluation.DestinationAndDuration);
+    perkEffectStatus = 3;
     // get target
     perkTargets = 
         PlayersWithinRadius(
@@ -3342,11 +3360,11 @@ if(
     perkType == PerkType.BeamSniper &&
     perkState == PerkState.Using &&
     IsButtonHeld(EventPlayer(), Button.SecondaryFire) &&
-    IsFiringSecondary()
+    IsFiringSecondary() &&
+    perkEffectStatus != 100
 ){
-    perkEffectStatus = 0;
-    ChaseVariableOverTime(perkEffectStatus, 100, 1.3,
-        TimeChaseReevaluation.DestinationAndDuration);
+    Wait(1.3, WaitBehavior.AbortWhenFalse);
+    perkEffectStatus = 100;
 }
 
 rule: "Perk/Player/BeamSniper/cancelCharge"
@@ -3404,18 +3422,16 @@ if(
         perkEffectStatus = 0;
         Abort();
     }
-
     perkEffectStatus = 0;
 
-    // give hit damage of penetration ballistic
+    // give hit damage to enemy near penetration ballistic
     if(perkTargets != []){
         PlayEffect(
             AllPlayers(), PlayEffect.GoodExplosion,
             Color.Aqua, perkTargets, 4.0);
         Damage(perkTargets, EventPlayer(), 300);
     }
-
-    // give splash damage of landed position
+    // give splash damage to enemy near landed position
     perkTargets = FilteredArray(
         PlayersWithinRadius(aimPosition, 4, Team.Team2, RadiusLOS.Off),
         IsAlive(ArrayElement()));
@@ -3423,34 +3439,36 @@ if(
         Damage(perkTargets, EventPlayer(), 100);
     }
 
+    // set offset for gun sight
     perkPosition = EyePosition() + 
-        -PositionOffset();  // Offset to gun sight
+        -PositionOffset(); 
+
+    // set landing position for penetration
     landPosition = EyePosition() +
         (FacingDirectionOf() * MaxLength());
 
-    // Ballistics for aiming
+    // play shot sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.Aqua, EventPlayer(), 100);
+    // play shot fire
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Aqua, perkPosition + (FacingDirectionOf() * 0.5), 1.0);
+    // play landed position blast
+    PlayContinuousBlast(aimPosition, 4,
+        2, Color.Aqua);
+
+    // show ballistics for aiming
     CreateBeamEffect(AllPlayers(),
         BeamType.BadBeam, perkPosition, aimPosition,
         Color.Aqua, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[1] = LastCreatedEntity();
-    // Ballistic for penetration
+    // show ballistic for penetration
     CreateBeamEffect(AllPlayers(),
         BeamType.BadBeam, aimPosition, landPosition,
         Color.Aqua, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[2] = LastCreatedEntity();
-
-    // shot sound
-    PlayEffect(
-        AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.Aqua, EventPlayer(), 100);
-    // shot fire
-    PlayEffect(
-        AllPlayers(), PlayEffect.BadExplosion,
-        Color.Aqua, perkPosition + (FacingDirectionOf() * 0.5), 1.0);
-    // landed position blast
-    PlayEffect(
-        AllPlayers(), PlayEffect.GoodExplosion,
-        Color.Aqua, aimPosition, 4.0);
 
     WaitPlayEffect();
     DestroyEffect(perkEffectAndText[1]);
