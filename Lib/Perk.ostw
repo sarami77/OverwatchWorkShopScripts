@@ -104,7 +104,7 @@ enum PerkState{
     Using
 }
 
-define enableDebugPerk: false;
+define enableDebugPerk: false;  // TAG enable Debug Perk
 playervar define perkHudEntitys;
 
 rule: "Perk/lotteryPerkList // list of parks you can pick up"
@@ -146,9 +146,16 @@ Event.OngoingGlobal
     }
     else{
         lotteryPerkList = [     // TAG lottery perk list for debug
-            // PerkType.DragonStorm,
             PerkType.AimHack
         ];
+
+        CreateHudText(HostPlayer(),
+            null,
+            null,
+            "enable Debug Perk",
+            Location.Left, -1,
+            Color.White, Color.White, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
     }
 }
 
@@ -1947,11 +1954,30 @@ if(
 }
 
 void AutoAim()"Subroutine/AutoAim"{
+    // check auto aim valid
+    perkTargets = FirstOf(
+        FilteredArray(
+            PlayersInViewAngle(EventPlayer(), Team.Team2, 10),
+            (
+                autoAimingTarget == ArrayElement()
+            )
+        )
+    );
+    // if auto aim invalid
+    if(perkTargets == 0){
+        // stop auto aim
+        if(autoAimingTarget != null){
+            StopFacing(EventPlayer());
+            autoAimingTarget = null;
+        }
+    }
+
     if(
         perkTargets == 0 ||     // no target
         IsDead(perkTargets) ||  // target is dead
-        !IsInLineOfSight(EventPlayer(), perkTargets, BarrierLOS.NoBarriersBlock)    // target lost
+        !IsInLineOfSight(EventPlayer(), perkTargets, BarrierLOS.NoBarriersBlock)    // target hidden
     ){
+        // get near target in sight
         perkTargets = FirstOf(
             SortedArray(
                 FilteredArray(
@@ -1970,7 +1996,9 @@ void AutoAim()"Subroutine/AutoAim"{
     if(perkTargets != 0){
         // target changed
         if(autoAimingTarget != perkTargets){
+            // update target
             autoAimingTarget = perkTargets;
+            // start auto aim
             StartFacing(
                 EventPlayer(), 
                 DirectionTowards(
@@ -1982,10 +2010,14 @@ void AutoAim()"Subroutine/AutoAim"{
                 FacingRev.DirectionAndTurnRate
             );
         }
+        // if some target, not restart auto aim.
     }
     else{
-        StopFacing(EventPlayer());
-        autoAimingTarget = null;
+        // stop auto aim
+        if(autoAimingTarget != null){
+            StopFacing(EventPlayer());
+            autoAimingTarget = null;
+        }
     }
 }
 
@@ -3524,10 +3556,11 @@ if(
     if(isInAir){
         Teleport(EventPlayer(), PositionOf() + Vector(0, -60, 0));
     }
-    // reset enemy icon
-    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
-        DestroyIcon(perkEffectAndText[pLoopIndex]);
-    }
+    // hide enemy outline
+    StopForcingPlayerOutlines(
+        AllPlayers(Team.Team2),
+        EventPlayer()
+    );
     // reset perk hero
     StopForcingPerkHero(EventPlayer());
     // reset type
@@ -3573,35 +3606,14 @@ if(
     SetStatus(EventPlayer(), null, Status.Rooted, MaxValue());
     SetGravity(EventPlayer(), 0);
     SetDamageDealt(EventPlayer(), 600);
-    // show enemy icon
-    perkEffectAndText = [];
-    switch(CountOf(AllPlayers(Team.Team2))){
-        case 6:
-            CreateIcon(EventPlayer(), PlayersInSlot(5, Team.Team2), Icon.Asterisk,
-            IconRev.VisibleToAndPosition, Color.Red, true);
-            perkEffectAndText[5] = LastCreatedEntity();
-        case 5:
-            CreateIcon(EventPlayer(), PlayersInSlot(4, Team.Team2), Icon.Asterisk,
-            IconRev.VisibleToAndPosition, Color.Red, true);
-            perkEffectAndText[4] = LastCreatedEntity();
-        case 4:
-            CreateIcon(EventPlayer(), PlayersInSlot(3, Team.Team2), Icon.Asterisk,
-            IconRev.VisibleToAndPosition, Color.Red, true);
-            perkEffectAndText[3] = LastCreatedEntity();
-        case 3:
-            CreateIcon(EventPlayer(), PlayersInSlot(2, Team.Team2), Icon.Asterisk,
-            IconRev.VisibleToAndPosition, Color.Red, true);
-            perkEffectAndText[2] = LastCreatedEntity();
-        case 2:
-            CreateIcon(EventPlayer(), PlayersInSlot(1, Team.Team2), Icon.Asterisk,
-            IconRev.VisibleToAndPosition, Color.Red, true);
-            perkEffectAndText[1] = LastCreatedEntity();
-        case 1:
-            CreateIcon(EventPlayer(), PlayersInSlot(0, Team.Team2), Icon.Asterisk,
-            IconRev.VisibleToAndPosition, Color.Red, true);
-            perkEffectAndText[0] = LastCreatedEntity();
-        default:
-    }
+    // show enemy outline
+    StartForcingPlayerOutlines(
+        AllLivingPlayers(Team.Team2),
+        EventPlayer(),
+        true,
+        Color.Red,
+        OutlineType.Always
+    );  
     // face enemy
     perkTargets = ClosestPlayerTo(EventPlayer(), Team.Team2);
     StartFacing(
@@ -3678,10 +3690,11 @@ if(
     ClearStatus(EventPlayer(), Status.Rooted);
     SetGravity(EventPlayer(), DefaultPercentage());
     SetDamageDealt(EventPlayer(), 150);
-    // reset enemy icon
-    for(pLoopIndex = 0; pLoopIndex < CountOf(AllPlayers(Team.Team2)); pLoopIndex++){
-        DestroyIcon(perkEffectAndText[pLoopIndex]);
-    }
+    // hide enemy outline
+    StopForcingPlayerOutlines(
+        AllPlayers(Team.Team2),
+        EventPlayer()
+    );
     // face enemy
     perkTargets = ClosestPlayerTo(EventPlayer(), Team.Team2);
     StartFacing(
