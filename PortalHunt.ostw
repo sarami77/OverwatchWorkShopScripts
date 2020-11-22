@@ -118,8 +118,6 @@ Event.OngoingGlobal
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
 }
 
-globalvar define roundNo;
-
 rule: "Game/RoundNo/showObjectMessageHUD //with update message by state"
 Event.OngoingPlayer
 Team.Team1
@@ -129,6 +127,8 @@ if(
 ){
     SetObjectiveDescription(EventPlayer(), "Find portal and attack it.", ObjectiveRev.VisibleToSortOrderAndString);
 }
+
+globalvar define roundNo;
 
 rule: "Game/RoundNo/showRoundHUD"
 Event.OngoingGlobal
@@ -158,41 +158,29 @@ if(
 // TAG Player Function ----------
 playervar define isInsidePortal;
 
-rule: "Player/InsidePortal/enable"
+rule: "Player/InsidePortal/update"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    (
-        portalEnable &&
-        HasSpawned() &&
-        IsAlive() &&
-        !IsInSpawnRoom() &&
-        DistanceBetween(EventPlayer(), portalPosition) <= portalSize
-    )
+    portalEnable
 ){
     // Set flag when player entered to portal
     // This flag is used for functions related to portal
-    WaitConditionConfirmed();
-    isInsidePortal = true;
-}
-rule: "Player/InsidePortal/disable"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    !(
+    if(
         portalEnable &&
         HasSpawned() &&
         IsAlive() &&
         !IsInSpawnRoom() &&
         DistanceBetween(EventPlayer(), portalPosition) <= portalSize
-    )
-){
-    // Release flag when player exited from portal
-    // This flag is used for functions related to portal
-    WaitConditionConfirmed();
-    isInsidePortal = false;
+    ){
+        isInsidePortal = true;
+    }
+    else{
+        isInsidePortal = false;
+    }
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue();
 }
 
 rule: "Player/ReturnSpawn/showOperationHUD"
@@ -691,12 +679,11 @@ Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
-    IsAlive() &&
-    DistanceBetween(EventPlayer(),
-        ClosestPlayerTo(EventPlayer(), Team.Team1)) <= 10
+    IsAlive()
 ){
-    WaitConditionConfirmed();
     if(
+        DistanceBetween(EventPlayer(),
+            ClosestPlayerTo(EventPlayer(), Team.Team1)) <= 10 &&
         !HasStatus(EventPlayer(), Status.Asleep) &&
         !HasStatus(EventPlayer(), Status.KnockedDown) &&
         !HasStatus(EventPlayer(), Status.Stunned) &&
@@ -851,26 +838,42 @@ if(
     }
 }
 
+globalvar define camperDetectSecond;
+
 rule: "Enemy/Teleport/teleportToPortalByCamperDetected"
 Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
     portalState == PortalState.Suspended &&
-    IsAlive() &&
-    !IsInLineOfSight(EventPlayer(),
-        ClosestPlayerTo(portalPosition, Team.Team1),
-        BarrierLOS.NoBarriersBlock)
+    IsAlive()
 ){
-    // Teleport an enemy to camping player
-    Wait(10 - (roundNo / 10), WaitBehavior.AbortWhenFalse); // TAG player not found timer
-    // set teleport position to camper
-    SetTeleportPositionToCamper();
-    // show teleport beam
-    PlayTeleportBeam();
-    // Teleport
-    Teleport(EventPlayer(), teleportPosition);
+    if(
+        !IsInLineOfSight(EventPlayer(),
+            ClosestPlayerTo(portalPosition, Team.Team1),
+            BarrierLOS.NoBarriersBlock)
+    ){
+        camperDetectSecond += 1;
 
+    }
+    else{
+        camperDetectSecond = 0;
+    }
+
+    if(
+        10 - (roundNo / 5) <= camperDetectSecond
+    ){
+        camperDetectSecond = 0;
+        // TAG player not found timer
+        // Teleport an enemy to camping player
+        // set teleport position to camper
+        SetTeleportPositionToCamper();
+        // show teleport beam
+        PlayTeleportBeam();
+        // Teleport
+        Teleport(EventPlayer(), teleportPosition);
+    }
+    WaitUpdateMediumCycle();
     LoopIfConditionIsTrue();
 }
 
@@ -917,8 +920,21 @@ Event.OngoingGlobal
     // If don't enough players, adjust enemy dealt damage rate to make the game fair
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    enemyDealtDamageRate = 30;                  // basic enemy dealt damage
-    enemyDealtDamageRate += (roundNo * 1.0);     // Add damage depending on the number of rounds for progress
+    enemyDealtDamageRate = 30;  // basic enemy dealt damage
+
+    if(enemyDealtDamageRate <= 10){
+        enemyDealtDamageRate += 0;
+        enemyDealtDamageRate += ((roundNo - 0) * 1.0);  // TAG increase enemy dealt damage
+    }
+    else if(enemyDealtDamageRate <= 20){
+        enemyDealtDamageRate += 10;
+        enemyDealtDamageRate += ((roundNo - 10) * 2.0); 
+    }
+    else if(enemyDealtDamageRate <= 30){
+        enemyDealtDamageRate += 30;
+        enemyDealtDamageRate += ((roundNo - 20) * 3.0); 
+    }
+
     // Apply balance multiplier
     enemyDealtDamageRate /= ConvertToBalancedValue(0.6, Team.Team1);     // TAG enemy dealt damage scale
     SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);
@@ -947,30 +963,38 @@ if(
     LoopIf(portalSize < maxPortalSize);
 }
 
-rule: "Enemy/HiddenSpeed/enableByGetInSight //when not visible from players, quickly approach the player and hunt down"
+rule: "Enemy/HiddenSpeed/enableByGetOutOfSight //when not visible from players, quickly approach the player and hunt down"
 Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
-    !IsInLineOfSight(EventPlayer(),
-        ClosestPlayerTo(EventPlayer(), Team.Team1),
-        BarrierLOS.NoBarriersBlock
-    )
+    portalEnable &&
+    IsAlive()
 ){
     // Hidden Speed is active when the player can't see the enemy
-    // Players are surrounded by many enemies, making the game more chaotic and fluid
-    WaitConditionConfirmed();
-    SetMoveSpeed(EventPlayer(), enemyHiddenSpeedRate);
-    // The portal may growing and changing in size, so repeat speed changes
+    if(
+        !IsInLineOfSight(EventPlayer(),
+            ClosestPlayerTo(EventPlayer(), Team.Team1),
+            BarrierLOS.NoBarriersBlock)
+    ){
+        // Players are surrounded by many enemies, making the game more chaotic and fluid
+        SetMoveSpeed(EventPlayer(), enemyHiddenSpeedRate);
+        // The portal may growing and changing in size, so repeat speed changes
+    }
+    else{
+        SetMoveSpeed(EventPlayer(), 100);
+    }
     WaitUpdateMediumCycle();
     LoopIfConditionIsTrue();
 }
 
-rule: "Enemy/HiddenSpeed/disableByGetOutOfSight //when visible from players, fight at basic speed"
+rule: "Enemy/HiddenSpeed/disableByGetInSight //when visible from players, fight at basic speed"
 Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
+    portalEnable &&
+    IsAlive() &&
     IsInLineOfSight(EventPlayer(),
         ClosestPlayerTo(EventPlayer(), Team.Team1),
         BarrierLOS.NoBarriersBlock
@@ -1449,15 +1473,21 @@ define portalStableTime: 40;
 rule: "Portal/Growing/startGrowingByPlayerFound"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Set &&
-    IsInLineOfSight(portalPosition,
-        ClosestPlayerTo(portalPosition, Team.Team1),
-        BarrierLOS.NoBarriersBlock
-    )
+    portalState == PortalState.Set
 ){
-    // Strat portal growing by player found
-    WaitConditionConfirmed();
-    portalState = PortalState.Growing;
+    if(
+        IsInLineOfSight(portalPosition,
+            ClosestPlayerTo(portalPosition, Team.Team1),
+            BarrierLOS.NoBarriersBlock)
+    ){
+        WaitConditionConfirmed();
+        // Strat portal growing by player found
+        portalState = PortalState.Growing;
+    }
+    else{
+        WaitUpdateMediumCycle();
+        LoopIfConditionIsTrue();
+    }
 }
 
 rule: "Portal/Growing/startGrowingByTimeout"
