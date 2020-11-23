@@ -105,7 +105,7 @@ enum PerkState{
     Using
 }
 
-define enableDebugPerk: true;  // TAG enable Debug Perk
+define enableDebugPerk: false;  // TAG enable Debug Perk
 playervar define perkHudEntitys;
 
 rule: "Perk/lotteryPerkList // list of parks you can pick up"
@@ -585,7 +585,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.GrudgeFireBall){
         perkName = "Grudge Fire Ball";
-        perkDetail = "Convert received damage to power and shoot as fire ball. If more power have, bigger explosion.";
+        perkDetail = "Convert received damage to power and shot as fire ball. If more power, bigger explode and damage.";
     }
     else if(perkType == PerkType.ArtillerySupport){
         perkName = "Artillery Support";
@@ -2134,7 +2134,7 @@ if(
 }
 
 // TAG GrudgeFireBall ----------
-define fireBallSpeed: 60;
+define fireBallSpeed: 50;
 playervar define fireBallPower;
 playervar define fireBallSize;
 playervar define fireBallDamageRange;
@@ -2187,9 +2187,10 @@ Player.All
 if(
     perkType == PerkType.GrudgeFireBall &&
     perkState == PerkState.Using &&
+    Attacker() != EventPlayer() &&
     EventDamage() > 0
 ){
-    fireBallPower += RoundToInteger(EventDamage());
+    fireBallPower += RoundToInteger(EventDamage() * 10);
 }
 
 rule: "Perk/Player/GrudgeFireBall/playFireBallTrajectory"
@@ -2215,14 +2216,16 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    HostPlayer() &&
+    perkType == PerkType.GrudgeFireBall &&
+    perkState == PerkState.Using &&
     perkEffectStatus == 100 &&
     IsButtonHeld(EventPlayer(), Button.Melee)
 ){
     WaitLongPressConfirm();
-    AbortIf(fireBallPower < 0);
+    AbortIf(fireBallPower <= 0);
 
-    perkPosition = EyePosition();
+    perkPosition = EyePosition() + 
+        (FacingDirectionOf(EventPlayer()) * fireBallSize / 2);
     landPosition = AimingPositionIgnorePlayer();
     // start movement
     UpdateEveryFrame(perkPosition);
@@ -2230,8 +2233,8 @@ if(
         perkPosition, landPosition, fireBallSpeed,
         RateChaseReevaluation.DestinationAndRate);
 
-    fireBallSize = fireBallPower * 0.003;
-    fireBallDamageRange = fireBallPower * 0.006;
+    fireBallSize = fireBallPower * 0.002;
+    fireBallDamageRange = fireBallPower * 0.010;
     // show ball
     CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
         perkPosition, fireBallSize, EffectRev.VisibleToPositionAndRadius);
@@ -2247,7 +2250,7 @@ if(
     // play shot sound
     PlayEffect(
         AllPlayers(), PlayEffect.DebuffImpactSound,
-        Color.White, AllPlayers(), fireBallSize * 30);
+        Color.White, EventPlayer(), fireBallPower * 1);
 
     perkEffectStatus = 1;
 }
@@ -2257,6 +2260,8 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState == PerkState.Using &&
     perkEffectStatus == 1
 ){
     Wait(DistanceBetween(perkPosition, landPosition) / fireBallSpeed,
@@ -2269,12 +2274,14 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState == PerkState.Using &&
     perkEffectStatus == 1 &&
     IsAlive(ClosestPlayerTo(perkPosition, Team.Team2)) &&
     DistanceBetween(
         perkPosition,
         ClosestPlayerTo(perkPosition, Team.Team2))
-    <= fireBallSize * 0.5
+    <= fireBallSize < 1 ? 1 : fireBallSize
 ){
     ExplodeFireBall();
 }
@@ -2284,6 +2291,8 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState == PerkState.Using &&
     perkEffectStatus == 1
 ){
     Wait(3, WaitBehavior.AbortWhenFalse);
@@ -2314,11 +2323,13 @@ void ExplodeFireBall()"Subroutine/ExplodeFireBall"{
     WaitEntityImpulse();
     // damage
     Damage(perkTargets, EventPlayer(), fireBallPower);
-    fireBallPower = 0;
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.White, AllPlayers(), fireBallSize * 30);
+        Color.White, perkPosition, fireBallPower * 1);
+
+    fireBallPower = 0;
+
     // play blast effect
     PlayContinuousBlast(perkPosition,
         fireBallDamageRange,
