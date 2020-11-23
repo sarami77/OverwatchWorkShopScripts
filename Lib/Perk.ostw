@@ -85,6 +85,7 @@ enum PerkType{  // TAG perk type
     AimHack,
     Vampire,
     ShotCaller,
+    GrudgeFireBall,
     ArtillerySupport,
     CruisingMissile,
     CarePackage,
@@ -104,7 +105,7 @@ enum PerkState{
     Using
 }
 
-define enableDebugPerk: false;  // TAG enable Debug Perk
+define enableDebugPerk: true;  // TAG enable Debug Perk
 playervar define perkHudEntitys;
 
 rule: "Perk/lotteryPerkList // list of parks you can pick up"
@@ -123,12 +124,15 @@ Event.OngoingGlobal
             PerkType.BioticStation,
             PerkType.BioticStation,
             PerkType.TrapBeam,
+            PerkType.BattleFlag,
             PerkType.ChainExplosion,
             PerkType.IceAge,
             PerkType.AimHack,
             PerkType.Vampire,
             PerkType.ShotCaller,
-            PerkType.BattleFlag,
+            PerkType.GrudgeFireBall,
+            PerkType.GrudgeFireBall,
+            PerkType.GrudgeFireBall,
             PerkType.ArtillerySupport,
             PerkType.ArtillerySupport,
             PerkType.CruisingMissile,
@@ -146,7 +150,7 @@ Event.OngoingGlobal
     }
     else{
         lotteryPerkList = [     // TAG lottery perk list for debug
-            PerkType.AimHack
+            PerkType.GrudgeFireBall
         ];
 
         CreateHudText(HostPlayer(),
@@ -578,6 +582,10 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     else if(perkType == PerkType.ShotCaller){
         perkName = "Shot Caller";
         perkDetail = "When use ultimate ability, teammate's ultimate ability be instantly full charged.";
+    }
+    else if(perkType == PerkType.GrudgeFireBall){
+        perkName = "Grudge Fire Ball";
+        perkDetail = "Convert received damage to power and shoot as fire ball. If more power have, bigger explosion.";
     }
     else if(perkType == PerkType.ArtillerySupport){
         perkName = "Artillery Support";
@@ -2125,6 +2133,202 @@ if(
     LoopIfConditionIsTrue();
 }
 
+// TAG GrudgeFireBall ----------
+define fireBallSpeed: 60;
+playervar define fireBallPower;
+playervar define fireBallSize;
+playervar define fireBallDamageRange;
+
+rule: "Perk/Player/GrudgeFireBall/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState == PerkState.Using
+){
+    // set time limit
+    perkTimeLimit = 300;
+    // set status
+    perkPosition = 0;
+    landPosition = 0;
+    perkEffectStatus = 100;
+    // set hud
+    perkEffectAndText = [];
+    CreatePerkEffectHud(<"Fire ball power <0>", fireBallPower>);
+    perkEffectAndText[0] = LastTextID();
+    CreatePerkEffectHud(<"Hold melee button <0> to shot fire ball.", ButtonGuide(Button.Melee)>);
+    perkEffectAndText[1] = LastTextID();
+}
+
+rule: "Perk/Player/GrudgeFireBall/deactivate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState == PerkState.Non
+){
+    // reset text
+    DestroyHudText(perkEffectAndText[0]);
+    DestroyHudText(perkEffectAndText[1]);
+    // reset effect
+    DestroyEffect(perkEffectAndText[2]);
+    DestroyEffect(perkEffectAndText[3]);
+    StopChasingVariable(perkPosition);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/GrudgeFireBall/chargePowerByTakenDamage"
+Event.OnDamageTaken
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState == PerkState.Using &&
+    EventDamage() > 0
+){
+    fireBallPower += RoundToInteger(EventDamage());
+}
+
+rule: "Perk/Player/GrudgeFireBall/playFireBallTrajectory"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == 1
+){
+    // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Yellow, perkPosition, fireBallSize);
+
+    WaitUpdateShortCycle();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/GrudgeFireBall/shot"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    HostPlayer() &&
+    perkEffectStatus == 100 &&
+    IsButtonHeld(EventPlayer(), Button.Melee)
+){
+    WaitLongPressConfirm();
+    AbortIf(fireBallPower < 0);
+
+    perkPosition = EyePosition();
+    landPosition = AimingPositionIgnorePlayer();
+    // start movement
+    UpdateEveryFrame(perkPosition);
+    ChaseVariableAtRate(
+        perkPosition, landPosition, fireBallSpeed,
+        RateChaseReevaluation.DestinationAndRate);
+
+    fireBallSize = fireBallPower * 0.003;
+    fireBallDamageRange = fireBallPower * 0.006;
+    // show ball
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
+        perkPosition, fireBallSize, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[2] = LastCreatedEntity();
+    // show aura
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Orange,
+        perkPosition, fireBallSize * 1.5, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[3] = LastCreatedEntity();
+    // play shot fire
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Orange, perkPosition + (FacingDirectionOf() * 1), fireBallSize);
+    // play shot sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.DebuffImpactSound,
+        Color.White, AllPlayers(), fireBallSize * 30);
+
+    perkEffectStatus = 1;
+}
+
+rule: "Perk/Player/GrudgeFireBall/landedToPoint"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkEffectStatus == 1
+){
+    Wait(DistanceBetween(perkPosition, landPosition) / fireBallSpeed,
+        WaitBehavior.AbortWhenFalse);
+    ExplodeFireBall();
+}
+
+rule: "Perk/Player/GrudgeFireBall/hitToPlyer"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkEffectStatus == 1 &&
+    IsAlive(ClosestPlayerTo(perkPosition, Team.Team2)) &&
+    DistanceBetween(
+        perkPosition,
+        ClosestPlayerTo(perkPosition, Team.Team2))
+    <= fireBallSize * 0.5
+){
+    ExplodeFireBall();
+}
+
+rule: "Perk/Player/GrudgeFireBall/timeOut"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkEffectStatus == 1
+){
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    ExplodeFireBall();
+}
+
+void ExplodeFireBall()"Subroutine/ExplodeFireBall"{
+    perkEffectStatus = 2;
+
+    // stop movement
+    StopChasingVariable(perkPosition);
+    // hide ball
+    DestroyEffect(perkEffectAndText[2]);
+    // hide aura
+    DestroyEffect(perkEffectAndText[3]);
+    // get target
+    perkTargets = 
+        PlayersWithinRadius(
+            perkPosition, fireBallDamageRange,
+            Team.Team2, RadiusLOS.Off);
+    // apply Impulse
+    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
+        ApplyImpulse(perkTargets[pLoopIndex],
+            VectorTowards(perkPosition, perkTargets[pLoopIndex] + Up()),
+            fireBallSize * 10, Relative.ToWorld, ContraryMotion.Cancel);
+    }
+    // show impulse
+    WaitEntityImpulse();
+    // damage
+    Damage(perkTargets, EventPlayer(), fireBallPower);
+    fireBallPower = 0;
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White, AllPlayers(), fireBallSize * 30);
+    // play blast effect
+    PlayContinuousBlast(perkPosition,
+        fireBallDamageRange,
+        fireBallSize < 7 ? fireBallSize : 7,
+        Color.Orange);
+
+    Wait(1, WaitBehavior.IgnoreCondition);
+    perkEffectStatus = 100;
+}
+
 // TAG ArtillerySupport ----------
 define artilleryLandingRange: 20;
 define artilleryDamageRange: 7;
@@ -2460,7 +2664,7 @@ if(
             Team.Team2, RadiusLOS.Off);
     for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
         ApplyImpulse(perkTargets[pLoopIndex],
-            VectorTowards(perkPosition, perkTargets[pLoopIndex] + PositionOffset()),
+            VectorTowards(perkPosition, perkTargets[pLoopIndex] + Up()),
             2000, Relative.ToWorld, ContraryMotion.Cancel);
     }
     WaitEntityImpulse();
@@ -3268,19 +3472,6 @@ if(
     ExplodeBomb();
 }
 
-rule: "Perk/Player/Juggernaut/coolDownGravityBomb"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.Juggernaut &&
-    perkState == PerkState.Using &&
-    perkEffectStatus == 3
-){
-    Wait(5.25, WaitBehavior.AbortWhenFalse);
-    perkEffectStatus = 100;
-}
-
 void ExplodeBomb()"Subroutine/ExplodeBomb"{
     perkEffectStatus = 2;
     // stop aura
@@ -3299,7 +3490,7 @@ void ExplodeBomb()"Subroutine/ExplodeBomb"{
     // apply Impulse
     for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
         ApplyImpulse(perkTargets[pLoopIndex],
-            VectorTowards(perkPosition2, perkTargets[pLoopIndex] + PositionOffset()),
+            VectorTowards(perkPosition2, perkTargets[pLoopIndex] + Up()),
             30, Relative.ToWorld, ContraryMotion.Cancel);
     }
     // show impulse
@@ -3313,6 +3504,19 @@ void ExplodeBomb()"Subroutine/ExplodeBomb"{
     // play blast effect
     PlayContinuousBlast(perkPosition2, bombDamageRange,
         5, Color.LimeGreen);
+}
+
+rule: "Perk/Player/Juggernaut/coolDownGravityBomb"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == 3
+){
+    Wait(5.25, WaitBehavior.AbortWhenFalse);
+    perkEffectStatus = 100;
 }
 
 // TAG BeamSniper ----------
@@ -3492,7 +3696,7 @@ if(
     // play shot fire
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.Aqua, perkPosition + (FacingDirectionOf() * 0.5), 1.0);
+        Color.Aqua, perkPosition + (FacingDirectionOf() * 1), 1.0);
     // play landed position blast
     PlayContinuousBlast(aimPosition, 4,
         2, Color.Aqua);
@@ -3886,7 +4090,7 @@ if(
     PerkHero perkHero = new PerkHero();
     perkHero.hero = Hero.Reaper;
     perkHero.statusUnkillable = true;
-    perkHero.maxHealth = 200;
+    perkHero.maxHealth = 150;
     perkHero.damageDealt = 150;
     perkHero.gravity = 75;
     perkHero.moveSpeed = 150;

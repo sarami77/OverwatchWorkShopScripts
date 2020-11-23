@@ -25,6 +25,7 @@ enum PerkType{  // TAG perk type
     SupportArtillery,
     CruisingMissile,
     CarePackage,
+    GrudgeFireBall,
     DeathFromAbove,
     LegendalyNinja,
     MachDelivery,
@@ -59,20 +60,20 @@ if(
     HasSpawned()
 ){
     SetDamageDealt(EventPlayer(), 100);
-    SetDamageReceived(EventPlayer(), 0);
+    SetDamageReceived(EventPlayer(), 100);
     SetHealingDealt(EventPlayer(), 100);
     SetHealingReceived(EventPlayer(), 100);
     SetMaxHealth(EventPlayer(), 100);
     SetJumpVerticalSpeed(EventPlayer(), 100);
     SetMoveSpeed(EventPlayer(), 1000);
-    SetGravity(EventPlayer(), 100);
+    SetGravity(EventPlayer(), 10);
     SetProjectileSpeed(EventPlayer(), 100);
     SetProjectileGravity(EventPlayer(), 100);
     StartScalingPlayer(EventPlayer(), 1);
     StartScalingBarriers(EventPlayer(), 1);
     SetUltimateCharge(EventPlayer(), 0);
 
-    SetRespawnMaxTime(AllPlayers(), 0);
+    SetRespawnMaxTime(AllPlayers(), 5);
     // SetStatus(AllPlayers(Team.Team2), null, Status.Rooted, 99999);
     // ForcePlayerHero(EventPlayer(), Hero.Widowmaker);
 
@@ -177,18 +178,14 @@ if(
 rule: "global_TEST"
 Event.OngoingPlayer
 if(
-    IsCrouching()
+    true
 ){
-    StartForcingPlayerOutlines(
-        AllLivingPlayers(Team.Team2),
-        EventPlayer(),
-        true,
-        Color.Red,
-        OutlineType.Always
-    );
+    SetMatchTime(15);
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue();
 }
 
-rule: "global_TEST"
+rule: "player_TEST"
 Event.OngoingPlayer
 if(
     !IsCrouching()
@@ -199,13 +196,168 @@ if(
     );
 }
 
+define fireBallSpeed: 50;
+playervar define fireBallPower;
+playervar define fireBallSize;
+playervar define fireBallDamageRange;
+
+rule: "Perk/Player/GrudgeFireBall/init"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    HostPlayer()
+){
+    perkEffectStatus = 100;
+}
+
+rule: "Perk/Player/GrudgeFireBall/chargeByTakenDamage"
+Event.OnDamageTaken
+Team.Team1
+Player.All
+if(
+    HostPlayer() &&
+    EventDamage() > 0
+){
+    fireBallPower += EventDamage();
+}
+
+rule: "Perk/Player/GrudgeFireBall/shot"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    HostPlayer() &&
+    perkEffectStatus == 100 &&
+    IsButtonHeld(EventPlayer(), Button.Melee)
+){
+    fireBallPower += param;
+
+    AbortIf(fireBallPower < 0);
+    WaitLongPressConfirm();
+
+    perkPosition = EyePosition();
+    landPosition = AimingPositionIgnorePlayer();
+    // start movement
+    UpdateEveryFrame(perkPosition);
+    ChaseVariableAtRate(
+        perkPosition, landPosition, fireBallSpeed,
+        RateChaseReevaluation.DestinationAndRate);
+
+    fireBallSize = fireBallPower * 0.01;
+    fireBallDamageRange = fireBallSize * 2;
+    // show ball
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
+        perkPosition, fireBallSize, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[0] = LastCreatedEntity();
+    // show aura
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Orange,
+        perkPosition, fireBallSize * 1.5, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[1] = LastCreatedEntity();
+    // play shot fire
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Orange, perkPosition + (FacingDirectionOf() * 1), fireBallSize);
+    // play shot sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.DebuffImpactSound,
+        Color.White, AllPlayers(), fireBallSize * 30);
+
+    perkEffectStatus = 1;
+}
+
+rule: "Perk/Player/GrudgeFireBall/landedToPoint"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkEffectStatus == 1
+){
+    Wait(DistanceBetween(perkPosition, landPosition) / fireBallSpeed,
+        WaitBehavior.AbortWhenFalse);
+    ExplodeFireBall();
+}
+
+rule: "Perk/Player/GrudgeFireBall/hitToPlyer"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkEffectStatus == 1 &&
+    IsAlive(ClosestPlayerTo(perkPosition, Team.Team2)) &&
+    DistanceBetween(
+        perkPosition,
+        ClosestPlayerTo(perkPosition, Team.Team2))
+    <= fireBallSize * 0.5
+){
+    ExplodeFireBall();
+}
+
+rule: "Perk/Player/GrudgeFireBall/timeOut"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkEffectStatus == 1
+){
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    ExplodeFireBall();
+}
+
+void ExplodeFireBall()"Subroutine/ExplodeFireBall"{
+    perkEffectStatus = 2;
+
+    // stop movement
+    StopChasingVariable(perkPosition);
+    // hide ball
+    DestroyEffect(perkEffectAndText[0]);
+    // hide aura
+    DestroyEffect(perkEffectAndText[1]);
+    // get target
+    perkTargets = 
+        PlayersWithinRadius(
+            perkPosition, fireBallDamageRange,
+            Team.Team2, RadiusLOS.Off);
+    // apply Impulse
+    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
+        ApplyImpulse(perkTargets[pLoopIndex],
+            VectorTowards(perkPosition, perkTargets[pLoopIndex] + Up()),
+            fireBallSize * 10, Relative.ToWorld, ContraryMotion.Cancel);
+    }
+    // show impulse
+    WaitEntityImpulse();
+    // damage
+    Damage(perkTargets, EventPlayer(), fireBallPower);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White, AllPlayers(), fireBallSize * 30);
+    // play blast effect
+    PlayContinuousBlast(perkPosition,
+        fireBallDamageRange,
+        fireBallSize < 7 ? fireBallSize : 7,
+        Color.Orange);
+
+    fireBallPower = 0;
+    Wait(1, WaitBehavior.IgnoreCondition);
+    perkEffectStatus = 100;
+}
+
 // Debug -----------------------------------------------
 globalvar define param = 1;
-define tuneUnit: 1;
+define tuneUnit: 10;
 
 rule: "showParam"
 Event.OngoingGlobal
 {
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "fire Ball Power", HostPlayer().fireBallPower>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+
     CreateHudText(HostPlayer(),
         null,
         <"<0> <1>", "param", param>,
@@ -221,6 +373,7 @@ Event.OngoingGlobal
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        
 }
 
 rule: "increaseParam"
@@ -231,6 +384,8 @@ if(
     IsButtonHeld(EventPlayer(), Button.Ability2)
 ){
     param += tuneUnit;
+    Wait(0.2, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
 }
 
 rule: "decreaseParam"
@@ -241,4 +396,6 @@ if(
     IsButtonHeld(EventPlayer(), Button.Ability1)
 ){
     param -= tuneUnit;
+    Wait(0.2, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
 }
