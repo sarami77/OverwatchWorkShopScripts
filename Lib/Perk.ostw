@@ -315,6 +315,7 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
+    perkType == PerkType.Non &&
     perkState == PerkState.Non
 ){
     // Hide perk hud
@@ -325,7 +326,10 @@ rule: "Perk/Player/ParkState/Ready"
 Event.OngoingPlayer
 Team.Team1
 Player.All
-if(perkState == PerkState.Ready){
+if(
+    perkType != PerkType.Non &&
+    perkState == PerkState.Ready
+){
     // Update perk hud
     HidePerkHUD();
     ShowPerkHUD();
@@ -335,7 +339,10 @@ rule: "Perk/Player/ParkState/Using"
 Event.OngoingPlayer
 Team.Team1
 Player.All
-if(perkState == PerkState.Using){
+if(
+    perkType != PerkType.Non &&
+    perkState == PerkState.Using
+){
     // Update perk hud
     HidePerkHUD();
     ShowPerkHUD();
@@ -585,7 +592,7 @@ void ShowPerkHUD()"Subroutine/ShowPerkHUD"{
     }
     else if(perkType == PerkType.GrudgeFireBall){
         perkName = "Grudge Fire Ball";
-        perkDetail = "Convert received damage to power and shot as fire ball. If more power, bigger explode and damage.";
+        perkDetail = "Charge power when received damage, shoot power as fire ball. if more power, bigger blast and damage.";
     }
     else if(perkType == PerkType.ArtillerySupport){
         perkName = "Artillery Support";
@@ -2190,7 +2197,7 @@ if(
     Attacker() != EventPlayer() &&
     EventDamage() > 0
 ){
-    fireBallPower += RoundToInteger(EventDamage() * 10);
+    fireBallPower += RoundToInteger(EventDamage() * 2);
 }
 
 rule: "Perk/Player/GrudgeFireBall/playFireBallTrajectory"
@@ -2205,7 +2212,7 @@ if(
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.Yellow, perkPosition, fireBallSize);
+        Color.Yellow, perkPosition, fireBallSize * 1.5);
 
     WaitUpdateShortCycle();
     LoopIfConditionIsTrue();
@@ -2234,7 +2241,7 @@ if(
         RateChaseReevaluation.DestinationAndRate);
 
     fireBallSize = fireBallPower * 0.002;
-    fireBallDamageRange = fireBallPower * 0.010;
+    fireBallDamageRange = fireBallPower * 0.020;
     // show ball
     CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
         perkPosition, fireBallSize, EffectRev.VisibleToPositionAndRadius);
@@ -2281,7 +2288,8 @@ if(
     DistanceBetween(
         perkPosition,
         ClosestPlayerTo(perkPosition, Team.Team2))
-    <= fireBallSize < 1 ? 1 : fireBallSize
+        	<= 
+    (fireBallSize < 1.75 ? 1.75 : fireBallSize)
 ){
     ExplodeFireBall();
 }
