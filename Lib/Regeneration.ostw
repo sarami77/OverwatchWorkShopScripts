@@ -5,15 +5,18 @@ import "Utility.ostw";
 // Function enable team
 // Set team in import destination parent file
 globalvar define Regeneration_enableTeam;
-globalvar define Regeneration_needTeamBalance;
-globalvar define Regeneration_regenerationRate;
-globalvar define Regeneration_waitRegenTime;
+globalvar define Regeneration_needBalanceTeam1;
+globalvar define Regeneration_needBalanceTeam2;
+globalvar define Regeneration_regenerationRateTeam1;
+globalvar define Regeneration_regenerationRateTeam2;
+globalvar define Regeneration_waitRegenTimeTeam1;
+globalvar define Regeneration_waitRegenTimeTeam2;
+
 define Regeneration_isEnableTeam:
     Regeneration_enableTeam == TeamOf() ||
     Regeneration_enableTeam == Team.All;
-
-globalvar define playerRegenerationRate;
-globalvar define playerRegenerationRate2;
+globalvar define playerRegenerationRateTeam1;
+globalvar define playerRegenerationRateTeam2;
 playervar define waitRegeneration;
 
 rule: "Player/Regeneration/updateRate //if there are few players, incrase regeneration rate for fair play."
@@ -22,12 +25,13 @@ Event.OngoingGlobal
     // If don't enough players, adjust player regeneration rate to make the game fair
     WaitUpdateLongCycle();
     // Multiply heal unit
-    playerRegenerationRate = (Regeneration_regenerationRate / 5);
+    playerRegenerationRateTeam1 = (Regeneration_regenerationRateTeam1 / 5);
+    playerRegenerationRateTeam2 = (Regeneration_regenerationRateTeam2 / 5);
     // Apply balance multiplier
-    if(Regeneration_needTeamBalance){
-        playerRegenerationRate *= ConvertToBalancedValue(0.4, Team.Team1);  // TAG player regeneration scale
-        playerRegenerationRate2 *= ConvertToBalancedValue(0.4, Team.Team2);  // TAG player regeneration scale
-    }
+    if(Regeneration_needBalanceTeam1)
+        playerRegenerationRateTeam1 *= ConvertToBalancedValue(0.4, Team.Team1);  // TAG player regeneration scale
+    else if(Regeneration_regenerationRateTeam2)
+        playerRegenerationRateTeam2 *= ConvertToBalancedValue(0.4, Team.Team2);  // TAG player regeneration scale
     LoopIfConditionIsTrue();
 }
 
@@ -40,7 +44,10 @@ if(
     // Stop regeneration when player receives damage
     // Resume regeneration over time
     waitRegeneration = true;
-    Wait(Regeneration_waitRegenTime, WaitBehavior.RestartWhenTrue);  // TAG wait regenenation timer
+    if(TeamOf() == Team.Team1)
+        Wait(Regeneration_waitRegenTimeTeam1, WaitBehavior.RestartWhenTrue);  // TAG wait regenenation timer
+    else if(TeamOf() == Team.Team2)
+        Wait(Regeneration_waitRegenTimeTeam2, WaitBehavior.RestartWhenTrue);
     waitRegeneration = false;
 }
 
@@ -55,9 +62,9 @@ if(
     // Heal until the player's health is maximized
     WaitUpdateShortCycle();
     if(TeamOf() == Team.Team1)
-        Heal(EventPlayer(), null, playerRegenerationRate);
+        Heal(EventPlayer(), null, playerRegenerationRateTeam1);
     else if(TeamOf() == Team.Team2)
-        Heal(EventPlayer(), null, playerRegenerationRate2);
+        Heal(EventPlayer(), null, playerRegenerationRateTeam2);
     LoopIfConditionIsTrue();
 }
 
