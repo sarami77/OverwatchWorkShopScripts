@@ -718,24 +718,27 @@ void PlayTeleportBeam()"Subroutine/PlayTeleportBeam"{
     DestroyEffect(teleportBeamEntity);
 }
 
+define minSpawnAreaSize: 5;
+define spawnAreaSizeRate: 1;
+define spawnAreaSize:
+    (portalSize * spawnAreaSizeRate) <= minSpawnAreaSize ?
+    minSpawnAreaSize :
+    (portalSize * spawnAreaSizeRate);
+
 void SetTeleportPositionToBlindSpot()"Subroutine/SetTeleportPositionToBlindSpot"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        if(portalSize < 5){
-            // Disperse the spawn position as it will fall if it is densely spawned near a cliff.
-            teleportPosition = NearestWalkablePosition(
-                portalPosition + RandomPosition(5, 0, 5));
-        }
-        else{
-            teleportPosition = NearestWalkablePosition(
-                portalPosition + RandomPosition(
-                portalSize * 1, portalSize * 1, portalSize * 1));
-        }
+        teleportPosition = NearestWalkablePosition(
+            portalPosition + RandomPosition(
+            spawnAreaSize,
+            spawnAreaSize,
+            spawnAreaSize
+        ));
         if(
             DistanceBetween(    // Within the portal
                 portalPosition, teleportPosition)
-                <= portalSize * 0.75
+                <= (portalSize * spawnAreaSizeRate)
                     &&
             !IsInLineOfSight(   // Blind spot from the player 
                 ClosestPlayerTo(EventPlayer(), Team.Team1),
@@ -1283,9 +1286,13 @@ if(
                 candidatePosition, NearestWalkablePosition(candidatePosition))
                 <= 15
                     &&
-            DistanceBetween(    // far from prev position
+            DistanceBetween(    // Somewhat far distance from prev position
                 candidatePosition, prevPortalPosition)
-                > 40
+                >= 50
+                    &&
+            DistanceBetween(    // Somewhat near distance from prev position
+                candidatePosition, prevPortalPosition)
+                <= 100
                     &&
             !IsInLineOfSight(   // Blind spot from the player 
                 candidatePosition + PositionOffset(),
@@ -1301,7 +1308,7 @@ if(
     portalState = PortalState.Checking;
 }
 
-define portalPositionCheckTime : 3.0;
+define portalPositionCheckTime : 4.0;
 
 rule: "Portal/Positioner/positionChecking"
 Event.OngoingGlobal
