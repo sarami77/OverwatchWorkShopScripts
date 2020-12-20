@@ -1,56 +1,6 @@
 import "Lib/Utility.ostw";
+import "Lib/PerkCore.ostw";
 import "Lib/Debug.ostw";
-
-// Common -----------------------------------------------
-playervar define perkTimeLimit;
-
-playervar define perkType;
-enum PerkType{  // TAG perk type
-    Non,
-    HighJump,
-    GrapplingBeam,
-    Sprinter,
-    Adrenaline,
-    Savior,
-    Fearless,
-    SteelFormation,
-    PersonalShelter,
-    BioticStation,
-    TrapBeam,
-    BattleFlag,
-    ChainExplosion,
-    AimHack,
-    Vampire,
-    ShotCaller,
-    SupportArtillery,
-    CruisingMissile,
-    CarePackage,
-    GrudgeFireBall,
-    DeathFromAbove,
-    LegendalyNinja,
-    MachDelivery,
-    Juggernaut,
-    BeamSniper,
-    DragonStorm,
-    Titan,
-    Annihilator
-}
-playervar define perkState;
-enum PerkState{
-    Non,
-    Ready,
-    Using
-}
-playervar define perkEffectAndText;
-playervar define perkEffectStatus;
-playervar define aimPosition;
-playervar define aimPosition2;
-playervar define perkPosition;
-playervar define perkPosition2;
-playervar define landPosition;
-playervar define landPosition2;
-playervar define perkTargets;
-
 
 // Builtin -----------------------------------------------
 rule: "Builtin"
@@ -85,262 +35,178 @@ if(
     //     EventPlayer(), 30, EffectRev.VisibleToPositionAndRadius);
 }
 
-rule: "Perk/Player/usePerk"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    IsAlive() &&
-    IsButtonHeld(EventPlayer(), Button.Interact)
-){
-    WaitLongPressConfirm();
-    PlayEffect(
-        AllPlayers(), PlayEffect.GoodPickupEffect,
-        Color.White, EventPlayer(), 1);
-    PlayEffect(
-        EventPlayer(), PlayEffect.BuffImpactSound,
-        Color.White, EventPlayer(), MaxLength());
-    perkType = PerkType.SupportArtillery;    
-    perkState = PerkState.Using;
-}
-
-rule: "Perk/Player/countDownTimeLimit"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkState == PerkState.Using &&
-    perkTimeLimit > 0
-){
-    // count down perk active limit time
-    WaitUpdateMediumCycle();
-    perkTimeLimit -= 1;
-    LoopIfConditionIsTrue();
-}
-
-rule: "Perk/Player/timeLimitOut"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkState == PerkState.Using &&
-    perkTimeLimit <= 0
-){
-    // lose perk by active limit time out
-    WaitConditionConfirmed();
-    perkState = PerkState.Non;
-}
-
-rule: "Perk/Player/cancelPerk"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    IsAlive() &&
-    perkState == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Interact)
-){
-    // lose perk by cancel operation of interact key hold
-    WaitCancelPressConfirm();
-    PlayEffect(
-        EventPlayer(), PlayEffect.DebuffImpactSound,
-        Color.White, EventPlayer(), MaxLength());
-    perkState = PerkState.Non;
-}
-
-disabled rule: "Debug/forceUsePerk // for bot"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    IsAlive()
-){
-    if(
-        DistanceBetween(
-            EventPlayer(),
-            ClosestPlayerTo(EventPlayer(), Team.Team2)) <= 10 &&
-        RandomInteger(1, 100) <= 50
-    ){
-        PlayEffect(
-            AllPlayers(), PlayEffect.GoodPickupEffect,
-            Color.White, EventPlayer(), 1);
-        PlayEffect(
-            EventPlayer(), PlayEffect.BuffImpactSound,
-            Color.White, EventPlayer(), MaxLength());
-        perkType = PerkType.SupportArtillery;  
-        perkState = PerkState.Using;
-    }
-    Wait(5, WaitBehavior.AbortWhenFalse);
-    LoopIfConditionIsTrue();    
-}
-
 // Test Code -----------------------------------------------
-rule: "global_TEST"
-Event.OngoingPlayer
-if(
-    true
-){
-    SetMatchTime(15);
-    WaitUpdateMediumCycle();
-    LoopIfConditionIsTrue();
-}
 
-rule: "player_TEST"
-Event.OngoingPlayer
-if(
-    !IsCrouching()
-){
-    StopForcingPlayerOutlines(
-        AllPlayers(Team.Team2),
-        EventPlayer()
-    );
-}
-
-define fireBallSpeed: 50;
-playervar define fireBallPower;
-playervar define fireBallSize;
-playervar define fireBallDamageRange;
-
-rule: "Perk/Player/GrudgeFireBall/init"
+// TAG OrbitalLaser ----------
+define lazerDamageRange: 3;
+rule: "Perk/Player/OrbitalLaser/activate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    HostPlayer()
+    perkType == PerkType.OrbitalLaser &&
+    perkState == PerkState.Using
 ){
-    perkEffectStatus = 100;
+    // set time limit
+    perkTimeLimit = 30;
+    // set status
+    perkTargets = 0;
+    perkEffectStatus = PerkEffectStatus.Ready;
+    // show text
+    // landing zone text
+    perkEffectAndText = [];
+    CreateInWorldText(
+        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Orbital Laser">,
+        landPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    perkEffectAndText[0] = LastTextID();
+    CreateInWorldText(
+        AllPlayers(), <"Irradiating orbital laser until <0> seconds.", perkTimeLimit>,
+        landPosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    perkEffectAndText[1] = LastTextID();
+    // set effect
+    // lazer body
+    CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
+        perkPosition, landPosition,
+        Color.Red, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[2] = LastCreatedEntity();
+    // lazer aura
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
+        landPosition, 5, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[3] = LastCreatedEntity();
+    // lazer sound
+    CreateEffect(AllPlayers(), Effect.EnergySound, Color.White,
+        landPosition, MaxLength(), EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[4] = LastCreatedEntity();
+    // above lazer aura
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
+        perkPosition, 15, EffectRev.None);
+    perkEffectAndText[5] = LastCreatedEntity();
+    // lazer shell
+    CreateEffect(AllPlayers(), Effect.LightShaft, Color.Red,
+        landPosition, 0.25, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[6] = LastCreatedEntity();  
+    // landing zone warning icon
+    // CreateIcon(AllPlayers(), landPosition + (PositionOffset()*2), Icon.Warning,
+    //     IconRev.VisibleToAndPosition, Color.Yellow, true);
+    // perkEffectAndText[7] = LastCreatedEntity();
+    // set hud
+    CreatePerkEffectHud(perkEffectStatus == PerkEffectStatus.Triggered ? "locked irradiation point." : "guiding irradiation point.");
+    perkEffectAndText[8] = LastTextID();
+    CreatePerkEffectHud(<"Hold melee button <0> to lock irradiation point.", ButtonGuide(Button.Melee)>);
+    perkEffectAndText[9] = LastTextID();  
 }
-
-rule: "Perk/Player/GrudgeFireBall/chargeByTakenDamage"
-Event.OnDamageTaken
-Team.Team1
-Player.All
-if(
-    HostPlayer() &&
-    EventDamage() > 0
-){
-    fireBallPower += EventDamage();
-}
-
-rule: "Perk/Player/GrudgeFireBall/shot"
+rule: "Perk/Player/OrbitalLaser/deactivate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    HostPlayer() &&
-    perkEffectStatus == 100 &&
+    perkType == PerkType.OrbitalLaser &&
+    perkState == PerkState.Non
+){
+    // reset text
+    DestroyInWorldText(perkEffectAndText[0]);
+    DestroyInWorldText(perkEffectAndText[1]);
+    // reset effect
+    DestroyEffect(perkEffectAndText[2]);
+    DestroyEffect(perkEffectAndText[3]);
+    DestroyEffect(perkEffectAndText[4]);
+    DestroyEffect(perkEffectAndText[5]);
+    DestroyEffect(perkEffectAndText[6]);
+    StopChasingVariable(perkPosition);
+    StopChasingVariable(landPosition);
+    // reset icon
+    DestroyIcon(perkEffectAndText[7]);
+    // reset hud
+    DestroyHudText(perkEffectAndText[8]);
+    DestroyHudText(perkEffectAndText[9]);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/OrbitalLaser/toggleLockPoint"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.OrbitalLaser &&
+    perkState == PerkState.Using &&
     IsButtonHeld(EventPlayer(), Button.Melee)
 ){
-    fireBallPower += param;
-
-    AbortIf(fireBallPower < 0);
     WaitLongPressConfirm();
+    if(perkEffectStatus == PerkEffectStatus.Triggered){
+        perkEffectStatus = PerkEffectStatus.Ready;
+    }
+    else{
+        perkEffectStatus = PerkEffectStatus.Triggered;
+    }
+}
 
-    perkPosition = EyePosition();
-    landPosition = AimingPositionIgnorePlayer();
-    // start movement
-    UpdateEveryFrame(perkPosition);
+define belowPosition: BelowPosition(AimingPosition() + Vector(0, 0.01, 0));
+
+rule: "Perk/Player/OrbitalLaser/launchLazer"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.OrbitalLaser &&
+    perkState == PerkState.Using
+){
+    // set lazer at above positions over 500m
+    perkPosition = AimingPosition() +
+        Vector(0, 500, 0);
+    // set lazer land position to aiming position
+    landPosition = belowPosition;
+}
+
+rule: "Perk/Player/OrbitalLaser/aimLandPoint"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.OrbitalLaser &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Ready
+){
+    // chase lazer land position to aiming position
+    WaitUpdateShortCycle();
+    aimPosition = belowPosition;
+    define distanceBetween = DistanceBetween(landPosition, aimPosition) * 2.0;
+    UpdateEveryFrame(landPosition);
     ChaseVariableAtRate(
-        perkPosition, landPosition, fireBallSpeed,
+        landPosition, aimPosition,
+        distanceBetween,
         RateChaseReevaluation.DestinationAndRate);
+    ChaseVariableAtRate(
+        perkPosition, aimPosition + Vector(0, 500, 0),
+        distanceBetween,
+        RateChaseReevaluation.DestinationAndRate);
+    LoopIfConditionIsTrue();
+}
 
-    fireBallSize = fireBallPower * 0.01;
-    fireBallDamageRange = fireBallSize * 2;
-    // show ball
-    CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
-        perkPosition, fireBallSize, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[0] = LastCreatedEntity();
-    // show aura
-    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Orange,
-        perkPosition, fireBallSize * 1.5, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[1] = LastCreatedEntity();
-    // play shot fire
+rule: "Perk/Player/OrbitalLaser/landedToPoint"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.OrbitalLaser &&
+    perkState == PerkState.Using
+){
+    // damage
+    Damage(
+        PlayersWithinRadius(
+            landPosition, lazerDamageRange,
+            Team.Team2, RadiusLOS.Off
+        ), EventPlayer(), 100);
+
+    // play blast effect
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.Orange, perkPosition + (FacingDirectionOf() * 1), fireBallSize);
-    // play shot sound
-    PlayEffect(
-        AllPlayers(), PlayEffect.DebuffImpactSound,
-        Color.White, AllPlayers(), fireBallSize * 30);
+        Color.Red, landPosition, lazerDamageRange);
 
-    perkEffectStatus = 1;
-}
-
-rule: "Perk/Player/GrudgeFireBall/landedToPoint"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkEffectStatus == 1
-){
-    Wait(DistanceBetween(perkPosition, landPosition) / fireBallSpeed,
-        WaitBehavior.AbortWhenFalse);
-    ExplodeFireBall();
-}
-
-rule: "Perk/Player/GrudgeFireBall/hitToPlyer"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkEffectStatus == 1 &&
-    IsAlive(ClosestPlayerTo(perkPosition, Team.Team2)) &&
-    DistanceBetween(
-        perkPosition,
-        ClosestPlayerTo(perkPosition, Team.Team2))
-    <= fireBallSize * 0.5
-){
-    ExplodeFireBall();
-}
-
-rule: "Perk/Player/GrudgeFireBall/timeOut"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkEffectStatus == 1
-){
-    Wait(3, WaitBehavior.AbortWhenFalse);
-    ExplodeFireBall();
-}
-
-void ExplodeFireBall()"Subroutine/ExplodeFireBall"{
-    perkEffectStatus = 2;
-
-    // stop movement
-    StopChasingVariable(perkPosition);
-    // hide ball
-    DestroyEffect(perkEffectAndText[0]);
-    // hide aura
-    DestroyEffect(perkEffectAndText[1]);
-    // get target
-    perkTargets = 
-        PlayersWithinRadius(
-            perkPosition, fireBallDamageRange,
-            Team.Team2, RadiusLOS.Off);
-    // apply Impulse
-    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
-        ApplyImpulse(perkTargets[pLoopIndex],
-            VectorTowards(perkPosition, perkTargets[pLoopIndex] + Up()),
-            fireBallSize * 10, Relative.ToWorld, ContraryMotion.Cancel);
-    }
-    // show impulse
-    WaitEntityImpulse();
-    // damage
-    Damage(perkTargets, EventPlayer(), fireBallPower);
-    // play blast sound
-    PlayEffect(
-        AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.White, AllPlayers(), fireBallSize * 30);
-    // play blast effect
-    PlayContinuousBlast(perkPosition,
-        fireBallDamageRange,
-        fireBallSize < 7 ? fireBallSize : 7,
-        Color.Orange);
-
-    fireBallPower = 0;
-    Wait(1, WaitBehavior.IgnoreCondition);
-    perkEffectStatus = 100;
+    WaitContinuousBlastCycle();
+    LoopIfConditionIsTrue();
 }
 
 // Debug -----------------------------------------------
@@ -350,15 +216,7 @@ define tuneUnit: 10;
 rule: "showParam"
 Event.OngoingGlobal
 {
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "fire Ball Power", HostPlayer().fireBallPower>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-
-    CreateHudText(HostPlayer(),
+     CreateHudText(HostPlayer(),
         null,
         <"<0> <1>", "param", param>,
         null,
