@@ -1266,8 +1266,11 @@ if(
 ){
     // Set the range to generate portal based on the central position
     // Use a factor times the distance between two spawn points to cover the map
+    prevPortalPosition = spawnPosition1;
     createRange = DistanceBetween(spawnPosition1, spawnPosition2) * 1.0;   // TAG create range
 }
+
+define calcAmount: 50;
 
 rule: "Portal/Positioner/createPortalInRange //repeat random positioning until close to map surface"
 Event.OngoingGlobal
@@ -1278,44 +1281,34 @@ if(
     // Create portal in createRange
     // Get candidate position by random position within the create range from the center of the map
     // reduce coordinateY for will not select a different location than the player's location in control map
-    // Repeat random position determination until within 15 meters of the map's walkable surface
-    define tryCalcCount = 1;
-    while(true){
+    // Repeat random position determination until within 10 meters of the map's walkable surface
+    for(gLoopIndex = 0; gLoopIndex < calcAmount; gLoopIndex++){
         candidatePosition = centerPosition + 
             RandomPosition(createRange, createRange / 4, createRange);
         if(
-            DistanceBetween(    // Near to map surface
+            DistanceBetween(    // Near the surface
                 candidatePosition, NearestWalkablePosition(candidatePosition))
-                <= 15
+                <= 50
                     &&
-            DistanceBetween(   // not too close to player 
-                candidatePosition,
-                ClosestPlayerTo(candidatePosition, Team.Team1))
-                >= 10
-                    &&
-            DistanceBetween(    // not too close to prev position
+            DistanceBetween(    // Somewhat far distance from prev position
                 candidatePosition, prevPortalPosition)
                 >= 50
                     &&
-            DistanceBetween(    // not too far to prev position
+            DistanceBetween(    // Somewhat near distance from prev position
                 candidatePosition, prevPortalPosition)
-                <= 200
+                <= 150
         ){
             break;
         }
-        tryCalcCount ++;
-        // Wait regularly to prevent overloading
-        if(tryCalcCount % 20 == 0){
-            Wait(1, WaitBehavior.AbortWhenFalse);
-        }
     }
+    dbgMsg(<"gLoopIndex=<0>", gLoopIndex>);
     // change to walkable position
     portalPosition = NearestWalkablePosition(candidatePosition) + PositionOffset();
     // create portal, next check position
     portalState = PortalState.Checking;
 }
 
-define portalPositionCheckTime : 2.5;
+define portalPositionCheckTime : 3.0;
 
 rule: "Portal/Positioner/positionChecking"
 Event.OngoingGlobal
