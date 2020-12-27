@@ -125,7 +125,7 @@ Player.All
 if(
     initCompleted
 ){
-    SetObjectiveDescription(EventPlayer(), "Find portal and attack it.", ObjectiveRev.VisibleToSortOrderAndString);
+    SetObjectiveDescription(EventPlayer(), "Find portal and attack it.", HudTextRev.String);
 }
 
 define enemyColor: Color.Purple;
@@ -300,10 +300,14 @@ if(
     ChaseVariableOverTime(closingProgress, 100, closingCount, TimeChaseReevaluation.DestinationAndDuration);
     // show progress hud
     if(progressHudEntity == null){
-        CreateProgressBarHudText(AllPlayers(),
+        CreateProgressBarHudText(
+            AllPlayers(),
             closingProgress,
-            <"<0> player stays in portal. Until portal closes...", playerNumInsidePortal >, Location.Top, MaxValue(),
-            Color.White, Color.White,
+            <"<0> player stays in portal. Until portal closes...", playerNumInsidePortal >,
+            Location.Top,
+            MaxValue(),
+            Color.White,
+            Color.White,
             ProgressBarEvaluation.VisibleToValuesAndColor,
             Spectators.DefaultVisibility );
         progressHudEntity = LastTextID();
@@ -727,7 +731,7 @@ define spawnAreaSize:
 void SetTeleportPositionToBlindSpot()"Subroutine/SetTeleportPositionToBlindSpot"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
-    for(pLoopIndex = 0; pLoopIndex < 20; pLoopIndex++){
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         teleportPosition = NearestWalkablePosition(
             portalPosition + RandomPosition(
             spawnAreaSize,
@@ -752,7 +756,7 @@ void SetTeleportPositionToBlindSpot()"Subroutine/SetTeleportPositionToBlindSpot"
 void SetTeleportPositionToCamper()"Subroutine/SetTeleportPositionToCamper"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
-    for(pLoopIndex = 0; pLoopIndex < 20; pLoopIndex++){
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         teleportPosition = ClosestPlayerTo(
             portalPosition, Team.Team1) +
             RandomPosition(1.5, 0, 1.5);
@@ -816,7 +820,7 @@ if(
     Teleport(EventPlayer(), teleportPosition);
 }
 
-rule: "Enemy/Teleport/teleportToPortalByPlayerEnteredPortal"
+rule: "Enemy/Teleport/teleportToPortalByPlayerEntered"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -841,9 +845,9 @@ if(
     }
 }
 
-globalvar define closestPlayerLostSightSecond;
+globalvar define camperDetectSecond;
 
-rule: "Enemy/Teleport/teleportToPortalByClosestPlayerInPortal"
+rule: "Enemy/Teleport/teleportToPortalByCamperDetected"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -856,18 +860,17 @@ if(
             ClosestPlayerTo(portalPosition, Team.Team1),
             BarrierLOS.NoBarriersBlock)
     ){
-        closestPlayerLostSightSecond += 1;
+        camperDetectSecond += 1;
 
     }
     else{
-        closestPlayerLostSightSecond = 0;
+        camperDetectSecond = 0;
     }
 
     if(
-        // round progresses, the shorter the waiting time
-        10 - (roundNo / 5) <= closestPlayerLostSightSecond
+        10 - (roundNo / 5) <= camperDetectSecond
     ){
-        closestPlayerLostSightSecond = 0;
+        camperDetectSecond = 0;
         // TAG player not found timer
         // Teleport an enemy to camping player
         // set teleport position to camper
@@ -1230,7 +1233,6 @@ if(
     WaitConditionConfirmed();
     // Set Team1's spawn points as spawnPosition1
     spawnPosition1 = PositionOf();
-    prevPortalPosition = spawnPosition1;    // init prevPortalPosition
 }
 
 rule: "Portal/Positioner/setSpawnPosition2 //a starting point for understanding the approximate center of the map"
@@ -1257,8 +1259,6 @@ if(
     centerPosition = (spawnPosition1 + spawnPosition2) / 2;
 }
 
-globalvar define prevPortalPosition;
-
 rule: "Portal/Positioner/createRange //distance range from the center of the map that create portal"
 Event.OngoingGlobal
 if(
@@ -1266,11 +1266,10 @@ if(
 ){
     // Set the range to generate portal based on the central position
     // Use a factor times the distance between two spawn points to cover the map
-    prevPortalPosition = spawnPosition1;
     createRange = DistanceBetween(spawnPosition1, spawnPosition2) * 1.0;   // TAG create range
 }
 
-define calcAmount: 50;
+globalvar define prevPortalPosition;
 
 rule: "Portal/Positioner/createPortalInRange //repeat random positioning until close to map surface"
 Event.OngoingGlobal
@@ -1281,34 +1280,38 @@ if(
     // Create portal in createRange
     // Get candidate position by random position within the create range from the center of the map
     // reduce coordinateY for will not select a different location than the player's location in control map
-    // Repeat random position determination until within 10 meters of the map's walkable surface
-    for(gLoopIndex = 0; gLoopIndex < calcAmount; gLoopIndex++){
+    // Repeat random position determination until within 15 meters of the map's walkable surface
+    for(gLoopIndex = 0; gLoopIndex < 50; gLoopIndex++){
         candidatePosition = centerPosition + 
             RandomPosition(createRange, createRange / 4, createRange);
         if(
             DistanceBetween(    // Near the surface
                 candidatePosition, NearestWalkablePosition(candidatePosition))
-                <= 50
+                <= 25
                     &&
             DistanceBetween(    // Somewhat far distance from prev position
                 candidatePosition, prevPortalPosition)
-                >= 50
+                >= 100
                     &&
             DistanceBetween(    // Somewhat near distance from prev position
                 candidatePosition, prevPortalPosition)
-                <= 150
+                <= 200
+                    &&
+            !IsInLineOfSight(   // Blind spot from the player 
+                candidatePosition + PositionOffset(),
+                ClosestPlayerTo(candidatePosition, Team.Team1),
+                BarrierLOS.NoBarriersBlock)
         ){
             break;
         }
     }
-    dbgMsg(<"gLoopIndex=<0>", gLoopIndex>);
     // change to walkable position
     portalPosition = NearestWalkablePosition(candidatePosition) + PositionOffset();
     // create portal, next check position
     portalState = PortalState.Checking;
 }
 
-define portalPositionCheckTime : 3.0;
+define portalPositionCheckTime : 2.5;
 
 rule: "Portal/Positioner/positionChecking"
 Event.OngoingGlobal
@@ -1849,11 +1852,9 @@ if(
     WaitLongPressConfirm();
     portalState = PortalState.Idle;
     debugAimingPosition = AimingPosition();
-    WaitChangeState();  // Wait for the changed status to be processed first
+    Wait(0.5, WaitBehavior.IgnoreCondition);  // Wait for the changed status to be processed first
     portalState = PortalState.Calculating;
-    while(portalState == PortalState.Calculating){
-        Wait(0.1, WaitBehavior.IgnoreCondition);
-    }
+    while(portalState == PortalState.Calculating){Wait(0.1, WaitBehavior.IgnoreCondition);}
     portalPosition = debugAimingPosition;
     Respawn(AllPlayers(Team.Team2));
 }

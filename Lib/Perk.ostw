@@ -333,7 +333,7 @@ if(
     // set time limit
     perkTimeLimit = 300;
     // set param
-    perkTargets = EmptyArray();
+    perkTargets = [];
 }
 
 rule: "Perk/Player/Savior/deactivate"
@@ -366,7 +366,7 @@ if(
                     saviorStunRange >= DistanceBetween(Victim(), ArrayElement())
                 )
             );
-            if(perkTargets != EmptyArray()){
+            if(perkTargets != []){
                 
                 // set stun
                 SetStatus(Victim(), EventPlayer(), Status.Stunned, 3.0);
@@ -701,7 +701,7 @@ if(
     // set time limit
     perkTimeLimit = 30;
     // set param
-    perkPosition = PositionOf();
+    perkPosition = BelowPosition(PositionOf());
     // show text
     perkEffectAndText = [];
     CreateInWorldText(
@@ -951,8 +951,10 @@ if(
 ){
     WaitChangeState();
     // set hud
-    CreatePerkEffectHud(<"Battle flag is raised on the battle line. Hold jump button <0> to teleport to battle flag.", ButtonGuide(Button.Jump)>);
+    CreatePerkEffectHud(<"Hold jump button <0> to teleport to battle flag.", ButtonGuide(Button.Jump)>);
     perkEffectAndText[100] = LastTextID();
+    CreatePerkEffectHud(<"Battle flag is raised on the battle line.">);
+    perkEffectAndText[101] = LastTextID();
 }
 
 rule: "Perk/Player/BattleFlag/hideOperationTeleport"
@@ -968,6 +970,7 @@ if(
     WaitChangeState();
     // reset hud
     DestroyHudText(perkEffectAndText[100]);
+    DestroyHudText(perkEffectAndText[101]);
 }
 
 rule: "Perk/Player/BattleFlag/teleportToBattleFlag"
@@ -1613,7 +1616,7 @@ if(
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[0] = LastTextID();
     CreateInWorldText(
-        AllPlayers(), <"Artillery Support incoming.">,
+        AllPlayers(), <"Barrage incoming. Stand by...">,
         landZonePosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[1] = LastTextID();
@@ -1661,7 +1664,7 @@ if(
     perkState == PerkState.Using
 ){
     // set shell land position to aiming position
-    landZonePosition = BelowPosition(AimingPosition());
+    landZonePosition = AimingPosition();
     Wait(3, WaitBehavior.AbortWhenFalse);
     DestroyEffect(perkEffectAndText[4]);
     perkEffectStatus = attackCount;
@@ -1680,7 +1683,15 @@ if(
     perkPosition = landZonePosition +
         Vector(0, 50, 0) + RandomPosition(10, 0, 10);
     // start shell move
-    landPosition = landZonePosition + RandomPosition(artilleryLandingRange / 2, 0, artilleryLandingRange / 2);
+    landPosition = 
+        BelowPosition(
+            landZonePosition + 
+            RandomPosition(
+                artilleryLandingRange / 2,
+                0,
+                artilleryLandingRange / 2
+            )
+        );
     UpdateEveryFrame(perkPosition);
     ChaseVariableOverTime(
         perkPosition, landPosition, attackTime / attackCount,
@@ -1900,6 +1911,18 @@ if(
     LoopIfConditionIsTrue();
 }
 
+rule: "Perk/Player/CruisingMissile/hideBlastRange"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.CruisingMissile &&
+    perkState == PerkState.Using &&
+    perkTimeLimit <= 1
+){
+    DestroyEffect(perkEffectAndText[5]);
+}
+
 rule: "Perk/Player/CruisingMissile/landedToPoint"
 Event.OngoingPlayer
 Team.Team1
@@ -1968,7 +1991,7 @@ if(
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[0] = LastTextID();
     CreateInWorldText(
-        AllPlayers(), <"Irradiating orbital laser until <0> seconds.", perkTimeLimit>,
+        AllPlayers(), <"Irradiating until <0> seconds.", perkTimeLimit>,
         landPosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[1] = LastTextID();
@@ -1976,10 +1999,10 @@ if(
     // lazer body
     CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
         perkPosition, landPosition,
-        Color.Red, EffectRev.VisibleToPositionAndRadius);
+        Color.White, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[2] = LastCreatedEntity();
     // lazer aura
-    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.White,
         landPosition, 5, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[3] = LastCreatedEntity();
     // lazer sound
@@ -1987,11 +2010,11 @@ if(
         landPosition, MaxLength(), EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[4] = LastCreatedEntity();
     // above lazer aura
-    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
-        perkPosition, 7, EffectRev.None);
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.White,
+        perkPosition2, 20, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[5] = LastCreatedEntity();
     // lazer shell
-    CreateEffect(AllPlayers(), Effect.LightShaft, Color.Red,
+    CreateEffect(AllPlayers(), Effect.LightShaft, Color.White,
         landPosition, 0.3, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[6] = LastCreatedEntity();  
     // landing zone warning icon
@@ -2064,7 +2087,8 @@ if(
 ){
     // set lazer at above positions over 500m
     perkPosition = AimingPosition() +
-        Vector(0, 500, 0);
+        Vector(0, 1000, 0);
+    perkPosition2 = perkPosition;
     // set lazer land position to aiming position
     landPosition = BelowPosition(AimingPosition());
 }
@@ -2081,7 +2105,7 @@ if(
     // chase lazer land position to aiming position
     WaitUpdateShortCycle();
     aimPosition = BelowPosition(AimingPosition());
-    define distanceBetween = DistanceBetween(landPosition, aimPosition) * 2.0;
+    define distanceBetween = DistanceBetween(landPosition, aimPosition) * 3.0;
     UpdateEveryFrame(landPosition);
     ChaseVariableAtRate(
         landPosition, aimPosition,
@@ -2112,7 +2136,7 @@ if(
     // play blast effect
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.Red, landPosition, lazerDamageRange);
+        Color.White, landPosition, lazerDamageRange);
 
     WaitContinuousBlastCycle();
     LoopIfConditionIsTrue();
@@ -2224,7 +2248,7 @@ if(
     perkPosition = EventPlayer() +
         Vector(0, 125, 0) + RandomPosition(0, 0, 0);
     // set package land position to player position
-    landPosition = PositionOf();
+    landPosition = BelowPosition(PositionOf());
     // start package move
     UpdateEveryFrame(perkPosition);
     ChaseVariableOverTime(
@@ -2287,11 +2311,11 @@ if(
     perkEffectStatus = PerkEffectStatus.Triggered;   // set fly mode
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(<"Press secondary fire button <0> to use Afterburner.", ButtonGuide(Button.SecondaryFire)>);
+    CreatePerkEffectHud(<"Press secondary fire button <0> to accelerate.", ButtonGuide(Button.SecondaryFire)>);
     perkEffectAndText[0] = LastTextID();
     CreatePerkEffectHud(<"Press jump button <0> to flying mode.", ButtonGuide(Button.Jump)>);
     perkEffectAndText[1] = LastTextID();
-    CreatePerkEffectHud(<"Press crouch button <0> to landing mode.", ButtonGuide(Button.Crouch)>);
+    CreatePerkEffectHud(<"Press crouch button <0> to walking mode.", ButtonGuide(Button.Crouch)>);
     perkEffectAndText[2] = LastTextID();
     // set perk hero
     PerkHero perkHero = new PerkHero();
