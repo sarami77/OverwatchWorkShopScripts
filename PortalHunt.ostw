@@ -1251,7 +1251,7 @@ if(
 ){
     // Set the range to generate portal based on the central position
     // Use a factor times the distance between two spawn points to cover the map
-    createRange = DistanceBetween(spawnPosition1, spawnPosition2) * 1.0;   // TAG create range
+    createRange = DistanceBetween(spawnPosition1, spawnPosition2) * 0.75;   // TAG create range
 }
 
 globalvar define prevPortalPosition;
@@ -1264,41 +1264,15 @@ if(
 ){
     // Create portal in createRange
     // Get candidate position by random position within the create range from the center of the map
-    // reduce coordinateY for will not select a different location than the player's location in control map
-    // Repeat random position determination until within 15 meters of the map's walkable surface
-    for(gLoopIndex = 0; gLoopIndex < 50; gLoopIndex++){
-        candidatePosition = centerPosition + 
-            RandomPosition(createRange, createRange / 4, createRange);
-        if(
-            DistanceBetween(    // Near the surface
-                candidatePosition, NearestWalkablePosition(candidatePosition))
-                <= 50
-                    &&
-            DistanceBetween(    // Somewhat far distance from prev position
-                candidatePosition, prevPortalPosition)
-                >= 50
-                    &&
-            DistanceBetween(    // Somewhat near distance from prev position
-                candidatePosition, prevPortalPosition)
-                <= 200
-                    &&
-            !IsInLineOfSight(   // Blind spot from the player 
-                candidatePosition + PositionOffset(),
-                ClosestPlayerTo(candidatePosition, Team.Team1),
-                BarrierLOS.NoBarriersBlock)
-        ){
-            break;
-        }
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
-    }
-    dbgMsg(<"gLoopIndex=<0>", gLoopIndex>);
+    candidatePosition = centerPosition + 
+        RandomPosition(createRange, createRange / 4, createRange);
     // change to walkable position
     portalPosition = NearestWalkablePosition(candidatePosition) + PositionOffset();
     // create portal, next check position
     portalState = PortalState.Checking;
 }
 
-define portalPositionCheckTime : 2.5;
+define positionCheckTime : 2.5;
 
 rule: "Portal/Positioner/positionChecking"
 Event.OngoingGlobal
@@ -1306,7 +1280,7 @@ if(
     portalState == PortalState.Checking
 ){
     // Waiting for Positioner/DetectXXX judgment described later
-    Wait(portalPositionCheckTime, WaitBehavior.AbortWhenFalse);
+    Wait(positionCheckTime, WaitBehavior.AbortWhenFalse);
     // save prev position
     prevPortalPosition = portalPosition;
     // confirm portal position
@@ -1394,7 +1368,7 @@ if(
 ){
     // If the portal position is in the cloased area,
     //  it is determined that the portal position is incorrect and the portal is recreate
-    Wait(portalPositionCheckTime - 0.1, WaitBehavior.AbortWhenFalse);
+    Wait(positionCheckTime - 0.1, WaitBehavior.AbortWhenFalse);
     dbgMsg("reset Portal by Detect Closed Area");
     portalState = PortalState.Calculating;
 }
@@ -1407,7 +1381,7 @@ if(
 ){
     // If the portal position is in the enemy spawn area,
     //  it is determined that the portal position is incorrect and the portal is recreate
-    Wait(portalPositionCheckTime - 0.1, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
+    Wait(positionCheckTime - 0.1, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
     dbgMsg("reset Portal by Detect Spawn Area");
     portalState = PortalState.Calculating;
 }
