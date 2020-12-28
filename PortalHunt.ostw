@@ -732,7 +732,7 @@ define spawnAreaSize:
 void SetTeleportPositionToPortal()"Subroutine/SetTeleportPositionToBlindSpot"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
-    for(pLoopIndex = 0; pLoopIndex < 20; pLoopIndex++){
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         teleportPosition = NearestWalkablePosition(
             portalPosition + RandomPosition(
             spawnAreaSize,
@@ -757,7 +757,7 @@ void SetTeleportPositionToPortal()"Subroutine/SetTeleportPositionToBlindSpot"{
 void SetTeleportPositionToCamper()"Subroutine/SetTeleportPositionToCamper"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
-    for(pLoopIndex = 0; pLoopIndex < 20; pLoopIndex++){
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         teleportPosition = ClosestPlayerTo(
             portalPosition, Team.Team1) +
             RandomPosition(1.5, 0, 1.5);
@@ -1264,8 +1264,32 @@ if(
 ){
     // Create portal in createRange
     // Get candidate position by random position within the create range from the center of the map
-    candidatePosition = centerPosition + 
-        RandomPosition(createRange, createRange / 4, createRange);
+    // reduce coordinateY for will not select a different location than the player's location in control map
+    // Repeat random position determination until within 15 meters of the map's walkable surface
+    for(gLoopIndex = 0; gLoopIndex < 10; gLoopIndex++){
+        candidatePosition = centerPosition + 
+            RandomPosition(createRange, createRange / 4, createRange);
+        if(
+            DistanceBetween(    // Near the surface
+                candidatePosition, NearestWalkablePosition(candidatePosition))
+                <= 50
+                    &&
+            DistanceBetween(    // Somewhat far distance from prev position
+                candidatePosition, prevPortalPosition)
+                >= 100
+                    &&
+            DistanceBetween(    // Somewhat near distance from prev position
+                candidatePosition, prevPortalPosition)
+                <= 200
+                    &&
+            !IsInLineOfSight(   // Blind spot from the player 
+                candidatePosition + PositionOffset(),
+                ClosestPlayerTo(candidatePosition, Team.Team1),
+                BarrierLOS.NoBarriersBlock)
+        ){
+            break;
+        }
+    }
     // change to walkable position
     portalPosition = NearestWalkablePosition(candidatePosition) + PositionOffset();
     // create portal, next check position
