@@ -688,6 +688,7 @@ if(
     if(
         DistanceBetween(EventPlayer(),
             ClosestPlayerTo(EventPlayer(), Team.Team1)) <= 10 &&
+        IsOnGround(EventPlayer()) &&
         !HasStatus(EventPlayer(), Status.Asleep) &&
         !HasStatus(EventPlayer(), Status.KnockedDown) &&
         !HasStatus(EventPlayer(), Status.Stunned) &&
@@ -721,17 +722,17 @@ void PlayTeleportBeam()"Subroutine/PlayTeleportBeam"{
     DestroyEffect(teleportBeamEntity);
 }
 
-define minSpawnAreaSize: 5;
+define minSpawnAreaSize: 10;
 define spawnAreaSizeRate: 1;
 define spawnAreaSize:
     (portalSize * spawnAreaSizeRate) <= minSpawnAreaSize ?
     minSpawnAreaSize :
     (portalSize * spawnAreaSizeRate);
 
-void SetTeleportPositionToBlindSpot()"Subroutine/SetTeleportPositionToBlindSpot"{
+void SetTeleportPositionToPortal()"Subroutine/SetTeleportPositionToBlindSpot"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+    for(pLoopIndex = 0; pLoopIndex < 20; pLoopIndex++){
         teleportPosition = NearestWalkablePosition(
             portalPosition + RandomPosition(
             spawnAreaSize,
@@ -756,7 +757,7 @@ void SetTeleportPositionToBlindSpot()"Subroutine/SetTeleportPositionToBlindSpot"
 void SetTeleportPositionToCamper()"Subroutine/SetTeleportPositionToCamper"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+    for(pLoopIndex = 0; pLoopIndex < 20; pLoopIndex++){
         teleportPosition = ClosestPlayerTo(
             portalPosition, Team.Team1) +
             RandomPosition(1.5, 0, 1.5);
@@ -799,7 +800,7 @@ if(
     // Teleport Enemy to portal when spawn
 
     // set teleport position to blind spot from player
-    SetTeleportPositionToBlindSpot();
+    SetTeleportPositionToPortal();
     // Teleport
     Teleport(EventPlayer(), teleportPosition);
 }
@@ -815,7 +816,7 @@ if(
     // Teleport Enemy to portal when spawn
 
     // set teleport position to blind spot from player
-    SetTeleportPositionToBlindSpot();
+    SetTeleportPositionToPortal();
     // Teleport
     Teleport(EventPlayer(), teleportPosition);
 }
@@ -837,7 +838,7 @@ if(
         // To protect the portal with the enemy
 
         // set teleport position tp blind spot from player
-        SetTeleportPositionToBlindSpot();
+        SetTeleportPositionToPortal();
         // show teleport beam
         PlayTeleportBeam();
         // Teleport
@@ -845,43 +846,26 @@ if(
     }
 }
 
-globalvar define camperDetectSecond;
-
 rule: "Enemy/Teleport/teleportToPortalByCamperDetected"
 Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
     portalState == PortalState.Suspended &&
-    IsAlive()
-){
-    if(
-        !IsInLineOfSight(EventPlayer(),
+    IsAlive() &&
+    !IsInLineOfSight(EventPlayer(),
             ClosestPlayerTo(portalPosition, Team.Team1),
             BarrierLOS.NoBarriersBlock)
-    ){
-        camperDetectSecond += 1;
-
-    }
-    else{
-        camperDetectSecond = 0;
-    }
-
-    if(
-        10 - (roundNo / 5) <= camperDetectSecond
-    ){
-        camperDetectSecond = 0;
-        // TAG player not found timer
-        // Teleport an enemy to camping player
-        // set teleport position to camper
-        SetTeleportPositionToCamper();
-        // show teleport beam
-        PlayTeleportBeam();
-        // Teleport
-        Teleport(EventPlayer(), teleportPosition);
-    }
-    WaitUpdateMediumCycle();
-    LoopIfConditionIsTrue();
+){
+    // TAG player not found timer
+    // Teleport an enemy to camping player
+    Wait(10- (portalSize / maxPortalSize * 5), WaitBehavior.AbortWhenFalse);
+    // set teleport position to camper
+    SetTeleportPositionToCamper();
+    // show teleport beam
+    PlayTeleportBeam();
+    // Teleport
+    Teleport(EventPlayer(), teleportPosition);
 }
 
 rule: "Enemy/Standby/enable"
@@ -914,7 +898,7 @@ Event.OngoingGlobal
     // Multiply damage rate
     enemyReceivedDamageRate = 100;
     // Apply balance multiplier
-    enemyReceivedDamageRate *= ConvertToBalancedValue(0.8, Team.Team1);     // TAG enemy received damage scale
+    enemyReceivedDamageRate *= ConvertToBalancedValue(0.5, Team.Team1);     // TAG enemy received damage scale
     SetDamageReceived(AllPlayers(Team.Team2), enemyReceivedDamageRate);
     LoopIfConditionIsTrue();
 }
@@ -932,7 +916,7 @@ Event.OngoingGlobal
     enemyDealtDamageRate = 20;  // basic enemy dealt damage
     enemyDealtDamageRate += roundNo * 1.5;  // TAG increase enemy dealt damage
     // Apply balance multiplier
-    enemyDealtDamageRate /= ConvertToBalancedValue(0.6, Team.Team1);     // TAG enemy dealt damage scale
+    enemyDealtDamageRate /= ConvertToBalancedValue(0.5, Team.Team1);     // TAG enemy dealt damage scale
     SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);
 
     LoopIfConditionIsTrue();
@@ -1287,11 +1271,11 @@ if(
         if(
             DistanceBetween(    // Near the surface
                 candidatePosition, NearestWalkablePosition(candidatePosition))
-                <= 25
+                <= 50
                     &&
             DistanceBetween(    // Somewhat far distance from prev position
                 candidatePosition, prevPortalPosition)
-                >= 100
+                >= 50
                     &&
             DistanceBetween(    // Somewhat near distance from prev position
                 candidatePosition, prevPortalPosition)
