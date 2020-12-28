@@ -4,7 +4,7 @@ import "Debug.ostw";
 // Function enable team is Team1
 
 // TAG System ----------
-define enableOverLoadMeasures: true;
+define enableOverLoadMeasures: false;
 define overloadSecondLimit: 5;
 globalvar define overloadSecond;
 globalvar define resetPerkPlayer;
@@ -95,7 +95,8 @@ enum PerkType{  // TAG perk type
     BeamSniper,
     DragonStorm,
     Titan,
-    Annihilator
+    Annihilator,
+    End
 }
 playervar define perkState;
 enum PerkState{
@@ -104,7 +105,7 @@ enum PerkState{
     Using
 }
 
-define enableDebugPerk: false;  // TAG enable Debug Perk
+define enableDebugPerk: true;  // TAG enable Debug Perk
 playervar define perkHudEntitys;
 
 rule: "Perk/lotteryPerkList // list of parks you can pick up"
@@ -157,7 +158,7 @@ Event.OngoingGlobal
         CreateHudText(HostPlayer(),
             null,
             null,
-            "enable Debug Perk",
+            <"enable Debug Perk. Relpeat press interact button <0> to select perk.", ButtonGuide(Button.Interact)>,
             Location.Left, -1,
             Color.White, Color.White, Color.White,
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
@@ -782,7 +783,48 @@ if(
 }
 
 // TAG Debug ----------
-rule: "Debug/givePerkToOwn"
+globalvar define backupPerkState;
+globalvar define backupPerkType;
+
+rule: "Debug/givePerkToSelf"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    enableDebugPerk &&
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact)
+){
+    WaitShortPressConfirm();
+    AbortIf(IsButtonHeld(EventPlayer(), Button.Interact));
+    AbortIf(perkState == PerkState.Using);
+
+    backupPerkState = perkState;
+    perkState = PerkState.Non;
+    perkType = PerkType.Non;
+    WaitChangeState();
+
+    if(backupPerkState == PerkState.Non){
+        if(backupPerkType == PerkType.Non){
+            backupPerkType ++;
+        }
+        perkType = backupPerkType;
+        perkState = PerkState.Ready;  
+    }
+    else if(backupPerkState == PerkState.Ready){
+        if(backupPerkType < PerkType.End){
+            perkType = backupPerkType + 1;
+        }
+        else{
+            perkType = 1;
+        }
+        backupPerkType = perkType;
+        perkState = PerkState.Ready;  
+    }
+    backupPerkState = perkState;
+}
+
+rule: "Debug/givePerkRandomToSelf"
 Event.OngoingPlayer
 Team.All
 Player.All
@@ -795,7 +837,7 @@ if(
 
     // Give perk to own player
     perkState = PerkState.Non;
-    Wait(0.5, WaitBehavior.IgnoreCondition);
+    WaitChangeState();
     perkType = RandomValueInArray(lotteryPerkList);
     perkState = PerkState.Ready;   
 
@@ -804,7 +846,6 @@ if(
     perkState = PerkState.Using;       
 }
 
-// TAG Debug ----------
 rule: "Debug/givePerkToAll"
 Event.OngoingPlayer
 Team.All
@@ -818,7 +859,7 @@ if(
 
     // Give perk to all player
     AllPlayers(Team.Team1).perkState = PerkState.Non;   
-    Wait(0.5, WaitBehavior.IgnoreCondition);
+    WaitChangeState();
     AllPlayers(Team.Team1).perkType = RandomValueInArray(lotteryPerkList);
     AllPlayers(Team.Team1).perkState = PerkState.Ready;
 
