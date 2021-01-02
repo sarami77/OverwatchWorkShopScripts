@@ -646,8 +646,7 @@ if(
     inShelter
 ){
     SetStatus(EventPlayer(), null, Status.PhasedOut, MaxValue());
-    SetStatus(EventPlayer(), null, Status.Invincible, MaxValue());
-    //SetInvisible(EventPlayer(), InvisibleTo.Enemies);
+    SetInvisible(EventPlayer(), InvisibleTo.Enemies);
 }
 
 rule: "Perk/Player/PersonalShelter/disableSafe"
@@ -658,8 +657,23 @@ if(
     !inShelter
 ){
     ClearStatus(EventPlayer(), Status.PhasedOut);
-    ClearStatus(EventPlayer(), Status.Invincible);
-    //SetInvisible(EventPlayer(), InvisibleTo.None);
+    SetInvisible(EventPlayer(), InvisibleTo.None);
+}
+
+rule: "Perk/Player/PersonalShelter/failsafeReset"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    HasStatus(EventPlayer(), Status.PhasedOut)
+){
+    WaitUpdateLongCycle();
+    if(!inShelter){
+        ClearStatus(EventPlayer(), Status.PhasedOut);   
+        SetInvisible(EventPlayer(), InvisibleTo.None);
+        dbgMsg("PhasedOut force released");
+    }
+    LoopIfConditionIsTrue();
 }
 
 rule: "Perk/Player/PersonalShelter/exclusiveOtherPlayer"
@@ -673,7 +687,6 @@ if(
             PlayersWithinRadius(
                 perkPosition, shelterRange, Team.Team1, RadiusLOS.Off))
 ){
-    WaitApplyImpulseCycle();
     perkTargets = PlayersWithinRadius(
                 perkPosition, shelterRange, Team.Team1, RadiusLOS.Off);
     for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
@@ -684,6 +697,7 @@ if(
                 10, Relative.ToWorld, ContraryMotion.Cancel);
         }
     }
+    WaitApplyImpulseCycle();
     LoopIfConditionIsTrue();
 }
 
@@ -3699,7 +3713,7 @@ if(
         // chase target
         ApplyImpulse(EventPlayer(),
             VectorTowards(EventPlayer(), perkTargets+ RandomPosition(1, 1, 1)),
-            1000, Relative.ToWorld, ContraryMotion.Cancel);
+            10000, Relative.ToWorld, ContraryMotion.Cancel);
         // play movement pulse
         PlayEffect(
             AllPlayers(), PlayEffect.BadPickupEffect,
