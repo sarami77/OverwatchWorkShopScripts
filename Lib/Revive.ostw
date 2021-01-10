@@ -12,10 +12,12 @@ playervar define downPosition;
 playervar define reviveTimeLimit;
 playervar define needHelpEntitys;
 playervar define reviver;
+
+define reviveTime: 3;
 define reviveRange : 2.5;
 define CanRevive():
-    IsDead(EventPlayer()) &&
-    IsOnGround(EventPlayer());
+    IsDead() &&
+    IsOnGround();
 
 define NearTeammate():
     CountOf(
@@ -106,6 +108,7 @@ rule: "Player/Revive/countDownTimeLimit"
 Event.OngoingPlayer
 if(
     Revive_isEnableTeam &&
+    CanRevive() &&
     reviveTimeLimit > 0
 ){
     // Count down revive time limit on the downed player's position
@@ -123,12 +126,14 @@ rule: "Player/Revive/reviveByTeammate //by near standing"
 Event.OngoingPlayer
 if(
     Revive_isEnableTeam &&
-    CanRevive() &&
-    NearTeammate()
+    (
+        CanRevive() &&
+        NearTeammate()
+    )
 ){
     // revived when a teammate is nearby
     // The event player is the player who receives the revival.
-    WaitConditionConfirmed();
+    DisableRespawning();
     if(!IsDeadByAbyss()){
         // Save the reviver to display a message to the reviver
         reviver = ClosestPlayerTo(EventPlayer(), Revive_enableTeam);
@@ -139,7 +144,6 @@ if(
                         <"<0> <1> <2>.", reviver, HeroIconString(HeroOf(reviver)), "reviving">);
 
         // reviving effect and progress count
-        if(reviveTimeLimit > 1){
             PlayEffect(
                 AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
                 Color.Yellow, EventPlayer(), 1);
@@ -148,8 +152,6 @@ if(
                 Color.Yellow, EventPlayer(), 30);
             // skip this wait by timer too short
             Wait(1, WaitBehavior.AbortWhenFalse);   
-        }
-        if(reviveTimeLimit > 1){
             PlayEffect(
                 AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
                 Color.Yellow, EventPlayer(), 1);
@@ -158,8 +160,7 @@ if(
                 Color.Yellow, EventPlayer(), 30);
             // skip this wait by timer too short
             Wait(1, WaitBehavior.AbortWhenFalse);   
-        }
-        if(reviveTimeLimit > 1){
+
             PlayEffect(
                 AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
                 Color.Yellow, EventPlayer(), 1);
@@ -168,7 +169,7 @@ if(
                 Color.Yellow, EventPlayer(), 30);
             // skip this wait by timer too short
             Wait(1, WaitBehavior.AbortWhenFalse);   
-        }
+
 
         // revive effect and sound
         PlayEffect(
@@ -187,6 +188,24 @@ if(
             <"<0> <1> <2>.", "revived", EventPlayer(), HeroIconString(HeroOf(EventPlayer()))>);
         SmallMessage(EventPlayer(),
             <"<0> <1> <2>.", reviver, HeroIconString(HeroOf(reviver)), "revivied">);
+    }
+}
+
+rule: "Player/Revive/cancelReviveByTeammate //by near standing"
+Event.OngoingPlayer
+if(
+    Revive_isEnableTeam &&
+    !(
+        CanRevive() &&
+        NearTeammate()
+    )
+){
+    EnableRespawning();
+    if(
+        reviveTimeLimit <= 0 &&
+        IsDead()
+    ){
+        Respawn();
     }
 }
 

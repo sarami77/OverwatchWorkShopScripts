@@ -33,16 +33,12 @@ disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopS
 
 // TAG Game Function ----------
 globalvar define initCompleted;
-globalvar define gameInProgress;
 
 rule: "Game/initGameSetting //wait 3 _seconds because some scripts fail immediately after loading the _server"
 Event.OngoingGlobal
 {
     // Stop records to reduce server load
     DisableInspectorRecording();
-
-    // Set game not in progress
-    gameInProgress = false;
 
     // Set imported function property
     Regeneration_enableTeam = Team.All;
@@ -52,10 +48,8 @@ Event.OngoingGlobal
     Regeneration_needBalanceTeam2 = false;
     Regeneration_regenerationRateTeam2 = MaxValue();
     Regeneration_waitRegenTimeTeam2 = 10.0;
-
     Revive_enableTeam = Team.Team1;
     Revive_timeLimit = 10;
-
     DamageText_enableTeam = Team.Team2;
 
     // If run it right after loading the server, some scripts fail, so wait 3 seconds
@@ -64,7 +58,6 @@ Event.OngoingGlobal
     // Cancel unnecessary default settings
     PauseMatchTime();
     DisableScoring();
-    // DisableGameModeHud(AllPlayers());
     DisableGameModeInworldUI(AllPlayers());
     DisableCompletion();
 
@@ -85,27 +78,34 @@ Event.OngoingGlobal
 rule: "Game/startGame // by start game of first respawn room exit "
 Event.OngoingGlobal
 if(
-    !gameInProgress &&
     initCompleted &&
-    createRange != 0
+    portalState == PortalState.Idle &&
+    IsTrueForAny(
+        AllPlayers(Team.Team1),
+        (
+            HasSpawned(ArrayElement()) &&
+            !IsInSpawnRoom(ArrayElement()) &&
+            IsMoving(ArrayElement())
+        )
+    )
 ){
-    WaitConditionConfirmed();
     elapsedTime = 0;
-    // If player exit spawn room, portal recreate.
+    // If player exit spawn room, start create portal.
     portalState = PortalState.Calculating;
-    gameInProgress = true;
 }
 
 rule: "Game/resetGame // by no player"
 Event.OngoingGlobal
 if(
-    0 >= NumberOfPlayers(Team.Team1)
+    initCompleted &&
+    portalState != PortalState.Idle &&
+    NumberOfPlayers(Team.Team1) <= 0
 ){
     elapsedTime = 0;
     roundNo = 0;
     teamLifes = initalTeamLifes;
     Heal(AllPlayers(Team.Team2), null, MaxValue());
-    gameInProgress = false;
+    portalState = PortalState.Idle;
 }
 
 rule: "Game/ShareCode/showGameCode"
@@ -148,8 +148,7 @@ if(
 rule: "Game/SpawnRoom/changeByTimer //to make the game fluid"
 Event.OngoingGlobal
 if(
-    initCompleted &&
-    centerPosition != 0
+    initCompleted
 ){
     // Change the spawn room regularly to keep the game fluid
     Wait(300, WaitBehavior.AbortWhenFalse); // change spawn room
@@ -280,7 +279,7 @@ if(
 globalvar define closingCount;
 globalvar define closingProgress;
 globalvar define closestPlayerToPortal;
-globalvar define progressHudEntity;
+globalvar define closingProgressHudEntity;
 globalvar define playerNumInsidePortal;
 
 define enableClosingProgress:
@@ -298,9 +297,9 @@ if(
     closingCount = RoundToInteger(portalSize, Rounding.Nearest);  // TAG portal closing count
     closingCount += roundNo * 2;
     closingProgress = 0;
-    ChaseVariableOverTime(closingProgress, 100, closingCount, TimeChaseReevaluation.DestinationAndDuration);
+    ChaseVariableOverTime(closingProgress, DefaultPercentage(), closingCount, TimeChaseReevaluation.DestinationAndDuration);
     // show progress hud
-    if(progressHudEntity == null){
+    if(closingProgressHudEntity == null){
         CreateProgressBarHudText(
             AllPlayers(),
             closingProgress,
@@ -310,7 +309,7 @@ if(
             Color.White,
             ProgressBarEvaluation.VisibleToValuesAndColor,
             Spectators.DefaultVisibility );
-        progressHudEntity = LastTextID();
+        closingProgressHudEntity = LastTextID();
     }
     // get closest surviver to portal center
     closestPlayerToPortal = 
@@ -365,8 +364,8 @@ if(
     if(closingProgress == 100){
         Wait(1.5, WaitBehavior.AbortWhenFalse);
     }
-    DestroyProgressBarHudText(progressHudEntity);
-    progressHudEntity = null;
+    DestroyProgressBarHudText(closingProgressHudEntity);
+    closingProgressHudEntity = null;
 }
 
 rule: "Player/ClosePortal/finishClose //on count down finished"
@@ -1199,99 +1198,41 @@ if(
     DestroyEffect(portalEntitys[4]);
 }
 
-globalvar define spawnPosition1;
-globalvar define spawnPosition2;
-globalvar define centerPosition;
-globalvar define createRange;
-globalvar define candidatePosition;
-
-rule: "Portal/Positioner/setSpawnPosition1 //a starting point for understanding the approximate center of the map"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    initCompleted &&
-    spawnPosition1 == 0 &&
-    !IsInSpawnRoom()
-){
-    WaitConditionConfirmed();
-    // Set Team1's spawn points as spawnPosition1
-    spawnPosition1 = PositionOf();
-    prevPortalPosition = spawnPosition1;
-}
-
-rule: "Portal/Positioner/setSpawnPosition2 //a starting point for understanding the approximate center of the map"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    initCompleted &&
-    spawnPosition2 == 0 &&
-    !IsInSpawnRoom()
-){
-    WaitConditionConfirmed();
-    // Set Team2's spawn points as spawnPosition2
-    spawnPosition2 = PositionOf();
-}
-
-rule: "Portal/Positioner/setCenterPosition //approximate center of the map. _set between two spawn position"
+rule: "Portal/Positioner/createPortal"
 Event.OngoingGlobal
 if(
-    spawnPosition1 != 0 &&
-    spawnPosition2 != 0
-){
-    // Set midway between two spawn points as centerPosition
-    centerPosition = (spawnPosition1 + spawnPosition2) / 2;
-}
-
-rule: "Portal/Positioner/createRange //distance range from the center of the map that create portal"
-Event.OngoingGlobal
-if(
-    centerPosition != 0
-){
-    // Set the range to generate portal based on the central position
-    // Use a factor times the distance between two spawn points to cover the map
-    createRange = DistanceBetween(spawnPosition1, spawnPosition2) * 0.75;   // TAG create range
-}
-
-globalvar define prevPortalPosition;
-
-rule: "Portal/Positioner/createPortalInRange //repeat random positioning until close to map surface"
-Event.OngoingGlobal
-if(
-    createRange != 0 &&
     portalState == PortalState.Calculating
 ){
-    // Create portal in createRange
-    // Get candidate position by random position within the create range from the center of the map
-    // reduce coordinateY for will not select a different location than the player's location in control map
-    // Repeat random position determination until within 15 meters of the map's walkable surface
-    for(gLoopIndex = 0; gLoopIndex < 30; gLoopIndex++){
-        candidatePosition = centerPosition + 
-            RandomPosition(createRange, createRange / 4, createRange);
-        if(
-            DistanceBetween(    // Near the surface
-                candidatePosition, NearestWalkablePosition(candidatePosition))
-                <= 50
-                    &&
-            DistanceBetween(    // Somewhat far distance from prev position
-                candidatePosition, prevPortalPosition)
-                >= 100
-                    &&
-            DistanceBetween(    // Somewhat near distance from prev position
-                candidatePosition, prevPortalPosition)
-                <= 200
-                    &&
-            !IsInLineOfSight(   // Blind spot from the player 
-                candidatePosition + PositionOffset(),
-                ClosestPlayerTo(candidatePosition, Team.Team1),
-                BarrierLOS.NoBarriersBlock)
-        ){
-            break;
-        }
+    // select random player as base positoon
+    define basePlayer =
+        RandomValueInArray(
+            FilteredArray(
+                AllLivingPlayers(Team.Team1),
+                HasSpawned(ArrayElement())
+            )
+        );
+    // select random positon from player around
+    define randomPositon = 
+        basePlayer
+        // add random direction
+        + DirectionFromAngles(
+            RandomReal(0, 360), 0
+        )
+        // add random distance
+        * RandomReal(75, 200);
+    // get candidate postion of portal 
+    define candidatePosition = NearestWalkablePosition(randomPositon);
+    // if far candidate postion than random positon
+    if(
+        DistanceBetween(basePlayer, randomPositon) < 
+        DistanceBetween(basePlayer, candidatePosition) + 10
+    ){
+        // retry select positon
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        LoopIfConditionIsTrue();
     }
-    // change to walkable position
-    portalPosition = NearestWalkablePosition(candidatePosition) + PositionOffset();
+    // confirm as portal position
+    portalPosition = candidatePosition;
     // create portal, next check position
     portalState = PortalState.Checking;
 }
@@ -1305,8 +1246,6 @@ if(
 ){
     // Waiting for Positioner/DetectXXX judgment described later
     Wait(positionCheckTime, WaitBehavior.AbortWhenFalse);
-    // save prev position
-    prevPortalPosition = portalPosition;
     // confirm portal position
     portalState = PortalState.Set;
 }
@@ -1353,6 +1292,7 @@ if(
 rule: "Portal/Positioner/DetectInvalidArea/resetPortal"
 Event.OngoingGlobal
 if(
+    portalState != PortalState.Idle &&  // avoid detect of game startingup
     sucideCount >= (NumberOfPlayers(Team.Team2) / 2)
 ){
     // If the suicide count reaches 0,
@@ -1839,7 +1779,7 @@ if(
     debugAimingPosition = AimingPosition();
     WaitChangeState();  // Wait for the changed status to be processed first
     portalState = PortalState.Calculating;
-    while(portalState == PortalState.Calculating){Wait(0.1, WaitBehavior.IgnoreCondition);}
+    WaitUntil(portalState != PortalState.Calculating, 5);
     portalPosition = debugAimingPosition;
     Respawn(AllPlayers(Team.Team2));
 }
