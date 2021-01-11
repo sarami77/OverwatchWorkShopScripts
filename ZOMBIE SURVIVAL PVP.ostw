@@ -1,0 +1,859 @@
+ import "Lib/Debug.ostw";
+ import "Lib/Utility.ostw";
+
+define ep: EventPlayer();
+
+// TAG Game
+globalvar define gameState;
+enum GameState{
+    Initialize,
+    RoundPrepear,
+    RoundProgress,
+    RoundEnd,
+    GameEnd
+}
+
+rule: "Game/State/Initialize"
+Event.OngoingGlobal
+if(
+    gameState == GameState.Initialize
+){
+    WaitNextPhase();
+    //DisableInspectorRecording();
+    DisableScoring();
+    DisableScoreboard(AllPlayers());
+    DisableGameModeHud(AllPlayers());
+    DisableGameModeInworldUI(AllPlayers());
+    DisableCompletion();
+    WaitNextPhase();
+    roundNo = 1;
+    gameState = GameState.RoundPrepear;
+}
+
+globalvar define zombieDealDamage;
+globalvar define zombieSpeed;
+globalvar define zombieHealth;
+
+rule: "Game/State/RoundPrepear"
+Event.OngoingGlobal
+if(
+    gameState == GameState.RoundPrepear
+){
+    zombieDealDamage = 400;
+    zombieHealth = 50;
+    zombieSpeed = 50;
+    AllPlayers().playerState = PlayerState.Survivor;
+    Respawn(AllPlayers());
+    BigMessage(AllPlayers(), "prepear to survive...");
+    WaitNextPhase();
+    gameState = GameState.RoundProgress;
+}
+
+rule: "Game/State/RoundProgress"
+Event.OngoingGlobal
+if(
+    gameState == GameState.RoundProgress
+){
+    RandomValueInArray(AllPlayers()).playerState = PlayerState.Ghost;
+    MinWait();
+    BigMessage(arraySurvivor, "spawned first zombie... survive!");
+    BigMessage(arrayGhostZombie, "you are first zombie... kill survivors!");
+}
+
+rule: "Game/State/RoundEnd"
+Event.OngoingGlobal
+if(
+    gameState == GameState.RoundEnd
+){
+    BigMessage(AllPlayers(), "round end");
+    WaitNextPhase();
+    if(roundNo >= roundLimit){
+        gameState = GameState.GameEnd;
+    }
+    else{
+        roundNo ++;
+        gameState = GameState.RoundPrepear;
+    }
+}
+
+rule: "Game/State/GameEnd"
+Event.OngoingGlobal
+if(
+    gameState == GameState.GameEnd
+){
+    BigMessage(AllPlayers(), "game end");
+    WaitNextPhase();
+    define topPlayer = LastOf(SortedArray(AllPlayers(), ArrayElement().score));
+    DeclarePlayerVictory(topPlayer);
+}
+
+define roundLimit: 3;
+globalvar define roundNo;
+
+rule: "Player/showRound"
+Event.OngoingGlobal
+if(
+    gameState != GameState.Initialize
+){
+    CreateHudText(AllPlayers(),
+        null,
+        null,
+        <"Round : <0> / <1>", roundNo, roundLimit>,
+        Location.Top, -1,
+        Color.White, Color.White, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
+}
+
+rule: "Game/finishRoundByNonSurvivors"
+Event.OngoingGlobal
+if(
+    gameState == GameState.RoundProgress &&
+    numSurvivor <= 0
+){
+    gameState = GameState.RoundEnd;
+}
+
+rule: "Game/restartRoundByNonGhostZombie"
+Event.OngoingGlobal
+if(
+    gameState == GameState.RoundProgress &&
+    numGhostZombie <= 0
+){
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
+    BigMessage(AllPlayers(), "restart round because without zombie.");
+    Wait(5, WaitBehavior.IgnoreCondition);
+    gameState = GameState.RoundPrepear;
+}
+
+
+globalvar define arraySurvivor;
+globalvar define numSurvivor;
+globalvar define arrayGhost;
+globalvar define numGhost;
+globalvar define arrayZombie;
+globalvar define numZombie;
+globalvar define arrayGhostZombie;
+globalvar define numGhostZombie;
+
+rule: "Game/updateDamageModifyAndOutline"
+Event.OngoingPlayer
+if(
+    numSurvivor != CountOf(FilteredArray(AllPlayers(), ArrayElement().playerState == PlayerState.Survivor)) || 
+    numGhost != CountOf(FilteredArray(AllPlayers(), ArrayElement().playerState == PlayerState.Ghost)) || 
+    numZombie != CountOf(FilteredArray(AllPlayers(), ArrayElement().playerState == PlayerState.Zombie))
+){
+    arraySurvivor = FilteredArray(AllPlayers(), ArrayElement().playerState == PlayerState.Survivor);
+    numSurvivor = CountOf(arraySurvivor);
+    arrayGhost = FilteredArray(AllPlayers(), ArrayElement().playerState == PlayerState.Ghost);
+    numGhost = CountOf(arrayGhost);
+    arrayZombie = FilteredArray(AllPlayers(), ArrayElement().playerState == PlayerState.Zombie);
+    numZombie = CountOf(arrayZombie);
+    arrayGhostZombie = FilteredArray(AllPlayers(), ArrayElement().playerState == PlayerState.Ghost || ArrayElement().playerState == PlayerState.Zombie);
+    numGhostZombie = CountOf(arrayGhostZombie);
+    updateDamageModifyAndOutline();
+}
+
+void updateDamageModifyAndOutline()"updateDamageModifyAndOutline"{
+    define listSurvivor = FilteredArray(AllPlayers(), ArrayElement().playerState == PlayerState.Survivor);
+    define listGhostZombie = FilteredArray(AllPlayers(), ArrayElement().playerState == PlayerState.Ghost || ArrayElement().playerState == PlayerState.Zombie);
+
+    // Survivor -> GhostZombie
+    StartDamageModification(listGhostZombie, listSurvivor,
+        DefaultPercentage(),
+        DamageModificationRev.ReceiversDamagersAndDamagePercent);
+    StartForcingPlayerOutlines(listGhostZombie, listSurvivor, true, 
+        Color.Red,
+        OutlineType.Default);
+
+    // GhostZombie -> Survivor
+    StartDamageModification(listSurvivor, listGhostZombie,
+        DefaultPercentage(),
+        DamageModificationRev.ReceiversDamagersAndDamagePercent);
+    StartForcingPlayerOutlines(listSurvivor, listGhostZombie, true, 
+        Color.Red,
+        OutlineType.Always);
+
+    // Survivor <-> Survivor
+    StartDamageModification(listSurvivor, listSurvivor,
+        0,
+        DamageModificationRev.ReceiversDamagersAndDamagePercent);
+    StartForcingPlayerOutlines(listSurvivor, listSurvivor, true, 
+        Color.Blue,
+        OutlineType.Default);
+
+    // GhostZombie <-> GhostZombie
+    StartDamageModification(listGhostZombie, listGhostZombie,
+        0,
+        DamageModificationRev.ReceiversDamagersAndDamagePercent);
+    StartForcingPlayerOutlines(listGhostZombie, listGhostZombie, true, 
+        Color.Blue,
+        OutlineType.Always);
+}
+
+// TAG Player
+playervar define playerState;
+enum PlayerState{
+    Survivor,
+    Ghost,
+    Zombie
+}
+
+rule: "Player/State/Survivor"
+Event.OngoingPlayer
+if(
+    playerState == PlayerState.Survivor
+){
+    {
+        ForcePlayerHero(ep, RandomValueInArray(AllDamageHeroes()));
+        SetMaxHealth(ep, DefaultPercentage());
+        SetDamageDealt(ep, DefaultPercentage());
+        SetMoveSpeed(ep, DefaultPercentage());
+        SetGravity(ep, DefaultPercentage());
+        ClearStatus(ep, Status.PhasedOut);
+        SetInvisible(ep, InvisibleTo.None);
+        SetButtonEnable(PlayerState.Survivor);
+        SetRoleHud(
+            "You are survivor",
+            "Survive from zombie attack until timeout.\n\rFind other survivors and unite.\n\rWatch out corners, Zombies come from blind spot.",
+            Color.Blue);
+        ResetAllOperationHud();
+        // AddOperationHud(
+        //     <"Press <0> key to spot and share dangers.", ButtonGuide(Button.Interact)>);
+        // operationHudEntity[CountOf(operationHudEntity)] = LastTextID();
+        SetFloatText("Survivor", AllPlayers());
+        DestroyEffect(ghostSoulEntity);
+    }
+}
+
+define last: CountOf(operationHudEntity);
+playervar define ghostSoulEntity;
+
+rule: "Player/State/Ghost"
+Event.OngoingPlayer
+if(
+    playerState == PlayerState.Ghost
+){
+    {
+        ForcePlayerHero(ep, RandomValueInArray([
+            Hero.Reaper
+        ]));
+        SetMaxHealth(ep, zombieHealth);
+        SetDamageDealt(ep, 0);
+        SetMoveSpeed(ep, 400);
+        SetGravity(ep, 25);
+        SetStatus(ep, null, Status.PhasedOut, MaxValue());
+        SetInvisible(ep, InvisibleTo.All);
+        SetButtonEnable(PlayerState.Ghost);
+        SetRoleHud(
+            "You are ghost form",
+            "Not visible from survivors.\n\rHide in blind spots of survivors, Wait chance of surprise attack.\n\runite to other ghosts.",
+            Color.Yellow);
+        ResetAllOperationHud();
+        // AddOperationHud(
+        //     <"Press <0> key to call attack countdown.", ButtonGuide(Button.Ability2)>);
+        // operationHudEntity[last] = LastTextID();
+        // AddOperationHud(
+        //     <"Press <0> key to call acknowledge.", ButtonGuide(Button.Ability1)>);
+        // operationHudEntity[last] = LastTextID();
+        AddOperationHud(
+            <"Press <0> key to appear here as zombie and attack.", ButtonGuide(Button.PrimaryFire)>);
+        operationHudEntity[last] = LastTextID();
+        SetFloatText(<"Ghost\n\r<0>", ep>, arrayGhostZombie);
+        CreateEffect(
+            arrayGhostZombie, Effect.Orb, Color.Yellow,
+            PositionOf(ep) + PositionOffset(), 1, EffectRev.VisibleToPositionAndRadius);
+        ghostSoulEntity = LastCreatedEntity();
+        MinWait();
+        Heal(ep, null, MaxValue());
+    }
+}
+
+rule: "Player/State/Zombie"
+Event.OngoingPlayer
+if(
+    playerState == PlayerState.Zombie
+){
+    {
+        SetMaxHealth(ep, zombieHealth);
+        SetDamageDealt(ep, zombieDealDamage);
+        SetMoveSpeed(ep, zombieSpeed);
+        SetGravity(ep, 75);
+        ClearStatus(ep, Status.PhasedOut);
+        SetInvisible(ep, InvisibleTo.None);
+        SetButtonEnable(PlayerState.Zombie);
+        SetRoleHud(
+            "You are zombie",
+            "Kill survivors by melee.\n\rWell use blind spot and try surprise attack.\n\runite to other zombies.",
+            Color.Red);
+        ResetAllOperationHud();
+        // AddOperationHud(
+        //     <"Press <0> key to call attack countdown.", ButtonGuide(Button.Ability2)>);
+        // operationHudEntity[CountOf(operationHudEntity)] = LastTextID();
+        // AddOperationHud(
+        //     <"Press <0> key to call acknowledge.", ButtonGuide(Button.Ability1)>);
+        // operationHudEntity[CountOf(operationHudEntity)] = LastTextID();
+        AddOperationHud(
+            <"Press <0> key to melee.", ButtonGuide(Button.PrimaryFire)>);
+        operationHudEntity[CountOf(operationHudEntity)] = LastTextID();
+        SetFloatText("Zombie", AllPlayers());
+        DestroyEffect(ghostSoulEntity);
+    }
+}
+
+
+rule: "Player/showRemainingSurvivors"
+Event.OngoingGlobal
+if(
+    gameState != GameState.Initialize
+){
+    CreateHudText(HostPlayer(),
+        null,
+        null,
+        <"Remaining survivors : <0>", numSurvivor>,
+        Location.Top, 0,
+        Color.White, Color.White, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
+}
+
+rule: "Player/returnGround"
+Event.OngoingPlayer
+if(
+    IsDead() &&
+    !IsOnGround()
+){
+    if(IsDeadByAbyss()){
+        Teleport(ep, NearestWalkablePosition());
+    }
+    else{
+        WaitUpdateMediumCycle();
+        LoopIfConditionIsTrue();
+    }
+}
+
+rule: "Player/SetGhost"
+Event.OngoingPlayer
+if(
+    HasSpawned()
+){
+    if(gameState == GameState.RoundPrepear){
+        ep.playerState = PlayerState.Survivor;
+    }
+    else{
+        ep.playerState = PlayerState.Ghost;
+    }
+}
+
+playervar define score;
+
+rule: "Game/Score/addScore"
+Event.OnFinalBlow
+if(
+    gameState == GameState.RoundProgress
+){
+    dbgMsg(ep);
+    if(playerState == PlayerState.Survivor){
+        score += 1;
+    }
+    else if(playerState == PlayerState.Zombie){
+        score += 3;
+    }
+    updateScoreBoard();
+}
+
+globalvar define playerNum;
+
+rule: "Game/Score/updateScoreBoard"
+Event.OngoingGlobal
+if(
+    playerNum != NumberOfPlayers(Team.All)
+){
+    playerNum = NumberOfPlayers(Team.All);
+    updateScoreBoard();
+}
+
+globalvar define scoreHudEntity;
+
+void updateScoreBoard()"updateScoreBoard"{
+    // delete all score
+    for(define idx = 0; idx < CountOf(scoreHudEntity); idx++){
+        DestroyHudText(scoreHudEntity[idx]);
+    }
+    scoreHudEntity = [];
+    // set Header
+    CreateHudText(AllPlayers(),
+        null,
+        null,
+        <"[Score board]">,
+        Location.Left, 0,
+        Color.White, Color.White, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
+    scoreHudEntity[CountOf(scoreHudEntity)] = LastTextID();
+    // set each player score
+    define playerArray = SortedArray(AllPlayers(), -ArrayElement().score);
+    define playerNum = CountOf(playerArray);
+    for(define idx = 0; idx < playerNum; idx++){
+        CreateHudText(AllPlayers(),
+            null,
+            null,
+            <"[<0>] <1> : <2>", (idx + 1), playerArray[idx], playerArray[idx].score>,
+            Location.Left, (idx + 1),
+            Color.White, Color.White, Color.White,
+            HudTextRev.None, Spectators.VisibleAlways);
+        scoreHudEntity[CountOf(scoreHudEntity)] = LastTextID();
+    }
+}
+
+playervar define roleHudEntity;
+void SetRoleHud(define header, define text, define color){
+    ResetRoleHud();
+    CreateHudText(
+        ep, header, text, "", Location.Top, 1,
+        color, color, color,
+        HudTextRev.VisibleToSortOrderStringAndColor, Spectators.DefaultVisibility);
+    roleHudEntity = LastTextID();
+}
+void ResetRoleHud(){
+    DestroyHudText(roleHudEntity);
+}
+
+playervar define operationHudEntity;
+define AddOperationHud(define text):
+    CreateHudText(
+        ep, "", "", text, Location.Top, 2,
+        null, null, Color.White,
+        HudTextRev.VisibleToSortOrderStringAndColor, Spectators.DefaultVisibility);
+void ResetAllOperationHud(){
+    for(define idx = 0; idx < CountOf(operationHudEntity); idx++){
+        DestroyHudText(operationHudEntity[idx]);
+    }
+    operationHudEntity = [];
+}
+
+playervar define floatTextEntity;
+void SetFloatText(define text, define visibleTo){
+    ResetFloatText();
+    floatTextEntity = [];
+    CreateInWorldText(
+        visibleTo,
+        text,
+        ep, 1, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionStringAndColor,
+        Color.White, Spectators.DefaultVisibility);
+    floatTextEntity = LastTextID();
+}
+void ResetFloatText(){
+    DestroyInWorldText(floatTextEntity[0]);
+    DestroyInWorldText(floatTextEntity[1]);
+}
+
+void SetButtonEnable(define playerState)"SetButtonEnable"{
+    if(playerState == PlayerState.Survivor){
+        SetPrimaryFireEnabled(ep, true);
+        SetSecondaryFireEnabled(ep, true);
+        SetAbility1Enabled(ep, true);
+        SetAbility2Enabled(ep, true);
+        SetUltimateAbilityEnabled(ep, true);
+        SetMeleeEnabled(ep, true);
+    }
+    else if(playerState == PlayerState.Ghost){
+        SetPrimaryFireEnabled(ep, false);
+        SetSecondaryFireEnabled(ep, false);
+        SetAbility1Enabled(ep, false);
+        SetAbility2Enabled(ep, false);
+        SetUltimateAbilityEnabled(ep, false);
+        SetMeleeEnabled(ep, false);
+    }
+    else if(playerState == PlayerState.Zombie){
+        SetPrimaryFireEnabled(ep, false);
+        SetSecondaryFireEnabled(ep, false);
+        SetAbility1Enabled(ep, false);
+        SetAbility2Enabled(ep, false);
+        SetUltimateAbilityEnabled(ep, false);
+        SetMeleeEnabled(ep, true);
+    }
+}
+
+
+define eyewitnessList:
+    FilteredArray(
+        AllPlayers(),
+        (
+            ArrayElement().playerState == PlayerState.Survivor &&
+            (
+                DistanceBetween(ep, ArrayElement()) <= 10 ||
+                (
+                    IsInViewAngle(ArrayElement(), ep, 100) &&
+                    IsInLineOfSight(EyePosition(ep), ArrayElement())
+                )
+            )
+        )
+    );
+
+define IsNoEyewitness:
+    0 == CountOf(
+        eyewitnessList
+    );
+
+define IsNoCloser:
+    0 == CountOf(
+        FilteredArray(
+            AllPlayers(),
+            (
+                ArrayElement().playerState == PlayerState.Survivor &&
+                (
+                    DistanceBetween(ep, ArrayElement()) <= 10
+                )
+            )
+        )
+    );
+
+// TAG Survivor
+rule: "Player/Survivor/changeToZombieByDead"
+Event.OngoingPlayer
+if(
+    IsDead()
+){
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    playerState = PlayerState.Ghost;
+    Resurrect();
+    //Respawn();
+}
+
+// TAG Ghost
+rule: "Player/Ghost/changeToZombieByAttackTriggerd"
+Event.OngoingPlayer
+if(
+    playerState == PlayerState.Ghost &&
+    IsButtonHeld(ep, Button.PrimaryFire)
+){
+    if(DistanceBetween(ep, NearestWalkablePosition(ep)) > 10){
+        PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 100);
+        SmallMessage(ep, "Can't attack from here. Too far from map surface.");
+    }
+    else if(!IsNoCloser){
+        PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 100);
+        SmallMessage(ep, "Can't attack from here. Too close to survivor.");
+    }
+    else if(!IsNoEyewitness){
+        PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 100);
+        SmallMessage(ep, "Can't attack from here. Not blind spot from survivor.");
+    }
+    else{
+        PlayEffect(ep, PlayEffect.RingExplosionSound, null, ep, 100);
+        SmallMessage(ep, "Attack Survivor.");
+        playerState = PlayerState.Zombie;
+    }
+}
+
+rule: "Player/Ghost/float"
+Event.OngoingPlayer
+if(
+    playerState == PlayerState.Ghost &&
+    IsOnGround() &&
+    IsMoving()
+){
+    ApplyImpulse(ep, Up(), 3.0, Relative.ToWorld, ContraryMotion.Cancel);
+}
+
+// TAG Zombie
+rule: "Player/Zombie/changeToGhostByRespawn"
+Event.OngoingPlayer
+if(
+    playerState == PlayerState.Zombie &&
+    IsDead()
+){
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    playerState = PlayerState.Ghost;
+    Resurrect();
+}
+
+rule: "Player/Zombie/changeToGhostByHidden"
+Event.OngoingPlayer
+if(
+    playerState == PlayerState.Zombie &&
+    IsNoEyewitness
+){
+    Wait(5, WaitBehavior.AbortWhenFalse);
+    playerState = PlayerState.Ghost;
+}
+
+rule: "Player/Zombie/primaryFireToMelee"
+Event.OngoingPlayer
+if(
+    playerState == PlayerState.Zombie &&
+    IsButtonHeld(ep, Button.PrimaryFire)
+){
+    CancelPrimaryAction();
+    PressButton(ep, Button.Melee);
+}
+
+rule: "Player/Zombie/increaseZombieBuff"
+Event.OngoingGlobal
+if(
+    0 < numGhostZombie
+){
+    Wait(numGhostZombie, WaitBehavior.AbortWhenFalse);    // TAG increaseZombieBuff
+    zombieDealDamage += 1;
+    SetDamageDealt(arrayZombie, zombieDealDamage);
+    zombieSpeed += 1;
+    SetMoveSpeed(arrayZombie, zombieSpeed);
+    zombieHealth += 0.5;
+    SetMaxHealth(arrayGhostZombie, zombieHealth);
+    MinWait();
+    Heal(arrayGhost, null, MaxValue());
+    LoopIfConditionIsTrue();
+}
+
+// TAG Debug
+globalvar define debugMode;
+globalvar define isRecording;
+
+enum DebugMode{
+    Non,
+    SHOW_PARAM,
+    WITH_RECORD
+}
+
+rule: "Debug/changeDebugMode"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.Jump) 
+){
+    // change debug mode
+    WaitLongPressConfirm();
+    if(debugMode == DebugMode.Non){
+        debugMode = DebugMode.SHOW_PARAM;
+        ShowDebugHud();
+    }
+    else if(debugMode == DebugMode.SHOW_PARAM){
+        debugMode = DebugMode.WITH_RECORD;
+        EnableInspectorRecording();
+        isRecording = true;
+        HideDebugHud();
+        ShowDebugHud();
+    }
+    else if(debugMode == DebugMode.WITH_RECORD){
+        debugMode = DebugMode.Non;
+        DisableInspectorRecording();
+        isRecording = false;
+        HideDebugHud();
+    }
+}
+
+define Last: CountOf(debugHudEntitys);
+globalvar define debugHudEntitys;
+
+// show debug icon and hud
+void ShowDebugHud()"Subroutine/ShowDebugHud"{
+
+    if(isRecording){
+        CreateHudText(HostPlayer(),
+            null,
+            null,
+            "● is Recording",
+            Location.Left, -1,
+            Color.White, Color.White, Color.Red,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[Last] = LastTextID();
+    }
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "game state", gameState>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Blue, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[Last] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "host player state", HostPlayer().playerState>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Blue, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[Last] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "zombie Deal Damage", zombieDealDamage>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Blue, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[Last] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "zombie speed", zombieSpeed>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Blue, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[Last] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "zombie health", zombieHealth>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Blue, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[Last] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "num Survivor", numSurvivor>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Blue, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[Last] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "num Ghost", numGhost>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Blue, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[Last] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "num Zombie", numZombie>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Blue, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[Last] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load", ServerLoad()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[Last] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load Average", ServerLoadAverage()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[Last] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load Peak", ServerLoadPeak()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[Last] = LastTextID();
+
+}
+
+// Hide debug icon and hud
+void HideDebugHud()"Subroutine/HideDebugHud"{
+    for(gLoopIndex = 0; gLoopIndex < CountOf(debugHudEntitys); gLoopIndex ++){
+        DestroyHudText(debugHudEntitys[gLoopIndex]);
+    }
+}
+
+define maxSlotNum: 12;
+
+void CreateDummyBotRandom(){
+    // check empty slot
+    define checkSlotNo;
+    for(checkSlotNo = 1; checkSlotNo <= maxSlotNum; checkSlotNo++){
+        if(PlayersInSlot(checkSlotNo, Team.All) == null ){
+            break;
+        }
+    }
+    // no empty slot
+    if(maxSlotNum > checkSlotNo){
+        // replace slot by random
+        checkSlotNo = RandomInteger(1,maxSlotNum);
+        DestroyDummyBot(Team.All, checkSlotNo);
+    }
+    // make bot
+    CreateDummyBot(
+        RandomValueInArray(AllHeroes()),
+        Team.All, checkSlotNo,
+        NearestWalkablePosition(AimingPosition()), FacingDirectionOf(ep));
+}
+
+playervar define debugTarget;
+
+rule: "Debug/createDebugTargetMarker"
+Event.OngoingPlayer
+if(
+    ep == HostPlayer()
+){
+    CreateEffect(
+        HostPlayer(), Effect.LightShaft, Color.White,
+        PositionOf(debugTarget), 1, EffectRev.PositionAndRadius);
+}
+
+rule: "Debug/selectDebugTarget"
+Event.OngoingPlayer
+if(
+    ep == HostPlayer()
+){
+    define aimPos = AimingPosition();
+    define nearestPlayer = ClosestPlayerTo(aimPos, Team.All);
+    if(DistanceBetween(aimPos, nearestPlayer) <= 5){
+        debugTarget = nearestPlayer;
+    }
+    else{
+        debugTarget = ep;
+    }
+    Wait(1.0, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Debug/spawnBot"
+Event.OngoingPlayer
+if(
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.PrimaryFire)
+){
+    CreateDummyBotRandom();
+}
+
+rule: "Debug/changePlayerState"
+Event.OngoingPlayer
+if(
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.SecondaryFire)
+){
+    if(debugTarget.playerState < PlayerState.Zombie){
+        debugTarget.playerState ++;
+    }
+    else{
+        debugTarget.playerState = PlayerState.Survivor;
+    }
+}
+
+rule: "Debug/changeGameState"
+Event.OngoingPlayer
+if(
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Crouch)
+){
+    if(gameState >= GameState.GameEnd)
+        gameState = GameState.RoundPrepear;
+    else
+        gameState ++;
+}
+
+
+
