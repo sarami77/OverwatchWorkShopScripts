@@ -216,7 +216,7 @@ rule: "Player/TeamLifes/initalCount"
 Event.OngoingGlobal
 {
     // Set initial team lifes
-    initialTeamLifes = WorkshopSettingInteger("Player Settings", "Inital Team Lifes", 6, 0, 100, 0);
+    initialTeamLifes = WorkshopSettingInteger("Player Settings", "Initial Team Lifes", 6, 0, 100, 0);
     teamLifes = initialTeamLifes;
 }
 
@@ -918,10 +918,16 @@ Event.OngoingGlobal
     LoopIfConditionIsTrue();
 }
 
-define maxHiddenSpeed: 500;
 globalvar define _EnemySpeedScale;
-globalvar define enemyHiddenSpeedRate;
+globalvar define maxHiddenSpeed;
+globalvar define enemyHiddenSpeed;
 playervar define isHiddenSpeed;
+
+rule: "Enemy/HiddenSpeed/setHiddenSpeed"
+Event.OngoingGlobal
+{
+    maxHiddenSpeed = WorkshopSettingReal("Enemy Settings", "Max Move Speed When Hidden", 500, 100, 1000, 5);
+}
 
 rule: "Enemy/HiddenSpeed/updateByPortalSize //for round harder, increase by growing portal size"
 Event.OngoingGlobal
@@ -933,9 +939,9 @@ if(
     // Portals that have grown significantly over time will send quickly more enemies.
     _EnemySpeedScale = portalSize;
     _EnemySpeedScale /= maxPortalSize;
-    enemyHiddenSpeedRate = maxHiddenSpeed;
-    enemyHiddenSpeedRate *= _EnemySpeedScale;
-    enemyHiddenSpeedRate += 100;
+    enemyHiddenSpeed = maxHiddenSpeed;
+    enemyHiddenSpeed *= _EnemySpeedScale;
+    enemyHiddenSpeed += 100;
     LoopIf(portalSize < maxPortalSize);
 }
 
@@ -954,7 +960,7 @@ if(
             BarrierLOS.NoBarriersBlock)
     ){
         // Players are surrounded by many enemies, making the game more chaotic and fluid
-        SetMoveSpeed(EventPlayer(), enemyHiddenSpeedRate);
+        SetMoveSpeed(EventPlayer(), enemyHiddenSpeed);
         // The portal may growing and changing in size, so repeat speed changes
     }
     else{
@@ -1070,7 +1076,7 @@ if(
     StopChasingVariable(portalSize);
     portalPosition = 0;
     portalSize = 0;
-    enemyHiddenSpeedRate = 100;
+    enemyHiddenSpeed = 100;
     isFirstGrowing = true;
     // Hide portal icon and effect
     DestroyIcon(portalEntitys[0]);
@@ -1571,7 +1577,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Hidden Speed Rate", enemyHiddenSpeedRate>,
+        <"<0> <1>", "enemy Hidden Speed", enemyHiddenSpeed>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1822,8 +1828,8 @@ if(
     // Set portal position to aim center
     WaitLongPressConfirm();
     portalSize = maxPortalSize;
-    enemyHiddenSpeedRate = maxHiddenSpeed;
-    SetMoveSpeed(AllPlayers(Team.Team2), enemyHiddenSpeedRate);
+    enemyHiddenSpeed = maxHiddenSpeed;
+    SetMoveSpeed(AllPlayers(Team.Team2), enemyHiddenSpeed);
     AllPlayers(Team.Team2).enemySpawnInterval = 0;
     SetRespawnMaxTime(AllPlayers(Team.Team2), 1);
 }
