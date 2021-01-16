@@ -1,5 +1,6 @@
  import "Lib/Debug.ostw";
  import "Lib/Utility.ostw";
+ import "Lib/DamageText.ostw";
 
 define ep: EventPlayer();
 
@@ -25,9 +26,14 @@ if(
     DisableGameModeHud(AllPlayers());
     DisableGameModeInworldUI(AllPlayers());
     DisableCompletion();
-    WaitNextPhase();
+
+    DamageText_enableTeam = Team.All;
+
     roundNo = 1;
-    gameState = GameState.RoundPrepear;
+    zombieDealDamage = 300;
+    zombieHealth = 50;
+    zombieSpeed = 50;
+    WaitNextPhase();
 }
 
 globalvar define zombieDealDamage;
@@ -39,8 +45,8 @@ Event.OngoingGlobal
 if(
     gameState == GameState.RoundPrepear
 ){
-    zombieDealDamage = 400;
-    zombieHealth = 50;
+    zombieDealDamage = 333;
+    zombieHealth = 25;
     zombieSpeed = 50;
     AllPlayers().playerState = PlayerState.Survivor;
     Respawn(AllPlayers());
@@ -54,8 +60,10 @@ Event.OngoingGlobal
 if(
     gameState == GameState.RoundProgress
 ){
-    RandomValueInArray(AllPlayers()).playerState = PlayerState.Ghost;
-    MinWait();
+    if(numGhostZombie <= 0){
+        RandomValueInArray(AllPlayers()).playerState = PlayerState.Ghost;
+        MinWait();
+    }
     BigMessage(arraySurvivor, "spawned first zombie... survive!");
     BigMessage(arrayGhostZombie, "you are first zombie... kill survivors!");
 }
@@ -104,20 +112,24 @@ if(
         HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
 }
 
-rule: "Game/finishRoundByNonSurvivors"
+rule: "Game/startGameByPlayerJoin"
 Event.OngoingGlobal
 if(
-    gameState == GameState.RoundProgress &&
-    numSurvivor <= 0
+    gameState == GameState.Initialize &&
+    playerNum >= 2
 ){
-    gameState = GameState.RoundEnd;
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
+    BigMessage(AllPlayers(), "Start the game because player join.");
+    Wait(5, WaitBehavior.AbortWhenFalse);
+    gameState = GameState.RoundPrepear;
 }
 
 rule: "Game/restartRoundByNonGhostZombie"
 Event.OngoingGlobal
 if(
     gameState == GameState.RoundProgress &&
-    numGhostZombie <= 0
+    numGhostZombie <= 0 &&
+    playerNum >= 2
 ){
     Wait(0.1, WaitBehavior.AbortWhenFalse);
     BigMessage(AllPlayers(), "restart round because without zombie.");
@@ -125,6 +137,15 @@ if(
     gameState = GameState.RoundPrepear;
 }
 
+rule: "Game/finishRoundByNonSurvivors"
+Event.OngoingGlobal
+if(
+    gameState == GameState.RoundProgress &&
+    numSurvivor <= 0 &&
+    playerNum >= 2
+){
+    gameState = GameState.RoundEnd;
+}
 
 globalvar define arraySurvivor;
 globalvar define numSurvivor;
@@ -193,6 +214,7 @@ void updateDamageModifyAndOutline()"updateDamageModifyAndOutline"{
 // TAG Player
 playervar define playerState;
 enum PlayerState{
+    Initial,
     Survivor,
     Ghost,
     Zombie
@@ -204,8 +226,14 @@ if(
     playerState == PlayerState.Survivor
 ){
     {
-        ForcePlayerHero(ep, RandomValueInArray(AllDamageHeroes()));
+        define hero = RandomValueInArray(AllDamageHeroes());
+        if(hero == Hero.Symmetra || hero == Hero.Torbjorn){
+            dbgMsg("retry change hero.");
+            LoopIfConditionIsTrue();
+        }
+        ForcePlayerHero(ep, hero);
         SetMaxHealth(ep, DefaultPercentage());
+        SetHealingReceived(ep, 10);
         SetDamageDealt(ep, DefaultPercentage());
         SetMoveSpeed(ep, DefaultPercentage());
         SetGravity(ep, DefaultPercentage());
@@ -214,19 +242,22 @@ if(
         SetButtonEnable(PlayerState.Survivor);
         SetRoleHud(
             "You are survivor",
-            "Survive from zombie attack until timeout.\n\rFind other survivors and unite.\n\rWatch out corners, Zombies come from blind spot.",
+            "Survive from zombie attack.\n\rFind other survivors and unite.\n\rWatch out corners, zombies come from blind spot.",
             Color.Blue);
         ResetAllOperationHud();
         // AddOperationHud(
         //     <"Press <0> key to spot and share dangers.", ButtonGuide(Button.Interact)>);
         // operationHudEntity[CountOf(operationHudEntity)] = LastTextID();
-        SetFloatText("Survivor", AllPlayers());
-        DestroyEffect(ghostSoulEntity);
+        SetFloatText("Survivor", AllPlayers(), Color.White);
+
+        DestroyEffect(roleEffectEntity);
+
+        roleEffectEntity = LastCreatedEntity();
     }
 }
 
 define last: CountOf(operationHudEntity);
-playervar define ghostSoulEntity;
+playervar define roleEffectEntity;
 
 rule: "Player/State/Ghost"
 Event.OngoingPlayer
@@ -234,10 +265,20 @@ if(
     playerState == PlayerState.Ghost
 ){
     {
-        ForcePlayerHero(ep, RandomValueInArray([
-            Hero.Reaper
-        ]));
+        if(notChangeHero){
+            notChangeHero = false;
+        }
+        else{
+            ForcePlayerHero(ep, RandomValueInArray([
+                Hero.Reaper,
+                Hero.Reaper,
+                Hero.Reaper,
+                Hero.Roadhog,
+                Hero.Zarya
+            ]));
+        }
         SetMaxHealth(ep, zombieHealth);
+        SetHealingReceived(ep, 0);
         SetDamageDealt(ep, 0);
         SetMoveSpeed(ep, 400);
         SetGravity(ep, 25);
@@ -246,23 +287,23 @@ if(
         SetButtonEnable(PlayerState.Ghost);
         SetRoleHud(
             "You are ghost form",
-            "Not visible from survivors.\n\rHide in blind spots of survivors, Wait chance of surprise attack.\n\runite to other ghosts.",
+            "Not visible from survivors.\n\rHide in blind spots of survivors, Wait chance of surprise attack.\n\rWell use blind spots and teamwork with other zombies.",
             Color.Yellow);
         ResetAllOperationHud();
-        // AddOperationHud(
-        //     <"Press <0> key to call attack countdown.", ButtonGuide(Button.Ability2)>);
-        // operationHudEntity[last] = LastTextID();
-        // AddOperationHud(
-        //     <"Press <0> key to call acknowledge.", ButtonGuide(Button.Ability1)>);
-        // operationHudEntity[last] = LastTextID();
         AddOperationHud(
-            <"Press <0> key to appear here as zombie and attack.", ButtonGuide(Button.PrimaryFire)>);
+            <"Press <0> key to call attack countdown.", ButtonGuide(Button.SecondaryFire)>);
         operationHudEntity[last] = LastTextID();
-        SetFloatText(<"Ghost\n\r<0>", ep>, arrayGhostZombie);
+        AddOperationHud(
+            <"Press <0> key to spawn here as zombie.", ButtonGuide(Button.PrimaryFire)>);
+        operationHudEntity[last] = LastTextID();
+        SetFloatText(<"Ghost\n\r<0>", ep>, arrayGhostZombie, Color.White);
+
+        DestroyEffect(roleEffectEntity);
         CreateEffect(
             arrayGhostZombie, Effect.Orb, Color.Yellow,
             PositionOf(ep) + PositionOffset(), 1, EffectRev.VisibleToPositionAndRadius);
-        ghostSoulEntity = LastCreatedEntity();
+        roleEffectEntity = LastCreatedEntity();
+
         MinWait();
         Heal(ep, null, MaxValue());
     }
@@ -275,31 +316,37 @@ if(
 ){
     {
         SetMaxHealth(ep, zombieHealth);
+        SetHealingReceived(ep, DefaultPercentage());
         SetDamageDealt(ep, zombieDealDamage);
         SetMoveSpeed(ep, zombieSpeed);
-        SetGravity(ep, 75);
+        SetGravity(ep, DefaultPercentage());
         ClearStatus(ep, Status.PhasedOut);
         SetInvisible(ep, InvisibleTo.None);
         SetButtonEnable(PlayerState.Zombie);
         SetRoleHud(
             "You are zombie",
-            "Kill survivors by melee.\n\rWell use blind spot and try surprise attack.\n\runite to other zombies.",
+            "Kill survivors by melee.\n\rWell use blind spots and teamwork with other zombies.\n\rAs time goes by, the zombies will be buffed.",
             Color.Red);
         ResetAllOperationHud();
-        // AddOperationHud(
-        //     <"Press <0> key to call attack countdown.", ButtonGuide(Button.Ability2)>);
-        // operationHudEntity[CountOf(operationHudEntity)] = LastTextID();
-        // AddOperationHud(
-        //     <"Press <0> key to call acknowledge.", ButtonGuide(Button.Ability1)>);
-        // operationHudEntity[CountOf(operationHudEntity)] = LastTextID();
+        AddOperationHud(
+            <"Stoping for while, return to ghost form.">);
+        operationHudEntity[CountOf(operationHudEntity)] = LastTextID();
+        AddOperationHud(
+            <"Press <0> key to call attack countdown.", ButtonGuide(Button.SecondaryFire)>);
+        operationHudEntity[last] = LastTextID();
         AddOperationHud(
             <"Press <0> key to melee.", ButtonGuide(Button.PrimaryFire)>);
         operationHudEntity[CountOf(operationHudEntity)] = LastTextID();
-        SetFloatText("Zombie", AllPlayers());
-        DestroyEffect(ghostSoulEntity);
+
+        SetFloatText("Zombie", AllPlayers(), Color.White);
+
+        DestroyEffect(roleEffectEntity);
+        CreateEffect(
+            AllPlayers(), Effect.BadAura, Color.Red,
+            PositionOf(ep) + PositionOffset(), 1, EffectRev.VisibleToPositionAndRadius);
+        roleEffectEntity = LastCreatedEntity();
     }
 }
-
 
 rule: "Player/showRemainingSurvivors"
 Event.OngoingGlobal
@@ -318,6 +365,7 @@ if(
 rule: "Player/returnGround"
 Event.OngoingPlayer
 if(
+    gameState != GameState.Initialize &&
     IsDead() &&
     !IsOnGround()
 ){
@@ -330,9 +378,10 @@ if(
     }
 }
 
-rule: "Player/SetGhost"
+rule: "Player/setInitialPlayserState"
 Event.OngoingPlayer
 if(
+    gameState != GameState.Initialize &&
     HasSpawned()
 ){
     if(gameState == GameState.RoundPrepear){
@@ -408,7 +457,7 @@ void SetRoleHud(define header, define text, define color){
     ResetRoleHud();
     CreateHudText(
         ep, header, text, "", Location.Top, 1,
-        color, color, color,
+        color, Color.White, Color.White,
         HudTextRev.VisibleToSortOrderStringAndColor, Spectators.DefaultVisibility);
     roleHudEntity = LastTextID();
 }
@@ -430,14 +479,14 @@ void ResetAllOperationHud(){
 }
 
 playervar define floatTextEntity;
-void SetFloatText(define text, define visibleTo){
+void SetFloatText(define text, define visibleTo, define color){
     ResetFloatText();
     floatTextEntity = [];
     CreateInWorldText(
         visibleTo,
         text,
         ep, 1, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionStringAndColor,
-        Color.White, Spectators.DefaultVisibility);
+        color, Spectators.DefaultVisibility);
     floatTextEntity = LastTextID();
 }
 void ResetFloatText(){
@@ -465,8 +514,8 @@ void SetButtonEnable(define playerState)"SetButtonEnable"{
     else if(playerState == PlayerState.Zombie){
         SetPrimaryFireEnabled(ep, false);
         SetSecondaryFireEnabled(ep, false);
-        SetAbility1Enabled(ep, false);
-        SetAbility2Enabled(ep, false);
+        SetAbility1Enabled(ep, true);
+        SetAbility2Enabled(ep, true);
         SetUltimateAbilityEnabled(ep, false);
         SetMeleeEnabled(ep, true);
     }
@@ -500,14 +549,14 @@ define IsNoCloser:
             (
                 ArrayElement().playerState == PlayerState.Survivor &&
                 (
-                    DistanceBetween(ep, ArrayElement()) <= 10
+                    DistanceBetween(ep, ArrayElement()) <= 8
                 )
             )
         )
     );
 
 // TAG Survivor
-rule: "Player/Survivor/changeToZombieByDead"
+rule: "Player/Survivor/changeToGhostByDead"
 Event.OngoingPlayer
 if(
     IsDead()
@@ -525,21 +574,21 @@ if(
     playerState == PlayerState.Ghost &&
     IsButtonHeld(ep, Button.PrimaryFire)
 ){
-    if(DistanceBetween(ep, NearestWalkablePosition(ep)) > 10){
+    if(IsInAir()){
         PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 100);
-        SmallMessage(ep, "Can't attack from here. Too far from map surface.");
+        SmallMessage(ep, "Can't spawn here. here is in air.");
     }
     else if(!IsNoCloser){
         PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 100);
-        SmallMessage(ep, "Can't attack from here. Too close to survivor.");
+        SmallMessage(ep, "Can't spawn here. Too close to survivor.");
     }
     else if(!IsNoEyewitness){
         PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 100);
-        SmallMessage(ep, "Can't attack from here. Not blind spot from survivor.");
+        SmallMessage(ep, "Can't spawn here. Not blind spot from survivor.");
     }
     else{
         PlayEffect(ep, PlayEffect.RingExplosionSound, null, ep, 100);
-        SmallMessage(ep, "Attack Survivor.");
+        SmallMessage(ep, "Spawned as zombie.");
         playerState = PlayerState.Zombie;
     }
 }
@@ -549,30 +598,37 @@ Event.OngoingPlayer
 if(
     playerState == PlayerState.Ghost &&
     IsOnGround() &&
-    IsMoving()
+    IsMoving() &&
+    !IsCrouching()
 ){
+    Wait(0.25, WaitBehavior.AbortWhenFalse);
     ApplyImpulse(ep, Up(), 3.0, Relative.ToWorld, ContraryMotion.Cancel);
 }
 
-// TAG Zombie
-rule: "Player/Zombie/changeToGhostByRespawn"
+rule: "Player/Ghost/secondaryFireToCall"
 Event.OngoingPlayer
 if(
-    playerState == PlayerState.Zombie &&
-    IsDead()
+    playerState == PlayerState.Ghost &&
+    IsButtonHeld(ep, Button.SecondaryFire) &&
+    !IsUsingAbility1(ep) &&
+    !IsUsingAbility2(ep)
 ){
-    Wait(3, WaitBehavior.AbortWhenFalse);
-    playerState = PlayerState.Ghost;
-    Resurrect();
+    CancelPrimaryAction();
+    Communicate(ep, Communication.Countdown);
 }
 
-rule: "Player/Zombie/changeToGhostByHidden"
+// TAG Zombie
+playervar define notChangeHero;
+
+rule: "Player/Zombie/changeToGhostByStop"
 Event.OngoingPlayer
 if(
     playerState == PlayerState.Zombie &&
-    IsNoEyewitness
+    !IsMoving()
 ){
     Wait(5, WaitBehavior.AbortWhenFalse);
+    SmallMessage(ep, "Returned to Ghost form.");
+    notChangeHero = true;
     playerState = PlayerState.Ghost;
 }
 
@@ -580,10 +636,24 @@ rule: "Player/Zombie/primaryFireToMelee"
 Event.OngoingPlayer
 if(
     playerState == PlayerState.Zombie &&
-    IsButtonHeld(ep, Button.PrimaryFire)
+    IsButtonHeld(ep, Button.PrimaryFire) &&
+    !IsUsingAbility1(ep) &&
+    !IsUsingAbility2(ep)
 ){
     CancelPrimaryAction();
     PressButton(ep, Button.Melee);
+}
+
+rule: "Player/Zombie/secondaryFireToCall"
+Event.OngoingPlayer
+if(
+    playerState == PlayerState.Zombie &&
+    IsButtonHeld(ep, Button.SecondaryFire) &&
+    !IsUsingAbility1(ep) &&
+    !IsUsingAbility2(ep)
+){
+    CancelPrimaryAction();
+    Communicate(ep, Communication.Countdown);
 }
 
 rule: "Player/Zombie/increaseZombieBuff"
@@ -594,7 +664,7 @@ if(
     Wait(numGhostZombie, WaitBehavior.AbortWhenFalse);    // TAG increaseZombieBuff
     zombieDealDamage += 1;
     SetDamageDealt(arrayZombie, zombieDealDamage);
-    zombieSpeed += 1;
+    zombieSpeed += 1.5;
     SetMoveSpeed(arrayZombie, zombieSpeed);
     zombieHealth += 0.5;
     SetMaxHealth(arrayGhostZombie, zombieHealth);
@@ -796,6 +866,7 @@ playervar define debugTarget;
 rule: "Debug/createDebugTargetMarker"
 Event.OngoingPlayer
 if(
+    debugMode != DebugMode.Non &&
     ep == HostPlayer()
 ){
     CreateEffect(
@@ -806,8 +877,10 @@ if(
 rule: "Debug/selectDebugTarget"
 Event.OngoingPlayer
 if(
+    debugMode != DebugMode.Non &&
     ep == HostPlayer()
 ){
+    WaitLongPressConfirm();
     define aimPos = AimingPosition();
     define nearestPlayer = ClosestPlayerTo(aimPos, Team.All);
     if(DistanceBetween(aimPos, nearestPlayer) <= 5){
@@ -823,18 +896,22 @@ if(
 rule: "Debug/spawnBot"
 Event.OngoingPlayer
 if(
+    debugMode != DebugMode.Non &&
     IsButtonHeld(ep, Button.Interact) &&
     IsButtonHeld(ep, Button.PrimaryFire)
 ){
+    WaitLongPressConfirm();
     CreateDummyBotRandom();
 }
 
 rule: "Debug/changePlayerState"
 Event.OngoingPlayer
 if(
+    debugMode != DebugMode.Non &&
     IsButtonHeld(ep, Button.Interact) &&
     IsButtonHeld(ep, Button.SecondaryFire)
 ){
+    WaitLongPressConfirm();
     if(debugTarget.playerState < PlayerState.Zombie){
         debugTarget.playerState ++;
     }
@@ -846,9 +923,11 @@ if(
 rule: "Debug/changeGameState"
 Event.OngoingPlayer
 if(
+    debugMode != DebugMode.Non &&
     IsButtonHeld(ep, Button.Interact) &&
     IsButtonHeld(ep, Button.Crouch)
 ){
+    WaitLongPressConfirm();
     if(gameState >= GameState.GameEnd)
         gameState = GameState.RoundPrepear;
     else
