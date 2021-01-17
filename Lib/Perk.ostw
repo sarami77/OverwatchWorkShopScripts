@@ -1226,7 +1226,7 @@ if(
     perkTargets = 0;
 }
 
-void AutoAim()"Subroutine/AutoAim"{
+void AutoAim()"AutoAim"{
     // check auto aim valid
     perkTargets = FirstOf(
         FilteredArray(
@@ -1573,7 +1573,7 @@ if(
     ExplodeFireBall();
 }
 
-void ExplodeFireBall()"Subroutine/ExplodeFireBall"{
+void ExplodeFireBall()"ExplodeFireBall"{
     perkEffectStatus = PerkEffectStatus.Reloading;
 
     // stop movement
@@ -1606,10 +1606,11 @@ void ExplodeFireBall()"Subroutine/ExplodeFireBall"{
     fireBallPower = 0;
 
     // play blast effect
-    PlayContinuousBlast(perkPosition,
+    PlayContinuousBlast(
+        Color.Orange,
+        perkPosition,
         fireBallDamageRange,
-        fireBallSize < 7 ? fireBallSize : 7,
-        Color.Orange);
+        fireBallSize < 7 ? fireBallSize : 7);
 
     Wait(1, WaitBehavior.IgnoreCondition);
     perkEffectStatus = PerkEffectStatus.Ready;
@@ -1761,7 +1762,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-void ExplodeShell(define position)"Subroutine/ExplodeShell"{
+void ExplodeShell(define position)"ExplodeShell"{
     // get target
     perkTargets = 
         PlayersWithinRadius(
@@ -1778,8 +1779,11 @@ void ExplodeShell(define position)"Subroutine/ExplodeShell"{
         AllPlayers(), PlayEffect.RingExplosionSound,
         Color.White, position, 300);
     // play blast effect
-    PlayContinuousBlast(position, artilleryDamageRange,
-        2, Color.Yellow);
+    PlayContinuousBlast(
+        Color.Yellow,
+        position,
+        artilleryDamageRange,
+        2);
 }
 
 // TAG CruisingMissile ----------
@@ -1801,14 +1805,14 @@ if(
     // landing zone text
     perkEffectAndText = [];
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Cruising Missile">,
+        AllPlayers(), <"<0> <1> <2>\n\rLanding at <3> second. Brace for impact!", EventPlayer(), HeroIconString(HeroOf()), "Cruising Missile", perkTimeLimit>,
         landPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[0] = LastTextID();
-    CreateInWorldText(
-        AllPlayers(), <"Landing at <0> second. Brace for impact!", perkTimeLimit>,
-        landPosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-        Color.White, Spectators.DefaultVisibility);
+    // CreateInWorldText(
+    //     AllPlayers(), <"Landing at <0> second. Brace for impact!", perkTimeLimit>,
+    //     landPosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+    //     Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[1] = LastTextID();
     // set effect
     // missile body
@@ -2000,8 +2004,11 @@ if(
         AllPlayers(), PlayEffect.RingExplosionSound,
         Color.White, AllPlayers(), MaxLength());
     // play blast effect
-    PlayContinuousBlast(perkPosition, missleDamageRange,
-        7, Color.Orange);
+    PlayContinuousBlast(
+        Color.Orange,
+        perkPosition,
+        missleDamageRange,
+        7);
     perkState = PerkState.Non;
 }
 // TAG OrbitalLaser ----------
@@ -2349,15 +2356,18 @@ if(
     // set time limit
     perkTimeLimit = 180;
     // set param
-    perkEffectStatus = PerkEffectStatus.Triggered;   // set fly mode
+    perkEffectStatus = PerkEffectStatus.Ready;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(<"Press secondary fire button <0> to accelerate.", ButtonGuide(Button.SecondaryFire)>);
+    CreatePerkEffectHud(<"Press ability1 button <0> to change weapon. now <1>.", ButtonGuide(Button.Ability1),
+        IsInAlternateForm()? "5mm Minigun" : "20mm Auto Canon">);
     perkEffectAndText[0] = LastTextID();
-    CreatePerkEffectHud(<"Press jump button <0> to flying mode.", ButtonGuide(Button.Jump)>);
+    CreatePerkEffectHud(<"Press secondary fire button <0> to accelerate.", ButtonGuide(Button.SecondaryFire)>);
     perkEffectAndText[1] = LastTextID();
-    CreatePerkEffectHud(<"Press crouch button <0> to walking mode.", ButtonGuide(Button.Crouch)>);
+    CreatePerkEffectHud(<"Press jump button <0> to flying mode.", ButtonGuide(Button.Jump)>);
     perkEffectAndText[2] = LastTextID();
+    CreatePerkEffectHud(<"Press crouch button <0> to walking mode.", ButtonGuide(Button.Crouch)>);
+    perkEffectAndText[3] = LastTextID();
     // set perk hero
     PerkHero perkHero = new PerkHero();
     perkHero.hero = Hero.Bastion;
@@ -2372,10 +2382,13 @@ if(
     StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
     Wait(0.5, WaitBehavior.AbortWhenFalse);
 
-    // change mode
-    PressButton(EventPlayer(), Button.Ability1);
     // fly
     PressButton(EventPlayer(), Button.Jump);
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+
+    // change mode
+    PressButton(EventPlayer(), Button.Ability1);
+    
 }
 
 rule: "Perk/Player/DeathFromAbove/deactivate"
@@ -2394,6 +2407,7 @@ if(
     DestroyHudText(perkEffectAndText[0]);
     DestroyHudText(perkEffectAndText[1]);
     DestroyHudText(perkEffectAndText[2]);
+    DestroyHudText(perkEffectAndText[3]);
     // reset perk hero
     StopForcingPerkHero(EventPlayer());
     // reset type
@@ -2443,6 +2457,8 @@ if(
     perkEffectStatus = PerkEffectStatus.Ready;
 }
 
+define keepHeight: 20;
+
 rule: "Perk/Player/DeathFromAbove/flying"
 Event.OngoingPlayer
 Team.Team1
@@ -2452,13 +2468,25 @@ if(
     perkState == PerkState.Using &&
     perkEffectStatus == PerkEffectStatus.Triggered
 ){
+    define distanceFromSurface = DistanceBetween(EventPlayer(), NearestWalkablePosition(EventPlayer()));
+    
     // if near surface
     if(
-        DistanceBetween(EventPlayer(), 
-        NearestWalkablePosition(EventPlayer())) <= 16
+        distanceFromSurface < keepHeight
     ){
         // float    
-        ApplyImpulse(EventPlayer(), Up(), 0.3,
+        ApplyImpulse(EventPlayer(), Up(),
+            (keepHeight - distanceFromSurface) * 0.04,
+            Relative.ToPlayer, ContraryMotion.Incorporate);
+    }
+
+    // if far surface
+    if(
+        distanceFromSurface > keepHeight
+    ){
+        // dive    
+        ApplyImpulse(EventPlayer(), Down(),
+            (distanceFromSurface - keepHeight) * 0.04,
             Relative.ToPlayer, ContraryMotion.Incorporate);
     }
     
@@ -2494,33 +2522,70 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define splashDamageRange: 1.5;
+define splashDamageRangeMinigun: 1.0;
 
-rule: "Perk/Player/DeathFromAbove/splashDamage"
+rule: "Perk/Player/DeathFromAbove/splashDamageMinigun"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
     perkType == PerkType.DeathFromAbove &&
     perkState == PerkState.Using &&
+    !IsUsingUltimate() &&
+    IsInAlternateForm() &&
     IsFiringPrimary()
-)
-{
+){
     // get aimPosition
     aimPosition = AimingPosition();
-    landPosition = RandomPosition(1.0, 1.0, 1.0);
+    landPosition = RandomPosition(0.625, 0.625, 0.625);
     // splash damage
     Damage(
         PlayersWithinRadius(
-            aimPosition + landPosition, splashDamageRange,
+            aimPosition + landPosition, splashDamageRangeMinigun,
             Team.Team2, RadiusLOS.Off),
-        EventPlayer(), 45);
+        EventPlayer(), 50);
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.Yellow, aimPosition + landPosition, splashDamageRange);
-    
+        Color.Yellow,
+        aimPosition + landPosition,
+        splashDamageRangeMinigun);
     WaitContinuousBlastCycle();
+
+    LoopIfConditionIsTrue();
+}
+
+define splashDamageRangeAutoCanon: 2.0;
+
+rule: "Perk/Player/DeathFromAbove/splashDamageAutoCanon"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState == PerkState.Using &&
+    !IsUsingUltimate() &&
+    !IsInAlternateForm() &&
+    IsFiringPrimary()
+){
+    // get aimPosition
+    aimPosition = AimingPosition();
+    landPosition = RandomPosition(1.25, 1.25, 1.25);
+
+    // auto canon
+    // splash damage
+    Damage(
+        PlayersWithinRadius(
+            aimPosition + landPosition, splashDamageRangeAutoCanon,
+            Team.Team2, RadiusLOS.Off),
+        EventPlayer(), 80);
+    // play blast
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.GoodExplosion,
+        Color.Orange, aimPosition + landPosition,
+        splashDamageRangeAutoCanon);
+    Wait(0.15, WaitBehavior.IgnoreCondition);
+    
     LoopIfConditionIsTrue();
 }
 
@@ -2668,6 +2733,7 @@ if(
     perkType == PerkType.LegendalyNinja &&
     perkState == PerkState.Using
 ){
+    SmallMessage(EventPlayer(), "Added 2 seconds of activity time.");
     perkTimeLimit += 2;
 }
 
@@ -2894,13 +2960,13 @@ if(
     // splash damage
     Damage(
         PlayersWithinRadius(
-            aimPosition + landPosition, splashDamageRange,
+            aimPosition + landPosition, splashDamageRangeMinigun,
             Team.Team2, RadiusLOS.Off),
         EventPlayer(), 30);
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.Green, aimPosition + landPosition, splashDamageRange);
+        Color.Green, aimPosition + landPosition, splashDamageRangeMinigun);
     
     WaitContinuousBlastCycle();
     LoopIfConditionIsTrue();
@@ -2974,7 +3040,7 @@ if(
     ExplodeBomb();
 }
 
-void ExplodeBomb()"Subroutine/ExplodeBomb"{
+void ExplodeBomb()"ExplodeBomb"{
     perkEffectStatus = PerkEffectStatus.SecondTriggered;
     // stop aura
     StopChasingVariable(perkPosition2);
@@ -3004,8 +3070,11 @@ void ExplodeBomb()"Subroutine/ExplodeBomb"{
         AllPlayers(), PlayEffect.RingExplosionSound,
         Color.White, AllPlayers(), MaxLength());
     // play blast effect
-    PlayContinuousBlast(perkPosition2, bombDamageRange,
-        5, Color.LimeGreen);
+    PlayContinuousBlast(
+        Color.LimeGreen,
+        perkPosition2,
+        bombDamageRange,
+        5);
 }
 
 rule: "Perk/Player/Juggernaut/coolDownGravityBomb"
@@ -3154,6 +3223,8 @@ if(
     LoopIfConditionIsTrue();
 }
 
+define beamSniperDamageRange: 4;
+
 rule: "Perk/Player/BeamSniper/shotSniperBeam"
 Event.OngoingPlayer
 Team.Team1
@@ -3172,12 +3243,12 @@ if(
     if(perkTargets != []){
         PlayEffect(
             AllPlayers(), PlayEffect.GoodExplosion,
-            Color.Aqua, perkTargets, 4.0);
+            Color.Aqua, perkTargets, beamSniperDamageRange);
         Damage(perkTargets, EventPlayer(), 300);
     }
     // give splash damage to enemy near landed position
     perkTargets = FilteredArray(
-        PlayersWithinRadius(aimPosition, 4, Team.Team2, RadiusLOS.Off),
+        PlayersWithinRadius(aimPosition, beamSniperDamageRange, Team.Team2, RadiusLOS.Off),
         IsAlive(ArrayElement()));
     if(perkTargets != []){
         Damage(perkTargets, EventPlayer(), 100);
@@ -3199,8 +3270,11 @@ if(
         AllPlayers(), PlayEffect.BadExplosion,
         Color.Aqua, perkPosition + (FacingDirectionOf() * 1), 1.0);
     // play landed position blast
-    PlayContinuousBlast(aimPosition, 4,
-        2, Color.Aqua);
+    PlayContinuousBlast(
+        Color.Aqua,
+        aimPosition,
+        beamSniperDamageRange,
+        3);
 
     // show ballistics for aiming
     CreateBeamEffect(AllPlayers(),
@@ -3425,6 +3499,7 @@ if(
     perkType == PerkType.DragonStorm &&
     perkState == PerkState.Using
 ){
+    SmallMessage(EventPlayer(), "Added 3 seconds of activity time.");
     perkTimeLimit += 3;
 }
 

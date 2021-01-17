@@ -582,22 +582,28 @@ if(
     enemyType != EnemyType.NotSet
 ){
     if(enemyType == EnemyType.Minion){ 
-        maxSpawnInterval = WorkshopSettingReal("Enemy Settings", "Inital Spawn Interval Of Minion Enemy", 3, 0, 100, 2);      // TAG maxSpawnInterva
+        eachMaxSpawnInterval =  WorkshopSettingReal("Enemy Settings", "(Minion) Inital Spawn Interval", 3, 0, 100, 4);      // TAG maxSpawnInterva
+        eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Minion) Dealt Damage Scale", 0.7, 0, 100, 5);
+        //eachGetUltTime =        WorkshopSettingReal("Enemy Settings", "(Minion) Get Ultmate Time", 30, 0, 100, 6);
+        SetMaxHealth(EventPlayer(), 50);
         StartScalingPlayer(EventPlayer(), 1.0, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
-        SetMaxHealth(EventPlayer(), 50);
     }
     else if(enemyType == EnemyType.Elite){
-        maxSpawnInterval = WorkshopSettingReal("Enemy Settings", "Inital Spawn Interval Of Elite Enemy", 10, 0, 100, 3);
-        StartScalingPlayer(EventPlayer(), 1.3, false);
-        StartModifyingHeroVoiceLines(EventPlayer(), 0.6, false);
+        eachMaxSpawnInterval =  WorkshopSettingReal("Enemy Settings", "(Elite) Inital Spawn Interval", 9, 0, 100, 7);
+        eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Elite) Dealt Damage Scale", 1.0, 0, 100, 8);
+        //eachGetUltTime =        WorkshopSettingReal("Enemy Settings", "(Elite) Get Ultmate Time", 10, 0, 100, 9);
         SetMaxHealth(EventPlayer(), 200);
+        StartScalingPlayer(EventPlayer(), 1.2, false);
+        StartModifyingHeroVoiceLines(EventPlayer(), 0.4, false);
     }
     else if(enemyType == EnemyType.Boss){
-        maxSpawnInterval = WorkshopSettingReal("Enemy Settings", "Inital Spawn Interval Of Boss Enemy", 15, 0, 100, 4);
-        StartScalingPlayer(EventPlayer(), 1.6, false);
-        StartModifyingHeroVoiceLines(EventPlayer(), 0.4, false);
+        eachMaxSpawnInterval =  WorkshopSettingReal("Enemy Settings", "(Boss) Inital Spawn Interval", 20, 0, 100, 10);
+        eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Boss) Dealt Damage Scale", 1.3, 0, 100, 11);
+        //eachGetUltTime =        WorkshopSettingReal("Enemy Settings", "(Boss) Get Ultmate Time", 5, 0, 100, 12);
         SetMaxHealth(EventPlayer(), 800);
+        StartScalingPlayer(EventPlayer(), 1.5, false);
+        StartModifyingHeroVoiceLines(EventPlayer(), 0.2, false);
     }
 }
 
@@ -665,13 +671,13 @@ if(
     // Play blast effect when enemy dead
     // It's easier to understand if you killed an enemy, and you'll feel better
     if(enemyType == EnemyType.Minion){
-        PlayContinuousBlast(PositionOf(), 2, 1, Color.Red);
+        PlayContinuousBlast(Color.Red, PositionOf(), 2, 1);
     }
     else if(enemyType == EnemyType.Elite){
-        PlayContinuousBlast(PositionOf(), 3, 2, Color.Red);
+        PlayContinuousBlast(Color.Red, PositionOf(), 3, 2);
     }
     else if(enemyType == EnemyType.Boss){
-        PlayContinuousBlast(PositionOf(), 5, 3, Color.Red);
+        PlayContinuousBlast(Color.Red, PositionOf(), 5, 3);
     }
 }
 
@@ -706,7 +712,7 @@ if(
 playervar define teleportBeamEntity;
 playervar define teleportPosition;
 
-void PlayTeleportBeam()"Subroutine/PlayTeleportBeam"{
+void PlayTeleportBeam()"PlayTeleportBeam"{
     DestroyEffect(teleportBeamEntity);
     // show beam
     CreateBeamEffect(AllPlayers(Team.All), BeamType.BadBeam,
@@ -726,7 +732,7 @@ define spawnAreaSize:
     minSpawnAreaSize :
     (portalSize * spawnAreaSizeRate);
 
-void SetTeleportPositionToPortal()"Subroutine/SetTeleportPositionToBlindSpot"{
+void SetTeleportPositionToPortal()"SetTeleportPositionToBlindSpot"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
@@ -751,7 +757,7 @@ void SetTeleportPositionToPortal()"Subroutine/SetTeleportPositionToBlindSpot"{
     }
 }
 
-void SetTeleportPositionToCamper()"Subroutine/SetTeleportPositionToCamper"{
+void SetTeleportPositionToCamper()"SetTeleportPositionToCamper"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
@@ -885,7 +891,7 @@ if(
     ClearStatus(AllPlayers(Team.Team2), Status.Rooted);
 }
 
-globalvar define enemyReceivedDamageRate;
+globalvar define confirmReceiveDamage;
 
 rule: "Enemy/ReceivedDamage/updateByBalance //for game balance, increase by missing players count"
 Event.OngoingGlobal
@@ -893,40 +899,44 @@ Event.OngoingGlobal
     WaitUpdateLongCycle();
     // If don't enough players, adjust enemy received damage rate to make the game fair
     // Multiply damage rate
-    enemyReceivedDamageRate = 100;
+    confirmReceiveDamage = 100;
     // Apply balance multiplier
-    enemyReceivedDamageRate *= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy received damage scale
-    SetDamageReceived(AllPlayers(Team.Team2), enemyReceivedDamageRate);
+    confirmReceiveDamage *= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy received damage scale
+    SetDamageReceived(AllPlayers(Team.Team2), confirmReceiveDamage);
     LoopIfConditionIsTrue();
 }
 
-globalvar define enemyDealtDamageRate;
+playervar define eachDealtDamageScale;
+playervar define confirmDealDamage;
 
-rule: "Enemy/DealtDamage/updateByBalance //for game progress, increase by round no, decrease by missing players count"
-Event.OngoingGlobal
+rule: "Enemy/DealtDamage/update"
+Event.OngoingPlayer
+Team.Team2
+Player.All
 {
     WaitUpdateLongCycle();
     // If don't enough players, adjust enemy dealt damage rate to make the game fair
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    enemyDealtDamageRate = WorkshopSettingReal("Enemy Settings", "Initial Deal Damage", 20, 0, 100, 0);  // basic enemy dealt damage
-    enemyDealtDamageRate += roundNo * WorkshopSettingReal("Enemy Settings", "Increase Deal Damage Per Round Progress", 1.5, 0, 100, 1);  // TAG increase enemy dealt damage
+    confirmDealDamage = WorkshopSettingReal("Enemy Settings", "Initial Deal Damage", 15, 0, 100, 1);
+    confirmDealDamage += roundNo * WorkshopSettingReal("Enemy Settings", "Increase Deal Damage Per Round Progress", 1.5, 0, 100, 2);
+    confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
-    enemyDealtDamageRate /= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy dealt damage scale
-    SetDamageDealt(AllPlayers(Team.Team2), enemyDealtDamageRate);
+    confirmDealDamage /= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy dealt damage scale
+    SetDamageDealt(EventPlayer(), confirmDealDamage);
 
     LoopIfConditionIsTrue();
 }
 
 globalvar define _EnemySpeedScale;
 globalvar define maxHiddenSpeed;
-globalvar define enemyHiddenSpeed;
+globalvar define confirmHiddenSpeed;
 playervar define isHiddenSpeed;
 
 rule: "Enemy/HiddenSpeed/setHiddenSpeed"
 Event.OngoingGlobal
 {
-    maxHiddenSpeed = WorkshopSettingReal("Enemy Settings", "Max Move Speed When Hidden", 500, 100, 1000, 5);
+    maxHiddenSpeed = WorkshopSettingReal("Enemy Settings", "Max Move Speed When Hidden", 500, 100, 1000, 3);
 }
 
 rule: "Enemy/HiddenSpeed/updateByPortalSize //for round harder, increase by growing portal size"
@@ -939,9 +949,9 @@ if(
     // Portals that have grown significantly over time will send quickly more enemies.
     _EnemySpeedScale = portalSize;
     _EnemySpeedScale /= maxPortalSize;
-    enemyHiddenSpeed = maxHiddenSpeed;
-    enemyHiddenSpeed *= _EnemySpeedScale;
-    enemyHiddenSpeed += 100;
+    confirmHiddenSpeed = maxHiddenSpeed;
+    confirmHiddenSpeed *= _EnemySpeedScale;
+    confirmHiddenSpeed += 100;
     LoopIf(portalSize < maxPortalSize);
 }
 
@@ -960,7 +970,7 @@ if(
             BarrierLOS.NoBarriersBlock)
     ){
         // Players are surrounded by many enemies, making the game more chaotic and fluid
-        SetMoveSpeed(EventPlayer(), enemyHiddenSpeed);
+        SetMoveSpeed(EventPlayer(), confirmHiddenSpeed);
         // The portal may growing and changing in size, so repeat speed changes
     }
     else{
@@ -988,11 +998,10 @@ if(
     SetMoveSpeed(EventPlayer(), 100);
 }
 
-playervar define maxSpawnInterval;
-globalvar define _EnemySpawnScale;
-playervar define enemySpawnInterval;
+playervar define eachMaxSpawnInterval;
+playervar define confirmSpawnInterval;
 
-rule: "Enemy/SpawnInterval/updateByPortalSizeAndRoundNo //portal get bigger, interval get shorter and game getter harder"
+rule: "Enemy/SpawnInterval/update"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -1002,20 +1011,20 @@ if(
     WaitUpdateMediumCycle();
     // Shortens enemy spawn interval depending on portal size
     // Portals that have grown significantly over time will spawn more enemies.
-    _EnemySpawnScale = maxPortalSize;
-    _EnemySpawnScale -= portalSize;
-    _EnemySpawnScale /= maxPortalSize;
+    define scaleByPortalSize = maxPortalSize;
+    scaleByPortalSize -= portalSize;
+    scaleByPortalSize /= maxPortalSize;
 
-    enemySpawnInterval = maxSpawnInterval;
-    enemySpawnInterval *= _EnemySpawnScale;// TAG enemy spawn interval
+    confirmSpawnInterval = eachMaxSpawnInterval;
+    confirmSpawnInterval *= scaleByPortalSize;// TAG enemy spawn interval
 
-    enemySpawnInterval -= (roundNo / 6);
-    if(0 > enemySpawnInterval){
-        enemySpawnInterval = 0;
+    confirmSpawnInterval -= (roundNo / 6);
+    if(0 > confirmSpawnInterval){
+        confirmSpawnInterval = 0;
     }
     
-    // set +1 enemySpawnInterval for show dead effect
-    SetRespawnMaxTime(EventPlayer(), enemySpawnInterval + 1);
+    // set +1 interval for show dead effect
+    SetRespawnMaxTime(EventPlayer(), confirmSpawnInterval + 1);
     LoopIf(portalSize < maxPortalSize);
 }
 
@@ -1026,9 +1035,9 @@ Player.All
 if(
     portalState == PortalState.Set
 ){
-    // Shortens enemy spawn interval depending on portal size
-    enemySpawnInterval = maxSpawnInterval;
-    SetRespawnMaxTime(EventPlayer(), enemySpawnInterval);
+    // reset enemy spawn interval
+    confirmSpawnInterval = eachMaxSpawnInterval;
+    SetRespawnMaxTime(EventPlayer(), confirmSpawnInterval);
 }
 
 rule: "Enemy/SpawnInterval/respawnBySucide"
@@ -1040,6 +1049,20 @@ if(
 ){
     Wait(1, WaitBehavior.AbortWhenFalse);
     Respawn();
+}
+
+playervar define eachGetUltTime;
+
+disabled rule: "Enemy/Ultimate/getUlt"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    !IsUsingUltimate()
+){
+    Wait(eachGetUltTime, WaitBehavior.AbortWhenFalse);
+    SetUltimateCharge(EventPlayer(), 100);
+    LoopIfConditionIsTrue();
 }
 
 // TAG Portal Function ----------
@@ -1076,7 +1099,7 @@ if(
     StopChasingVariable(portalSize);
     portalPosition = 0;
     portalSize = 0;
-    enemyHiddenSpeed = 100;
+    confirmHiddenSpeed = 100;
     isFirstGrowing = true;
     // Hide portal icon and effect
     DestroyIcon(portalEntitys[0]);
@@ -1178,8 +1201,11 @@ if(
     ChaseVariableOverTime(portalSize, 0,
         0.65, TimeChaseReevaluation.DestinationAndDuration);
     // play blast effect
-    PlayContinuousBlast(portalPosition, portalSize * 1.5,
-        10, Color.Yellow);
+    PlayContinuousBlast(
+        Color.Yellow,
+        portalPosition,
+        portalSize * 1.5,
+        10);
 }
 
 rule: "Portal/State/Closed //waiting state after closing. another script displays the round end message and adds teamlifes"
@@ -1370,7 +1396,7 @@ if(
     portalState = PortalState.Calculating;
 }
 
-rule: "Portal/Positioner/DetectSpawnArea/resetPortal"
+rule: "Portal/Positioner/DetectRespawnRoom/resetPortal"
 Event.OngoingGlobal
 if(
     portalState == PortalState.Checking &&
@@ -1379,7 +1405,7 @@ if(
     // If the portal position is in the enemy spawn area,
     //  it is determined that the portal position is incorrect and the portal is recreate
     Wait(positionCheckTime - 0.01, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
-    dbgMsg("reset Portal by Detect Spawn Area");
+    dbgMsg("reset Portal by Detect Respawn Room");
     portalState = PortalState.Calculating;
 }
 
@@ -1528,7 +1554,7 @@ define End(): CountOf(debugHudEntitys);
 globalvar define debugHudEntitys;
 
 // show debug icon and hud
-void ShowDebugHud()"Subroutine/ShowDebugHud"{
+void ShowDebugHud()"ShowDebugHud"{
 
     if(isRecording){
         CreateHudText(HostPlayer(),
@@ -1552,7 +1578,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Spawn Interval (boss)", PlayersInSlot(0, Team.Team2).enemySpawnInterval>,
+        <"<0> <1>", "enemy Spawn Interval (boss)", PlayersInSlot(0, Team.Team2).confirmSpawnInterval>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1561,7 +1587,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Spawn Interval (elite)", PlayersInSlot(1, Team.Team2).enemySpawnInterval>,
+        <"<0> <1>", "enemy Spawn Interval (elite)", PlayersInSlot(1, Team.Team2).confirmSpawnInterval>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1570,7 +1596,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Spawn Interval (minion)", PlayersInSlot(3, Team.Team2).enemySpawnInterval>,
+        <"<0> <1>", "enemy Spawn Interval (minion)", PlayersInSlot(3, Team.Team2).confirmSpawnInterval>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1579,7 +1605,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Hidden Speed", enemyHiddenSpeed>,
+        <"<0> <1>", "enemy Dealt Damage (boss)", PlayersInSlot(0, Team.Team2).confirmDealDamage>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1588,7 +1614,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Dealt Damage Rate", enemyDealtDamageRate>,
+        <"<0> <1>", "enemy Dealt Damage (elite)", PlayersInSlot(1, Team.Team2).confirmDealDamage>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1597,7 +1623,25 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Received Damage Rate", enemyReceivedDamageRate>,
+        <"<0> <1>", "enemy Dealt Damage (minion)", PlayersInSlot(3, Team.Team2).confirmDealDamage>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Red, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[End()] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "enemy Received Damage", confirmReceiveDamage>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Red, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[End()] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "enemy Hidden Speed", confirmHiddenSpeed>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1741,7 +1785,7 @@ void ShowDebugHud()"Subroutine/ShowDebugHud"{
 }
 
 // Hide debug icon and hud
-void HideDebugHud()"Subroutine/HideDebugHud"{
+void HideDebugHud()"HideDebugHud"{
     for(gLoopIndex = 0; gLoopIndex < CountOf(debugHudEntitys); gLoopIndex ++){
         DestroyHudText(debugHudEntitys[gLoopIndex]);
     }
@@ -1830,8 +1874,8 @@ if(
     // Set portal position to aim center
     WaitLongPressConfirm();
     portalSize = maxPortalSize;
-    enemyHiddenSpeed = maxHiddenSpeed;
-    SetMoveSpeed(AllPlayers(Team.Team2), enemyHiddenSpeed);
-    AllPlayers(Team.Team2).enemySpawnInterval = 0;
+    confirmHiddenSpeed = maxHiddenSpeed;
+    SetMoveSpeed(AllPlayers(Team.Team2), confirmHiddenSpeed);
+    AllPlayers(Team.Team2).confirmSpawnInterval = 0;
     SetRespawnMaxTime(AllPlayers(Team.Team2), 1);
 }
