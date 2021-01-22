@@ -16,7 +16,7 @@ if(
     SetMaxHealth(EventPlayer(), 100);
     SetJumpVerticalSpeed(EventPlayer(), 100);
     SetMoveSpeed(EventPlayer(), 1000);
-    SetGravity(EventPlayer(), 10);
+    SetGravity(EventPlayer(), 100);
     SetProjectileSpeed(EventPlayer(), 100);
     SetProjectileGravity(EventPlayer(), 100);
     StartScalingPlayer(EventPlayer(), 1);
@@ -35,186 +35,320 @@ if(
     //     EventPlayer(), 30, EffectRev.VisibleToPositionAndRadius);
 }
 
-// Test Code -----------------------------------------------
-rule: "Perk/Player/overridePerk"
+rule: "Debug/spawnBotAndUsePerk"
+Event.OngoingPlayer
+if(
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    IsButtonHeld(EventPlayer(), Button.PrimaryFire)
+){
+    WaitLongPressConfirm();
+    // make bot
+    CreateDummyBot(
+        Hero.Reinhardt,
+        Team.Team1, 5,
+        NearestWalkablePosition(AimingPosition()), -FacingDirectionOf(EventPlayer()));
+    define player = PlayersInSlot(5, Team.Team1);
+
+    player.perkType = PerkType.Non;
+    player.perkState = PerkState.Non;
+    WaitChangeState();
+    player.perkType = PerkType.Titan;
+    player.perkState = PerkState.Using;
+}
+
+rule: "Debug/overridePerk"
 Event.OngoingPlayer
 Team.Team1
-Player.All
 if(
     perkState == PerkState.Using
 ){
-        perkType = PerkType.OrbitalLaser;
+    perkType = PerkType.Titan;
 }
 
-// TAG OrbitalLaser ----------
-define lazerDamageRange: 3;
-rule: "Perk/Player/OrbitalLaser/activate"
+rule: "Debug/startButtonHold"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.OrbitalLaser &&
+    EventPlayer() != HostPlayer() &&
+    (DistanceBetween(EventPlayer(), HostPlayer()) <= 6)
+){
+    dbgMsg("StartHoldingButton");
+    StartHoldingButton(EventPlayer(), Button.Jump);
+}
+
+rule: "Debug/stopButtonHold"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    EventPlayer() != HostPlayer() &&
+    !(DistanceBetween(EventPlayer(), HostPlayer()) <= 5)
+){
+    dbgMsg("StopHoldingButton");
+    StopHoldingButton(EventPlayer(), Button.Jump);
+}
+
+// Test Code -----------------------------------------------
+// TAG Titan ----------
+playervar define titanHealthPoolID;
+
+rule: "Perk/Player/Titan/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.Titan &&
     perkState == PerkState.Using
 ){
     // set time limit
-    perkTimeLimit = 60;
-    // set status
-    perkTargets = 0;
-    perkEffectStatus = PerkEffectStatus.Ready;
-    // show text
-    // landing zone text
-    perkEffectAndText = [];
-    CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Orbital Laser">,
-        landPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-        Color.White, Spectators.DefaultVisibility);
-    perkEffectAndText[0] = LastTextID();
-    CreateInWorldText(
-        AllPlayers(), <"Irradiating until <0> seconds.", perkTimeLimit>,
-        landPosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-        Color.White, Spectators.DefaultVisibility);
-    perkEffectAndText[1] = LastTextID();
-    // set effect
-    // lazer body
-    CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
-        perkPosition, landPosition,
-        Color.Red, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[2] = LastCreatedEntity();
-    // lazer aura
-    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
-        landPosition, 4, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[3] = LastCreatedEntity();
-    // lazer sound
-    CreateEffect(AllPlayers(), Effect.EnergySound, Color.White,
-        landPosition, MaxLength(), EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[4] = LastCreatedEntity();
-    // lazer shell
-    CreateEffect(AllPlayers(), Effect.LightShaft, Color.Red,
-        landPosition, 0.3, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[5] = LastCreatedEntity();  
-    // above lazer aura
-    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
-        perkPosition2, 30, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[6] = LastCreatedEntity();
+    perkTimeLimit = 120;
+    // set param
+    perkEffectStatus = 0;
+    rider = 0;
     // set hud
-    CreatePerkEffectHud(perkEffectStatus == PerkEffectStatus.Triggered ? "locked irradiation point." : "guiding irradiation point.");
-    perkEffectAndText[7] = LastTextID();
-    CreatePerkEffectHud(<"Hold melee button <0> to lock irradiation point.", ButtonGuide(Button.Melee)>);
-    perkEffectAndText[8] = LastTextID();  
+    perkEffectAndText = [];
+    CreatePerkEffectHud(
+        rider != 0 ?
+            <"<0> <1> riding on your back.", rider, HeroIconString(HeroOf(rider))> :
+            "Teammate can ride your back.");
+    perkEffectAndText[0] = LastTextID();
+    CreatePerkEffectHud(<"Hold crouch or crouch button <0> to get smaller.", ButtonGuide(Button.Crouch)>);
+    perkEffectAndText[1] = LastTextID();
+    // set perk hero
+    PerkHero perkHero = new PerkHero();
+    perkHero.hero = Hero.Reinhardt;
+    perkHero.statusUnkillable = true;
+    perkHero.maxHealth = 200;
+    perkHero.healingReceived = 10.0;
+    perkHero.damageDealt = 300;
+    perkHero.ultimateCharge = 100;
+    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+
+    // set pool health
+    AddHealthPoolToPlayer(EventPlayer(), HealthType.Armor, 1500, true, false);
+    titanHealthPoolID = LastCreatedHealthPool();
+
+    // start grow big
+    PressButton(EventPlayer(), Button.Crouch);
 }
-rule: "Perk/Player/OrbitalLaser/deactivate"
+
+rule: "Perk/Player/Titan/deactivate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.OrbitalLaser &&
+    perkType == PerkType.Titan &&
     perkState == PerkState.Non
 ){
-    // reset text
-    DestroyInWorldText(perkEffectAndText[0]);
-    DestroyInWorldText(perkEffectAndText[1]);
-    // reset effect
-    DestroyEffect(perkEffectAndText[2]);
-    DestroyEffect(perkEffectAndText[3]);
-    DestroyEffect(perkEffectAndText[4]);
-    DestroyEffect(perkEffectAndText[5]);
-    DestroyEffect(perkEffectAndText[6]);
-    StopChasingVariable(perkPosition);
-    StopChasingVariable(landPosition);
+    // set param
+    perkEffectStatus = 0;
+    DetachPlayers(rider);
+    Teleport(rider, EventPlayer());
+    rider.ridingTitan = 0;
+    rider = 0;
     // reset hud
-    DestroyHudText(perkEffectAndText[7]);
-    DestroyHudText(perkEffectAndText[8]);
+    DestroyHudText(perkEffectAndText[0]);
+    DestroyHudText(perkEffectAndText[1]);
+    // reset perk hero
+    StopForcingPerkHero(EventPlayer());
+    // reset status
+    RemoveHealthPoolFromPlayer(titanHealthPoolID);
+    StopScalingPlayer(EventPlayer());
+    StopModifyingHeroVoiceLines(EventPlayer());
     // reset type
     perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/OrbitalLaser/toggleLockPoint"
+rule: "Perk/Player/Titan/brokenPerk //by helth 1"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.OrbitalLaser &&
+    perkType == PerkType.Titan &&
     perkState == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    Health() <= 1
+){
+    WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
+    perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/Titan/growBig"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.Titan &&
+    perkState == PerkState.Using &&
+    !(IsCrouching() || IsButtonHeld(EventPlayer(), Button.Crouch))
+){
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodPickupEffect,
+        Color.White, EventPlayer(), 1);
+
+    if(!( 0 <= perkEffectStatus && perkEffectStatus <= 1)) perkEffectStatus = 0;
+    while(perkEffectStatus < 1){
+        StartScalingPlayer(EventPlayer(), 1 + (perkEffectStatus * 1.25), false);
+        perkEffectStatus += 0.1;
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+    }
+    StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
+}
+
+rule: "Perk/Player/Titan/getSmall"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.Titan &&
+    perkState == PerkState.Using &&
+    (IsCrouching() || IsButtonHeld(EventPlayer(), Button.Crouch))
+){
+    DetachPlayers(rider);
+    Teleport(rider, EventPlayer());
+    rider.ridingTitan = 0;
+    rider = 0;
+
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodPickupEffect,
+        Color.White, EventPlayer(), 1);
+
+    if(!( 0 <= perkEffectStatus && perkEffectStatus <= 1)) perkEffectStatus = 1;
+    while(perkEffectStatus > 0){
+        StartScalingPlayer(EventPlayer(), 1 + (perkEffectStatus * 1.25), false);
+        perkEffectStatus -= 0.1;
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+    }
+    StartModifyingHeroVoiceLines(EventPlayer(), 1.0, false);
+}
+
+rule: "Perk/Player/Titan/chargingUlt"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.Titan &&
+    perkState == PerkState.Using &&
+    !IsUsingUltimate() &&
+    UltimateChargePercent() < 100
+){
+    WaitUpdateMediumCycle();
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 3));
+    LoopIfConditionIsTrue();
+}
+
+define canRideRange : 6.0;
+define nearTitan:
+    FilteredArray(
+        AllPlayers(Team.Team1),
+        (
+            ArrayElement() != EventPlayer() &&
+            ArrayElement().perkType == PerkType.Titan &&
+            ArrayElement().perkState == PerkState.Using &&
+            ArrayElement().rider == 0 &&
+            ArrayElement().perkEffectStatus == 1 &&
+            DistanceBetween(EventPlayer(), ArrayElement()) <= canRideRange
+        )
+    );
+define canRide:
+    IsAlive() &&
+    EventPlayer().ridingTitan == 0 &&
+    CountOf(nearTitan) > 0;
+
+playervar define rider;
+
+rule: "Perk/Player/Titan/showOperationGetOn"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    canRide
+){
+    WaitChangeState();
+    // set hud
+    CreatePerkEffectHud(<"Hold jump button <0> to get on titan.", ButtonGuide(Button.Jump)>);
+    perkEffectAndText[200] = LastTextID();
+}
+
+rule: "Perk/Player/Titan/hideOperationGetOn"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    !canRide
+){
+    WaitChangeState();
+    DestroyHudText(perkEffectAndText[200]);
+}
+
+playervar define ridingTitan;
+
+rule: "Perk/Player/Titan/getOnTitan"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    canRide &&
+    IsButtonHeld(EventPlayer(), Button.Jump)
 ){
     WaitLongPressConfirm();
-    if(perkEffectStatus == PerkEffectStatus.Triggered){
-        perkEffectStatus = PerkEffectStatus.Ready;
-    }
-    else{
-        perkEffectStatus = PerkEffectStatus.Triggered;
-    }
-    // play change sound
-    PlayEffect(
-        EventPlayer(), PlayEffect.DebuffImpactSound,
-        Color.White, EventPlayer(), MaxValue());
+
+    SmallMessage(EventPlayer(), "Killed enemy on riding Titan, can add Titan's activity time.");
+    ridingTitan = FirstOf(nearTitan);
+    AttachPlayers(EventPlayer(), ridingTitan, (Up() * 4.0));
+    ridingTitan.rider = EventPlayer();
 }
 
-rule: "Perk/Player/OrbitalLaser/launchLazer"
+rule: "Perk/Player/Titan/showOperationGetOff"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.OrbitalLaser &&
-    perkState == PerkState.Using
+    ridingTitan != 0
 ){
-    // set lazer at above positions over 500m
-    perkPosition = AimingPosition() +
-        Vector(0, 1000, 0);
-    perkPosition2 = perkPosition;
-    // set lazer land position to aiming position
-    landPosition = BelowPosition(AimingPosition());
+    WaitChangeState();
+    // set hud
+    CreatePerkEffectHud(<"Press crouch button <0> to get off titan.", ButtonGuide(Button.Crouch)>);
+    perkEffectAndText[201] = LastTextID();
 }
 
-rule: "Perk/Player/OrbitalLaser/aimLandPoint"
+rule: "Perk/Player/Titan/hideOperationGetOff"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.OrbitalLaser &&
-    perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Ready
+    ridingTitan == 0
 ){
-    // chase lazer land position to aiming position
-    WaitUpdateShortCycle();
-    aimPosition = BelowPosition(AimingPosition());
-    define distanceBetween = DistanceBetween(landPosition, aimPosition) * 3.0;
-    UpdateEveryFrame(landPosition);
-    ChaseVariableAtRate(
-        landPosition, aimPosition,
-        distanceBetween,
-        RateChaseReevaluation.DestinationAndRate);
-    ChaseVariableAtRate(
-        perkPosition, aimPosition + Vector(0, 1000, 0),
-        distanceBetween,
-        RateChaseReevaluation.DestinationAndRate);
-    LoopIfConditionIsTrue();
+    WaitChangeState();
+    DestroyHudText(perkEffectAndText[201]);
 }
 
-rule: "Perk/Player/OrbitalLaser/landedToPoint"
+rule: "Perk/Player/Titan/addActivityTime"
+Event.OnFinalBlow
+Team.Team1
+Player.All
+if(
+    ridingTitan.perkType == PerkType.Titan &&
+    ridingTitan.perkState == PerkState.Using
+){
+    SmallMessage(EventPlayer(), "Added 8 seconds of titan's activity time.");
+    ridingTitan.perkTimeLimit += 8;
+}
+
+rule: "Perk/Player/Titan/getOffTitan"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.OrbitalLaser &&
-    perkState == PerkState.Using
+    ridingTitan != 0 &&
+    IsButtonHeld(EventPlayer(), Button.Crouch)
 ){
-    // damage
-    Damage(
-        PlayersWithinRadius(
-            landPosition, lazerDamageRange,
-            Team.Team2, RadiusLOS.Off
-        ), EventPlayer(), 50);
-
-    // play blast effect
-    PlayEffect(
-        AllPlayers(), PlayEffect.BadExplosion,
-        Color.Red, landPosition, lazerDamageRange);
-
-    WaitContinuousBlastCycle();
-    LoopIfConditionIsTrue();
+    DetachPlayers(ridingTitan.rider);
+    Teleport(EventPlayer(), ridingTitan);
+    ridingTitan.rider = 0;
+    ridingTitan = 0;
 }
-
 
 // Debug -----------------------------------------------
 globalvar define param = 1;
