@@ -31,6 +31,55 @@ disabled rule: "Check detail with https://github.com/ItsDeltin/Overwatch-Script-
 disabled rule: "Original source code was created by [sarami77#1868]"-1{}
 disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopScripts"-1{}
 
+// TAG System ----------
+define enableOverLoadMeasures: true;
+define overloadSecondLimit: 5;
+globalvar define overloadSecond;
+
+rule: "System/ServerOverLoadMeasures"
+Event.OngoingGlobal
+if(
+    enableOverLoadMeasures &&
+    teamLifes > 0
+){
+    // To avoid shutdown due to server overload,
+    //  reset the perk to reduce the load
+    //  if the overload continues for a certain period of time.
+    
+    // Since the value of ServerLoad() changes frequently,
+    // do not bind it to "Condition" and monitor it by polling.
+
+    // count duration of overload
+    if(255 <= ServerLoad()){
+        overloadSecond ++;
+    }
+    else{
+        overloadSecond = 0;
+    }
+
+    if(overloadSecond == 0){
+        SetSlowMotion(100);
+    }
+    else if(overloadSecond == 1){
+        SetSlowMotion(90);
+    }
+    else if(overloadSecond == 2){
+        SetSlowMotion(80);
+    }
+    else if(overloadSecond == 3){
+        SetSlowMotion(70);
+    }
+    else if(overloadSecond == 4){
+        SetSlowMotion(60);
+    }
+    else if(overloadSecond >= 5){
+        SetSlowMotion(50);
+    }
+
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
 // TAG Game Function ----------
 globalvar define initCompleted;
 
@@ -1230,6 +1279,7 @@ if(
 rule: "Portal/Positioner/createPortal"
 Event.OngoingGlobal
 if(
+    teamLifes > 0 &&
     portalState == PortalState.Calculating
 ){
     WaitConditionConfirmed();
@@ -1273,7 +1323,7 @@ if(
                 DistanceBetween(
                     ClosestPlayerTo(candidatePosition, Team.Team1),
                     candidatePosition
-                ) >= 25
+                ) >= 50
             )
         ){
             break;
@@ -1295,6 +1345,7 @@ globalvar define prevPortalPosition;
 rule: "Portal/Positioner/positionChecking"
 Event.OngoingGlobal
 if(
+    teamLifes > 0 &&
     portalState == PortalState.Checking
 ){
     // Waiting for Positioner/DetectXXX judgment described later
