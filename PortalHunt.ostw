@@ -33,8 +33,8 @@ disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopS
 
 // TAG System ----------
 define enableOverLoadMeasures: true;
-define overloadSecondLimit: 5;
-globalvar define overloadSecond;
+define overloadDuringLimit: 5;
+globalvar define overloadDuring;
 
 rule: "System/ServerOverLoadMeasures"
 Event.OngoingGlobal
@@ -51,29 +51,33 @@ if(
 
     // count duration of overload
     if(255 <= ServerLoad()){
-        overloadSecond ++;
+        if(5 > overloadDuring){
+            overloadDuring ++;
+        }
     }
     else{
-        overloadSecond = 0;
+        if(0 < overloadDuring){
+            overloadDuring --;
+        }
     }
 
-    if(overloadSecond == 0){
+    if(overloadDuring == 0){
         SetSlowMotion(100);
     }
-    else if(overloadSecond == 1){
+    else if(overloadDuring == 1){
         SetSlowMotion(90);
     }
-    else if(overloadSecond == 2){
+    else if(overloadDuring == 2){
         SetSlowMotion(80);
     }
-    else if(overloadSecond == 3){
-        SetSlowMotion(70);
-    }
-    else if(overloadSecond == 4){
+    else if(overloadDuring == 3){
         SetSlowMotion(60);
     }
-    else if(overloadSecond >= 5){
-        SetSlowMotion(50);
+    else if(overloadDuring == 4){
+        SetSlowMotion(40);
+    }
+    else if(overloadDuring == 5){
+        SetSlowMotion(10);
     }
 
     Wait(1, WaitBehavior.AbortWhenFalse);
@@ -287,18 +291,25 @@ Player.All
 if(
     IsDead()
 ){
-    // Remaining lifes reduced by spawn of downed player
-    Wait(10, WaitBehavior.AbortWhenFalse);  // wait player spawn
-    teamLifes -= 1;
-    WaitChangeState();  // wait for show big message by newest value
-    if(teamLifes > 0){
+    // Respawn immediately in case of suicide
+    if(Attacker() == EventPlayer()){
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        Respawn();
+    }
+    else{
+        // Remaining lifes reduced by spawn of downed player
+        Wait(10, WaitBehavior.AbortWhenFalse);  // wait player spawn
+        teamLifes -= 1;
+        WaitChangeState();  // wait for show big message by newest value
         if(teamLifes > 0){
-            BigMessage(AllPlayers(Team.All),
-                <"<0> <1> <2>", "Our remaining team lifes is", teamLifes, "...">);
+            if(teamLifes > 0){
+                BigMessage(AllPlayers(Team.All),
+                    <"<0> <1> <2>", "Our remaining team lifes is", teamLifes, "...">);
+            }
+            PlayEffect(
+                AllPlayers(Team.All), PlayEffect.DebuffImpactSound,
+                Color.White, portalPosition, MaxLength());
         }
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.DebuffImpactSound,
-            Color.White, AllPlayers(Team.All), MaxLength());
     }
 }
 
@@ -308,10 +319,10 @@ if(
     teamLifes <= 0
 ){
     // When the team lifes out, the game ends
-    portalState = PortalState.Idle;
+    portalState = PortalState.End;
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.RingExplosionSound,
-        Color.White, AllPlayers(Team.All), MaxLength());
+        Color.White, portalPosition, MaxLength());
     BigMessage(AllPlayers(Team.All), "Our team lifes is out...");
     SetSlowMotion(10);
     Wait(1, WaitBehavior.AbortWhenFalse);   // show slow
@@ -436,7 +447,7 @@ if(
     BigMessage(AllPlayers(Team.All), "We got new team lifes!");
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.BuffImpactSound,
-        Color.White, AllPlayers(Team.All), MaxLength()
+        Color.White, portalPosition, MaxLength()
     );
     teamLifes += 1;
     WaitNextPhase();
@@ -775,7 +786,7 @@ void PlayTeleportBeam()"PlayTeleportBeam"{
 }
 
 define minSpawnAreaSize: 10;
-define spawnAreaSizeRate: 1;
+define spawnAreaSizeRate: 0.5;
 define spawnAreaSize:
     (portalSize * spawnAreaSizeRate) <= minSpawnAreaSize ?
     minSpawnAreaSize :
@@ -967,8 +978,8 @@ Player.All
     // If don't enough players, adjust enemy dealt damage rate to make the game fair
     // And the round progresses, the enemy deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    confirmDealDamage = WorkshopSettingReal("Enemy Settings", "Initial Deal Damage", 20, 0, 100, 1);
-    confirmDealDamage += roundNo * WorkshopSettingReal("Enemy Settings", "Increase Deal Damage Per Round Progress", 2.0, 0, 100, 2);
+    confirmDealDamage = WorkshopSettingReal("Enemy Settings", "Initial Deal Damage", 20, 0, 1000, 1);
+    confirmDealDamage += roundNo * WorkshopSettingReal("Enemy Settings", "Increase Deal Damage Per Round Progress", 1.2, 0, 1000, 2);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
     confirmDealDamage /= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy dealt damage scale
@@ -1124,7 +1135,8 @@ enum PortalState{
     Growing,
     Suspended,
     Closing,
-    Closed
+    Closed,
+    End
 }
 
 globalvar define portalPosition;
@@ -1209,7 +1221,7 @@ if(
     // Start growing portal with warning message
     UpdateEveryFrame(portalSize);
     ChaseVariableAtRate(
-        portalSize, maxPortalSize, 1 + (roundNo / 5),   //TAG portal grow speed
+        portalSize, maxPortalSize, 1 + (roundNo / 8),   //TAG portal grow speed
         RateChaseReevaluation.DestinationAndRate);
     // If first growing, show message
     if(isFirstGrowing == true){
@@ -1244,7 +1256,7 @@ if(
     // play blast sound
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.RingExplosionSound,
-        Color.White, AllPlayers(Team.All), MaxLength());
+        Color.White, portalPosition, MaxLength());
     // contraction portal
     UpdateEveryFrame(portalSize);
     ChaseVariableOverTime(portalSize, 0,
@@ -1827,7 +1839,7 @@ void ShowDebugHud()"ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "over load Second", overloadSecond>,
+        <"<0> <1>", "over load Second", overloadDuring>,
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,

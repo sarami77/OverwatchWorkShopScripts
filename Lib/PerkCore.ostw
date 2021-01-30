@@ -2,75 +2,6 @@ import "Utility.ostw";
 import "Debug.ostw";
 
 // Function enable team is Team1
-
-// TAG System ----------
-define enableOverLoadMeasures: true;
-define overloadSecondLimit: 5;
-globalvar define overloadSecond;
-globalvar define resetPerkPlayer;
-playervar define resetPerkType;
-
-rule: "System/ServerOverLoadMeasures"
-Event.OngoingGlobal
-if(
-    enableOverLoadMeasures
-){
-    // To avoid shutdown due to server overload,
-    //  reset the perk to reduce the load
-    //  if the overload continues for a certain period of time.
-    
-    // Since the value of ServerLoad() changes frequently,
-    // do not bind it to "Condition" and monitor it by polling.
-    Wait(1, WaitBehavior.AbortWhenFalse);
-
-    // count duration of overload
-    if(255 <= ServerLoad()){
-        overloadSecond ++;
-    }
-    else{
-        overloadSecond = 0;
-    }
-
-    if(overloadSecond == 0){
-        SetSlowMotion(100);
-    }
-    else if(overloadSecond == 1){
-        SetSlowMotion(80);
-    }
-    else if(overloadSecond == 2){
-        SetSlowMotion(60);
-    }
-    else if(overloadSecond == 3){
-        SetSlowMotion(40);
-    }
-    else if(overloadSecond == 4){
-        SetSlowMotion(20);
-    }
-    else if(overloadSecond >= 5){
-        overloadSecond = 0;
-
-        // abort perk
-        dbgMsg("!!! Player's perk was force reset by server over load !!!");
-        resetPerkPlayer = 
-            FilteredArray(
-                AllPlayers(Team.Team1),
-                ArrayElement().perkState == PerkState.Using
-        );
-        for(gLoopIndex = 0; gLoopIndex < CountOf(resetPerkPlayer); gLoopIndex++){
-            resetPerkPlayer[gLoopIndex].resetPerkType = resetPerkPlayer[gLoopIndex].perkType;
-            resetPerkPlayer[gLoopIndex].perkState = PerkState.Non;
-        }
-        Wait(4, WaitBehavior.IgnoreCondition);
-        // reset perk
-        for(gLoopIndex = 0; gLoopIndex < CountOf(resetPerkPlayer); gLoopIndex++){
-            resetPerkPlayer[gLoopIndex].perkType = resetPerkPlayer[gLoopIndex].resetPerkType;
-            resetPerkPlayer[gLoopIndex].perkState = PerkState.Ready;
-        }
-    }
-
-    LoopIfConditionIsTrue();
-}
-
 globalvar define lotteryPerkList;
 playervar define perkCratePosition;
 playervar define perkCrateState;
@@ -132,36 +63,36 @@ rule: "Perk/lotteryPerkList // list of parks you can pick up"
 Event.OngoingGlobal
 {
     lotteryPerkList = [];     // TAG lottery perk list
-    if(WorkshopSettingToggle("Perk Settings", "Enable High Jump", true,         0))     addLottelyPerk(PerkType.HighJump,         2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Grappling Beam", true,    1))     addLottelyPerk(PerkType.GrapplingBeam,    2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Sprinter", true,          2))     addLottelyPerk(PerkType.Sprinter,         2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Adrenaline", true,        3))     addLottelyPerk(PerkType.Adrenaline,       2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Savior", true,            4))     addLottelyPerk(PerkType.Savior,           2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Fearless", true,          5))     addLottelyPerk(PerkType.Fearless,         2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Steel Formation", true,   7))     addLottelyPerk(PerkType.SteelFormation,   2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Personal Shelter", true,  8))     addLottelyPerk(PerkType.PersonalShelter,  2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Biotic Station", true,    9))     addLottelyPerk(PerkType.BioticStation,    3);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Trap Beam", true,         10))    addLottelyPerk(PerkType.TrapBeam,         2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Battle Flag", true,       11))    addLottelyPerk(PerkType.BattleFlag,       2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Chain Explosion", true,   12))    addLottelyPerk(PerkType.ChainExplosion,   2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Ice Age", true,           13))    addLottelyPerk(PerkType.IceAge,           2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Aim Hack", true,          14))    addLottelyPerk(PerkType.AimHack,          2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Vampire", true,           15))    addLottelyPerk(PerkType.Vampire,          2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Hot Shot", true,          16))    addLottelyPerk(PerkType.HotShot,          4);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Shot Caller", true,       17))    addLottelyPerk(PerkType.ShotCaller,       2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Grudge Fire Ball", true,  18))    addLottelyPerk(PerkType.GrudgeFireBall,   2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Artillery Support", true, 19))    addLottelyPerk(PerkType.ArtillerySupport, 4);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Cruising Missile", true,  20))    addLottelyPerk(PerkType.CruisingMissile,  4);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Orbital Laser", true,     21))    addLottelyPerk(PerkType.OrbitalLaser,     2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Care Package", true,      22))    addLottelyPerk(PerkType.CarePackage,      2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Death From Above", true,  23))    addLottelyPerk(PerkType.DeathFromAbove,   4);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Legendaly Ninja", true,   24))    addLottelyPerk(PerkType.LegendalyNinja,   2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Mach Delivery", true,     25))    addLottelyPerk(PerkType.MachDelivery,     2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Juggernaut", true,        26))    addLottelyPerk(PerkType.Juggernaut,       2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Beam Sniper", true,       27))    addLottelyPerk(PerkType.BeamSniper,       2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Dragon Storm", true,      28))    addLottelyPerk(PerkType.DragonStorm,      2);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Titan", true,             29))    addLottelyPerk(PerkType.Titan,            6);
-    if(WorkshopSettingToggle("Perk Settings", "Enable Annihilator", true,       30))    addLottelyPerk(PerkType.Annihilator,      2);
+    addLottelyPerk(PerkType.HighJump,         WorkshopSettingInteger("Perk Settings", "(High Jump) Included Amount",            10, 0, 1000, 0 ));
+    addLottelyPerk(PerkType.GrapplingBeam,    WorkshopSettingInteger("Perk Settings", "(Grappling Beam) Included Amount",       10, 0, 1000, 1 ));
+    addLottelyPerk(PerkType.Sprinter,         WorkshopSettingInteger("Perk Settings", "(Sprinter) Included Amount",             10, 0, 1000, 2 ));
+    addLottelyPerk(PerkType.Adrenaline,       WorkshopSettingInteger("Perk Settings", "(Adrenaline) Included Amount",           10, 0, 1000, 3 ));
+    addLottelyPerk(PerkType.Savior,           WorkshopSettingInteger("Perk Settings", "(Savior) Included Amount",               10, 0, 1000, 4 ));
+    addLottelyPerk(PerkType.Fearless,         WorkshopSettingInteger("Perk Settings", "(Fearless) Included Amount",             10, 0, 1000, 5 ));
+    addLottelyPerk(PerkType.SteelFormation,   WorkshopSettingInteger("Perk Settings", "(Steel Formation) Included Amount",      10, 0, 1000, 7 ));
+    addLottelyPerk(PerkType.PersonalShelter,  WorkshopSettingInteger("Perk Settings", "(Personal Shelter) Included Amount",     10, 0, 1000, 8 ));
+    addLottelyPerk(PerkType.BioticStation,    WorkshopSettingInteger("Perk Settings", "(Biotic Station) Included Amount",       10, 0, 1000, 9 ));
+    addLottelyPerk(PerkType.TrapBeam,         WorkshopSettingInteger("Perk Settings", "(Trap Beam) Included Amount",            10, 0, 1000, 10));
+    addLottelyPerk(PerkType.BattleFlag,       WorkshopSettingInteger("Perk Settings", "(Battle Flag) Included Amount",          10, 0, 1000, 11));
+    addLottelyPerk(PerkType.ChainExplosion,   WorkshopSettingInteger("Perk Settings", "(Chain Explosion) Included Amount",      10, 0, 1000, 12));
+    addLottelyPerk(PerkType.IceAge,           WorkshopSettingInteger("Perk Settings", "(Ice Age) Included Amount",              10, 0, 1000, 13));
+    addLottelyPerk(PerkType.AimHack,          WorkshopSettingInteger("Perk Settings", "(Aim Hack) Included Amount",             10, 0, 1000, 14));
+    addLottelyPerk(PerkType.Vampire,          WorkshopSettingInteger("Perk Settings", "(Vampire) Included Amount",              10, 0, 1000, 15));
+    addLottelyPerk(PerkType.HotShot,          WorkshopSettingInteger("Perk Settings", "(Hot Shot) Included Amount",             10, 0, 1000, 16));
+    addLottelyPerk(PerkType.ShotCaller,       WorkshopSettingInteger("Perk Settings", "(Shot Caller) Included Amount",          10, 0, 1000, 17));
+    addLottelyPerk(PerkType.GrudgeFireBall,   WorkshopSettingInteger("Perk Settings", "(Grudge Fire Ball) Included Amount",     10, 0, 1000, 18));
+    addLottelyPerk(PerkType.ArtillerySupport, WorkshopSettingInteger("Perk Settings", "(Artillery Support) Included Amount",    10, 0, 1000, 19));
+    addLottelyPerk(PerkType.CruisingMissile,  WorkshopSettingInteger("Perk Settings", "(Cruising Missile) Included Amount",     10, 0, 1000, 20));
+    addLottelyPerk(PerkType.OrbitalLaser,     WorkshopSettingInteger("Perk Settings", "(Orbital Laser) Included Amount",        10, 0, 1000, 21));
+    addLottelyPerk(PerkType.CarePackage,      WorkshopSettingInteger("Perk Settings", "(Care Package) Included Amount",         10, 0, 1000, 22));
+    addLottelyPerk(PerkType.DeathFromAbove,   WorkshopSettingInteger("Perk Settings", "(Death From Above) Included Amount",     10, 0, 1000, 23));
+    addLottelyPerk(PerkType.LegendalyNinja,   WorkshopSettingInteger("Perk Settings", "(Legendaly Ninja) Included Amount",      10, 0, 1000, 24));
+    addLottelyPerk(PerkType.MachDelivery,     WorkshopSettingInteger("Perk Settings", "(Mach Delivery) Included Amount",        10, 0, 1000, 25));
+    addLottelyPerk(PerkType.Juggernaut,       WorkshopSettingInteger("Perk Settings", "(Juggernaut) Included Amount",           10, 0, 1000, 26));
+    addLottelyPerk(PerkType.BeamSniper,       WorkshopSettingInteger("Perk Settings", "(Beam Sniper) Included Amount",          10, 0, 1000, 27));
+    addLottelyPerk(PerkType.DragonStorm,      WorkshopSettingInteger("Perk Settings", "(Dragon Storm) Included Amount",         10, 0, 1000, 28));
+    addLottelyPerk(PerkType.Titan,            WorkshopSettingInteger("Perk Settings", "(Titan) Included Amount",                10, 0, 1000, 29));
+    addLottelyPerk(PerkType.Annihilator,      WorkshopSettingInteger("Perk Settings", "(Annihilator) Included Amount",          10, 0, 1000, 30));
 }
 
 rule: "Perk/CreatState/NotDropped"
@@ -196,26 +127,25 @@ if(
     perkCrateEntitys[1] = LastCreatedEntity();
 }
 
-rule: "Perk/Enemy/dropPerkCrate // drop by low probability on death"
-Event.OngoingPlayer
+rule: "Perk/Enemy/dropPerkCrate // drop by some probability on death"
+Event.OnDeath
 Team.Team2
 Player.All
 if(
-    IsDead() &&
-    IsOnGround()
+    Attacker() != EventPlayer()
 ){
     // The more people who do not have a park, the higher the drop rate
     if(
         RandomReal(0, 100)
-            <= 
+            <=
         ( 
-            WorkshopSettingReal("Perk Settings", "Perk Crate Drop Rate When Enemy Kill", 6.0, 0, 100, 0)		// TAG perk drop rate
+            WorkshopSettingReal("Perk Settings", "Perk Crate Drop Rate When Enemy Kill", 8.0, 0, 100, -1)		// TAG perk drop rate
         )
     ){
         // Set perk crate position from killed enemry position
         perkCrateState = PerkCrateState.NotDropped;
         WaitChangeState();
-        perkCratePosition = PositionOf() + PositionOffset();
+        perkCratePosition = BelowPosition(PositionOf()) + PositionOffset();
         perkCrateState = PerkCrateState.Dropped;
     }
 }
@@ -407,9 +337,9 @@ void ForcePlayerPerkHero(
     // set ultimateCharge
     SetUltimateCharge(target, perkHero.ultimateCharge);
 
-    // set statusUnkillable
+    // set status Unkillable
     if(perkHero.statusUnkillable) SetStatus(target, null, Status.Unkillable, MaxValue());
-    // set statusUnkillable
+    // set status Invincible
     if(perkHero.statusInvincible) SetStatus(target, null, Status.Invincible, MaxValue());
 }
 
