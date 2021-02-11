@@ -1681,23 +1681,23 @@ void ExplodeFireBall()"ExplodeFireBall"{
     perkEffectStatus = PerkEffectStatus.Ready;
 }
 
-// TAG ArtillerySupport ----------
+// TAG ArtilleryFireRequest ----------
 define artilleryLandingRange: 20;
 define artilleryDamageRange: 7;
 define attackTime: 10;
 define attackCount: 30;
 playervar define landZonePosition;
 
-rule: "Perk/Player/ArtillerySupport/activate"
+rule: "Perk/Player/ArtilleryFireRequest/activate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.ArtillerySupport &&
+    perkType == PerkType.ArtilleryFireRequest &&
     perkState == PerkState.Using
 ){
     // set time limit
-    perkTimeLimit = 13;
+    perkTimeLimit = 14;
     // set status
     perkPosition = 0;
     perkPosition2 = 0;
@@ -1708,7 +1708,7 @@ if(
     // landing zone text
     perkEffectAndText = [];
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\rBarrage incoming. Stand by...", EventPlayer(), HeroIconString(HeroOf()), "Artillery Support">,
+        AllPlayers(), <"<0> <1> <2>\n\rBarrage incoming. Stand by...", EventPlayer(), HeroIconString(HeroOf()), "Artillery Fire Request">,
         landZonePosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[0] = LastTextID();
@@ -1731,12 +1731,12 @@ if(
         landZonePosition, artilleryLandingRange, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[4] = LastCreatedEntity();
 }
-rule: "Perk/Player/ArtillerySupport/deactivate"
+rule: "Perk/Player/ArtilleryFireRequest/deactivate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.ArtillerySupport &&
+    perkType == PerkType.ArtilleryFireRequest &&
     perkState == PerkState.Non
 ){
     // reset text
@@ -1752,33 +1752,42 @@ if(
     perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/ArtillerySupport/setLandingZone"
+rule: "Perk/Player/ArtilleryFireRequest/setLandingZone"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.ArtillerySupport &&
+    perkType == PerkType.ArtilleryFireRequest &&
     perkState == PerkState.Using
 ){
+    perkPosition = InvalidPosition();
+    perkPosition2 = InvalidPosition();
+
     // set shell land position to aiming position
     landZonePosition = AimingPosition();
     Wait(3, WaitBehavior.AbortWhenFalse);
     DestroyEffect(perkEffectAndText[4]);
+    firstAnimationDelay = true;
     perkEffectStatus = attackCount;
 }
 
-rule: "Perk/Player/ArtillerySupport/launchShell"
+playervar define firstAnimationDelay;
+define parallelAnimationNum: 2;
+define attackSpeeed:
+    (attackTime / attackCount) * parallelAnimationNum;
+
+rule: "Perk/Player/ArtilleryFireRequest/launchShell"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.ArtillerySupport &&
+    perkType == PerkType.ArtilleryFireRequest &&
     perkState == PerkState.Using &&
     perkEffectStatus > 0
 ){
     // set shell at random horizontal positions over 50
     perkPosition = landZonePosition +
-        Vector(0, 50, 0) + RandomPosition(10, 0, 10);
+        Vector(0, 100, 0) + RandomPosition(10, 0, 10);
     // start shell move
     landPosition = 
         landZonePosition + 
@@ -1789,21 +1798,35 @@ if(
         );
     UpdateEveryFrame(perkPosition);
     ChaseVariableOverTime(
-        perkPosition, landPosition, attackTime / attackCount,
+        perkPosition, landPosition, attackSpeeed,
         TimeChaseReevaluation.DestinationAndDuration);
-    Wait(attackTime / attackCount, WaitBehavior.AbortWhenFalse);
+    Wait(attackSpeeed, WaitBehavior.IgnoreCondition);
+    StopChasingVariable(perkPosition);
     // hide shell
     perkPosition = InvalidPosition();
     // on landed play blast
-    StopChasingVariable(perkPosition);
     async ExplodeShell(landPosition);
     perkEffectStatus -- ;
+    LoopIfConditionIsTrue();
+}
 
-    AbortIfConditionIsFalse();
+rule: "Perk/Player/ArtilleryFireRequest/launchShell2"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.ArtilleryFireRequest &&
+    perkState == PerkState.Using &&
+    perkEffectStatus > 0
+){
+    if(firstAnimationDelay){
+        firstAnimationDelay = false;
+        Wait(attackSpeeed / 2, WaitBehavior.IgnoreCondition);
+    }
 
     // set shell at random horizontal positions over 50
     perkPosition2 = landZonePosition +
-        Vector(0, 50, 0) + RandomPosition(10, 0, 10);
+        Vector(0, 100, 0) + RandomPosition(10, 0, 10);
     // start shell move
     landPosition2 = 
         landZonePosition + 
@@ -1814,16 +1837,15 @@ if(
         );
     UpdateEveryFrame(perkPosition2);
     ChaseVariableOverTime(
-        perkPosition2, landPosition2, attackTime / attackCount,
+        perkPosition2, landPosition2, attackSpeeed,
         TimeChaseReevaluation.DestinationAndDuration);
-    Wait(attackTime / attackCount, WaitBehavior.AbortWhenFalse);
+    Wait(attackSpeeed, WaitBehavior.IgnoreCondition);
+    StopChasingVariable(perkPosition2);
     // hide shell
     perkPosition2 = InvalidPosition();
     // on landed play blast
-    StopChasingVariable(perkPosition2);
     async ExplodeShell(landPosition2);
     perkEffectStatus -- ;
-
     LoopIfConditionIsTrue();
 }
 
@@ -2944,6 +2966,9 @@ if(
     perkHero.gravity = 300;
     perkHero.moveSpeed = 75;
     ForcePlayerPerkHero(EventPlayer(), perkHero);
+    // set status
+    StartScalingPlayer(EventPlayer(), 1.5, false);
+    StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
 
     // use secondary
     Wait(0.5, WaitBehavior.AbortWhenFalse);
@@ -2958,6 +2983,9 @@ if(
     perkType == PerkType.Juggernaut &&
     perkState == PerkState.Non
 ){
+    // reset status
+    StopScalingPlayer(EventPlayer());
+    StopModifyingHeroVoiceLines(EventPlayer());
     // reset hud
     DestroyHudText(perkEffectAndText[0]);
     // reset effect
@@ -3795,7 +3823,7 @@ if(
 
     SmallMessage(EventPlayer(), "Killed enemy on riding Titan, can add Titan's activity time.");
     ridingTitan = FirstOf(nearTitan);
-    AttachPlayers(EventPlayer(), ridingTitan, (Up() * 4.0));
+    AttachPlayers(EventPlayer(), ridingTitan, Up() * 3.75);
     ridingTitan.rider = EventPlayer();
 }
 
