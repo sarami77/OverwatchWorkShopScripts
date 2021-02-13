@@ -705,6 +705,17 @@ if(
 
 // TAG BioticStation ----------
 define healRange : 6;
+define nearStation:
+    CountOf(
+        FilteredArray(
+            AllPlayers(Team.Team1),
+            (
+                ArrayElement().perkType == PerkType.BioticStation &&
+                ArrayElement().perkState == PerkState.Using &&
+                DistanceBetween(EventPlayer(), ArrayElement().perkPosition) <= healRange
+            )
+        )
+    ) > 0;
 
 rule: "Perk/Player/BioticStation/activate"
 Event.OngoingPlayer
@@ -757,23 +768,31 @@ if(
     perkType = PerkType.Non;
 }
 
+rule: "Perk/Player/BioticStation/playWave"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.BioticStation &&
+    perkState == PerkState.Using
+){
+    // play ring
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosion,
+        Color.Yellow, perkPosition, healRange * 2);
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue();
+}
+
 rule: "Perk/Player/BioticStation/heal"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    CountOf(
-        FilteredArray(
-            AllPlayers(Team.Team1),
-            (
-                ArrayElement().perkType == PerkType.BioticStation &&
-                ArrayElement().perkState == PerkState.Using &&
-                DistanceBetween(EventPlayer(), ArrayElement().perkPosition) <= healRange
-            )
-        )
-    ) > 0
+    nearStation
 ){
-    Heal(EventPlayer(), EventPlayer(), 20);
+    // heal
+    Heal(EventPlayer(), EventPlayer(), 25);
     WaitUpdateShortCycle();
     LoopIfConditionIsTrue();
 }
@@ -898,7 +917,7 @@ if(
         EventPlayer(), battleFlagRange, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[0] = LastCreatedEntity();
     // show icon
-    CreateIcon(AllPlayers(), PositionOf() + (Up() * 2.5), Icon.Flag,
+    CreateIcon(AllPlayers(), PositionOf() + (Up() * 2), Icon.Flag,
         IconRev.VisibleToAndPosition, Color.Blue, false);
     perkEffectAndText[1] = LastCreatedEntity();
 }
@@ -1443,8 +1462,11 @@ if(
 playervar define fireBallSpeed;
 playervar define fireBallPower;
 playervar define fireBallSize;
-playervar define fireBallDamageRange;
-define minCollisionRange: 1.5;
+playervar define fireBallBlastRange;
+define minFireBallSpeed: 15;
+define maxFireBallSpeed: 60;
+define minCollisionRange: 2.0;
+define chargeRate: 2.0;
 
 rule: "Perk/Player/GrudgeFireBall/activate"
 Event.OngoingPlayer
@@ -1497,7 +1519,7 @@ if(
     Attacker() != EventPlayer() &&
     EventDamage() > 0
 ){
-    fireBallPower += RoundToInteger(EventDamage() * 2);
+    fireBallPower += RoundToInteger(EventDamage() * chargeRate);
 }
 
 rule: "Perk/Player/GrudgeFireBall/shot"
@@ -1514,15 +1536,14 @@ if(
     AbortIf(fireBallPower <= 0);
 
     perkPosition = EyePosition() + 
-        (FacingDirectionOf(EventPlayer()) * fireBallSize);
+        (FacingDirectionOf(EventPlayer()) * fireBallSize / 2);
     landPosition = AimingPositionIgnorePlayer();
     // set fireball param
-    fireBallSpeed =
-            50 - (fireBallPower / 50) < 10 ?
-            10 :
-            50 - (fireBallPower / 50);
+    fireBallSpeed = maxFireBallSpeed - (fireBallPower / maxFireBallSpeed);
+    fireBallSpeed = Max(minFireBallSpeed, fireBallSpeed);
+    fireBallSpeed = Min(maxFireBallSpeed, fireBallSpeed);
     fireBallSize = fireBallPower * 0.002;
-    fireBallDamageRange = fireBallPower * 0.020;
+    fireBallBlastRange = fireBallPower * 0.01;
     // start movement
     UpdateEveryFrame(perkPosition);
     ChaseVariableAtRate(
@@ -1593,10 +1614,7 @@ if(
         perkPosition,
         ClosestPlayerTo(perkPosition, Team.Team2))
         	<= 
-    (fireBallSize < minCollisionRange ?
-        minCollisionRange :
-        fireBallSize
-    )
+    Max(minCollisionRange, fireBallSize)
 ){
     ExplodeFireBall();
 }
@@ -1626,34 +1644,26 @@ void ExplodeFireBall()"ExplodeFireBall"{
     // get target
     perkTargets = 
         PlayersWithinRadius(
-            perkPosition,
-            (fireBallDamageRange < minCollisionRange ? minCollisionRange : fireBallDamageRange),
+            perkPosition, Max(minCollisionRange, fireBallBlastRange),
             Team.Team2, RadiusLOS.Off);
-    // apply Impulse
-    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
-        ApplyImpulse(perkTargets[pLoopIndex],
-            VectorTowards(perkPosition, perkTargets[pLoopIndex] + Up()),
-            fireBallSize * 10, Relative.ToWorld, ContraryMotion.Cancel);
-    }
-    // show impulse
-    WaitEntityImpulse();
+    // apply blast impulse
+    ApplyBlastImpulse(perkTargets, perkPosition, fireBallBlastRange);
     // damage
     Damage(perkTargets, EventPlayer(), fireBallPower);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.White, perkPosition, fireBallPower * 1);
-
-    fireBallPower = 0;
-
+        Color.White, perkPosition, fireBallBlastRange * 50);
     // play blast effect
     PlayContinuousBlast(
         Color.Orange,
         perkPosition,
-        fireBallDamageRange,
-        fireBallSize < 7 ? fireBallSize : 7);
+        fireBallBlastRange,
+        Min(7, fireBallSize));
 
-    Wait(1, WaitBehavior.IgnoreCondition);
+    // reset charge
+    fireBallPower = 0;
+
     perkEffectStatus = PerkEffectStatus.Ready;
 }
 
@@ -1706,6 +1716,10 @@ if(
     CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
         landZonePosition, artilleryLandingRange, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[4] = LastCreatedEntity();
+    // landing zone position
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
+        landZonePosition, 0.2, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[5] = LastCreatedEntity(); 
 }
 rule: "Perk/Player/ArtilleryRequest/deactivate"
 Event.OngoingPlayer
@@ -1722,6 +1736,7 @@ if(
     DestroyEffect(perkEffectAndText[2]);
     DestroyEffect(perkEffectAndText[3]);
     DestroyEffect(perkEffectAndText[4]);
+    DestroyEffect(perkEffectAndText[5]);
     StopChasingVariable(perkPosition);
     StopChasingVariable(perkPosition2);
     // reset type
@@ -1740,9 +1755,10 @@ if(
     perkPosition2 = InvalidPosition();
 
     // set shell land position to aiming position
-    landZonePosition = AimingPosition();
+    landZonePosition = BelowPosition(AimingPosition());
     Wait(3, WaitBehavior.AbortWhenFalse);
     DestroyEffect(perkEffectAndText[4]);
+    DestroyEffect(perkEffectAndText[5]);
     firstAnimationDelay = true;
     perkEffectStatus = attackCount;
 }
@@ -1781,7 +1797,7 @@ if(
     // hide shell
     perkPosition = InvalidPosition();
     // on landed play blast
-    async ExplodeShell(landPosition);
+    async ExplodeArtilleryShell(landPosition);
     perkEffectStatus -- ;
     LoopIfConditionIsTrue();
 }
@@ -1820,12 +1836,12 @@ if(
     // hide shell
     perkPosition2 = InvalidPosition();
     // on landed play blast
-    async ExplodeShell(landPosition2);
+    async ExplodeArtilleryShell(landPosition2);
     perkEffectStatus -- ;
     LoopIfConditionIsTrue();
 }
 
-void ExplodeShell(define position)"ExplodeShell"{
+void ExplodeArtilleryShell(define position)"ExplodeArtilleryShell"{
     // get target
     perkTargets = 
         PlayersWithinRadius(
@@ -1941,7 +1957,7 @@ if(
         EventPlayer(), PlayEffect.DebuffImpactSound,
         Color.White, EventPlayer(), MaxValue());
 
-    aimPosition = AimingPosition();
+    aimPosition = BelowPosition(AimingPosition());
     approachingAngle = DirectionFromAngles(
                 RandomReal(0, 360), 0);
     // set start point
@@ -2047,7 +2063,7 @@ if(
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.Red,
+        Color.White,
         landPosition2,
         strafReqDamageRange);
     // play blast sound
@@ -2093,20 +2109,20 @@ if(
     perkPosition =
         aimPosition +
         DirectionTowards(aimPosition, perkPosition) * 
-        (strafReqAttackDistance * 25) +
+        (strafReqAttackDistance * 20) +
         Vector(0, 75 , 0); 
     // set end point
     perkPosition2 = 
         aimPosition +
         DirectionTowards(aimPosition, perkPosition2) *
-        (strafReqAttackDistance * 25) +
+        (strafReqAttackDistance * 20) +
         Vector(0, 75 , 0); 
     // air craft
-    CreateEffect(AllPlayers(), Effect.Orb, Color.White,
+    CreateEffect(AllPlayers(), Effect.Orb, Color.Red,
         landPosition, 1, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[1] = LastCreatedEntity();
     // air craft aura
-    CreateEffect(AllPlayers(), Effect.GoodAura, Color.White,
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
         landPosition, 10, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[2] = LastCreatedEntity();
 
@@ -2174,7 +2190,7 @@ if(
         landPosition, 0.2, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[6] = LastCreatedEntity();  
     // landing zone warning icon
-    CreateIcon(AllPlayers(), landPosition + (PositionOffset()*2), Icon.Warning,
+    CreateIcon(AllPlayers(), landPosition + (Up() * 2), Icon.Warning,
         IconRev.VisibleToAndPosition, Color.Yellow, true);
     perkEffectAndText[7] = LastCreatedEntity();
     // set hud
@@ -2320,17 +2336,13 @@ if(
             perkPosition, missleDamageRange,
             Team.Team1, RadiusLOS.Off
         ), null, Status.KnockedDown, 3);
-    // apply Impulse
+    // get target
     perkTargets = 
         PlayersWithinRadius(
             aimPosition, missleDamageRange,
             Team.Team2, RadiusLOS.Off);
-    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
-        ApplyImpulse(perkTargets[pLoopIndex],
-            VectorTowards(perkPosition, perkTargets[pLoopIndex] + Up()),
-            2000, Relative.ToWorld, ContraryMotion.Cancel);
-    }
-    WaitEntityImpulse();
+    // apply blast impulse
+    ApplyBlastImpulse(perkTargets, perkPosition, missleDamageRange);
     // damage
     Damage(
         PlayersWithinRadius(
@@ -2347,8 +2359,10 @@ if(
         perkPosition,
         missleDamageRange,
         7);
+
     perkState = PerkState.Non;
 }
+
 // TAG OrbitalLaser ----------
 define lazerDamageRange: 3;
 rule: "Perk/Player/OrbitalLaser/activate"
@@ -2576,7 +2590,7 @@ if(
         landPosition, 0.1, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[6] = LastCreatedEntity();
     // landing zone check icon
-    CreateIcon(AllPlayers(), landPosition + PositionOffset(), Icon.Heart,
+    CreateIcon(AllPlayers(), landPosition + (Up() * 2), Icon.Heart,
         IconRev.VisibleToAndPosition, Color.Turquoise, true);
     perkEffectAndText[7] = LastCreatedEntity();
 }
@@ -2634,7 +2648,7 @@ if(
     perkPosition = EventPlayer() +
         Vector(0, 125, 0) + RandomPosition(0, 0, 0);
     // set package land position to player position
-    landPosition = BelowPosition(PositionOf());
+    landPosition = BelowPosition(EventPlayer());
     // start package move
     UpdateEveryFrame(perkPosition);
     ChaseVariableOverTime(
@@ -3342,7 +3356,7 @@ if(
     perkEffectStatus = PerkEffectStatus.Triggered;
 }
 
-define bombDamageRange: 6;
+define gravityBombDamageRange: 6;
 
 rule: "Perk/Player/Juggernaut/triggerGravityBomb"
 Event.OngoingPlayer
@@ -3354,7 +3368,7 @@ if(
     perkEffectStatus == PerkEffectStatus.Triggered &&
     IsButtonHeld(EventPlayer(), Button.SecondaryFire)
 ){
-    ExplodeBomb();
+    ExplodeGravityBomb();
 }
 
 rule: "Perk/Player/Juggernaut/landedGravityBomb"
@@ -3367,7 +3381,7 @@ if(
     perkEffectStatus == PerkEffectStatus.Triggered &&
     perkPosition2 == aimPosition2
 ){
-    ExplodeBomb();
+    ExplodeGravityBomb();
 }
 
 rule: "Perk/Player/Juggernaut/timeoutGravityBomb"
@@ -3380,10 +3394,10 @@ if(
     perkEffectStatus == PerkEffectStatus.Triggered
 ){
     Wait(3, WaitBehavior.AbortWhenFalse);
-    ExplodeBomb();
+    ExplodeGravityBomb();
 }
 
-void ExplodeBomb()"ExplodeBomb"{
+void ExplodeGravityBomb()"ExplodeGravityBomb"{
     perkEffectStatus = PerkEffectStatus.SecondTriggered;
     // stop aura
     StopChasingVariable(perkPosition2);
@@ -3396,16 +3410,10 @@ void ExplodeBomb()"ExplodeBomb"{
     // get target
     perkTargets = 
         PlayersWithinRadius(
-            perkPosition2, bombDamageRange,
+            perkPosition2, gravityBombDamageRange,
             Team.Team2, RadiusLOS.Off);
-    // apply Impulse
-    for(pLoopIndex = 0; pLoopIndex < CountOf(perkTargets); pLoopIndex++){
-        ApplyImpulse(perkTargets[pLoopIndex],
-            VectorTowards(perkPosition2, perkTargets[pLoopIndex] + Up()),
-            30, Relative.ToWorld, ContraryMotion.Cancel);
-    }
-    // show impulse
-    WaitEntityImpulse();
+    // apply blast impulse
+    ApplyBlastImpulse(perkTargets, perkPosition2, gravityBombDamageRange);
     // damage
     Damage(perkTargets, EventPlayer(), 600);
     // play blast sound
@@ -3416,7 +3424,7 @@ void ExplodeBomb()"ExplodeBomb"{
     PlayContinuousBlast(
         Color.LimeGreen,
         perkPosition2,
-        bombDamageRange,
+        gravityBombDamageRange,
         5);
 }
 
