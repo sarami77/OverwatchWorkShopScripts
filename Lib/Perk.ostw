@@ -1245,8 +1245,11 @@ void AutoAim()"AutoAim"{
             )
         );
     }
-    // has target
-    if(perkTargets != 0){
+    // has target and sighted
+    if(
+        perkTargets != 0 &&
+        IsInLineOfSight(EventPlayer(), perkTargets)
+    ){
         // target changed
         if(autoAimingTarget != perkTargets){
             // update target
@@ -1654,19 +1657,19 @@ void ExplodeFireBall()"ExplodeFireBall"{
     perkEffectStatus = PerkEffectStatus.Ready;
 }
 
-// TAG ArtilleryFireRequest ----------
+// TAG ArtilleryRequest ----------
 define artilleryLandingRange: 20;
 define artilleryDamageRange: 7;
 define attackTime: 10;
 define attackCount: 30;
 playervar define landZonePosition;
 
-rule: "Perk/Player/ArtilleryFireRequest/activate"
+rule: "Perk/Player/ArtilleryRequest/activate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.ArtilleryFireRequest &&
+    perkType == PerkType.ArtilleryRequest &&
     perkState == PerkState.Using
 ){
     // set time limit
@@ -1681,7 +1684,7 @@ if(
     // landing zone text
     perkEffectAndText = [];
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\rBarrage incoming. Stand by...", EventPlayer(), HeroIconString(HeroOf()), "Artillery Fire Request">,
+        AllPlayers(), <"<0> <1> <2>\n\rBarrage incoming. Stand by...", EventPlayer(), HeroIconString(HeroOf()), "Artillery Request">,
         landZonePosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[0] = LastTextID();
@@ -1704,12 +1707,12 @@ if(
         landZonePosition, artilleryLandingRange, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[4] = LastCreatedEntity();
 }
-rule: "Perk/Player/ArtilleryFireRequest/deactivate"
+rule: "Perk/Player/ArtilleryRequest/deactivate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.ArtilleryFireRequest &&
+    perkType == PerkType.ArtilleryRequest &&
     perkState == PerkState.Non
 ){
     // reset text
@@ -1725,12 +1728,12 @@ if(
     perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/ArtilleryFireRequest/setLandingZone"
+rule: "Perk/Player/ArtilleryRequest/setLandingZone"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.ArtilleryFireRequest &&
+    perkType == PerkType.ArtilleryRequest &&
     perkState == PerkState.Using
 ){
     perkPosition = InvalidPosition();
@@ -1749,12 +1752,12 @@ define parallelAnimationNum: 2;
 define attackSpeeed:
     (attackTime / attackCount) * parallelAnimationNum;
 
-rule: "Perk/Player/ArtilleryFireRequest/launchShell"
+rule: "Perk/Player/ArtilleryRequest/launchShell"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.ArtilleryFireRequest &&
+    perkType == PerkType.ArtilleryRequest &&
     perkState == PerkState.Using &&
     perkEffectStatus > 0
 ){
@@ -1783,12 +1786,12 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Perk/Player/ArtilleryFireRequest/launchShell2"
+rule: "Perk/Player/ArtilleryRequest/launchShell2"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.ArtilleryFireRequest &&
+    perkType == PerkType.ArtilleryRequest &&
     perkState == PerkState.Using &&
     perkEffectStatus > 0
 ){
@@ -1846,6 +1849,281 @@ void ExplodeShell(define position)"ExplodeShell"{
         2);
 }
 
+// TAG StrafingRequest ----------
+define strafReqLandingRange: 4;
+define strafReqDamageRange: 3.5;
+define strafReqAttackTime: 1.5;
+define strafReqAttackDistance: 25;
+define strafReqReloadTime: RandomInteger(4, 8);
+
+rule: "Perk/Player/StrafingRequest/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.StrafingRequest &&
+    perkState == PerkState.Using
+){
+    // set time limit
+    perkTimeLimit = 240;
+    // set status
+    perkPosition = 0;
+    perkPosition2 = 0;
+    landPosition = -1;
+    perkEffectStatus = PerkEffectStatus.Ready;
+    perkEffectAndText = [];
+    // set hud
+    perkEffectAndText = [];
+    CreatePerkEffectHud(
+        perkEffectStatus == PerkEffectStatus.Ready ?
+            <"Hold melee button <0> to call Strafing Request.", ButtonGuide(Button.Melee)> :
+            perkEffectStatus == PerkEffectStatus.Reloading ?
+                "Strafing Request in preparation..." :
+                "Strafing incoming!"
+        );
+    perkEffectAndText[3] = LastTextID();
+
+    // first use
+    StartHoldingButton(EventPlayer(), Button.Melee);
+    Wait(0.5, WaitBehavior.IgnoreCondition);
+    StopHoldingButton(EventPlayer(), Button.Melee);
+}
+rule: "Perk/Player/StrafingRequest/deactivate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.StrafingRequest &&
+    perkState == PerkState.Non
+){
+    // reset hud
+    DestroyInWorldText(perkEffectAndText[0]);
+    DestroyHudText(perkEffectAndText[3]);
+    // reset effect
+    DestroyEffect(perkEffectAndText[1]);
+    DestroyEffect(perkEffectAndText[2]);
+    StopChasingVariable(landPosition);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+
+rule: "Perk/Player/StrafingRequest/startCas"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.StrafingRequest &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Ready &&
+    IsButtonHeld(EventPlayer(), Button.Melee)
+){
+    WaitLongPressConfirm();
+    perkEffectStatus = PerkEffectStatus.Triggered;
+}
+
+playervar define approachingAngle;
+
+rule: "Perk/Player/StrafingRequest/setLandingZone"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.StrafingRequest &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered
+){
+    DestroyEffect(perkEffectAndText[1]);
+    DestroyEffect(perkEffectAndText[2]);
+
+    // play set sound
+    PlayEffect(
+        EventPlayer(), PlayEffect.DebuffImpactSound,
+        Color.White, EventPlayer(), MaxValue());
+
+    aimPosition = AimingPosition();
+    approachingAngle = DirectionFromAngles(
+                RandomReal(0, 360), 0);
+    // set start point
+    perkPosition = 
+        aimPosition + 
+            // add random direction
+            approachingAngle *
+            // add static distance
+            strafReqAttackDistance;
+    // set end point
+    perkPosition2 = 
+        aimPosition + 
+            // add random direction
+            -approachingAngle *
+            // add static distance
+            strafReqAttackDistance;
+
+    // landing zone text
+    CreateInWorldText(
+        AllPlayers(), <"<0> <1> <2>\n\rStrafing incoming!", EventPlayer(), HeroIconString(HeroOf()), "Strafing Request">,
+        aimPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    perkEffectAndText[0] = LastTextID();
+
+    // set effect
+    // landing zone blast range
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
+        landPosition, strafReqLandingRange, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[1] = LastCreatedEntity();
+    // landing zone position
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
+        aimPosition, 0.2, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[2] = LastCreatedEntity(); 
+
+    // play landing animation
+    landPosition = perkPosition;
+    ChaseVariableOverTime(
+        landPosition, perkPosition2,
+        strafReqAttackTime,
+        TimeChaseReevaluation.DestinationAndDuration);
+    Wait(strafReqAttackTime, WaitBehavior.AbortWhenFalse);
+
+    StopChasingVariable(landPosition);
+    DestroyEffect(perkEffectAndText[1]);
+    DestroyEffect(perkEffectAndText[2]);
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
+
+    // start attack
+    perkEffectStatus = PerkEffectStatus.SecondTriggered;
+}
+
+
+rule: "Perk/Player/StrafingRequest/moveLandPoint"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.StrafingRequest &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.SecondTriggered
+){
+    // chase landing position
+    landPosition = perkPosition;
+    UpdateEveryFrame(landPosition);
+    ChaseVariableOverTime(
+        landPosition, perkPosition2,
+        strafReqAttackTime,
+        TimeChaseReevaluation.DestinationAndDuration);
+    Wait(strafReqAttackTime, WaitBehavior.IgnoreCondition);
+
+    StopChasingVariable(landPosition);
+    DestroyInWorldText(perkEffectAndText[0]);
+
+    // start reload
+    perkEffectStatus = PerkEffectStatus.Reloading;
+}
+
+rule: "Perk/Player/StrafingRequest/landedToPoint"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.StrafingRequest &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.SecondTriggered
+){
+    DestroyEffect(perkEffectAndText[1]);
+    DestroyEffect(perkEffectAndText[2]);
+
+    landPosition2 =
+        landPosition + 
+        RandomPosition(
+            strafReqLandingRange / 1.5,
+            0,
+            strafReqLandingRange / 1.5
+        );
+    // splash damage
+    Damage(
+        PlayersWithinRadius(
+            landPosition2, strafReqDamageRange,
+            Team.Team2, RadiusLOS.Off),
+        EventPlayer(), 250);
+    // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Red,
+        landPosition2,
+        strafReqDamageRange);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White,
+        landPosition2,
+        100);
+    Wait(0.05, WaitBehavior.IgnoreCondition);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/StrafingRequest/coolDown"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.StrafingRequest &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Reloading
+){
+    Wait(strafReqReloadTime, WaitBehavior.AbortWhenFalse);
+    // play ready sound
+    PlayEffect(
+        EventPlayer(), PlayEffect.BuffImpactSound,
+        Color.White, EventPlayer(), 80);
+    perkEffectStatus = PerkEffectStatus.Ready;
+}
+
+rule: "Perk/Player/StrafingRequest/playAircraftAnimation"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.StrafingRequest &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Reloading
+){
+    DestroyEffect(perkEffectAndText[1]);
+    DestroyEffect(perkEffectAndText[2]);
+
+    // set start point
+    perkPosition =
+        aimPosition +
+        DirectionTowards(aimPosition, perkPosition) * 
+        (strafReqAttackDistance * 25) +
+        Vector(0, 75 , 0); 
+    // set end point
+    perkPosition2 = 
+        aimPosition +
+        DirectionTowards(aimPosition, perkPosition2) *
+        (strafReqAttackDistance * 25) +
+        Vector(0, 75 , 0); 
+    // air craft
+    CreateEffect(AllPlayers(), Effect.Orb, Color.White,
+        landPosition, 1, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[1] = LastCreatedEntity();
+    // air craft aura
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.White,
+        landPosition, 10, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[2] = LastCreatedEntity();
+
+    // play air craft animation
+    landPosition = perkPosition;
+    UpdateEveryFrame(landPosition);
+    ChaseVariableOverTime(
+        landPosition, perkPosition2,
+        strafReqAttackTime * 1.5,
+        TimeChaseReevaluation.DestinationAndDuration);
+    Wait(strafReqAttackTime * 1.5, WaitBehavior.IgnoreCondition);
+    StopChasingVariable(landPosition);
+
+    DestroyEffect(perkEffectAndText[1]);
+    DestroyEffect(perkEffectAndText[2]);
+}
+
 // TAG CruisingMissile ----------
 define missleDamageRange: 20;
 rule: "Perk/Player/CruisingMissile/activate"
@@ -1892,8 +2170,8 @@ if(
         landPosition, missleDamageRange, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[5] = LastCreatedEntity();
     // landing zone position
-    CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
-        landPosition, 0.1, EffectRev.VisibleToPositionAndRadius);
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
+        landPosition, 0.2, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[6] = LastCreatedEntity();  
     // landing zone warning icon
     CreateIcon(AllPlayers(), landPosition + (PositionOffset()*2), Icon.Warning,
@@ -1972,7 +2250,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Perk/Player/CruisingMissile/launchMissile"
+rule: "Perk/Player/CruisingMissile/setLandingZone"
 Event.OngoingPlayer
 Team.Team1
 Player.All
@@ -2560,7 +2838,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Perk/Player/DeathFromAbove/playAfterburner"
+rule: "Perk/Player/DeathFromAbove/playAfterBurner"
 Event.OngoingPlayer
 Team.Team1
 Player.All
@@ -2593,18 +2871,18 @@ if(
 ){
     // get aimPosition
     aimPosition = AimingPosition();
-    landPosition = RandomPosition(0.625, 0.625, 0.625);
+    define randomPosition = RandomPosition(0.625, 0.625, 0.625);
     // splash damage
     Damage(
         PlayersWithinRadius(
-            aimPosition + landPosition, splashDamageRangeMinigun,
+            aimPosition + randomPosition, splashDamageRangeMinigun,
             Team.Team2, RadiusLOS.Off),
         EventPlayer(), 50);
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
         Color.Yellow,
-        aimPosition + landPosition,
+        aimPosition + randomPosition,
         splashDamageRangeMinigun);
     WaitContinuousBlastCycle();
 
@@ -2994,7 +3272,7 @@ if(
     IsFiringPrimary()
 )
 {
-    SetMoveSpeed(EventPlayer(), 30);
+    SetMoveSpeed(EventPlayer(), 25);
 }
 
 rule: "Perk/Player/Juggernaut/resetFiringSlow"
@@ -3028,7 +3306,7 @@ if(
         PlayersWithinRadius(
             aimPosition + landPosition, splashDamageRangeMinigun,
             Team.Team2, RadiusLOS.Off),
-        EventPlayer(), 30);
+        EventPlayer(), 40);
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
@@ -3038,7 +3316,6 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// splashDamage
 rule: "Perk/Player/Juggernaut/shotGravityBomb"
 Event.OngoingPlayer
 Team.Team1
@@ -3130,7 +3407,7 @@ void ExplodeBomb()"ExplodeBomb"{
     // show impulse
     WaitEntityImpulse();
     // damage
-    Damage(perkTargets, EventPlayer(), 500);
+    Damage(perkTargets, EventPlayer(), 600);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
@@ -3310,7 +3587,7 @@ if(
         PlayEffect(
             AllPlayers(), PlayEffect.GoodExplosion,
             Color.Aqua, perkTargets, beamSniperDamageRange);
-        Damage(perkTargets, EventPlayer(), 300);
+        Damage(perkTargets, EventPlayer(), 400);
     }
     // give splash damage to enemy near landed position
     perkTargets = FilteredArray(
@@ -3459,7 +3736,7 @@ if(
     // set status
     SetStatus(EventPlayer(), null, Status.Rooted, MaxValue());
     SetGravity(EventPlayer(), 0);
-    SetDamageDealt(EventPlayer(), 600);
+    SetDamageDealt(EventPlayer(), 700);
     // show enemy outline
     StartForcingPlayerOutlines(
         AllLivingPlayers(Team.Team2),
@@ -3902,8 +4179,8 @@ if(
     perkState == PerkState.Using &&
     IsUsingUltimate()
 ){
-    SetDamageDealt(EventPlayer(), 300);
-    SetMoveSpeed(EventPlayer(), 300);
+    SetDamageDealt(EventPlayer(), 400);
+    SetMoveSpeed(EventPlayer(), 400);
 
     perkTargets = 
         SortedArray(
