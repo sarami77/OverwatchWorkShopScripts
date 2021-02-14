@@ -65,16 +65,16 @@ if(
         SetSlowMotion(100);
     }
     else if(overloadDuring == 1){
-        SetSlowMotion(90);
+        SetSlowMotion(95);
     }
     else if(overloadDuring == 2){
-        SetSlowMotion(80);
+        SetSlowMotion(90);
     }
     else if(overloadDuring == 3){
-        SetSlowMotion(70);
+        SetSlowMotion(80);
     }
     else if(overloadDuring == 4){
-        SetSlowMotion(60);
+        SetSlowMotion(70);
     }
     else if(overloadDuring == 5){
         SetSlowMotion(50);
@@ -639,25 +639,25 @@ if(
     enemyType != EnemyType.None
 ){
     if(enemyType == EnemyType.Minion){ 
-        eachMaxSpawnInterval =  WorkshopSettingReal("Enemy Settings", "(Minion) Inital Spawn Interval", 3, 0, 100, 4);      // TAG maxSpawnInterva
-        eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Minion) Dealt Damage Scale", 0.5, 0, 100, 5);
-        //eachGetUltTime =        WorkshopSettingReal("Enemy Settings", "(Minion) Get Ultmate Time", 30, 0, 100, 6);
+        eachMaxSpawnInterval =  WorkshopSettingReal("Enemy Settings", "(Minion) Inital Spawn Interval",   3, 0, 100, 4);      // TAG maxSpawnInterva
+        eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Minion) Dealt Damage Scale",    0.5, 0, 100, 5);
+        eachMoveSpeedScale =    WorkshopSettingReal("Enemy Settings", "(Minion) Walk Speed Scale",      1.0, 0, 100, 6);
         SetMaxHealth(EventPlayer(), 50);
         StartScalingPlayer(EventPlayer(), 1.0, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
     }
     else if(enemyType == EnemyType.Elite){
-        eachMaxSpawnInterval =  WorkshopSettingReal("Enemy Settings", "(Elite) Inital Spawn Interval", 9, 0, 100, 7);
-        eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Elite) Dealt Damage Scale", 1.0, 0, 100, 8);
-        //eachGetUltTime =        WorkshopSettingReal("Enemy Settings", "(Elite) Get Ultmate Time", 10, 0, 100, 9);
+        eachMaxSpawnInterval =  WorkshopSettingReal("Enemy Settings", "(Elite) Inital Spawn Interval",   9, 0, 100, 7);
+        eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Elite) Dealt Damage Scale",    1.0, 0, 100, 8);
+        eachMoveSpeedScale =    WorkshopSettingReal("Enemy Settings", "(Elite) Walk Speed Scale",     0.75, 0, 100, 9);
         SetMaxHealth(EventPlayer(), 300);
         StartScalingPlayer(EventPlayer(), 1.2, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.4, false);
     }
     else if(enemyType == EnemyType.Boss){
-        eachMaxSpawnInterval =  WorkshopSettingReal("Enemy Settings", "(Boss) Inital Spawn Interval", 20, 0, 100, 10);
-        eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Boss) Dealt Damage Scale", 1.5, 0, 100, 11);
-        //eachGetUltTime =        WorkshopSettingReal("Enemy Settings", "(Boss) Get Ultmate Time", 5, 0, 100, 12);
+        eachMaxSpawnInterval =  WorkshopSettingReal("Enemy Settings", "(Boss) Inital Spawn Interval",   20, 0, 100, 10);
+        eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Boss) Dealt Damage Scale",     1.5, 0, 100, 11);
+        eachMoveSpeedScale =    WorkshopSettingReal("Enemy Settings", "(Boss) Walk Speed Scale",       0.5, 0, 100, 12);
         SetMaxHealth(EventPlayer(), 900);
         StartScalingPlayer(EventPlayer(), 1.5, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.2, false);
@@ -934,7 +934,6 @@ if(
     !portalEnable
 ){
     // Lock enemies when portal is disable so they can't leave the spawn room
-    WaitConditionConfirmed();
     SetStatus(AllPlayers(Team.Team2), null, Status.Rooted, MaxValue());
 }
 
@@ -944,7 +943,6 @@ if(
     portalEnable
 ){
     // Release lock enemies when portal is enable
-    WaitConditionConfirmed();
     ClearStatus(AllPlayers(Team.Team2), Status.Rooted);
 }
 
@@ -958,7 +956,7 @@ Event.OngoingGlobal
     // Multiply damage rate
     confirmReceiveDamage = 100;
     // Apply balance multiplier
-    confirmReceiveDamage *= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy received damage scale
+    confirmReceiveDamage *= ConvertToBalancedValue(0.6, Team.Team1);     // TAG enemy received damage scale
     SetDamageReceived(AllPlayers(Team.Team2), confirmReceiveDamage);
     LoopIfConditionIsTrue();
 }
@@ -979,24 +977,17 @@ Player.All
     confirmDealDamage += roundNo * WorkshopSettingReal("Enemy Settings", "Increase Deal Damage Per Round Progress", 1.5, 0, 1000, 2);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
-    confirmDealDamage /= ConvertToBalancedValue(0.75, Team.Team1);     // TAG enemy dealt damage scale
+    confirmDealDamage /= ConvertToBalancedValue(0.6, Team.Team1);     // TAG enemy dealt damage scale
     SetDamageDealt(EventPlayer(), confirmDealDamage);
 
     LoopIfConditionIsTrue();
 }
 
-globalvar define _EnemySpeedScale;
-globalvar define maxHiddenSpeed;
-globalvar define confirmHiddenSpeed;
-playervar define isHiddenSpeed;
+playervar define eachMoveSpeedScale;
+globalvar define hiddenSpeedScale;
+playervar define confirmMoveSpeed;
 
 rule: "Enemy/HiddenSpeed/setHiddenSpeed"
-Event.OngoingGlobal
-{
-    maxHiddenSpeed = WorkshopSettingReal("Enemy Settings", "Max Move Speed When Hidden", 500, 100, 1000, 3);
-}
-
-rule: "Enemy/HiddenSpeed/updateByPortalSize //for round harder, increase by growing portal size"
 Event.OngoingGlobal
 if(
     portalState == PortalState.Growing
@@ -1004,40 +995,41 @@ if(
     WaitUpdateMediumCycle();
     // Increase enemy hidden speed depending on portal size
     // Portals that have grown significantly over time will send quickly more enemies.
-    _EnemySpeedScale = portalSize;
-    _EnemySpeedScale /= maxPortalSize;
-    confirmHiddenSpeed = maxHiddenSpeed;
-    confirmHiddenSpeed *= _EnemySpeedScale;
-    confirmHiddenSpeed += 100;
+    hiddenSpeedScale = WorkshopSettingReal("Enemy Settings", "Additional Max Move Speed Scale When Hidden From Player", 5, 0, 1000, 3);
+    hiddenSpeedScale *= (portalSize / maxPortalSize);
+    hiddenSpeedScale += 1;
+    define enemyArray = FilteredArray(AllPlayers(Team.Team2), ArrayElement().isHidden);
+    for(gLoopIndex = 0; gLoopIndex < CountOf(enemyArray); gLoopIndex++){
+        define anEnemy = enemyArray[gLoopIndex];
+        anEnemy.confirmMoveSpeed = 100 * anEnemy.eachMoveSpeedScale * hiddenSpeedScale;
+        SetMoveSpeed(anEnemy, anEnemy.confirmMoveSpeed);
+    }
     LoopIf(portalSize < maxPortalSize);
 }
 
-rule: "Enemy/HiddenSpeed/enableByGetOutOfSight //when not visible from players, quickly approach the player and hunt down"
+playervar define isHidden;
+
+rule: "Enemy/HiddenSpeed/enable //when not visible from players, quickly approach the player and hunt down"
 Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
     portalEnable &&
-    IsAlive()
+    IsAlive() &&
+    !IsInLineOfSight(EventPlayer(),
+        ClosestPlayerTo(EventPlayer(), Team.Team1),
+        BarrierLOS.NoBarriersBlock
+    )
 ){
     // Hidden Speed is active when the player can't see the enemy
-    if(
-        !IsInLineOfSight(EventPlayer(),
-            ClosestPlayerTo(EventPlayer(), Team.Team1),
-            BarrierLOS.NoBarriersBlock)
-    ){
-        // Players are surrounded by many enemies, making the game more chaotic and fluid
-        SetMoveSpeed(EventPlayer(), confirmHiddenSpeed);
-        // The portal may growing and changing in size, so repeat speed changes
-    }
-    else{
-        SetMoveSpeed(EventPlayer(), DefaultPercentage());
-    }
-    WaitUpdateMediumCycle();
-    LoopIfConditionIsTrue();
+    // Players are surrounded by many enemies, making the game more chaotic and fluid
+    Wait(1, WaitBehavior.AbortWhenFalse); // wait enable hidden speed
+    isHidden = true;
+    confirmMoveSpeed = 100 * eachMoveSpeedScale * hiddenSpeedScale;
+    SetMoveSpeed(EventPlayer(), confirmMoveSpeed);
 }
 
-rule: "Enemy/HiddenSpeed/disableByGetInSight //when visible from players, fight at basic speed"
+rule: "Enemy/HiddenSpeed/disable //when visible from players, fight at basic speed"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -1051,8 +1043,10 @@ if(
 ){
     // Hidden Speed is deactive when the player can see the enemy
     // Enemies move at normal speed, making it easier for players to attack enemies
-    Wait(0.1, WaitBehavior.AbortWhenFalse); // wait disable hidden speed
-    SetMoveSpeed(EventPlayer(), 100);
+    Wait(0.01, WaitBehavior.AbortWhenFalse); // wait disable hidden speed
+    isHidden = false;
+    confirmMoveSpeed = 100 * eachMoveSpeedScale;
+    SetMoveSpeed(EventPlayer(), confirmMoveSpeed);
 }
 
 playervar define eachMaxSpawnInterval;
@@ -1157,8 +1151,16 @@ if(
     StopChasingVariable(portalSize);
     portalPosition = 0;
     portalSize = 0;
-    confirmHiddenSpeed = 100;
     isFirstGrowing = true;
+    hiddenSpeedScale = 1;
+    // Init enemy move speed
+    define enemyArray = AllPlayers(Team.Team2);
+    for(gLoopIndex = 0; gLoopIndex < CountOf(enemyArray); gLoopIndex++){
+        define anEnemy = enemyArray[gLoopIndex];
+        anEnemy.confirmMoveSpeed = 100;
+        anEnemy.confirmMoveSpeed *= anEnemy.eachMoveSpeedScale;
+        SetMoveSpeed(anEnemy, anEnemy.confirmMoveSpeed);
+    }
     // Hide portal icon and effect
     DestroyIcon(portalEntitys[0]);
     DestroyEffect(portalEntitys[1]);
@@ -1344,7 +1346,7 @@ if(
     portalState = PortalState.Checking;
     // fail safe
     Wait(6, WaitBehavior.AbortWhenFalse);
-	//dbgMsg("failsafe triggered of createPortal");
+	dbgMsg("failsafe triggered of createPortal");
     LoopIfConditionIsTrue();
 }
 
@@ -1364,7 +1366,7 @@ if(
     portalState = PortalState.Set;
     // fail safe
     Wait(6, WaitBehavior.AbortWhenFalse);
-    //dbgMsg("failsafe triggered of positionChecking");
+    dbgMsg("failsafe triggered of positionChecking");
     LoopIfConditionIsTrue();
 }
 
@@ -1416,7 +1418,7 @@ if(
 ){
     // If the suicide count reaches 0,
     //  it is determined that the portal position is incorrect and the portal is recreate
-    //dbgMsg("reset Portal by Detect Invalid Area");
+    dbgMsg("reset Portal by Detect Invalid Area");
     portalState = PortalState.Calculating;
 }
 
@@ -1452,7 +1454,7 @@ if(
     // If the portal position is in the cloased area,
     //  it is determined that the portal position is incorrect and the portal is recreate
     Wait(positionCheckTime - 0.01, WaitBehavior.AbortWhenFalse);
-    //dbgMsg("reset Portal by Detect Closed Area");
+    dbgMsg("reset Portal by Detect Closed Area");
     portalState = PortalState.Calculating;
 }
 
@@ -1465,7 +1467,7 @@ if(
     // If the portal position is in the enemy spawn area,
     //  it is determined that the portal position is incorrect and the portal is recreate
     Wait(positionCheckTime - 0.01, WaitBehavior.AbortWhenFalse);   // wait teleport to portal
-    //dbgMsg("reset Portal by Detect Respawn Room");
+    dbgMsg("reset Portal by Detect Respawn Room");
     portalState = PortalState.Calculating;
 }
 
@@ -1508,7 +1510,7 @@ if(
 ){
     // If the player and enemy haven't been met for some time,
     //  it is determined that the portal position is incorrect and the portal is recreate
-    //dbgMsg("reset Portal by Detect Remote Area");
+    dbgMsg("reset Portal by Detect Remote Area");
     portalState = PortalState.Calculating;
 }
 
@@ -1701,7 +1703,25 @@ void ShowDebugHud()"ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "enemy Hidden Speed", confirmHiddenSpeed>,
+        <"<0> <1>", "enemy Move Speed (boss)", PlayersInSlot(0, Team.Team2).confirmMoveSpeed>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Red, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[End()] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "enemy Move Speed (elite)", PlayersInSlot(1, Team.Team2).confirmMoveSpeed>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Red, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[End()] = LastTextID();
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "enemy Move Speed (minion)", PlayersInSlot(3, Team.Team2).confirmMoveSpeed>,
         null,
         Location.Left, -1,
         Color.White, Color.Red, Color.White,
@@ -1919,23 +1939,4 @@ if(
     WaitUntil(portalState != PortalState.Calculating, 5);
     portalPosition = debugAimingPosition;
     Respawn(AllPlayers(Team.Team2));
-}
-
-rule: "Debug/setPortalMaxSize"
-Event.OngoingPlayer
-Team.All
-Player.All
-if(
-    HostPlayer() == EventPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.Reload) &&
-    IsButtonHeld(EventPlayer(), Button.Crouch)
-){
-    // Set portal position to aim center
-    WaitLongPressConfirm();
-    portalSize = maxPortalSize;
-    confirmHiddenSpeed = maxHiddenSpeed;
-    SetMoveSpeed(AllPlayers(Team.Team2), confirmHiddenSpeed);
-    AllPlayers(Team.Team2).confirmSpawnInterval = 0;
-    SetRespawnMaxTime(AllPlayers(Team.Team2), 1);
 }
