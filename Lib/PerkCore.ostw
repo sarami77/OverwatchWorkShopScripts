@@ -99,7 +99,7 @@ Event.OngoingGlobal
 
 rule: "Perk/CreatState/NotDropped"
 Event.OngoingPlayer
-Team.Team2
+//Team.Team2
 Player.All
 if(
     perkCrateState == PerkCrateState.NotDropped
@@ -113,7 +113,7 @@ if(
 
 rule: "Perk/CreatState/Dropped"
 Event.OngoingPlayer
-Team.Team2
+//Team.Team2
 Player.All
 if(
     perkCrateState == PerkCrateState.Dropped
@@ -134,6 +134,7 @@ Event.OnDeath
 Team.Team2
 Player.All
 if(
+    perkCrateState == PerkCrateState.NotDropped &&
     Attacker() != EventPlayer()
 ){
     // The more people who do not have a park, the higher the drop rate
@@ -154,7 +155,7 @@ if(
 
 rule: "Perk/Enemy/clearPerkCrate //by 30second timer"
 Event.OngoingPlayer
-Team.Team2
+//Team.Team2
 Player.All
 if(
     perkCrateState == PerkCrateState.Dropped
@@ -169,7 +170,7 @@ playervar define playerClosestCrate;
 
 rule: "Perk/Enemy/perkPickUpByPlayer //Giving a park to the player who touched the crate"
 Event.OngoingPlayer
-Team.Team2
+//Team.Team2
 Player.All
 if(
     perkCrateState == PerkCrateState.Dropped &&
@@ -177,8 +178,9 @@ if(
         FilteredArray(
             AllPlayers(Team.Team1),
             (
+                !ArrayElement().notPickupPerk &&
+                TeamOf(ArrayElement()) == Team.Team1 &&
                 ArrayElement().perkState == PerkState.Non &&
-                ArrayElement().perkType == PerkType.Non &&
                 DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
             )
         )
@@ -192,6 +194,7 @@ if(
             FilteredArray(
                 AllPlayers(Team.Team1),
                 (
+                    TeamOf(ArrayElement()) == Team.Team1 &&
                     ArrayElement().perkState == PerkState.Non &&
                     DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
                 )
@@ -206,7 +209,13 @@ if(
         Color.White, playerClosestCrate, MaxLength());
     SmallMessage(playerClosestCrate, "Got perk. Check detail from left list.");
     // set perk
-    playerClosestCrate.perkType = RandomValueInArray(lotteryPerkList);
+    if(dropedPerkType != PerkType.Non){
+        playerClosestCrate.perkType = dropedPerkType;
+        dropedPerkType = PerkType.Non;
+    }
+    else{
+        playerClosestCrate.perkType = RandomValueInArray(lotteryPerkList);
+    }
     playerClosestCrate.perkState = PerkState.Ready;
     // delete perk crate when picked up
     perkCrateState = PerkCrateState.NotDropped;
@@ -214,7 +223,7 @@ if(
 
 rule: "Perk/Enemy/alreadykPickUpByPlayer"
 Event.OngoingPlayer
-Team.Team2
+//Team.Team2
 Player.All
 if(
     perkCrateState == PerkCrateState.Dropped &&
@@ -222,6 +231,7 @@ if(
         FilteredArray(
             AllPlayers(Team.Team1),
             (
+                TeamOf(ArrayElement()) == Team.Team1 &&
                 ArrayElement().perkState != PerkState.Non &&
                 DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
             )
@@ -234,6 +244,7 @@ if(
             FilteredArray(
                 AllPlayers(Team.Team1),
                 (
+                    TeamOf(ArrayElement()) == Team.Team1 &&
                     ArrayElement().perkState != PerkState.Non &&
                     DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
                 )
@@ -242,7 +253,7 @@ if(
 
     // If player already have perk
     SmallMessage(playerClosestCrate, "Already have perk.");
-    SmallMessage(playerClosestCrate, <"First, long hold interact button <0> to cancel current perk.", ButtonGuide(Button.Interact)> );
+    SmallMessage(playerClosestCrate, <"First, double press interact button <0> to cancel current perk.", ButtonGuide(Button.Interact)> );
 }
 
 rule: "Perk/Player/ParkState/Non"
@@ -419,33 +430,43 @@ define CreatePerkTitleHud(define title):
 // show perk detail
 define CreatePerkDetailHud(define detail):
     CreateHudText(AllPlayers(),
-        null, detail, null,
+        null, <" <0>", detail>, null,
         Location.Left, (SlotOf() * 10) + 1,
         Color.Team1, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
 
-// show perk ready status
-define CreatePerkReadyHud():
+// show perk status and active time limit
+define CreatePerkStatusHud():
     CreateHudText(AllPlayers(),
-        null, null, <"  perk ready. hold interact button <0> to active.", ButtonGuide(Button.Interact)>,
+        null, null, 
+        perkState == PerkState.Ready ? 
+            <"  perk ready."> :
+            <"  perk active until <0> second.", perkTimeLimit>,
         Location.Left, (SlotOf() * 10) + 2,
-        Color.Team1, Color.White, Color.Yellow,
+        Color.White, Color.White,
+        perkState == PerkState.Ready ?
+            Color.Yellow : Color.Orange,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
 
-// show perk effect status
+// show perk operation
+define CreatePerkOperationHud():
+    CreateHudText(EventPlayer(),
+        null, null, 
+        perkState == PerkState.Ready ?
+            <"  Press interact button <0> to activate.\n\r  Double press interact button <0> to drop as crate.", ButtonGuide(Button.Interact)> :
+            <"  Double press interact button <0> to cancel.", ButtonGuide(Button.Interact)>,
+        Location.Left, (SlotOf() * 10) + 3,
+        Color.White, Color.White, 
+        perkState == PerkState.Ready ?
+            Color.Yellow : Color.Orange,
+        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+
+// show perk effect status on top
 define CreatePerkEffectHud(define text):
     CreateHudText(EventPlayer(),
         null, null, text,
         Location.Top, 4,
         Color.White, Color.White, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
-
-// show perk active status and active limit time
-define CreatePerkActiveHud():
-    CreateHudText(AllPlayers(),
-        null, null, <"  perk active until <0> second. long hold interact button <1> to cancel.", perkTimeLimit, ButtonGuide(Button.Interact)>,
-        Location.Left, (SlotOf() * 10) + 2,
-        Color.Team1, Color.White, Color.Orange,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
 
 // show active perk name on player head up
@@ -590,39 +611,33 @@ void ShowPerkHUD()"ShowPerkHUD"{
     // TAG perk common action
     perkHudEntitys = [];
     WaitRedraw();
-
     // show title hud
     CreatePerkTitleHud(perkName);
     perkHudEntitys[0] = LastTextID();
     WaitRedraw();
-
     // show detail hud
-    CreatePerkDetailHud(<" <0>", perkDetail>);
+    CreatePerkDetailHud(perkDetail);
     perkHudEntitys[1] = LastTextID();
     WaitRedraw();
-
     // show status hud
-    if(perkState == PerkState.Ready){
-        CreatePerkReadyHud();
-    }
-    else if(perkState == PerkState.Using){
-        CreatePerkActiveHud();
-    }
+    CreatePerkStatusHud();
     perkHudEntitys[2] = LastTextID();
     WaitRedraw();
-
+    // show operation hud
+    CreatePerkOperationHud();
+    perkHudEntitys[3] = LastTextID();
+    WaitRedraw();
     // show head up text
     if(perkState == PerkState.Using){
         CreateHeadUpText(perkName);
+        perkHudEntitys[4] = LastTextID();
+        WaitRedraw();
     }
-    perkHudEntitys[3] = LastTextID();
-    WaitRedraw();
-
     // show Aura effct
     if(perkState == PerkState.Using){
         CreateEffect(AllPlayers(), Effect.BadAura, Color.White,
             EventPlayer(), 1, EffectRev.VisibleToPositionAndRadius);
-        perkHudEntitys[4] = LastCreatedEntity();
+        perkHudEntitys[5] = LastCreatedEntity();
         WaitRedraw();
     }
 }
@@ -631,8 +646,9 @@ void HidePerkHUD()"HidePerkHUD"{
     DestroyHudText(perkHudEntitys[0]);
     DestroyHudText(perkHudEntitys[1]);
     DestroyHudText(perkHudEntitys[2]);
-    DestroyInWorldText(perkHudEntitys[3]);
-    DestroyEffect(perkHudEntitys[4]);
+    DestroyHudText(perkHudEntitys[3]);
+    DestroyInWorldText(perkHudEntitys[4]);
+    DestroyEffect(perkHudEntitys[5]);
 }
 
 rule: "Perk/Player/usePerk"
@@ -652,6 +668,37 @@ if(
         EventPlayer(), PlayEffect.BuffExplosionSound,
         Color.White, EventPlayer(), MaxLength());
     perkState = PerkState.Using;
+}
+
+playervar define notPickupPerk;
+playervar define dropedPerkType;
+
+rule: "Perk/Player/dropPerk"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    IsAlive() &&
+    perkState == PerkState.Ready &&
+    intaractDoublePressed
+){
+    WaitConditionConfirmed();
+    notPickupPerk = true;
+    dropedPerkType = perkType;
+    perkCratePosition = BelowPosition(PositionOf()) + PositionOffset();
+    perkCrateState = PerkCrateState.Dropped;
+    perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/releaseNotPickupPerk"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    notPickupPerk
+){
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    notPickupPerk = false;
 }
 
 rule: "Perk/Player/countDownTimeLimit"
@@ -688,10 +735,10 @@ Player.All
 if(
     IsAlive() &&
     perkState == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Interact)
+    intaractDoublePressed
 ){
     // lose perk by cancel operation of interact key hold
-    WaitCancelPressConfirm();
+    WaitConditionConfirmed();
     PlayEffect(
         EventPlayer(), PlayEffect.DebuffImpactSound,
         Color.White, EventPlayer(), MaxLength());
