@@ -97,7 +97,90 @@ if(
 
 // Test Code -----------------------------------------------
 
+// TAG HighJump ----------
+rule: "Perk/Player/HighJump/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.HighJump &&
+    perkState == PerkState.Using
+){
+    // set time limit
+    perkTimeLimit = 300;
+    // set param
+    perkEffectStatus = PerkEffectStatus.Ready;
+    // set hud
+    perkEffectAndText = [];
+    CreatePerkEffectHud("More hold to hover in air.");
+    perkEffectAndText[0] = LastTextID();
+    CreatePerkEffectHud(<"Hold jump button <0> to high jump.", ButtonGuide(Button.Jump)>);
+    perkEffectAndText[1] = LastTextID();
+}
 
+rule: "Perk/Player/HighJump/deactivate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.HighJump &&
+    perkState == PerkState.Non
+){
+    // reset hud
+    DestroyHudText(perkEffectAndText[0]);
+    DestroyHudText(perkEffectAndText[1]);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/HighJump/HighJump"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.HighJump &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Ready &&
+    IsButtonHeld(EventPlayer(), Button.Jump)
+){
+    WaitLongPressConfirm();
+    ApplyImpulse(EventPlayer(), Up(), 18,
+        Relative.ToPlayer, ContraryMotion.Cancel);
+    perkEffectStatus = PerkEffectStatus.Triggered;
+}
+
+rule: "Perk/Player/HighJump/hover"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.HighJump &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    IsButtonHeld(EventPlayer(), Button.Jump)
+){
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    for(define hovringCount = 0; hovringCount < 50; hovringCount++){
+        ApplyImpulse(EventPlayer(), (Up() * 0.1), 1,
+            Relative.ToPlayer, ContraryMotion.Cancel);
+        WaitApplyImpulseCycle();
+    }
+}
+
+rule: "Perk/Player/HighJump/resetUsedFlag"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.HighJump &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    IsOnGround()
+)
+{
+    WaitConditionConfirmed();
+    perkEffectStatus = PerkEffectStatus.Ready;
+}
 
 // Debug -----------------------------------------------
 define changeTimeInterval: 0.2;
