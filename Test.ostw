@@ -3,7 +3,6 @@ import "Lib/PerkCore.ostw";
 import "Lib/Debug.ostw";
 
 // Builtin -----------------------------------------------
-define blastRangeToImpulse: 5;
 
 rule: "Builtin"
 Event.OngoingPlayer
@@ -17,8 +16,8 @@ if(
     SetHealingReceived(EventPlayer(), 100);
     SetMaxHealth(EventPlayer(), 100);
     SetJumpVerticalSpeed(EventPlayer(), 100);
-    SetMoveSpeed(EventPlayer(), 1000);
-    SetGravity(EventPlayer(), 7);
+    //SetMoveSpeed(EventPlayer(), 1000);
+    //SetGravity(EventPlayer(), 7);
     SetProjectileSpeed(EventPlayer(), 100);
     SetProjectileGravity(EventPlayer(), 100);
     StartScalingPlayer(EventPlayer(), 1);
@@ -36,7 +35,6 @@ if(
     // CreateEffect(EventPlayer(), Effect.Ring, Color.White,
     //     EventPlayer(), 30, EffectRev.VisibleToPositionAndRadius);
 }
-
 
 disabled rule: "Debug/startButtonHold"
 Event.OngoingPlayer
@@ -93,248 +91,119 @@ Team.Team1
 if(
     perkState == PerkState.Using
 ){
-    perkType = PerkType.CruisingMissile;
+    perkType = PerkType.HighJump;
 }
 
 
 // Test Code -----------------------------------------------
 
-
-// TAG CruisingMissile ----------
-define missleDamageRange: 5;
-rule: "Perk/Player/CruisingMissile/activate"
+// TAG HighJump ----------
+rule: "Perk/Player/HighJump/activate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.CruisingMissile &&
+    perkType == PerkType.HighJump &&
     perkState == PerkState.Using
 ){
     // set time limit
-    perkTimeLimit = 5;
-    // set status
-    perkTargets = 0;
+    perkTimeLimit = 300;
+    // set param
     perkEffectStatus = PerkEffectStatus.Ready;
-    // show text
-    // landing zone text
-    perkEffectAndText = [];
-    CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\rLanding at <3> second. Brace for impact!", EventPlayer(), HeroIconString(HeroOf()), "Cruising Missile", perkTimeLimit>,
-        landPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-        Color.White, Spectators.DefaultVisibility);
-    perkEffectAndText[0] = LastTextID();
-    // CreateInWorldText(
-    //     AllPlayers(), <"Landing at <0> second. Brace for impact!", perkTimeLimit>,
-    //     landPosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-    //     Color.White, Spectators.DefaultVisibility);
-    perkEffectAndText[1] = LastTextID();
-    // set effect
-    // missile body
-    CreateEffect(AllPlayers(), Effect.Orb, Color.Red,
-        perkPosition, 10, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[2] = LastCreatedEntity();
-    // missile flare
-    CreateEffect(AllPlayers(), Effect.GoodAura, Color.White,
-        perkPosition, 20, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[3] = LastCreatedEntity();
-    // missle sound
-    CreateEffect(AllPlayers(), Effect.BadAuraSound, Color.White,
-        perkPosition, MaxLength(), EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[4] = LastCreatedEntity();
-    // landing zone blast range
-    CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
-        landPosition, missleDamageRange, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[5] = LastCreatedEntity();
-    // landing zone position
-    CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
-        landPosition, 0.2, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[6] = LastCreatedEntity();  
-    // landing zone warning icon
-    CreateIcon(AllPlayers(), landPosition + (Up() * 2), Icon.Warning,
-        IconRev.VisibleToAndPosition, Color.Yellow, true);
-    perkEffectAndText[7] = LastCreatedEntity();
     // set hud
-    CreatePerkEffectHud(perkEffectStatus == PerkEffectStatus.Triggered ? "locked landing point." : "guiding landing point.");
-    perkEffectAndText[8] = LastTextID();
-    CreatePerkEffectHud(<"Hold melee button <0> to lock landing point.", ButtonGuide(Button.Melee)>);
-    perkEffectAndText[9] = LastTextID();  
+    perkEffectAndText = [];
+    CreatePerkEffectHud("More hold to hover in air.");
+    perkEffectAndText[0] = LastTextID();
+    CreatePerkEffectHud(<"Hold jump button <0> to high jump.", ButtonGuide(Button.Jump)>);
+    perkEffectAndText[1] = LastTextID();
+    // set status
+    //SetJumpVerticalSpeed(EventPlayer(), 200);
+    SetGravity(EventPlayer(), 50);
 }
-rule: "Perk/Player/CruisingMissile/deactivate"
+
+rule: "Perk/Player/HighJump/deactivate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.CruisingMissile &&
+    perkType == PerkType.HighJump &&
     perkState == PerkState.Non
 ){
-    // reset text
-    DestroyInWorldText(perkEffectAndText[0]);
-    DestroyInWorldText(perkEffectAndText[1]);
-    // reset effect
-    DestroyEffect(perkEffectAndText[2]);
-    DestroyEffect(perkEffectAndText[3]);
-    DestroyEffect(perkEffectAndText[4]);
-    DestroyEffect(perkEffectAndText[5]);
-    DestroyEffect(perkEffectAndText[6]);
-    StopChasingVariable(perkPosition);
-    StopChasingVariable(landPosition);
-    // reset icon
-    DestroyIcon(perkEffectAndText[7]);
     // reset hud
-    DestroyHudText(perkEffectAndText[8]);
-    DestroyHudText(perkEffectAndText[9]);
+    DestroyHudText(perkEffectAndText[0]);
+    DestroyHudText(perkEffectAndText[1]);
+    // reset status
+    SetJumpVerticalSpeed(EventPlayer(), 100);
+    SetGravity(EventPlayer(), 100);
     // reset type
     perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/CruisingMissile/toggleLockPoint"
+rule: "Perk/Player/HighJump/highJump"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.CruisingMissile &&
+    perkType == PerkType.HighJump &&
     perkState == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    perkEffectStatus == PerkEffectStatus.Ready &&
+    IsButtonHeld(EventPlayer(), Button.Jump)
 ){
     WaitLongPressConfirm();
-    if(perkEffectStatus == PerkEffectStatus.Triggered){
-        perkEffectStatus = PerkEffectStatus.Ready;
+    ApplyImpulse(EventPlayer(), Up(), 16,
+        Relative.ToPlayer, ContraryMotion.Cancel);
+    perkEffectStatus = PerkEffectStatus.Triggered;
+}
+
+rule: "Perk/Player/HighJump/hover"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.HighJump &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    IsButtonHeld(EventPlayer(), Button.Jump)
+){
+    Wait(1.6, WaitBehavior.AbortWhenFalse);
+    for(define hovringCount = 0; hovringCount < 300; hovringCount++){
+        ApplyImpulse(EventPlayer(), (Up() * 0.00001), 1,
+            Relative.ToPlayer, ContraryMotion.Cancel);
+        WaitApplyImpulseCycle();
     }
-    else{
-        perkEffectStatus = PerkEffectStatus.Triggered;
-    }
-    // play change sound
-    PlayEffect(
-        EventPlayer(), PlayEffect.DebuffImpactSound,
-        Color.White, EventPlayer(), MaxValue());
 }
 
-rule: "Perk/Player/CruisingMissile/playMissleBooster"
+rule: "Perk/Player/HighJump/resetUsedFlag"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.CruisingMissile &&
-    perkState == PerkState.Using
-){
-    // play blast
-    PlayEffect(
-        AllPlayers(), PlayEffect.BadExplosion,
-        Color.Orange, perkPosition, 3.0);
-
-    WaitUpdateShortCycle();
-    LoopIfConditionIsTrue();
-}
-
-rule: "Perk/Player/CruisingMissile/setLandingZone"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.CruisingMissile &&
-    perkState == PerkState.Using
-){
-    // set missiles at random horizontal positions over 500m
-    perkPosition = EventPlayer() +
-        Vector(0, 500, 0) + RandomPosition(250, 0, 250);
-    // set missile land position to aiming position
-    landPosition = AimingPosition();
-    // start missile move
-    UpdateEveryFrame(perkPosition);
-    ChaseVariableOverTime(
-        perkPosition, landPosition, perkTimeLimit,
-        TimeChaseReevaluation.DestinationAndDuration);
-}
-
-rule: "Perk/Player/CruisingMissile/aimLandPoint"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.CruisingMissile &&
+    perkType == PerkType.HighJump &&
     perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Ready
-){
-    // chase missile land position to aiming position
-    WaitUpdateShortCycle();
-    aimPosition = AimingPosition();
-    UpdateEveryFrame(landPosition);
-    ChaseVariableAtRate(
-        landPosition, aimPosition,
-        DistanceBetween(landPosition, aimPosition) * 1.0,
-        RateChaseReevaluation.DestinationAndRate);
-    LoopIfConditionIsTrue();
-}
-
-rule: "Perk/Player/CruisingMissile/hideBlastRange"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.CruisingMissile &&
-    perkState == PerkState.Using &&
-    perkTimeLimit <= 1
-){
-    DestroyEffect(perkEffectAndText[5]);
-}
-
-rule: "Perk/Player/CruisingMissile/landedToPoint"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.CruisingMissile &&
-    perkState == PerkState.Using &&
-    perkTimeLimit <= 0
-){
-    StopChasingVariable(perkPosition);
-    StopChasingVariable(landPosition);
-
-    // apply knockout
-    SetStatus(
-        PlayersWithinRadius(
-            perkPosition, missleDamageRange,
-            Team.Team1, RadiusLOS.Off
-        ), null, Status.KnockedDown, 3);
-    // get target
-    perkTargets = 
-        PlayersWithinRadius(
-            aimPosition, missleDamageRange,
-            Team.Team2, RadiusLOS.Off);
-    // apply blast impulse
-    ApplyBlastImpulse(perkTargets, perkPosition, missleDamageRange);
-    // damage
-    Damage(
-        PlayersWithinRadius(
-            perkPosition, missleDamageRange,
-            Team.Team2, RadiusLOS.Off
-        ), EventPlayer(), MaxValue());
-    // play blast sound
-    PlayEffect(
-        AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.White, perkPosition, MaxLength());
-    // play blast effect
-    PlayContinuousBlast(
-        Color.Orange,
-        perkPosition,
-        missleDamageRange,
-        7);
-    perkState = PerkState.Non;
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    IsOnGround()
+)
+{
+    WaitConditionConfirmed();
+    perkEffectStatus = PerkEffectStatus.Ready;
 }
 
 
 
 
 // Debug -----------------------------------------------
-globalvar define param = 1;
-define tuneUnit: 10;
+define changeTimeInterval: 0.2;
+globalvar define tuneVal = 1;
+globalvar define consecutiveChangeCount = 0;
+define initialTuneUnit : 0.1;
+globalvar define tuneUnit = initialTuneUnit;
 
 rule: "showParam"
 Event.OngoingGlobal
 {
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "param", param>,
+        <"<0> <1>", "tune Val", tuneVal>,
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
@@ -346,30 +215,74 @@ Event.OngoingGlobal
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);       
 }
 
-rule: "increaseParam"
+rule: "startIncreaseParam"
 Event.OngoingPlayer
 if(
     HostPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.Ability2)
+    (
+        IsButtonHeld(EventPlayer(), Button.Interact) &&
+        IsButtonHeld(EventPlayer(), Button.Ability2)
+    )
 ){
-    param += tuneUnit;
-    Wait(0.2, WaitBehavior.AbortWhenFalse);
+    tuneVal += tuneUnit;
+    Wait(changeTimeInterval, WaitBehavior.AbortWhenFalse);
+    changeTuneUnit();
     LoopIfConditionIsTrue();
 }
 
-rule: "decreaseParam"
+rule: "stopIncreaseParam"
 Event.OngoingPlayer
 if(
     HostPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.Ability1)
+    !(
+        IsButtonHeld(EventPlayer(), Button.Interact) &&
+        IsButtonHeld(EventPlayer(), Button.Ability2)
+    )
 ){
-    param -= tuneUnit;
-    Wait(0.2, WaitBehavior.AbortWhenFalse);
+    resetTuneUnit();
+}
+
+rule: "startDecreaseParam"
+Event.OngoingPlayer
+if(
+    HostPlayer() &&
+    (
+        IsButtonHeld(EventPlayer(), Button.Interact) &&
+        IsButtonHeld(EventPlayer(), Button.Ability1)
+    )
+){
+    tuneVal -= tuneUnit;
+    Wait(changeTimeInterval, WaitBehavior.AbortWhenFalse);
+    changeTuneUnit();
     LoopIfConditionIsTrue();
+}
+
+rule: "stopDecreaseParam"
+Event.OngoingPlayer
+if(
+    HostPlayer() &&
+    !(
+        IsButtonHeld(EventPlayer(), Button.Interact) &&
+        IsButtonHeld(EventPlayer(), Button.Ability1)
+    )
+){
+    resetTuneUnit();
+}
+
+void resetTuneUnit(){
+    tuneUnit = initialTuneUnit;
+    consecutiveChangeCount= 0;
+}
+
+void changeTuneUnit(){
+    consecutiveChangeCount ++;
+    if(consecutiveChangeCount < 10)
+        tuneUnit = initialTuneUnit;
+    else if(consecutiveChangeCount < 20 )
+        tuneUnit = (initialTuneUnit * 5);
+    else
+        tuneUnit = (initialTuneUnit * 10);
 }
