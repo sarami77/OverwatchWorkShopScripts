@@ -1164,9 +1164,9 @@ if(
     // set time limit
     perkTimeLimit = 240;
     // set status
-    perkEffectStatus = PerkEffectStatus.Triggered;
-    autoAimingTarget = 0;
     perkTargets = 0;
+    autoAimingTarget = 0;
+    perkEffectStatus = PerkEffectStatus.Triggered;
     // set hud
     perkEffectAndText = [];
     CreatePerkEffectHud(perkEffectStatus == PerkEffectStatus.Triggered ?
@@ -1186,6 +1186,9 @@ if(
 ){
     // reset status
     StopFacing();
+    perkTargets = 0;
+    autoAimingTarget = 0;
+    perkEffectStatus = PerkEffectStatus.Disabled;
     // reset hud
     DestroyHudText(perkEffectAndText[0]);
     DestroyHudText(perkEffectAndText[1]);
@@ -1239,15 +1242,19 @@ if(
     perkEffectStatus == PerkEffectStatus.Ready
 ){
     StopFacing(EventPlayer());
-    autoAimingTarget = null;
+    autoAimingTarget = 0;
     perkTargets = 0;
 }
 
 void AutoAim()"AutoAim"{
     if(
-        perkTargets == 0 ||     // no target
-        IsDead(perkTargets) ||  // target is dead
-        !IsInLineOfSight(EventPlayer(), perkTargets, BarrierLOS.NoBarriersBlock)    // target hidden
+        perkTargets == 0 ||     // has not target
+        !IsInLineOfSight(       // target hidden
+            EventPlayer(),
+            perkTargets,
+            BarrierLOS.NoBarriersBlock
+        ) ||
+        IsDead(perkTargets)     // target is dead
     ){
         // get near target in sight
         perkTargets = FirstOf(
@@ -1274,13 +1281,13 @@ void AutoAim()"AutoAim"{
             // update target
             autoAimingTarget = perkTargets;
             // start auto aim
-            StartAutoAiming(perkTargets);
+            StartAutoAiming(autoAimingTarget);
         }
         // if some target, not restart auto aim.
     }
     else{
-        // stop auto aim
         if(autoAimingTarget != 0){
+            // stop auto aim
             StopFacing(EventPlayer());
             autoAimingTarget = 0;
         }
@@ -1867,10 +1874,10 @@ void ExplodeArtilleryShell(define position)"ExplodeArtilleryShell"{
 
 // TAG StrafingSupport ----------
 define strafReqLandingRange: 4;
-define strafReqDamageRange: 4;
+define strafReqDamageRange: 3;
 define strafReqAttackTime: 1.5;
 define strafReqAttackDistance: 50;
-define strafReqReloadTime: RandomInteger(4, 8);
+define strafReqReloadTime: RandomInteger(5, 10);
 
 rule: "Perk/Player/StrafingSupport/activate"
 Event.OngoingPlayer
@@ -1881,7 +1888,7 @@ if(
     perkState == PerkState.Using
 ){
     // set time limit
-    perkTimeLimit = 240;
+    perkTimeLimit = 300;
     // set status
     perkPosition = 0;
     perkPosition2 = 0;
@@ -1891,9 +1898,9 @@ if(
     perkEffectAndText = [];
     CreatePerkEffectHud(
         perkEffectStatus == PerkEffectStatus.Ready ?
-            <"Hold melee button <0> to call Strafing Support.", ButtonGuide(Button.Melee)> :
+            <"Hold melee button <0> to call Strafing Request.", ButtonGuide(Button.Melee)> :
             perkEffectStatus == PerkEffectStatus.Reloading ?
-                "Strafing Support in preparation..." :
+                "Strafing Request in preparation..." :
                 "Strafing incoming!"
         );
     perkEffectAndText[0] = LastTextID();
@@ -1982,7 +1989,7 @@ if(
 
     // landing zone text
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\rStrafing incoming!", EventPlayer(), HeroIconString(HeroOf()), "Strafing Support">,
+        AllPlayers(), <"<0> <1> <2>\n\rStrafing incoming!", EventPlayer(), HeroIconString(HeroOf()), "Strafing Request">,
         aimPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[1] = LastTextID();
@@ -2024,7 +2031,7 @@ if(
 ){
     // create Ballistic
     CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
-        landPosition2, landPosition2 - (approachingAngle * 200 ) + (Up() * 50 ),
+        landPosition2, landPosition2 - (approachingAngle * 200) + (Up() * 75),
         Color.White, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[4] = LastCreatedEntity(); 
 
@@ -2115,21 +2122,21 @@ if(
     perkPosition =
         aimPosition +
         DirectionTowards(aimPosition, perkPosition) * 
-        (strafReqAttackDistance * 30) +
-        Vector(0, 150, 0); 
+        (strafReqAttackDistance * 20) +
+        Vector(0, 300, 0); 
     // set end point
     perkPosition2 = 
         aimPosition +
         DirectionTowards(aimPosition, perkPosition2) *
-        (strafReqAttackDistance * 30) +
-        Vector(0, 150, 0); 
+        (strafReqAttackDistance * 20) +
+        Vector(0, 300, 0); 
     // air craft
     CreateEffect(AllPlayers(), Effect.Orb, Color.Red,
         landPosition, 1, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[2] = LastCreatedEntity();
     // air craft aura
     CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
-        landPosition, 10, EffectRev.VisibleToPositionAndRadius);
+        landPosition, 30, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[3] = LastCreatedEntity();
 
     // play air craft animation
