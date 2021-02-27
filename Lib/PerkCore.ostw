@@ -255,7 +255,7 @@ if(
 
     // If player already have perk
     SmallMessage(playerClosestCrate, "Already have perk.");
-    SmallMessage(playerClosestCrate, <"First, double press interact button <0> to cancel current perk.", ButtonGuide(Button.Interact)> );
+    SmallMessage(playerClosestCrate, <"First, hold interact button <0> to cancel current perk.", ButtonGuide(Button.Interact)> );
 }
 
 rule: "Perk/Player/ParkState/Non"
@@ -455,8 +455,8 @@ define CreatePerkOperationHud():
     CreateHudText(EventPlayer(),
         null, null, 
         perkState == PerkState.Ready ?
-            <"  Hold interact button <0> to activate.\n\r  Double press interact button <0> to drop as crate.", ButtonGuide(Button.Interact)> :
-            <"  Double press interact button <0> to cancel.", ButtonGuide(Button.Interact)>,
+            <"  Double press interact button <0> to activate.\n\r  Hold interact button <0> to drop as crate.", ButtonGuide(Button.Interact)> :
+            <"  Hold interact button <0> to cancel.", ButtonGuide(Button.Interact)>,
         Location.Left, (SlotOf() * 10) + 3,
         Color.White, Color.White, 
         perkState == PerkState.Ready ?
@@ -660,9 +660,8 @@ Player.All
 if(
     IsAlive() &&
     perkState == PerkState.Ready &&
-    IsButtonHeld(EventPlayer(), Button.Interact)
+    intaractDoublePressed
 ){
-    WaitLongPressConfirm();
     PlayEffect(
         AllPlayers(), PlayEffect.GoodPickupEffect,
         Color.White, EventPlayer(), 1);
@@ -682,9 +681,10 @@ Player.All
 if(
     IsAlive() &&
     perkState == PerkState.Ready &&
-    intaractDoublePressed
+    IsButtonHeld(EventPlayer(), Button.Interact)
 ){
-    WaitConditionConfirmed();
+    // drop perk as crate by cancel operation of interact key hold
+    WaitCancelPressConfirm();
     notPickupPerk = true;
     dropedPerkType = perkType;
     perkCratePosition = BelowPosition(PositionOf()) + PositionOffset();
@@ -737,10 +737,10 @@ Player.All
 if(
     IsAlive() &&
     perkState == PerkState.Using &&
-    intaractDoublePressed
+    IsButtonHeld(EventPlayer(), Button.Interact)
 ){
     // lose perk by cancel operation of interact key hold
-    WaitConditionConfirmed();
+    WaitCancelPressConfirm();
     PlayEffect(
         EventPlayer(), PlayEffect.DebuffImpactSound,
         Color.White, EventPlayer(), MaxLength());
@@ -877,7 +877,7 @@ if(
 
 
 
-disabled rule: "Debug/forceUsePerk // for bot only"
+rule: "Debug/forceUsePerk // for bot only"
 Event.OngoingPlayer
 Team.Team1
 Player.All
@@ -892,14 +892,14 @@ if(
         RandomInteger(1, 100) <= 100
     ){
         StartHoldingButton(EventPlayer(), Button.Interact);
-        Wait(1, WaitBehavior.AbortWhenFalse);
+        Wait(1, WaitBehavior.IgnoreCondition);
         StopHoldingButton(EventPlayer(), Button.Interact);
     }
     WaitUpdateLongCycle();
     LoopIfConditionIsTrue();    
 }
 
-disabled rule: "Debug/forceUseMelee // for bot only"
+rule: "Debug/forceUseMelee // for bot only"
 Event.OngoingPlayer
 Team.Team1
 Player.All
@@ -914,7 +914,7 @@ if(
         RandomInteger(1, 100) <= 100
     ){
         StartHoldingButton(EventPlayer(), Button.Melee);
-        Wait(1, WaitBehavior.AbortWhenFalse);
+        Wait(1, WaitBehavior.IgnoreCondition);
         StopHoldingButton(EventPlayer(), Button.Melee);
     }
     WaitUpdateLongCycle();

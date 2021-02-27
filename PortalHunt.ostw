@@ -11,10 +11,10 @@
 // YY1N2
 // [ToDo]
 // add optimaze hit scan by close range of Beam Sniaper
-// add hand over Perk Function
 // add Perk Disarmament
 // add Perk Drone Guard Dog
 // add Perk Assassination
+// add Perk Missle Strike
 
 import "Lib/ElapsedTimer.ostw";
 import "Lib/DamageText.ostw";
@@ -990,8 +990,7 @@ playervar define confirmMoveSpeed;
 rule: "Enemy/HiddenSpeed/setHiddenSpeed"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Growing ||
-    setPortalMaxSize
+    portalState == PortalState.Growing
 ){
     WaitUpdateMediumCycle();
     // Increase enemy hidden speed depending on portal size
@@ -1005,8 +1004,6 @@ if(
         anEnemy.confirmMoveSpeed = 100 * anEnemy.eachMoveSpeedScale * hiddenSpeedScale;
         SetMoveSpeed(anEnemy, anEnemy.confirmMoveSpeed);
     }
-    dbgMsg("hoge");
-    setPortalMaxSize = false;
     LoopIf(portalSize < maxPortalSize);
 }
 
@@ -1619,7 +1616,7 @@ if(
         ShowDebugHud();
     }
     else if(debugMode == DebugMode.WithRecord){
-        DisableInspectorRecording();
+        EnableInspectorRecording();
         HideDebugHud();
         ShowDebugHud();
     }
@@ -1961,8 +1958,6 @@ if(
     Respawn(AllPlayers(Team.Team2));
 }
 
-globalvar define setPortalMaxSize;
-
 rule: "Debug/setPortalMaxSize // reset portal position by aim center"
 Event.OngoingPlayer
 Team.All
@@ -1976,6 +1971,19 @@ if(
     // Set portal position to aim center
     WaitLongPressConfirm();
     portalSize = maxPortalSize;
-    // Set Max Hidden Speed
-    setPortalMaxSize = true;
+
+    // set max hidden speed
+    hiddenSpeedScale = 6;
+    hiddenSpeedScale *= (portalSize / maxPortalSize);
+    hiddenSpeedScale += 1;
+    define enemyArray = FilteredArray(AllPlayers(Team.Team2), ArrayElement().isHidden);
+    for(gLoopIndex = 0; gLoopIndex < CountOf(enemyArray); gLoopIndex++){
+        define anEnemy = enemyArray[gLoopIndex];
+        anEnemy.confirmMoveSpeed = 100 * anEnemy.eachMoveSpeedScale * hiddenSpeedScale;
+        SetMoveSpeed(anEnemy, anEnemy.confirmMoveSpeed);
+    }
+
+    // set min spawn interval
+    AllPlayers(Team.Team2).confirmSpawnInterval = 0;
+    SetRespawnMaxTime(AllPlayers(Team.Team2), confirmSpawnInterval + 1);
 }

@@ -367,7 +367,6 @@ if(
                 )
             );
             if(perkTargets != []){
-                
                 // set stun
                 SetStatus(Victim(), EventPlayer(), Status.Stunned, 3.0);
                 // play blast
@@ -1152,7 +1151,6 @@ if(
 }
 
 // TAG AimHack ----------
-playervar define autoAimingTarget;
 rule: "Perk/Player/AimHack/activate"
 Event.OngoingPlayer
 Team.Team1
@@ -1227,8 +1225,8 @@ if(
     perkState == PerkState.Using &&
     perkEffectStatus == PerkEffectStatus.Triggered
 ){
-    AutoAim();
     WaitUpdateShortCycle();
+    AutoAim();
     LoopIfConditionIsTrue();
 }
 
@@ -1241,20 +1239,37 @@ if(
     perkState == PerkState.Using &&
     perkEffectStatus == PerkEffectStatus.Ready
 ){
+    WaitConditionConfirmed();
     StopFacing(EventPlayer());
     autoAimingTarget = 0;
     perkTargets = 0;
 }
 
+rule: "Perk/Player/AimHack/setTargetByDangerTarget"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.AimHack &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    Health() <= MaxHealth() / 2
+){
+    perkTargets = ClosestPlayerTo(EventPlayer(), Team.Team2);
+    if(IsInLineOfSight(EventPlayer(), perkTargets)){
+        autoAimingTarget = perkTargets;
+    }
+}
+
 void AutoAim()"AutoAim"{
     if(
-        perkTargets == 0 ||     // has not target
-        !IsInLineOfSight(       // target hidden
+        autoAimingTarget == 0 ||    // has not target
+        IsDead(autoAimingTarget) || // target dead
+        !IsInLineOfSight(           // target hidden
             EventPlayer(),
-            perkTargets,
+            autoAimingTarget,
             BarrierLOS.NoBarriersBlock
-        ) ||
-        IsDead(perkTargets)     // target is dead
+        )
     ){
         // get near target in sight
         perkTargets = FirstOf(
@@ -1270,26 +1285,20 @@ void AutoAim()"AutoAim"{
                 DistanceBetween(EventPlayer(), ArrayElement())
             )
         );
-    }
-    // has target and sighted
-    if(
-        perkTargets != 0 &&
-        IsInLineOfSight(EventPlayer(), perkTargets)
-    ){
-        // target changed
-        if(autoAimingTarget != perkTargets){
-            // update target
-            autoAimingTarget = perkTargets;
+        // has new target and sighted
+        if(
+            perkTargets != 0 &&
+            IsInLineOfSight(EventPlayer(), perkTargets)
+        ){
             // start auto aim
-            StartAutoAiming(autoAimingTarget);
+            autoAimingTarget = perkTargets;
+            StartAutoAiming();
         }
-        // if some target, not restart auto aim.
-    }
-    else{
-        if(autoAimingTarget != 0){
+        // has not target
+        else{
             // stop auto aim
-            StopFacing(EventPlayer());
             autoAimingTarget = 0;
+            StopFacing(EventPlayer());
         }
     }
 }
@@ -3781,8 +3790,9 @@ if(
     // face enemy
     perkTargets = ClosestPlayerTo(EventPlayer(), Team.Team2);
     // start auto aim
-    StartAutoAiming(perkTargets);
-    Wait(0.25, WaitBehavior.IgnoreCondition);
+    autoAimingTarget = perkTargets;
+    StartAutoAiming();
+    Wait(0.25, WaitBehavior.AbortWhenFalse);
     StopFacing();
 
     // wait aim
@@ -3837,7 +3847,8 @@ if(
     // face enemy
     perkTargets = ClosestPlayerTo(EventPlayer(), Team.Team2);
     // start auto aim
-    StartAutoAiming(perkTargets);
+    autoAimingTarget = perkTargets;
+    StartAutoAiming();
     Wait(0.25, WaitBehavior.AbortWhenFalse);
     StopFacing();
 
