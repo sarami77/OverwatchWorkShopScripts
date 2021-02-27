@@ -2724,14 +2724,21 @@ if(
     perkEffectStatus = PerkEffectStatus.Ready;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(<"Press ability1 button <0> to change weapon. now <1>.", ButtonGuide(Button.Ability1),
-        IsInAlternateForm()? "5mm Minigun" : "20mm Auto Canon">);
+    CreatePerkEffectHud(
+        IsUsingUltimate() ?
+            <"Current weapon is <0>.", "150mm HE"> :
+            <"Press ability1 button <1> to change weapon. Current weapon is <0>.",
+                IsInAlternateForm() ?
+                "5mm Minigun" :
+                "20mm Auto Canon" ,
+            ButtonGuide(Button.Ability1)>
+    );
     perkEffectAndText[0] = LastTextID();
-    CreatePerkEffectHud(<"Press secondary fire button <0> to accelerate.", ButtonGuide(Button.SecondaryFire)>);
+    CreatePerkEffectHud(<"Press secondary fire button <0> to afterburner.", ButtonGuide(Button.SecondaryFire)>);
     perkEffectAndText[1] = LastTextID();
-    CreatePerkEffectHud(<"Press jump button <0> to flying mode.", ButtonGuide(Button.Jump)>);
+    CreatePerkEffectHud(<"Hold jump button <0> to flying mode.", ButtonGuide(Button.Jump)>);
     perkEffectAndText[2] = LastTextID();
-    CreatePerkEffectHud(<"Press crouch button <0> to walking mode.", ButtonGuide(Button.Crouch)>);
+    CreatePerkEffectHud(<"Hold crouch button <0> to walking mode.", ButtonGuide(Button.Crouch)>);
     perkEffectAndText[3] = LastTextID();
     // set perk hero
     PerkHero perkHero = new PerkHero();
@@ -2748,7 +2755,9 @@ if(
 
     // fly and change mode
     Wait(0.5, WaitBehavior.AbortWhenFalse);
-    PressButton(EventPlayer(), Button.Jump);
+    StartHoldingButton(EventPlayer(), Button.Jump);
+    Wait(0.5, WaitBehavior.IgnoreCondition);
+    StopHoldingButton(EventPlayer(), Button.Jump);
     PressButton(EventPlayer(), Button.Ability1);
 }
 
@@ -2798,6 +2807,7 @@ if(
     perkEffectStatus == PerkEffectStatus.Ready &&
     IsButtonHeld(EventPlayer(), Button.Jump)
 ){
+    WaitLongPressConfirm();
     SetStatus(EventPlayer(), null, Status.Rooted, MaxValue());
     SetGravity(EventPlayer(), 5);
     perkEffectStatus = PerkEffectStatus.Triggered;
@@ -2813,6 +2823,7 @@ if(
     perkEffectStatus == PerkEffectStatus.Triggered &&
     IsButtonHeld(EventPlayer(), Button.Crouch)
 ){
+    WaitLongPressConfirm();
     ClearStatus(EventPlayer(), Status.Rooted);
     SetGravity(EventPlayer(), 100);
     perkEffectStatus = PerkEffectStatus.Ready;
@@ -3092,7 +3103,8 @@ Team.Team1
 Player.All
 if(
     perkType == PerkType.LegendalyNinja &&
-    perkState == PerkState.Using
+    perkState == PerkState.Using &&
+    perkTimeLimit > 0
 ){
     SmallMessage(EventPlayer(), "Added 2 seconds of activity time.");
     perkTimeLimit += 2;
@@ -3855,7 +3867,8 @@ Team.Team1
 Player.All
 if(
     perkType == PerkType.DragonStorm &&
-    perkState == PerkState.Using
+    perkState == PerkState.Using &&
+    perkTimeLimit > 0
 ){
     SmallMessage(EventPlayer(), "Added 3 seconds of activity time.");
     perkTimeLimit += 3;
@@ -3899,7 +3912,7 @@ if(
             <"<0> <1> riding on your back.", rider, HeroIconString(HeroOf(rider))> :
             "Teammate can ride your back.");
     perkEffectAndText[0] = LastTextID();
-    CreatePerkEffectHud(<"Hold crouch or crouch button <0> to get smaller.", ButtonGuide(Button.Crouch)>);
+    CreatePerkEffectHud(<"Hold crouch button <0> to get smaller.", ButtonGuide(Button.Crouch)>);
     perkEffectAndText[1] = LastTextID();
     // set perk hero
     PerkHero perkHero = new PerkHero();
@@ -4034,12 +4047,13 @@ define nearTitan:
             ArrayElement().perkState == PerkState.Using &&
             ArrayElement().rider == 0 &&
             ArrayElement().perkEffectStatus == 1 &&
+            IsAlive(ArrayElement()) &&
             DistanceBetween(EventPlayer(), ArrayElement()) <= canRideRange
         )
     );
 define canRide:
     IsAlive() &&
-    ridingTitan == 0 &&
+    !IsRidingTitan &&
     CountOf(nearTitan) > 0;
 
 playervar define rider;
@@ -4052,8 +4066,10 @@ if(
     canRide
 ){
     // set hud
-    CreatePerkEffectHud(<"Hold jump button <0> to get on titan.", ButtonGuide(Button.Jump)>);
+    CreatePerkEffectHud(<"Can add titan's activity time by kill enemy when riding titan.">);
     perkEffectAndText[200] = LastTextID();
+    CreatePerkEffectHud(<"Hold jump button <0> to get on titan.", ButtonGuide(Button.Jump)>);
+    perkEffectAndText[201] = LastTextID();
 }
 
 rule: "Perk/Player/Titan/hideOperationGetOn"
@@ -4064,9 +4080,35 @@ if(
     !canRide
 ){
     DestroyHudText(perkEffectAndText[200]);
+    DestroyHudText(perkEffectAndText[201]);
 }
 
 playervar define ridingTitan;
+
+define IsRidingTitan: 
+    ridingTitan != 0;
+
+rule: "Perk/Player/Titan/showOperationGetOff"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    IsRidingTitan
+){
+    // set hud
+    CreatePerkEffectHud(<"Hold crouch button <0> to get off titan.", ButtonGuide(Button.Crouch)>);
+    perkEffectAndText[201] = LastTextID();
+}
+
+rule: "Perk/Player/Titan/hideOperationGetOff"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    !IsRidingTitan
+){
+    DestroyHudText(perkEffectAndText[201]);
+}
 
 rule: "Perk/Player/Titan/getOnTitan"
 Event.OngoingPlayer
@@ -4077,33 +4119,39 @@ if(
     IsButtonHeld(EventPlayer(), Button.Jump)
 ){
     WaitLongPressConfirm();
-
-    SmallMessage(EventPlayer(), "Killed enemy on riding Titan, can add Titan's activity time.");
     ridingTitan = FirstOf(nearTitan);
     AttachPlayers(EventPlayer(), ridingTitan, Up() * 3.75);
     ridingTitan.rider = EventPlayer();
 }
 
-rule: "Perk/Player/Titan/showOperationGetOff"
+rule: "Perk/Player/Titan/getOffTitan"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    ridingTitan != 0
+    IsRidingTitan &&
+    IsButtonHeld(EventPlayer(), Button.Crouch)
+
 ){
-    // set hud
-    CreatePerkEffectHud(<"Press crouch button <0> to get off titan.", ButtonGuide(Button.Crouch)>);
-    perkEffectAndText[201] = LastTextID();
+    WaitLongPressConfirm();
+    DetachPlayers(ridingTitan.rider);
+    Teleport(EventPlayer(), ridingTitan);
+    ridingTitan.rider = 0;
+    ridingTitan = 0;
 }
 
-rule: "Perk/Player/Titan/hideOperationGetOff"
+rule: "Perk/Player/Titan/getOffTitanByDead"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    ridingTitan == 0
+    IsRidingTitan &&
+    IsDead(EventPlayer())
 ){
-    DestroyHudText(perkEffectAndText[201]);
+    DetachPlayers(ridingTitan.rider);
+    Teleport(EventPlayer(), ridingTitan);
+    ridingTitan.rider = 0;
+    ridingTitan = 0;
 }
 
 rule: "Perk/Player/Titan/addActivityTime"
@@ -4112,24 +4160,12 @@ Team.Team1
 Player.All
 if(
     ridingTitan.perkType == PerkType.Titan &&
-    ridingTitan.perkState == PerkState.Using
+    ridingTitan.perkState == PerkState.Using &&
+    ridingTitan.perkTimeLimit > 0
+
 ){
     SmallMessage(EventPlayer(), "Added 8 seconds of titan's activity time.");
-    ridingTitan.perkTimeLimit += 8;
-}
-
-rule: "Perk/Player/Titan/getOffTitan"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    ridingTitan != 0 &&
-    IsButtonHeld(EventPlayer(), Button.Crouch)
-){
-    DetachPlayers(ridingTitan.rider);
-    Teleport(EventPlayer(), ridingTitan);
-    ridingTitan.rider = 0;
-    ridingTitan = 0;
+    ridingTitan.perkTimeLimit += 10;
 }
 
 // TAG Annihilator ----------
