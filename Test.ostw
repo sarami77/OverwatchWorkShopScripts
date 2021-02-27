@@ -97,7 +97,158 @@ if(
 
 // Test Code -----------------------------------------------
 
+// TAG AimHack ----------
+rule: "Perk/Player/AimHack/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.AimHack &&
+    perkState == PerkState.Using
+){
+    // set time limit
+    perkTimeLimit = 240;
+    // set status
+    perkTargets = 0;
+    autoAimingTarget = 0;
+    perkEffectStatus = PerkEffectStatus.Triggered;
+    // set hud
+    perkEffectAndText = [];
+    CreatePerkEffectHud(perkEffectStatus == PerkEffectStatus.Triggered ?
+        "Aim hack Enable." : "Aim hack Disable.");
+    perkEffectAndText[0] = LastTextID();
+    CreatePerkEffectHud(<"Hold melee button <0> to toggle aim hack.", ButtonGuide(Button.Melee)>);
+    perkEffectAndText[1] = LastTextID();
+}
 
+rule: "Perk/Player/AimHack/deactivate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.AimHack &&
+    perkState == PerkState.Non
+){
+    // reset status
+    StopFacing();
+    perkTargets = 0;
+    autoAimingTarget = 0;
+    perkEffectStatus = PerkEffectStatus.Disabled;
+    // reset hud
+    DestroyHudText(perkEffectAndText[0]);
+    DestroyHudText(perkEffectAndText[1]);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/AimHack/toggleAimHack"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.AimHack &&
+    perkState == PerkState.Using &&
+    IsButtonHeld(EventPlayer(), Button.Melee)
+){
+    WaitLongPressConfirm();
+    if(perkEffectStatus == PerkEffectStatus.Triggered){
+        perkEffectStatus = PerkEffectStatus.Ready;
+    }
+    else{
+        perkEffectStatus = PerkEffectStatus.Triggered;
+    }
+    // play change sound
+    PlayEffect(
+        EventPlayer(), PlayEffect.DebuffImpactSound,
+        Color.White, EventPlayer(), MaxValue());
+}
+
+rule: "Perk/Player/AimHack/startAutoAim"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.AimHack &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered
+){
+    WaitUpdateShortCycle();
+    AutoAim();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/AimHack/stopAutoAim"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.AimHack &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Ready
+){
+    WaitConditionConfirmed();
+    StopFacing(EventPlayer());
+    autoAimingTarget = 0;
+    perkTargets = 0;
+}
+
+rule: "Perk/Player/AimHack/setTargetByDangerTarget"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.AimHack &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    Health() <= MaxHealth() / 2
+){
+    perkTargets = ClosestPlayerTo(EventPlayer(), Team.Team2);
+    if(IsInLineOfSight(EventPlayer(), perkTargets)){
+        autoAimingTarget = perkTargets;
+    }
+}
+
+void AutoAim()"AutoAim"{
+    if(
+        autoAimingTarget == 0 ||    // has not target
+        IsDead(autoAimingTarget) || // target dead
+        !IsInLineOfSight(           // target hidden
+            EventPlayer(),
+            autoAimingTarget,
+            BarrierLOS.NoBarriersBlock
+        )
+    ){
+        // get near target in sight
+        perkTargets = FirstOf(
+            SortedArray(
+                FilteredArray(
+                    PlayersInViewAngle(EventPlayer(), Team.Team2, 90),
+                    (
+                        IsAlive(ArrayElement()) &&
+                        IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock) &&
+                        !HasStatus(ArrayElement(), Status.Asleep)
+                    )
+                ),
+                DistanceBetween(EventPlayer(), ArrayElement())
+            )
+        );
+        // has new target and sighted
+        if(
+            perkTargets != 0 &&
+            IsInLineOfSight(EventPlayer(), perkTargets)
+        ){
+            // start auto aim
+            autoAimingTarget = perkTargets;
+            StartAutoAiming();
+        }
+        // has not target
+        else{
+            // stop auto aim
+            autoAimingTarget = 0;
+            StopFacing(EventPlayer());
+        }
+    }
+}
 
 // Debug -----------------------------------------------
 define changeTimeInterval: 0.2;
