@@ -368,7 +368,7 @@ if(
             );
             if(perkTargets != []){
                 // set stun
-                SetStatus(Victim(), EventPlayer(), Status.Stunned, 3.0);
+                SetStatus(Victim(), EventPlayer(), Status.Stunned, 2.0);
                 // play blast
                 PlayEffect(
                     AllPlayers(), PlayEffect.GoodExplosion,
@@ -1479,10 +1479,10 @@ playervar define fireBallSpeed;
 playervar define fireBallPower;
 playervar define fireBallSize;
 playervar define fireBallBlastRange;
-define minFireBallSpeed: 15;
-define maxFireBallSpeed: 60;
-define minCollisionRange: 2.0;
-define chargeRate: 2.0;
+define fireBallMinSpeed: 15;
+define fireBallMaxSpeed: 60;
+define fireBallMinCollisionRange: 2.0;
+define fireBallChargeRate: 2.0;
 
 rule: "Perk/Player/GrudgeFireBall/activate"
 Event.OngoingPlayer
@@ -1535,7 +1535,7 @@ if(
     Attacker() != EventPlayer() &&
     EventDamage() > 0
 ){
-    fireBallPower += RoundToInteger(EventDamage() * chargeRate);
+    fireBallPower += RoundToInteger(EventDamage() * fireBallChargeRate);
 }
 
 rule: "Perk/Player/GrudgeFireBall/shot"
@@ -1555,9 +1555,9 @@ if(
         (FacingDirectionOf(EventPlayer()) * fireBallSize / 2);
     landPosition = AimingPositionIgnorePlayer();
     // set fireball param
-    fireBallSpeed = maxFireBallSpeed - (fireBallPower / maxFireBallSpeed);
-    fireBallSpeed = Max(minFireBallSpeed, fireBallSpeed);
-    fireBallSpeed = Min(maxFireBallSpeed, fireBallSpeed);
+    fireBallSpeed = fireBallMaxSpeed - (fireBallPower / fireBallMaxSpeed);
+    fireBallSpeed = Max(fireBallMinSpeed, fireBallSpeed);
+    fireBallSpeed = Min(fireBallMaxSpeed, fireBallSpeed);
     fireBallSize = fireBallPower * 0.002;
     fireBallBlastRange = fireBallPower * 0.01;
     // start movement
@@ -1630,7 +1630,7 @@ if(
         perkPosition,
         ClosestPlayerTo(perkPosition, Team.Team2))
         	<= 
-    Max(minCollisionRange, fireBallSize)
+    Max(fireBallMinCollisionRange, fireBallSize)
 ){
     ExplodeFireBall();
 }
@@ -1660,7 +1660,7 @@ void ExplodeFireBall()"ExplodeFireBall"{
     // get target
     perkTargets = 
         PlayersWithinRadius(
-            perkPosition, Max(minCollisionRange, fireBallBlastRange),
+            perkPosition, Max(fireBallMinCollisionRange, fireBallBlastRange),
             Team.Team2, RadiusLOS.Off);
     // apply blast impulse
     ApplyBlastImpulse(perkTargets, perkPosition, fireBallBlastRange);
@@ -1681,6 +1681,181 @@ void ExplodeFireBall()"ExplodeFireBall"{
     fireBallPower = 0;
 
     perkEffectStatus = PerkEffectStatus.Ready;
+}
+
+// TAG GrudgeThunderStrike ----------
+playervar define thunderStrikePower;
+define thunderStrikeLandingRange: 1;
+define thunderStrikeDamageRange: 3;
+define thunderStrikeChargeRate: 7.0;
+define thunderStrikeConsumePower: 100;
+
+rule: "Perk/Player/GrudgeThunderStrike/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState == PerkState.Using
+){
+    // set time limit
+    perkTimeLimit = 300;
+    // set status
+    perkPosition = 0;
+    landPosition = 0;
+    perkEffectStatus = PerkEffectStatus.Ready;
+    // set hud
+    perkEffectAndText = [];
+    CreatePerkEffectHud(<"Thunder strike power <0>", thunderStrikePower>);
+    perkEffectAndText[0] = LastTextID();
+    CreatePerkEffectHud(<"Hold melee button <0> to shot thunder strike.", ButtonGuide(Button.Melee)>);
+    perkEffectAndText[1] = LastTextID();
+}
+
+rule: "Perk/Player/GrudgeThunderStrike/deactivate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState == PerkState.Non
+){
+    // reset text
+    DestroyHudText(perkEffectAndText[0]);
+    DestroyHudText(perkEffectAndText[1]);
+    // reset effect
+    DestroyEffect(perkEffectAndText[2]);
+    DestroyEffect(perkEffectAndText[3]);
+    DestroyEffect(perkEffectAndText[4]);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/GrudgeThunderStrike/chargePowerByTakenDamage"
+Event.OnDamageTaken
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState == PerkState.Using &&
+    Attacker() != EventPlayer() &&
+    EventDamage() > 0
+){
+    thunderStrikePower += RoundToInteger(EventDamage() * thunderStrikeChargeRate);
+}
+
+rule: "Perk/Player/GrudgeThunderStrike/shot"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Ready &&
+    IsButtonHeld(EventPlayer(), Button.Melee)
+){
+    WaitLongPressConfirm();
+    AbortIf(thunderStrikePower <= 0);
+    
+    // create Trajectory of Thunder
+    CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
+        landPosition, landPosition2,
+        Color.SkyBlue, EffectRev.VisibleToPositionRadiusAndColor);
+    perkEffectAndText[4] = LastCreatedEntity(); 
+
+    perkEffectStatus = PerkEffectStatus.Triggered;
+}
+
+disabled rule: "Perk/Player/GrudgeThunderStrike/cancelShot"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    IsButtonHeld(EventPlayer(), Button.Melee)
+){
+    WaitLongPressConfirm();
+    DestroyEffect(perkEffectAndText[4]);
+    perkEffectStatus = PerkEffectStatus.Ready;
+}
+
+rule: "Perk/Player/GrudgeThunderStrike/cancelShotByEmpty"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    thunderStrikePower <= 0
+){
+    DestroyEffect(perkEffectAndText[4]);
+    perkEffectStatus = PerkEffectStatus.Ready;
+}
+
+rule: "Perk/Player/GrudgeThunderStrike/landedToPoint"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    thunderStrikePower > 0
+){
+    // set land position
+    landPosition = 
+        AimingPosition() + 
+        RandomPosition(
+            thunderStrikeLandingRange,
+            0,
+            thunderStrikeLandingRange
+        );
+    
+    landPosition2 =
+        landPosition +
+        (Up() * 50) +
+        RandomPosition(
+            thunderStrikeLandingRange * 5,
+            0,
+            thunderStrikeLandingRange * 5
+        );
+
+    // splash damage
+    Damage(
+        PlayersWithinRadius(
+            landPosition, thunderStrikeDamageRange,
+            Team.Team2, RadiusLOS.Off),
+        EventPlayer(), thunderStrikeConsumePower);
+    // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.SkyBlue,
+        landPosition,
+        1);
+    // play ring
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosion,
+        Color.SkyBlue,
+        landPosition,
+        thunderStrikeDamageRange);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White,
+        landPosition,
+        100);
+
+    // consume power
+    thunderStrikePower =
+        thunderStrikePower < thunderStrikeConsumePower ?
+        0:
+        thunderStrikePower - thunderStrikeConsumePower;
+
+    WaitContinuousBlastCycle();
+    LoopIfConditionIsTrue();
 }
 
 // TAG ArtilleryRequest ----------
@@ -4326,24 +4501,24 @@ if(
     if(perkTargets != 0){
         // chase target
         ApplyImpulse(EventPlayer(),
-            VectorTowards(EventPlayer(), perkTargets+ RandomPosition(1, 1, 1)),
-            10000, Relative.ToWorld, ContraryMotion.Cancel);
+            VectorTowards(EventPlayer(), perkTargets + Up() + RandomPosition(1, 1, 1)),
+            MaxValue(), Relative.ToWorld, ContraryMotion.Cancel);
         // play movement pulse
         PlayEffect(
             AllPlayers(), PlayEffect.BadPickupEffect,
             Color.Red, EventPlayer(), 1.0);
 
         // camera too far to player
-        if(DistanceBetween(perkPosition, EyePosition()) > 20){
+        if(DistanceBetween(perkPosition, EyePosition()) > 15){
             // camera set to middle point
             perkPosition = (perkPosition + EyePosition()) / 2;
         }
         // camera too close to player
         if(DistanceBetween(perkPosition, EyePosition()) < 5){
             // camera move to backword
-            perkPosition = perkPosition + (VectorTowards(perkTargets, perkPosition) * 1.5);
+            perkPosition = perkPosition + (VectorTowards(perkTargets, perkPosition) * 2.0);
         }
-        // camera blocked to player
+        // camera blocked by wall
         while(!IsInLineOfSight(perkPosition, EyePosition(), BarrierLOS.NoBarriersBlock)){
             // camera set to middle point
             perkPosition = (perkPosition + EyePosition()) / 2;
@@ -4374,13 +4549,9 @@ if(
     SetDamageDealt(EventPlayer(), 200);
     SetMoveSpeed(EventPlayer(), 150);
     StopCamera(EventPlayer());
-
     Wait(4, WaitBehavior.AbortWhenFalse);
 
     perkEffectStatus = 0;
-    SetDamageDealt(EventPlayer(), 200);
-    SetMoveSpeed(EventPlayer(), 150);
-    StopCamera(EventPlayer());
 }
 
 rule: "Perk/Player/Annihilator/returnGround"
@@ -4423,3 +4594,4 @@ if(
     SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 4));
     LoopIfConditionIsTrue();
 }
+

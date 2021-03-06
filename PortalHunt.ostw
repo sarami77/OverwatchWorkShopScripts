@@ -16,12 +16,15 @@
 // add Perk Assassination
 // add Perk Missle Strike
 
+import "Lib/Utility.ostw";
+import "Lib/Debug.ostw";
+//import "Lib/InvisibleImmortalForDebug.ostw";
+
 import "Lib/ElapsedTimer.ostw";
 import "Lib/DamageText.ostw";
 import "Lib/Regeneration.ostw";
 import "Lib/Revive.ostw";
 import "Lib/Perk.ostw";
-// import "Lib/InvisibleImmortalForDebug.ostw";
 
 // TAG Signature and infomation ----------
 disabled rule: "PORTAL HUNT -HORDE PVE [ver 3.0] Share code [YY1N2]"-1{}
@@ -305,18 +308,18 @@ Player.All
 if(
     IsDead()
 ){
-    // Respawn immediately in case of suicide
+    // Respawn immediately in case of suicide when full health
     if(
         Attacker() == EventPlayer() &&
         DistanceBetween(EventPlayer(),
-            ClosestPlayerTo(EventPlayer(), Team.Team2)) < 10
+            ClosestPlayerTo(EventPlayer(), Team.Team2)) > 10
     ){
         Wait(1, WaitBehavior.AbortWhenFalse);
         Respawn();
     }
+    // Remaining lifes reduced by spawn of downed player
     else{
-        // Remaining lifes reduced by spawn of downed player
-        Wait(10, WaitBehavior.AbortWhenFalse);  // wait player spawn
+        Wait(Revive_timeLimit, WaitBehavior.AbortWhenFalse);  // wait player spawn
         teamLifes -= 1;
         WaitChangeState();  // wait for show big message by newest value
         if(teamLifes > 0){
@@ -661,6 +664,7 @@ if(
         eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Minion) Dealt Damage Scale",    0.5, 0, 100, 5);
         eachMoveSpeedScale =    WorkshopSettingReal("Enemy Settings", "(Minion) Walk Speed Scale",      1.0, 0, 100, 6);
         SetMaxHealth(EventPlayer(), 50);
+        SetProjectileSpeed(EventPlayer(), 100);
         StartScalingPlayer(EventPlayer(), 1.0, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
     }
@@ -669,6 +673,7 @@ if(
         eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Elite) Dealt Damage Scale",    1.0, 0, 100, 8);
         eachMoveSpeedScale =    WorkshopSettingReal("Enemy Settings", "(Elite) Walk Speed Scale",     0.75, 0, 100, 9);
         SetMaxHealth(EventPlayer(), 300);
+        SetProjectileSpeed(EventPlayer(), 500);
         StartScalingPlayer(EventPlayer(), 1.2, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.4, false);
     }
@@ -677,6 +682,7 @@ if(
         eachDealtDamageScale =  WorkshopSettingReal("Enemy Settings", "(Boss) Dealt Damage Scale",     1.5, 0, 100, 11);
         eachMoveSpeedScale =    WorkshopSettingReal("Enemy Settings", "(Boss) Walk Speed Scale",       0.5, 0, 100, 12);
         SetMaxHealth(EventPlayer(), 900);
+        SetProjectileSpeed(EventPlayer(), 1000);
         StartScalingPlayer(EventPlayer(), 1.5, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.2, false);
     }
@@ -786,22 +792,44 @@ if(
 
 playervar define teleportBeamEntity;
 playervar define teleportPosition;
+playervar define orbPosition;
 
-void PlayTeleportBeam()"PlayTeleportBeam"{
-    DestroyEffect(teleportBeamEntity);
-    // show beam
-    CreateBeamEffect(AllPlayers(Team.All), BeamType.BadBeam,
-        EventPlayer(), teleportPosition,
-        enemyColor, EffectRev.VisibleToPositionAndRadius);
-    teleportBeamEntity = LastCreatedEntity();
-    // show beam effect
-    WaitPlayEffect();
-    // hide beam
-    DestroyEffect(teleportBeamEntity);
+define teleportActionTime: 0.7;
+
+void PlayTeleportEffect()"PlayTeleportEffect"{
+    DestroyEffect(teleportBeamEntity[0]);
+    DestroyEffect(teleportBeamEntity[1]);
+    teleportBeamEntity = [];
+
+    // play teleport enemy effect
+    // The enemy dives into the ground
+    CreateEffect(AllPlayers(Team.All), Effect.Ring, Color.Red,
+        EventPlayer(), 1.5, EffectRev.VisibleToPositionAndRadius);
+    teleportBeamEntity[0] = LastCreatedEntity();
+    DisableMovementCollisionWithEnvironment(EventPlayer(), true);
+
+    // play teleport destination effect
+    // Red orb rises from the ground
+    orbPosition = teleportPosition + (Down() * 0.6);
+    CreateEffect(AllPlayers(Team.All), Effect.Orb, Color.Red,
+        orbPosition, 1, EffectRev.VisibleToPositionAndRadius);
+    teleportBeamEntity[1] = LastCreatedEntity();
+    ChaseVariableOverTime(
+        orbPosition, teleportPosition + (Up() * 0.5), teleportActionTime,
+        TimeChaseReevaluation.DestinationAndDuration);
+
+    // show enemy dive and orb rise
+    Wait(teleportActionTime, WaitBehavior.IgnoreCondition);
+
+    // hide effect
+    DestroyEffect(teleportBeamEntity[0]);
+    DestroyEffect(teleportBeamEntity[1]);
+    StopChasingVariable(orbPosition);
+    EnableMovementCollisionWithEnvironment(EventPlayer());
 }
 
 define minSpawnAreaSize: 10;
-define spawnAreaSizeRate: 0.5;
+define spawnAreaSizeRate: 1.0;
 define spawnAreaSize:
     (portalSize * spawnAreaSizeRate) <= minSpawnAreaSize ?
     minSpawnAreaSize :
@@ -879,6 +907,8 @@ if(
 
     // set teleport position to blind spot from player
     SetTeleportPositionToPortal();
+    // show teleport effect
+    PlayTeleportEffect();
     // Teleport
     Teleport(EventPlayer(), teleportPosition);
 }
@@ -895,6 +925,8 @@ if(
 
     // set teleport position to blind spot from player
     SetTeleportPositionToPortal();
+    // show teleport effect
+    PlayTeleportEffect();
     // Teleport
     Teleport(EventPlayer(), teleportPosition);
 }
@@ -917,8 +949,8 @@ if(
 
         // set teleport position tp blind spot from player
         SetTeleportPositionToPortal();
-        // show teleport beam
-        PlayTeleportBeam();
+        // show teleport effect
+        PlayTeleportEffect();
         // Teleport
         Teleport(EventPlayer(), teleportPosition);
     }
@@ -940,8 +972,8 @@ if(
     Wait(10 - (roundNo / 8), WaitBehavior.AbortWhenFalse);
     // set teleport position to camper
     SetTeleportPositionToCamper();
-    // show teleport beam
-    PlayTeleportBeam();
+    // show teleport effect
+    PlayTeleportEffect();
     // Teleport
     Teleport(EventPlayer(), teleportPosition);
 }
@@ -1463,7 +1495,7 @@ rule: "Portal/Positioner/DetectClosedArea/resetPortal"
 Event.OngoingGlobal
 if(
     portalState == PortalState.Checking &&
-    stoppedCount >= (NumberOfPlayers(Team.Team2) / 3)
+    stoppedCount >= (NumberOfPlayers(Team.Team2) / 2)
 ){
     // If the portal position is in the cloased area,
     //  it is determined that the portal position is incorrect and the portal is recreate
