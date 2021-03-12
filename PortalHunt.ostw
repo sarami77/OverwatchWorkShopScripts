@@ -474,7 +474,7 @@ if(
 
 playervar define inPortalEffectEntitys;
 
-rule: "Player/ClosePortal/showInsidePortalEffect //heavy fog and energy sound in the portal"
+disabled rule: "Player/ClosePortal/showInsidePortalEffect //heavy fog and energy sound in the portal"
 Event.OngoingPlayer
 Team.Team1
 Player.All
@@ -489,15 +489,11 @@ if(
     inPortalEffectEntitys[0] = LastCreatedEntity();
 
     CreateEffect(EventPlayer(), Effect.Cloud, enemyColor,
-        EventPlayer(), 5, EffectRev.VisibleToPositionAndRadius);
-    inPortalEffectEntitys[1] = LastCreatedEntity();
-
-    CreateEffect(EventPlayer(), Effect.Cloud, enemyColor,
         EventPlayer(), 10, EffectRev.VisibleToPositionAndRadius);
-    inPortalEffectEntitys[2] = LastCreatedEntity();
+    inPortalEffectEntitys[1] = LastCreatedEntity();
 }
 
-rule: "Player/ClosePortal/hideInsidePortalEffect"
+disabled rule: "Player/ClosePortal/hideInsidePortalEffect"
 Event.OngoingPlayer
 Team.Team1
 Player.All
@@ -507,7 +503,6 @@ if(
     // When a player exits the portal, hide smoke in the player view
     DestroyEffect(inPortalEffectEntitys[0]);
     DestroyEffect(inPortalEffectEntitys[1]);
-    DestroyEffect(inPortalEffectEntitys[2]);
 }
 
 rule: "Player/FairPlay/disableStealthWhenInside //sombra's stealth for fair play"
@@ -788,16 +783,13 @@ playervar define teleportEffectEntity;
 playervar define teleportPosition;
 
 void PlayTeleportEffect()"PlayTeleportEffect"{
-    teleportEffectEntity = [];
-    // play beam
-    CreateBeamEffect(AllPlayers(Team.All), BeamType.BadBeam,
-        EventPlayer(), teleportPosition + Up(),
-        enemyColor, EffectRev.VisibleToPositionAndRadius);
-    teleportEffectEntity[0] = LastCreatedEntity();
-    // show beam effect
-    WaitPlayEffect();
-    // hide beam
-    DestroyEffect(teleportEffectEntity[0]);
+        // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Red,
+        EventPlayer(),
+        1);
+    WaitChangeState();
 }
 
 define minSpawnAreaSize: 10;
@@ -1330,7 +1322,10 @@ if(
             RandomReal(50, 200);
         // get candidate postion of portal 
         candidatePosition = NearestWalkablePosition(randomPositon);
-        
+        // move candidate postion in the direction of player for avoiding map edge
+        candidatePosition += DirectionTowards(candidatePosition, basePlayer) * RandomReal(5, 25);
+        // convert to walkble position
+        candidatePosition = NearestWalkablePosition(candidatePosition);
         if(
             // close candidate postion than random positon
             (
@@ -1353,6 +1348,7 @@ if(
         ){
             break;
         }
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
     }
     // confirm as portal position
     portalPosition = candidatePosition;

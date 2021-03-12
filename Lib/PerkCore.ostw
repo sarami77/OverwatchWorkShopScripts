@@ -170,6 +170,16 @@ if(
 }
 
 define pickupRange : 2.5;
+define canPickupCratePlayers:
+    FilteredArray(
+        AllPlayers(Team.Team1),
+        (
+            TeamOf(ArrayElement()) == Team.Team1 &&
+            ArrayElement().perkState == PerkState.Non &&
+            DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange &&
+            !ArrayElement().notPickupPerk
+        )
+    );
 playervar define playerClosestCrate;
 
 rule: "Perk/Enemy/perkPickUpByPlayer //Giving a park to the player who touched the crate"
@@ -178,32 +188,12 @@ Event.OngoingPlayer
 Player.All
 if(
     perkCrateState == PerkCrateState.Dropped &&
-    CountOf(
-        FilteredArray(
-            AllPlayers(Team.Team1),
-            (
-                !ArrayElement().notPickupPerk &&
-                TeamOf(ArrayElement()) == Team.Team1 &&
-                ArrayElement().perkState == PerkState.Non &&
-                DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
-            )
-        )
-    ) > 0
+    CountOf(canPickupCratePlayers) > 0
 ){
     // When a player approaches the position where the perk crate drops,
     //  give the player a random perk
     WaitConditionConfirmed();
-    playerClosestCrate = 
-        FirstOf(
-            FilteredArray(
-                AllPlayers(Team.Team1),
-                (
-                    TeamOf(ArrayElement()) == Team.Team1 &&
-                    ArrayElement().perkState == PerkState.Non &&
-                    DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
-                )
-            )
-        );
+    playerClosestCrate = FirstOf(canPickupCratePlayers);
     // play pickup effect, message
     PlayEffect(
         AllPlayers(), PlayEffect.GoodPickupEffect,
@@ -707,7 +697,7 @@ Player.All
 if(
     notPickupPerk
 ){
-    Wait(3, WaitBehavior.AbortWhenFalse);
+    Wait(2, WaitBehavior.AbortWhenFalse);
     notPickupPerk = false;
 }
 
@@ -764,7 +754,8 @@ if(
 ){
     // remind use perk.
     Wait(30, WaitBehavior.AbortWhenFalse);
-    SmallMessage(EventPlayer(), <"Forgotten perk? Hold interact button <0> to activate perk.", ButtonGuide(Button.Interact)> );
+    SmallMessage(EventPlayer(), <"Forgotten perk?"> );
+    SmallMessage(EventPlayer(), <"Hold interact button <0> to activate perk.", ButtonGuide(Button.Interact)> );
     LoopIfConditionIsTrue();
 }
 
