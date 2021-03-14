@@ -2079,7 +2079,7 @@ if(
         perkEffectStatus == PerkEffectStatus.Ready ?
             <"Hold melee button <0> to call Strafing Request.", ButtonGuide(Button.Melee)> :
             perkEffectStatus == PerkEffectStatus.Reloading ?
-                "Strafing Request in preparation..." :
+                <"Strafing Request in preparation until <0> seconds.", perkEffectCoolTime> :
                 "Strafing incoming!"
         );
     perkEffectAndText[0] = LastTextID();
@@ -2246,6 +2246,7 @@ if(
 
     // start reload
     perkEffectStatus = PerkEffectStatus.Reloading;
+    perkEffectCoolTime = RandomInteger(5, 10);
 }
 
 rule: "Perk/Player/StrafingSupport/landedToPoint"
@@ -2288,21 +2289,38 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Perk/Player/StrafingSupport/coolDown"
+playervar define perkEffectCoolTime;
+
+rule: "Perk/Player/countDownTimeLimit"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
     perkType == PerkType.StrafingSupport &&
     perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Reloading
+    perkEffectStatus == PerkEffectStatus.Reloading &&
+    perkEffectCoolTime > 0
 ){
-    Wait(strafReqReloadTime, WaitBehavior.AbortWhenFalse);
+    // count down perk cooldown time
+    WaitUpdateMediumCycle();
+    perkEffectCoolTime -= 1;
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/StrafingSupport/coolDownComplete"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.StrafingSupport &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Reloading &&
+    perkEffectCoolTime <= 0
+){
     // play ready sound
     PlayEffect(
         EventPlayer(), PlayEffect.BuffImpactSound,
         Color.White, EventPlayer(), 100);
-    SmallMessage(EventPlayer(), "Strafing Request Ready.");    
     perkEffectStatus = PerkEffectStatus.Ready;
 }
 
