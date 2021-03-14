@@ -5,8 +5,8 @@ define DamageText_isEnableTeam:
     DamageText_enableTeam == TeamOf() ||
     DamageText_enableTeam == Team.All;
 
-define minDisplayTime: 0.1;
-define maxDisplayTime: 5;
+define minDisplayTime: 0.3;
+define maxDisplayTime: 10;
 playervar define damageTextEntity;
 
 playervar define prevDamage;
@@ -20,17 +20,31 @@ if(
     EventDamage() >= 1
 )
 {
+    // less damage than before
     if(prevDamage > EventDamage()){
-        Wait(minDisplayTime, WaitBehavior.IgnoreCondition);
+        // wait update text according to current display time because max damage
+        Wait(damageTextDisplayTime * 0.1, WaitBehavior.RestartWhenTrue);
     }
-    prevDamage = EventDamage();
+    // same damage as before
+    else if(prevDamage == EventDamage()){
+        // reduces update frequently for good visibility
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+    }
+    // more damage than before
+    else{
+        // update instantly with no wait
+    }
+    // hide current text
     DestroyInWorldText(damageTextEntity);
-
+    // save current damage as previous damage
+    prevDamage = EventDamage();
+    // set position 
     define damageTextPosition = EyePosition(EventPlayer());
-
-    define damageTextSize = 1 + (EventDamage() * 0.02);
-
-    damageTextDisplayTime = EventDamage() * 0.005;
+    // set size
+    define damageTextSize = 1 + (EventDamage() * 0.01);
+    // set dislay time
+    damageTextDisplayTime = EventDamage() * 0.01;
+    // tune display time
     damageTextDisplayTime =
         damageTextDisplayTime < minDisplayTime ?
         minDisplayTime :
@@ -39,37 +53,37 @@ if(
         damageTextDisplayTime > maxDisplayTime ?
         maxDisplayTime :
         damageTextDisplayTime;
-
-    // show red in 200 damage over
+    // show text with color
     if(200 <= EventDamage()){
+        // show red in 200 damage over
         CreateInWorldText(AllPlayers(), RoundToInteger(EventDamage()), damageTextPosition,
             damageTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.Red, Spectators.DefaultVisibility);
     }
-    // show orange in 100 damage over
     else if(100 <= EventDamage()){
+        // show orange in 100 damage over
         CreateInWorldText(AllPlayers(), RoundToInteger(EventDamage()), damageTextPosition,
             damageTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.Orange, Spectators.DefaultVisibility);
     }
-    // show yellow in 50 damage over
     else if(50 <= EventDamage()){
+        // show yellow in 50 damage over
         CreateInWorldText(AllPlayers(), RoundToInteger(EventDamage()), damageTextPosition,
             damageTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.Yellow, Spectators.DefaultVisibility);
     }
-    // show white in 50 damage under
     else{
+        // show white in 50 damage under
         CreateInWorldText(AllPlayers(), RoundToInteger(EventDamage()), damageTextPosition,
             damageTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.White, Spectators.DefaultVisibility);
     }
-
     damageTextEntity = LastTextID();
+    // start text popup
     UpdateEveryFrame(damageTextPosition);
-
     ChaseVariableAtRate(damageTextPosition, damageTextPosition + (Up() * 10),
-        0.75, RateChaseReevaluation.DestinationAndRate);
+        1.0, RateChaseReevaluation.DestinationAndRate);
+    // wait hide text according to damage amount
     Wait(damageTextDisplayTime, WaitBehavior.RestartWhenTrue);
     DestroyInWorldText(damageTextEntity);
 }
