@@ -5,11 +5,13 @@ define DamageText_isEnableTeam:
     DamageText_enableTeam == TeamOf() ||
     DamageText_enableTeam == Team.All;
 
-define minDisplayTime: 0.5;
-define maxDisplayTime: 10;
+define minDisplayTime: 0.1;
+define maxDisplayTime: 5;
 playervar define damageTextEntity;
 
 playervar define prevDamage;
+
+playervar define damageTextDisplayTime;
 
 rule: "DamageFloatText/popup"
 Event.OnDamageTaken
@@ -18,12 +20,26 @@ if(
     EventDamage() >= 1
 )
 {
-    Wait(0.1, WaitBehavior.RestartWhenTrue);
+    if(prevDamage > EventDamage()){
+        Wait(minDisplayTime, WaitBehavior.IgnoreCondition);
+    }
+    prevDamage = EventDamage();
     DestroyInWorldText(damageTextEntity);
+
     define damageTextPosition = EyePosition(EventPlayer());
-    define damageTextSize = 1 + (EventDamage() * 0.01);
-    define damageTextDisplayTime = minDisplayTime + (EventDamage() * 0.01);
-    damageTextDisplayTime = damageTextDisplayTime > maxDisplayTime ? maxDisplayTime : damageTextDisplayTime;
+
+    define damageTextSize = 1 + (EventDamage() * 0.02);
+
+    damageTextDisplayTime = EventDamage() * 0.005;
+    damageTextDisplayTime =
+        damageTextDisplayTime < minDisplayTime ?
+        minDisplayTime :
+        damageTextDisplayTime;
+    damageTextDisplayTime =
+        damageTextDisplayTime > maxDisplayTime ?
+        maxDisplayTime :
+        damageTextDisplayTime;
+
     // show red in 200 damage over
     if(200 <= EventDamage()){
         CreateInWorldText(AllPlayers(), RoundToInteger(EventDamage()), damageTextPosition,
@@ -48,11 +64,12 @@ if(
             damageTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.White, Spectators.DefaultVisibility);
     }
+
     damageTextEntity = LastTextID();
     UpdateEveryFrame(damageTextPosition);
 
-    ChaseVariableOverTime(damageTextPosition, damageTextPosition + (Up() * 10),
-        maxDisplayTime, TimeChaseReevaluation.DestinationAndDuration);
+    ChaseVariableAtRate(damageTextPosition, damageTextPosition + (Up() * 10),
+        0.75, RateChaseReevaluation.DestinationAndRate);
     Wait(damageTextDisplayTime, WaitBehavior.RestartWhenTrue);
     DestroyInWorldText(damageTextEntity);
 }

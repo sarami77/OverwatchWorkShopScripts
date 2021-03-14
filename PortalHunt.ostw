@@ -21,6 +21,7 @@ import "Lib/DamageText.ostw";
 import "Lib/Regeneration.ostw";
 import "Lib/Revive.ostw";
 import "Lib/Perk.ostw";
+import "Lib/Debug.ostw";
 // import "Lib/InvisibleImmortalForDebug.ostw";
 
 // TAG Signature and infomation ----------
@@ -781,17 +782,6 @@ if(
 
 playervar define teleportEffectEntity;
 playervar define teleportPosition;
-
-void PlayTeleportEffect()"PlayTeleportEffect"{
-    // play blast
-    PlayEffect(
-        AllPlayers(), PlayEffect.BadExplosion,
-        Color.Red,
-        EventPlayer(),
-        2);
-    WaitChangeState();
-}
-
 define minSpawnAreaSize: 10;
 define spawnAreaSizeRate: 1.0;
 define spawnAreaSize:
@@ -799,23 +789,53 @@ define spawnAreaSize:
     minSpawnAreaSize :
     (portalSize * spawnAreaSizeRate);
 
-void SetTeleportPositionToPortal()"SetTeleportPositionToBlindSpot"{
+define teleportPositionClosestPlayer: ClosestPlayerTo(teleportPosition, Team.Team1);
+define portalPositionClosestPlayer: ClosestPlayerTo(portalPosition, Team.Team1);
+
+void SetTeleportPositionToPortal()"SetTeleportPositionToPortal"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        teleportPosition = NearestWalkablePosition(
-            portalPosition + RandomPosition(
-            spawnAreaSize,
-            spawnAreaSize,
-            spawnAreaSize
-        ));
+        teleportPosition =
+            NearestWalkablePosition(
+                portalPosition
+                    +
+                RandomPosition(spawnAreaSize, spawnAreaSize, spawnAreaSize)
+            );
+
         if(
-            DistanceBetween(    // Within the portal
+            DistanceBetween(    // Inside portal
                 portalPosition, teleportPosition)
-                <= (portalSize * spawnAreaSizeRate)
+            <= (portalSize * spawnAreaSizeRate)
                     &&
-            !IsInLineOfSight(   // Blind spot from the player 
-                ClosestPlayerTo(EventPlayer(), Team.Team1),
+            !IsInLineOfSight(   // Blind spot from player 
+                teleportPositionClosestPlayer,
+                teleportPosition + Up(),
+                BarrierLOS.NoBarriersBlock)
+        ){
+            break;
+        }
+    }
+}
+
+void SetTeleportPositionToPlayer()"SetTeleportPositionToPlayer"{
+    // set teleport position by blind spot from player
+    // find place that will be a blind spot up to 10 times
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        teleportPosition =
+            NearestWalkablePosition(
+                portalPositionClosestPlayer
+                    +
+                RandomPosition(20, 20, 20)
+            );
+        
+        if(
+            DistanceBetween(    // Not too close to player
+                teleportPositionClosestPlayer, teleportPosition)
+            > 5
+                    &&
+            !IsInLineOfSight(   // Blind spot from player 
+                teleportPositionClosestPlayer,
                 teleportPosition + Up(),
                 BarrierLOS.NoBarriersBlock)
         ){
@@ -828,35 +848,70 @@ void SetTeleportPositionToCamper()"SetTeleportPositionToCamper"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        teleportPosition = ClosestPlayerTo(
-            portalPosition, Team.Team1) +
-            RandomPosition(1.5, 0, 1.5);
+        teleportPosition = 
+            portalPositionClosestPlayer
+                +
+            RandomPosition(3, 0, 3);
+               
         if(
-            IsInLineOfSight(    // Not buried in the wall
-                ClosestPlayerTo(EventPlayer(), Team.Team1),
-                teleportPosition + Up(),
-                BarrierLOS.NoBarriersBlock)
+            DistanceBetween(    // Not too close to player
+                teleportPositionClosestPlayer, teleportPosition)
+            > 1
                     &&
-            !IsInViewAngle(    // Out of the player's field of view
-                ClosestPlayerTo(EventPlayer(), Team.Team1),
+            !IsInViewAngle(    // Out of player field view
+                teleportPositionClosestPlayer,
                 teleportPosition + Up(),
                 90)
+                    &&
+            IsInLineOfSight(    // Not buried in wall
+                teleportPositionClosestPlayer,
+                teleportPosition + Up(),
+                BarrierLOS.NoBarriersBlock)
         ){
             break;
         }
     }
 }
 
+void PlayTeleportEffect()"PlayTeleportEffect"{
+    // Play blast effect when enemy teleport
+    if(enemyType == EnemyType.Minion){
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.BadExplosion,
+            enemyColor, EventPlayer(), 2);
+    }
+    else if(enemyType == EnemyType.Elite){
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.BadExplosion,
+            enemyColor, EventPlayer(), 3);
+    }
+    else if(enemyType == EnemyType.Boss){
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.BadExplosion,
+            enemyColor, EventPlayer(), 5);
+    }
+    // show effect at root position
+    WaitPlayEffect();
+}
+
 rule: "Enemy/Teleport/teleportToSpawnRoomByPortalDisabled"
-Event.OngoingGlobal
+Event.OngoingPlayer
+Team.Team2
+Player.All
 if(
     initCompleted &&
     !portalEnable
 ){
     // Teleport Enemy to spawn room when portal disable
-    Wait(1, WaitBehavior.AbortWhenFalse);   // wait show dead effect
+    Wait(1, WaitBehavior.AbortWhenFalse);   // wait show dead effect when portal closing
+    if(IsAlive()){
+        // show pre teleport effect
+        PlayTeleportEffect();
+    }
     // Teleport to spawn room
     Respawn(AllPlayers(Team.Team2));
+    // show teleport effect
+    PlayTeleportEffect();
 }
 
 rule: "Enemy/Teleport/teleportToPortalByPortalEnabled"
@@ -871,8 +926,12 @@ if(
 
     // set teleport position to blind spot from player
     SetTeleportPositionToPortal();
+    // show pre teleport effect
+    PlayTeleportEffect();
     // Teleport
     Teleport(EventPlayer(), teleportPosition);
+    // show teleport effect
+    PlayTeleportEffect();
 }
 
 rule: "Enemy/Teleport/teleportToPortalBySpawn"
@@ -887,8 +946,12 @@ if(
 
     // set teleport position to blind spot from player
     SetTeleportPositionToPortal();
+    // show pre teleport effect
+    PlayTeleportEffect();
     // Teleport
     Teleport(EventPlayer(), teleportPosition);
+    // show teleport effect
+    PlayTeleportEffect();
 }
 
 rule: "Enemy/Teleport/teleportToPortalByPlayerEntered"
@@ -909,10 +972,13 @@ if(
 
         // set teleport position tp blind spot from player
         SetTeleportPositionToPortal();
-        // show teleport effect
+        // show pre teleport effect
         PlayTeleportEffect();
         // Teleport
         Teleport(EventPlayer(), teleportPosition);
+        // show teleport effect
+        PlayTeleportEffect();
+
     }
 }
 
@@ -929,13 +995,15 @@ if(
 ){
     // TAG player not found timer
     // Teleport an enemy to camping player
-    Wait(10 - (roundNo / 8), WaitBehavior.AbortWhenFalse);
+    Wait(10 - (roundNo / 6), WaitBehavior.AbortWhenFalse);
     // set teleport position to camper
     SetTeleportPositionToCamper();
-    // show teleport effect
+    // show pre teleport effect
     PlayTeleportEffect();
     // Teleport
     Teleport(EventPlayer(), teleportPosition);
+    // show pre teleport effect
+    PlayTeleportEffect();
 }
 
 rule: "Enemy/Standby/enable"
@@ -2000,4 +2068,22 @@ if(
     // set min spawn interval
     AllPlayers(Team.Team2).confirmSpawnInterval = 0;
     SetRespawnMaxTime(AllPlayers(Team.Team2), confirmSpawnInterval + 1);
+}
+
+disabled rule: "Debug/forceTeleportEnemyToHostPlayer"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    IsButtonHeld(HostPlayer(), Button.Interact)
+){
+    WaitLongPressConfirm();
+    // set teleport position to camper
+    SetTeleportPositionToCamper();
+    // show pre teleport effect
+    PlayTeleportEffect();
+    // Teleport
+    Teleport(EventPlayer(), teleportPosition);
+    // show teleport effect
+    PlayTeleportEffect();
 }
