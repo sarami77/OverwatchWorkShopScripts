@@ -177,7 +177,7 @@ define canPickupCratePlayers:
             TeamOf(ArrayElement()) == Team.Team1 &&
             ArrayElement().perkState == PerkState.Non &&
             DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange &&
-            !ArrayElement().notPickupPerk
+            !(ArrayElement().notPickupPerk && ArrayElement() == EventPlayer())
         )
     );
 playervar define playerClosestCrate;
@@ -435,7 +435,7 @@ define CreatePerkStatusHud():
         null, null, 
         perkState == PerkState.Ready ? 
             <"  perk ready."> :
-            <"  perk active until <0> second.", perkTimeLimit>,
+            <"  perk active until <0> seconds.", perkTimeLimit>,
         Location.Left, (SlotOf() * 10) + 2,
         Color.White, Color.White,
         perkState == PerkState.Ready ?
@@ -873,12 +873,16 @@ if(
     AllPlayers(Team.Team1).perkState = PerkState.Using;
 }
 
+define isInCombat: 
+    IsAlive() &&
+    IsInLineOfSight(EventPlayer(), ClosestPlayerTo(EventPlayer(), Team.Team2));
+
 disabled rule: "Debug/forceGetPerk // for bot only"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    IsAlive() &&
+    isInCombat &&
     perkState == PerkState.Non
 ){
     Wait(RandomInteger(1, 5), WaitBehavior.AbortWhenFalse);
@@ -892,7 +896,7 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    IsAlive() &&
+    isInCombat &&
     perkState == PerkState.Ready
 ){
     Wait(RandomInteger(1, 5), WaitBehavior.AbortWhenFalse);
@@ -907,7 +911,7 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    IsAlive() &&
+    isInCombat &&
     perkState == PerkState.Using
 ){
     Wait(RandomInteger(1, 5), WaitBehavior.AbortWhenFalse);
