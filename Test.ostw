@@ -1,6 +1,6 @@
 import "Lib/Utility.ostw";
-import "Lib/PerkCore.ostw";
 import "Lib/Debug.ostw";
+//import "Lib/PerkCore.ostw";
 
 // Builtin -----------------------------------------------
 
@@ -10,7 +10,7 @@ if(
     HostPlayer() == EventPlayer() &&
     HasSpawned()
 ){
-    SetDamageDealt(EventPlayer(), 100);
+    SetDamageDealt(EventPlayer(), 600);
     SetDamageReceived(EventPlayer(), 1);
     SetHealingDealt(EventPlayer(), 100);
     SetHealingReceived(EventPlayer(), 100);
@@ -27,7 +27,7 @@ if(
     define others = FilteredArray(AllPlayers(), ArrayElement() != EventPlayer());
     SetMoveSpeed(others, 1000);
 
-    SetRespawnMaxTime(AllPlayers(), 5);
+    SetRespawnMaxTime(AllPlayers(Team.Team2), 1);
 
     // SetStatus(AllPlayers(Team.Team2), null, Status.Rooted, 99999);
     // ForcePlayerHero(EventPlayer(), Hero.Widowmaker);
@@ -40,69 +40,581 @@ if(
     //     EventPlayer(), 30, EffectRev.VisibleToPositionAndRadius);
 }
 
-disabled rule: "Debug/startButtonHold"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    EventPlayer() != HostPlayer() &&
-    (DistanceBetween(EventPlayer(), HostPlayer()) <= 6)
-){
-    dbgMsg("StartHoldingButton");
-    StartHoldingButton(EventPlayer(), Button.Jump);
-}
-
-disabled rule: "Debug/stopButtonHold"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    EventPlayer() != HostPlayer() &&
-    !(DistanceBetween(EventPlayer(), HostPlayer()) <= 5)
-){
-    dbgMsg("StopHoldingButton");
-    StopHoldingButton(EventPlayer(), Button.Jump);
-}
-
-disabled rule: "Debug/spawnBotAndUsePerk"
+rule: "Debug/spawnBot"
 Event.OngoingPlayer
 if(
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.PrimaryFire)
+    intaractDoublePressed
 ){
-    WaitLongPressConfirm();
-    // make bot
-    CreateDummyBot(
-        Hero.Reinhardt,
-        Team.Team1, 5,
-        NearestWalkablePosition(AimingPosition()),
-        FacingDirectionOf(
-            EventPlayer()
-        )
-    );
-    define player = PlayersInSlot(5, Team.Team1);
-
-    player.perkType = PerkType.Non;
-    player.perkState = PerkState.Non;
-    WaitChangeState();
-    player.perkType = PerkType.Titan;
-    player.perkState = PerkState.Using;
+    for(gLoopIndex = 0; gLoopIndex < NumberOfSlots(Team.Team2); gLoopIndex++){
+        if(null == PlayersInSlot(gLoopIndex, Team.Team2)){
+            break;
+        }
+    }
+    if(gLoopIndex < NumberOfSlots(Team.Team2)){
+        // make bot
+        CreateDummyBot(
+            RandomValueInArray(AllHeroes()),
+            Team.Team2, gLoopIndex,
+            AimingPosition() + Up(),
+            FacingDirectionOf()
+        );
+    }
+    else{
+        define player = FarthestPlayerFrom(AimingPosition(), Team.Team2);
+        Teleport(player, AimingPosition() + Up());
+        MinWait();
+        SetFacing(player, FacingDirectionOf(), Relative.ToWorld);
+    }
 }
 
-rule: "Debug/overridePerk"
-Event.OngoingPlayer
-Team.Team1
-if(
-    perkState == PerkState.Using
-){
-    perkType = PerkType.GrudgeThunderStrike;
-}
+// disabled rule: "Debug/overridePerk"
+// Event.OngoingPlayer
+// Team.Team1
+// if(
+//     perkState == PerkState.Using
+// ){
+//     perkType = PerkType.GrudgeThunderStrike;
+// }
 
 
 // Test Code -----------------------------------------------
+playervar define statusText;
+playervar define eyesPos;
+playervar define frontjudgePos;
+playervar define belowjudgePos;
+playervar define tuneDir;
+playervar define tuneDirCriff;
+playervar define target;
+playervar define watchUpdateRate;
+define judgeForwardDist: 8;
+define judgeBelowDist: 6;
+define watchEnemyAroundAngle: 100;
+define watchEnemyAroundDist: 10;
+define turnRatio: RandomReal(0, 1);
 
+rule: "Enemy/Debug/positionMarker"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    HasSpawned()
+){
+    // show frontjudgePos distance
+    CreateBeamEffect(
+        HostPlayer(), BeamType.GoodBeam,
+        eyesPos, frontjudgePos,
+        DistanceBetween(eyesPos, frontjudgePos) < judgeForwardDist ?
+        Color.Red : Color.White,
+        EffectRev.VisibleToPositionRadiusAndColor);
+    // show belowjudgePos distance
+    CreateBeamEffect(
+        HostPlayer(), BeamType.GoodBeam,
+        frontjudgePos, belowjudgePos,
+        DistanceBetween(frontjudgePos, belowjudgePos) > judgeBelowDist ?
+        Color.Red : Color.White,
+        EffectRev.VisibleToPositionRadiusAndColor);
+    // show status text
+    CreateInWorldText(
+        HostPlayer(), statusText,
+        ep, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+}
 
+define isContactPlayer: 
+    IsInLineOfSight(ep, ClosestPlayerTo(ep, Team.Team1)) &&
+    !(
+        HeroOf(target) == Hero.Sombra && IsUsingAbility1(target) &&
+        DistanceBetween(ep, ClosestPlayerTo(ep, Team.Team1)) >= 2
+    );
 
+define isCliff:
+    DistanceBetween(frontjudgePos, belowjudgePos) > judgeBelowDist ||
+    DistanceBetween(frontjudgePos, belowjudgePos) <= 1;  // exclude hit handrail
+
+define isWall:
+    DistanceBetween(eyesPos, frontjudgePos) < judgeForwardDist;
+
+define isStacked:
+    SpeedOf() <= 1.0;
+
+playervar define enemyState;
+enum EnemyState{
+    Non,
+    Wandering,
+    Combat,
+    Searching
+}
+
+rule: "Enemy/State/StateControl"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    HasSpawned()
+){
+    if(isContactPlayer){
+        // combat by contact player
+        enemyState = EnemyState.Combat; 
+    }
+    else{
+        // near targetPos
+        if(
+            DistanceBetween(ep, targetPos) < 3 ||
+            isStacked   // stacked
+        ){
+            // start wardering by target lost
+            enemyState = EnemyState.Wandering;    
+        }
+        else{
+            // start searching by target lost
+            enemyState = EnemyState.Searching;
+        }
+        
+    }
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Enemy/State/Wandering"
+Event.OngoingPlayer
+if(
+    enemyState == EnemyState.Wandering
+){
+    statusText = <"Wandering">;
+
+    // set initial status
+    targetPos = 0;
+    StopFacing(ep);
+    SetMoveSpeed(ep, 200);
+    StopHoldingButton(ep, Button.PrimaryFire);
+    watchUpdateRate = 0.5;
+    // action loop
+    while(true){
+        // set judge pos
+        eyesPos = EyePosition();
+        frontjudgePos = AimingPositionWithLimit(judgeForwardDist * (SpeedOf() / 5.5));
+        belowjudgePos = BelowPosition(frontjudgePos);
+        // avoid cliff
+        if(isCliff){
+            // set base turn direction
+            if(tuneDirCriff == 0){
+                // set base turn direction
+                if(RandomInteger(0, 100) <= 50){
+                    tuneDirCriff = Right();
+                }
+                else{
+                    tuneDirCriff = Left();
+                }
+            }
+            // set curve to left/right direction
+            SetFacing(ep, Forward() + (tuneDirCriff * turnRatio), Relative.ToPlayer);
+            StartThrottleInDirection(
+                ep, Forward(), 1,
+                Relative.ToPlayer,
+                ThrottleBehavior.ReplaceExistingThrottle,
+                ThrottleRev.DirectionAndMagnitude);
+            // shorten watch update rate
+            watchUpdateRate = 0.1;
+        }
+        // avoid wall
+        else if(isWall){
+            // first avoid
+            if(tuneDir == 0){
+                // set base turn direction
+                if(RandomInteger(0, 100) <= 50){
+                    tuneDir = Right();
+                }
+                else{
+                    tuneDir = Left();
+                }
+            }
+            // set curve to forward direction
+            SetFacing(ep, Forward() + (tuneDir * turnRatio), Relative.ToPlayer);
+            StartThrottleInDirection(
+                ep, Forward(), 1,
+                Relative.ToPlayer,
+                ThrottleBehavior.ReplaceExistingThrottle,
+                ThrottleRev.DirectionAndMagnitude);
+            // shorten watch update rate
+            watchUpdateRate = 0.1;
+        }
+        // walk forward
+        else{
+            // reset base turn direction
+            tuneDir = 0;
+            // reset watch update rate
+            watchUpdateRate = 1;
+        }
+        // stacked
+        if(isStacked){
+            // random
+            if(
+                !isCliff &&
+                RandomInteger(0, 100) <= 70
+            ){
+                StartThrottleInDirection(
+                    ep, Forward(), 1,
+                    Relative.ToPlayer,
+                    ThrottleBehavior.ReplaceExistingThrottle,
+                    ThrottleRev.DirectionAndMagnitude);
+                // jump
+                PressButton(ep, Button.Jump);
+                Wait(1.5, WaitBehavior.AbortWhenFalse);  
+            }
+            // if stacked yet
+            if(isStacked){
+                // set curve to left/right direction
+                SetFacing(ep, Backward() + (tuneDir * turnRatio), Relative.ToPlayer);
+                StartThrottleInDirection(
+                    ep, Forward(), 1,
+                    Relative.ToPlayer,
+                    ThrottleBehavior.ReplaceExistingThrottle,
+                    ThrottleRev.DirectionAndMagnitude);
+                // shorten watch update rate
+                watchUpdateRate = 0.1;
+            }
+        }
+
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+enum CombatRange{
+    Non,
+    Melee,
+    Close,
+    Middle,
+    Far
+}
+
+CombatRange CombatRange(define player)"CombatRange"{
+    define  combatRange = CombatRange.Non;
+    switch(HeroOf(player)){
+        case Hero.Brigitte:
+        case Hero.Reinhardt:
+        combatRange = CombatRange.Melee; 
+        break;
+
+        case Hero.Reaper:
+        case Hero.Mei:
+        case Hero.Doomfist:
+        case Hero.Genji:
+        case Hero.Winston:
+        case Hero.Dva:
+        case Hero.Sigma:
+        case Hero.Roadhog:
+        case Hero.Zarya:
+        combatRange = CombatRange.Close; 
+        break;
+
+        case Hero.Bastion:
+        case Hero.Echo:
+        case Hero.Junkrat:
+        case Hero.Mccree:
+        case Hero.Pharah:
+        case Hero.Soldier76:
+        case Hero.Sombra:
+        case Hero.Symmetra:
+        case Hero.Torbjorn:
+        case Hero.Tracer:
+        case Hero.Orisa:
+        case Hero.WreckingBall:
+        case Hero.Baptiste:
+        case Hero.Zenyatta:
+        case Hero.Lucio:        
+        case Hero.Moira:
+        case Hero.Mercy:
+        combatRange = CombatRange.Middle; 
+        break;
+
+        case Hero.Widowmaker:
+        case Hero.Ashe:
+        case Hero.Ana:
+        case Hero.Hanzo:
+        combatRange = CombatRange.Far; 
+        break;
+
+        default:
+        break;
+    }
+    return combatRange;
+}
+
+playervar define targetPos;
+playervar define combatMinRange;
+playervar define combatMaxRange;
+playervar define combatMoveDir;
+playervar define sideStepDir;
+playervar define sideStepKeepSecond;
+playervar define waitJumpSecond;
+
+rule: "Enemy/State/Combat"
+Event.OngoingPlayer
+if(
+    enemyState == EnemyState.Combat
+){
+    statusText = <"Combat">;
+
+    SetRespawnMaxTime(ep, 1);
+
+    // set initial status
+    watchUpdateRate = 0.5;
+    combatMoveDir = 0;
+    sideStepDir = 0;
+    StartFacing(
+            ep,
+            DirectionTowards(ep, target),
+            MaxValue(),
+            Relative.ToWorld, FacingRev.DirectionAndTurnRate
+        );   
+    SetMoveSpeed(ep, 100);
+    StartHoldingButton(ep, Button.PrimaryFire);
+
+    // set combat range
+    switch(CombatRange(ep)){
+        case CombatRange.Melee:
+            combatMinRange = 1;
+            combatMaxRange = 3;
+            break;
+        case CombatRange.Close:
+            combatMinRange = 1;
+            combatMaxRange = 10;
+            break;
+        case CombatRange.Middle:
+            combatMinRange = 10;
+            combatMaxRange = 20;
+            break;
+        case CombatRange.Far:
+            combatMinRange = 20;
+            combatMaxRange = 30;
+            break;
+    }
+    
+    // action loop
+    while(true){
+        // set judge pos
+        eyesPos = EyePosition();
+        frontjudgePos = AimingPositionWithLimit(judgeForwardDist * (SpeedOf() / 5.5));
+        belowjudgePos = BelowPosition(frontjudgePos);
+        // set target
+        target = ClosestPlayerTo(ep, Team.Team1);
+        targetPos = PositionOf(target);
+        // change combat distance
+        define distToTarget = DistanceBetween(ep, target);
+        if(isCliff){
+            combatMoveDir = 0;
+            statusText = <"Combat Stop by Cliff">;
+        }
+        else if(distToTarget > combatMaxRange){
+            combatMoveDir = Forward();
+            statusText = <"Combat Forward">;
+        }
+        else if(distToTarget < combatMinRange){
+            combatMoveDir = Backward();
+            statusText = <"Combat Backward">;
+        }
+        else{
+            combatMoveDir = 0;
+            statusText = <"Combat Stop">;
+        }
+
+        // change side step
+        if(
+            sideStepKeepSecond == 0  || // not keep side step
+            isStacked
+        ){
+            if(RandomInteger(0, 100) <= 70){
+                sideStepDir = RandomValueInArray([Right(),Left()]);
+                sideStepKeepSecond = RandomReal(3, 6);
+            }
+            else{
+                sideStepDir = 0;
+                sideStepKeepSecond = RandomReal(0, 1);
+            }
+        }
+
+        // set move direction
+        if(combatMoveDir != 0 && sideStepDir != 0){
+            StartThrottleInDirection(
+                ep, (combatMoveDir + sideStepDir), 1,
+                Relative.ToPlayer,
+                ThrottleBehavior.ReplaceExistingThrottle,
+                ThrottleRev.DirectionAndMagnitude);
+        }
+        else if(combatMoveDir == 0 && sideStepDir != 0){
+            StartThrottleInDirection(
+                ep, sideStepDir, 1,
+                Relative.ToPlayer,
+                ThrottleBehavior.ReplaceExistingThrottle,
+                ThrottleRev.DirectionAndMagnitude);
+        }
+        else if(combatMoveDir != 0 && sideStepDir == 0){
+            StartThrottleInDirection(
+                ep, combatMoveDir, 1,
+                Relative.ToPlayer,
+                ThrottleBehavior.ReplaceExistingThrottle,
+                ThrottleRev.DirectionAndMagnitude);
+        }
+        else{
+            StopThrottleInDirection();
+        }
+
+        // jump
+        if(
+            waitJumpSecond == 0 // not keep side step
+        ){
+            waitJumpSecond = RandomInteger(1, 4);
+            PressButton(ep, Button.Jump);
+        }
+                
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+rule: "Enemy/State/Searching"
+Event.OngoingPlayer
+if(
+    enemyState == EnemyState.Searching
+){
+    statusText = <"Searching">;
+
+    // set initial status
+    StopFacing(ep); 
+    SetFacing(ep, DirectionTowards(ep, targetPos), Relative.ToWorld);
+    StopHoldingButton(ep, Button.PrimaryFire);
+    SetMoveSpeed(ep, 200);
+    if(sideStepDir == 0){
+        sideStepDir = RandomValueInArray([Right(),Left()]);
+    }
+    else{
+        // set reverse side step for find player
+        sideStepDir = -sideStepDir;
+    }
+    StartThrottleInDirection(
+        ep, (Forward() + sideStepDir), 1,
+        Relative.ToPlayer,
+        ThrottleBehavior.ReplaceExistingThrottle,
+        ThrottleRev.DirectionAndMagnitude);
+}
+
+rule: "Enemy/sideStepKeepSecond"
+Event.OngoingPlayer
+if(
+    0 < sideStepKeepSecond
+){
+    while(1){
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        sideStepKeepSecond--;
+    }
+}
+
+rule: "Enemy/waitJumpSecond"
+Event.OngoingPlayer
+if(
+    0 < waitJumpSecond
+){
+    while(1){
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        waitJumpSecond--;
+    }
+}
+
+playervar define primaryFireType;
+playervar define secondaryFireType;
+
+enum FireType{
+    Non,
+    Simple,
+    Hold,
+    HoldAndRelease
+}
+
+playervar define ability1Trigger;
+playervar define ability2Trigger;
+
+enum AbiityTrigger{
+    Non,
+    OnMyCombatRange,
+    OnNotMyCombatRange,
+    OnMeleeCombatRange,
+    OnCloseCombatRange,
+    OnMiddleCombatRange,
+    OnFarCombatRange,
+    OnTakenDamage,
+    OnRegularly,
+    OnRandom
+}
+
+playervar define teleportPosition;
+
+rule: "Enemy/Teleport/teleportToPlayerAroundOnSpawn"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    IsAlive() &&
+    IsInSpawnRoom()
+){
+    SetTeleportPositionToPlayer();
+    Teleport(ep, teleportPosition);
+}
+
+rule: "Enemy/Teleport/teleportByNotPlayerFound"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    IsAlive() &&
+    enemyState != EnemyState.Non &&
+    enemyState != EnemyState.Combat
+){
+    if(enemyState == EnemyState.Searching){
+        Wait(3, WaitBehavior.AbortWhenFalse);
+    }
+    else{
+        Wait(3, WaitBehavior.AbortWhenFalse);
+    }
+    SetTeleportPositionToPlayer();
+    Teleport(ep, teleportPosition);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Enemy/Teleport/teleportByInvalidArea"
+Event.OnDamageTaken
+Team.Team2
+Player.All
+if(
+    IsAlive() &&
+    Attacker() == ep
+){
+    SetTeleportPositionToPlayer();
+    Teleport(ep, teleportPosition);
+    Heal(ep, null, MaxValue());
+}
+
+void SetTeleportPositionToPlayer()"SetTeleportPositionToPlayer"{
+    // set teleport position by blind spot from player
+    // find place that will be a blind spot up to 10 times
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        teleportPosition =
+            NearestWalkablePosition(
+                target
+                    +
+                RandomPosition(20, 20, 20)
+            );
+        
+        if(
+            DistanceBetween(    // Not too close to player
+                target, teleportPosition)
+            > 5
+                    &&
+            !IsInLineOfSight(   // Blind spot from player 
+                target,
+                teleportPosition + Up(),
+                BarrierLOS.NoBarriersBlock)
+        ){
+            break;
+        }
+    }
+}
 
 // Debug -----------------------------------------------
 define changeTimeInterval: 0.2;
@@ -193,9 +705,9 @@ void resetTuneUnit(){
 void changeTuneUnit(){
     consecutiveChangeCount ++;
     if(consecutiveChangeCount < 10)
-        tuneUnit = initialTuneUnit;
+        tuneUnit =  initialTuneUnit * 1;
     else if(consecutiveChangeCount < 20 )
-        tuneUnit = (initialTuneUnit * 5);
+        tuneUnit = initialTuneUnit * 10;
     else
-        tuneUnit = (initialTuneUnit * 10);
+        tuneUnit = initialTuneUnit * 100;
 }
