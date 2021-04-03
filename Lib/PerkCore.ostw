@@ -176,6 +176,7 @@ define canPickupCratePlayers:
         (
             TeamOf(ArrayElement()) == Team.Team1 &&
             ArrayElement().perkState == PerkState.Non &&
+            ArrayElement().perkType == PerkType.Non &&
             DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange &&
             !(ArrayElement().notPickupPerk && ArrayElement() == EventPlayer())
         )
@@ -202,6 +203,7 @@ if(
         playerClosestCrate, PlayEffect.BuffExplosionSound,
         Color.White, playerClosestCrate, MaxLength());
     SmallMessage(playerClosestCrate, "Got perk. Check detail from left list.");
+
     // set perk
     if(dropedPerkType != PerkType.Non){
         playerClosestCrate.perkType = dropedPerkType;
@@ -791,12 +793,12 @@ if(
 globalvar define backupPerkState;
 globalvar define backupPerkType;
 
-rule: "Debug/givePerkToSelf"
+rule: "Debug/choicePerk"
 Event.OngoingPlayer
 Team.All
 Player.All
 if(
-    enableDebugPerk &&
+    //enableDebugPerk &&
     HostPlayer() == EventPlayer() &&
     IsButtonHeld(EventPlayer(), Button.Interact)
 ){
@@ -806,8 +808,7 @@ if(
 
     backupPerkState = perkState;
     perkState = PerkState.Non;
-    perkType = PerkType.Non;
-    WaitChangeState();
+    WaitUntil(perkType == PerkType.Non, 1);
 
     if(backupPerkState == PerkState.Non){
         if(backupPerkType == PerkType.Non){
@@ -842,7 +843,7 @@ if(
 
     // Give perk to own player
     perkState = PerkState.Non;
-    WaitChangeState();
+    WaitUntil(perkType == PerkType.Non, 1);
     perkType = RandomValueInArray(lotteryPerkList);
     perkState = PerkState.Ready;   
 
@@ -864,7 +865,7 @@ if(
 
     // Give perk to all player
     AllPlayers(Team.Team1).perkState = PerkState.Non;   
-    WaitChangeState();
+    WaitUntil(AllPlayers(Team.Team1).perkType == PerkType.Non, 1);
     AllPlayers(Team.Team1).perkType = RandomValueInArray(lotteryPerkList);
     AllPlayers(Team.Team1).perkState = PerkState.Ready;
 
@@ -887,6 +888,7 @@ if(
 ){
     Wait(RandomInteger(1, 5), WaitBehavior.AbortWhenFalse);
 
+    WaitUntil(AllPlayers(Team.Team1).perkType == PerkType.Non, 1);
     EventPlayer().perkType = RandomValueInArray(lotteryPerkList);
     EventPlayer().perkState = PerkState.Ready;
 }
