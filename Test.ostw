@@ -81,336 +81,156 @@ Team.Team1
 if(
     perkState == PerkState.Using
 ){
-    perkType = PerkType.StrafingSupport;
+    perkType = PerkType.SuperLanding;
 }
 
 // Test Code -----------------------------------------------
 
-// TAG StrafingSupport ----------
-define strafReqLandingRange: 5;
-define strafReqDamageRange: 3;
-define strafReqAttackTime: 2.0;
-define strafReqAttackDistance: 50;
-define strafReqAttackInterval: 0.03;
-define strafReqReloadTime: RandomInteger(5, 10);
-
-rule: "Perk/Player/StrafingSupport/activate"
+// TAG SuperLanding ----------
+rule: "Perk/Player/SuperLanding/activate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.StrafingSupport &&
+    perkType == PerkType.SuperLanding &&
     perkState == PerkState.Using
 ){
     // set time limit
     perkTimeLimit = 300;
-    // set status
-    perkPosition = 0;
-    perkPosition2 = 0;
-    landPosition = -1;
+    // set param
     perkEffectStatus = PerkEffectStatus.Ready;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(
-        perkEffectStatus == PerkEffectStatus.Ready ?
-            <"Hold melee button <0> to call Strafing Request.", ButtonGuide(Button.Melee)> :
-            perkEffectStatus == PerkEffectStatus.Reloading ?
-                <"Strafing Request in preparation until <0> seconds.", perkEffectCoolTime> :
-                "Strafing incoming!"
-        );
+    CreatePerkEffectHud(<"Hold crouch button <0> to landing attack.", ButtonGuide(Button.Crouch)>);
     perkEffectAndText[0] = LastTextID();
-
-    // first use
-    StartHoldingButton(EventPlayer(), Button.Melee);
-    Wait(0.5, WaitBehavior.IgnoreCondition);
-    StopHoldingButton(EventPlayer(), Button.Melee);
+    CreatePerkEffectHud(<"More hold jump button <0> to hovering.", ButtonGuide(Button.Jump)>);
+    perkEffectAndText[1] = LastTextID();
+    CreatePerkEffectHud(<"Hold jump button <0> to high jump.", ButtonGuide(Button.Jump)>);
+    perkEffectAndText[2] = LastTextID();
 }
-rule: "Perk/Player/StrafingSupport/deactivate"
+
+rule: "Perk/Player/SuperLanding/deactivate"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.StrafingSupport &&
+    perkType == PerkType.SuperLanding &&
     perkState == PerkState.Non
 ){
     // reset hud
     DestroyHudText(perkEffectAndText[0]);
-    DestroyInWorldText(perkEffectAndText[1]);
-    // reset effect
-    DestroyEffect(perkEffectAndText[2]);
-    DestroyEffect(perkEffectAndText[3]);
-    DestroyEffect(perkEffectAndText[4]);
-    StopChasingVariable(landPosition);
+    DestroyHudText(perkEffectAndText[1]);
+    DestroyHudText(perkEffectAndText[2]);
+    // reset status
+    StopHoldingButton(EventPlayer(), Button.Crouch);
+    SetMoveSpeed(EventPlayer(), 100);
     // reset type
     perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/StrafingSupport/remindStrafingSupport"
+rule: "Perk/Player/SuperLanding/highJump"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.StrafingSupport &&
-    perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Ready
-){
-    // remind use perk.
-    Wait(30, WaitBehavior.AbortWhenFalse);
-    SmallMessage(EventPlayer(), <"Forgotten Strafing Support?"> );
-    SmallMessage(EventPlayer(), <"Hold melee button <0> to call Strafing Support.", ButtonGuide(Button.Melee)> );
-    LoopIfConditionIsTrue();
-}
-
-rule: "Perk/Player/StrafingSupport/startStrafing"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.StrafingSupport &&
+    perkType == PerkType.SuperLanding &&
     perkState == PerkState.Using &&
     perkEffectStatus == PerkEffectStatus.Ready &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    IsButtonHeld(EventPlayer(), Button.Jump)
 ){
     WaitLongPressConfirm();
-    // reset hud
-    DestroyHudText(perkEffectAndText[0]);
-    DestroyInWorldText(perkEffectAndText[1]);
-    // reset effect
-    DestroyEffect(perkEffectAndText[2]);
-    DestroyEffect(perkEffectAndText[3]);
-    DestroyEffect(perkEffectAndText[4]);
-    StopChasingVariable(landPosition);
+    ApplyImpulse(EventPlayer(), Up(), 18,
+        Relative.ToPlayer, ContraryMotion.Cancel);
     perkEffectStatus = PerkEffectStatus.Triggered;
 }
 
-playervar define approachingAngle;
-
-rule: "Perk/Player/StrafingSupport/setLandingZone"
+rule: "Perk/Player/SuperLanding/hover"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.StrafingSupport &&
+    perkType == PerkType.SuperLanding &&
     perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Triggered
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    IsButtonHeld(EventPlayer(), Button.Jump)
 ){
-    // play set sound
-    PlayEffect(
-        EventPlayer(), PlayEffect.DebuffImpactSound,
-        Color.White, EventPlayer(), MaxValue());
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    for(define hovringCount = 0; hovringCount < 50; hovringCount++){
+        ApplyImpulse(EventPlayer(), (Up() * 0.1), 1,
+            Relative.ToPlayer, ContraryMotion.Cancel);
+        WaitApplyImpulseCycle();
+    }
+}
 
-    aimPosition = BelowPosition(AimingPosition());
-    approachingAngle = DirectionTowards(
-            aimPosition, ClosestPlayerTo(
-                aimPosition,
-                Team.Team2
-            )
-        );
-    approachingAngle = Vector(
-        XOf(approachingAngle),
-        0,
-        ZOf(approachingAngle)
-    );
-    // set start point
-    perkPosition = 
-        aimPosition + 
-            // add random direction
-            -approachingAngle *
-            // add static distance
-            (strafReqAttackDistance / 2);
-    // set end point
-    perkPosition2 = 
-        aimPosition + 
-            // add random direction
-            approachingAngle *
-            // add static distance
-            (strafReqAttackDistance / 2);
-
-    // landing zone text
-    CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\rStrafing incoming!", EventPlayer(), HeroIconString(HeroOf()), "Strafing Request">,
-        aimPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-        Color.White, Spectators.DefaultVisibility);
-    perkEffectAndText[1] = LastTextID();
-
-    // set effect
-    // landing zone blast range
-    CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
-        landPosition, strafReqLandingRange, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[2] = LastCreatedEntity();
-    // landing zone position
-    CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
-        aimPosition, 0.2, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[3] = LastCreatedEntity(); 
-
-    // play landing animation
-    landPosition = perkPosition;
-    ChaseVariableOverTime(
-        landPosition, perkPosition2,
-        strafReqAttackTime,
-        TimeChaseReevaluation.DestinationAndDuration);
-    Wait(strafReqAttackTime, WaitBehavior.AbortWhenFalse);
-
-    StopChasingVariable(landPosition);
-    DestroyEffect(perkEffectAndText[2]);
-    DestroyEffect(perkEffectAndText[3]);
-
-    // start attack
+rule: "Perk/Player/SuperLanding/descent"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.SuperLanding &&
+    perkState == PerkState.Using &&
+    IsButtonHeld(EventPlayer(), Button.Crouch)
+){
+    AbortIf(6 > DistanceBetween(EventPlayer(), BelowPosition(EventPlayer())));
+    WaitLongPressConfirm();
+    ApplyImpulse(EventPlayer(), Down(), MaxValue(),
+        Relative.ToPlayer, ContraryMotion.Cancel);
     perkEffectStatus = PerkEffectStatus.SecondTriggered;
 }
 
-rule: "Perk/Player/StrafingSupport/moveLandPoint"
+define superLandingRange: 8;
+
+rule: "Perk/Player/SuperLanding/landing"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.StrafingSupport &&
+    perkType == PerkType.SuperLanding &&
     perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.SecondTriggered
+    perkEffectStatus == PerkEffectStatus.SecondTriggered &&
+    IsOnGround()
 ){
-    // create Ballistic
-    CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
-        landPosition2, landPosition2 - (approachingAngle * 200) + (Up() * 100),
-        Color.White, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[4] = LastCreatedEntity(); 
+    StartHoldingButton(EventPlayer(), Button.Crouch);
+    SetMoveSpeed(EventPlayer(), 0);
 
-    // chase landing position
-    landPosition = perkPosition;
-    UpdateEveryFrame(landPosition);
-    ChaseVariableOverTime(
-        landPosition, perkPosition2,
-        strafReqAttackTime,
-        TimeChaseReevaluation.DestinationAndDuration);
-
-    Wait(strafReqAttackTime, WaitBehavior.AbortWhenFalse);
-
-    StopChasingVariable(landPosition);
-    DestroyInWorldText(perkEffectAndText[1]);
-    DestroyEffect(perkEffectAndText[4]);
-
-    // start reload
-    perkEffectStatus = PerkEffectStatus.Reloading;
-    perkEffectCoolTime = strafReqReloadTime;
-}
-
-rule: "Perk/Player/StrafingSupport/landedToPoint"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.StrafingSupport &&
-    perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.SecondTriggered
-){
-    // set landed point
-    landPosition2 =
-        landPosition + 
-        RandomPosition(
-            strafReqLandingRange / 1.5,
-            0,
-            strafReqLandingRange / 1.5
-        );
-    // splash damage
-    Damage(
-        PlayersWithinRadius(
-            landPosition2, strafReqDamageRange,
-            Team.Team2, RadiusLOS.Off),
-        EventPlayer(), 200);
     // play blast
     PlayEffect(
-        AllPlayers(), PlayEffect.BadExplosion,
-        Color.White,
-        landPosition2,
-        strafReqDamageRange);
+        AllPlayers(), PlayEffect.GoodExplosion,
+        Color.White, PositionOf(), superLandingRange);
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosion,
+        Color.White, PositionOf(), superLandingRange);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.White,
-        landPosition2,
-        100);
+        Color.White, PositionOf(), 200);
+    // apply blast impulse
+    perkTargets = PlayersWithinRadius(
+        PositionOf(EventPlayer()), 
+        superLandingRange, Team.Team2, RadiusLOS.Off);
+    ApplyBlastImpulse(perkTargets, PositionOf(), superLandingRange);
+    // splash damage
+    Damage(perkTargets, EventPlayer(), 100);
 
-    Wait(strafReqAttackInterval, WaitBehavior.AbortWhenFalse);
-    LoopIfConditionIsTrue();
+    Wait(1.0, WaitBehavior.IgnoreCondition);
+    StopHoldingButton(EventPlayer(), Button.Crouch);
+    SetMoveSpeed(EventPlayer(), 100);
 }
 
-playervar define perkEffectCoolTime;
-
-rule: "Perk/Player/countDownTimeLimit"
+rule: "Perk/Player/SuperLanding/resetUsedFlag"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perkType == PerkType.StrafingSupport &&
+    perkType == PerkType.SuperLanding &&
     perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Reloading &&
-    perkEffectCoolTime > 0
-){
-    // count down perk cooldown time
-    WaitUpdateMediumCycle();
-    perkEffectCoolTime -= 1;
-    LoopIfConditionIsTrue();
-}
-
-rule: "Perk/Player/StrafingSupport/coolDownComplete"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.StrafingSupport &&
-    perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Reloading &&
-    perkEffectCoolTime <= 0
-){
-    // play ready sound
-    PlayEffect(
-        EventPlayer(), PlayEffect.BuffImpactSound,
-        Color.White, EventPlayer(), 100);
+    IsOnGround()
+)
+{
+    WaitConditionConfirmed();
     perkEffectStatus = PerkEffectStatus.Ready;
 }
 
-rule: "Perk/Player/StrafingSupport/playAircraftAnimation"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    perkType == PerkType.StrafingSupport &&
-    perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Reloading
-){
-    // set start point
-    perkPosition =
-        aimPosition +
-        DirectionTowards(aimPosition, perkPosition) * 
-        (strafReqAttackDistance * 25) +
-        Vector(0, 200, 0); 
-    // set end point
-    perkPosition2 = 
-        aimPosition +
-        DirectionTowards(aimPosition, perkPosition2) *
-        (strafReqAttackDistance * 25) +
-        Vector(0, 1200, 0); 
-    // air craft
-    CreateEffect(AllPlayers(), Effect.Orb, Color.Red,
-        landPosition, 1, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[2] = LastCreatedEntity();
-    // air craft aura
-    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
-        landPosition, 30, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[3] = LastCreatedEntity();
-
-    // play air craft animation
-    landPosition = perkPosition;
-    UpdateEveryFrame(landPosition);
-    ChaseVariableOverTime(
-        landPosition, perkPosition2,
-        3,
-        TimeChaseReevaluation.DestinationAndDuration);
-    Wait(3, WaitBehavior.IgnoreCondition);
-    StopChasingVariable(landPosition);
-
-    DestroyEffect(perkEffectAndText[2]);
-    DestroyEffect(perkEffectAndText[3]);
-}
 
 // Debug -----------------------------------------------
 define changeTimeInterval: 0.2;
