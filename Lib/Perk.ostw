@@ -17,7 +17,7 @@ if(
     perkEffectStatus = PerkEffectStatus.Ready;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(<"Hold crouch button <0> to landing attack.", ButtonGuide(Button.Crouch)>);
+    CreatePerkEffectHud(<"Hold crouch button <0> in air to landing attack.", ButtonGuide(Button.Crouch)>);
     perkEffectAndText[0] = LastTextID();
     CreatePerkEffectHud(<"More hold jump button <0> to hovering.", ButtonGuide(Button.Jump)>);
     perkEffectAndText[1] = LastTextID();
@@ -1625,7 +1625,9 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 2));
+    SetUltimateCharge(EventPlayer(),
+        UltimateChargePercent() +
+        NumberOfSlots(Team.Team2) - NumberOfPlayers(Team.Team2));
     LoopIfConditionIsTrue();
 }
 
@@ -2016,9 +2018,10 @@ if(
 // TAG ArtilleryRequest ----------
 define artilleryLandingRange: 20;
 define artilleryDamageRange: 7;
-define attackTime: 10;
-define attackCount: 30;
+define artilleryAttackTime: 10;
+define artilleryAttackCount: 30;
 playervar define landZonePosition;
+playervar define perkEffectCount;
 
 rule: "Perk/Player/ArtilleryRequest/activate"
 Event.OngoingPlayer
@@ -2035,7 +2038,7 @@ if(
     perkPosition2 = 0;
     landPosition = -1;
     landPosition2 = -1;  
-    perkEffectStatus = 0; 
+    perkEffectCount = 0; 
     // show text
     // landing zone text
     perkEffectAndText = [];
@@ -2103,16 +2106,18 @@ if(
     // set shell land position to aiming position
     landZonePosition = BelowPosition(AimingPosition());
     Wait(3, WaitBehavior.AbortWhenFalse);
+
     DestroyEffect(perkEffectAndText[4]);
     DestroyEffect(perkEffectAndText[5]);
+
     firstAnimationDelay = true;
-    perkEffectStatus = attackCount;
+    perkEffectCount = artilleryAttackCount;
 }
 
 playervar define firstAnimationDelay;
 define parallelAnimationNum: 2;
-define attackSpeeed:
-    (attackTime / attackCount) * parallelAnimationNum;
+define artilleryAttackSpeeed:
+    (artilleryAttackTime / artilleryAttackCount) * parallelAnimationNum;
 
 rule: "Perk/Player/ArtilleryRequest/launchShell"
 Event.OngoingPlayer
@@ -2121,9 +2126,9 @@ Player.All
 if(
     perkType == PerkType.ArtilleryRequest &&
     perkState == PerkState.Using &&
-    perkEffectStatus > 0
+    perkEffectCount > 0
 ){
-    // set shell at random horizontal positions over 50
+    // set shell at random
     perkPosition = landZonePosition +
         Vector(0, 100, 0) + RandomPosition(10, 0, 10);
     // start shell move
@@ -2136,15 +2141,15 @@ if(
         );
     UpdateEveryFrame(perkPosition);
     ChaseVariableOverTime(
-        perkPosition, landPosition, attackSpeeed,
+        perkPosition, landPosition, artilleryAttackSpeeed,
         TimeChaseReevaluation.DestinationAndDuration);
-    Wait(attackSpeeed, WaitBehavior.IgnoreCondition);
+    Wait(artilleryAttackSpeeed, WaitBehavior.AbortWhenFalse);
     StopChasingVariable(perkPosition);
     // hide shell
     perkPosition = InvalidPosition();
     // on landed play blast
-    async ExplodeArtilleryShell(landPosition);
-    perkEffectStatus -- ;
+    async ExplodeArtillery(landPosition);
+    perkEffectCount -- ;
     LoopIfConditionIsTrue();
 }
 
@@ -2155,14 +2160,14 @@ Player.All
 if(
     perkType == PerkType.ArtilleryRequest &&
     perkState == PerkState.Using &&
-    perkEffectStatus > 0
+    perkEffectCount > 0
 ){
     if(firstAnimationDelay){
         firstAnimationDelay = false;
-        Wait(attackSpeeed / 2, WaitBehavior.IgnoreCondition);
+        Wait(artilleryAttackSpeeed / 2, WaitBehavior.AbortWhenFalse);
     }
 
-    // set shell at random horizontal positions over 50
+    // set shell at random
     perkPosition2 = landZonePosition +
         Vector(0, 100, 0) + RandomPosition(10, 0, 10);
     // start shell move
@@ -2175,19 +2180,19 @@ if(
         );
     UpdateEveryFrame(perkPosition2);
     ChaseVariableOverTime(
-        perkPosition2, landPosition2, attackSpeeed,
+        perkPosition2, landPosition2, artilleryAttackSpeeed,
         TimeChaseReevaluation.DestinationAndDuration);
-    Wait(attackSpeeed, WaitBehavior.IgnoreCondition);
+    Wait(artilleryAttackSpeeed, WaitBehavior.AbortWhenFalse);
     StopChasingVariable(perkPosition2);
     // hide shell
     perkPosition2 = InvalidPosition();
     // on landed play blast
-    async ExplodeArtilleryShell(landPosition2);
-    perkEffectStatus -- ;
+    async ExplodeArtillery(landPosition2);
+    perkEffectCount -- ;
     LoopIfConditionIsTrue();
 }
 
-void ExplodeArtilleryShell(define position)"ExplodeArtilleryShell"{
+void ExplodeArtillery(define position)"ExplodeArtilleryShell"{
     // get target
     perkTargets = 
         PlayersWithinRadius(
@@ -2217,7 +2222,7 @@ define strafReqDamageRange: 3;
 define strafReqAttackTime: 2.0;
 define strafReqAttackDistance: 50;
 define strafReqAttackInterval: 0.03;
-define strafReqReloadTime: RandomInteger(5, 10);
+define strafReloadTime: 10;
 
 rule: "Perk/Player/StrafingSupport/activate"
 Event.OngoingPlayer
@@ -2414,7 +2419,7 @@ if(
 
     // start reload
     perkEffectStatus = PerkEffectStatus.Reloading;
-    perkEffectCoolTime = strafReqReloadTime;
+    perkEffectCoolTime = strafReloadTime;
 }
 
 rule: "Perk/Player/StrafingSupport/landedToPoint"
@@ -2459,7 +2464,7 @@ if(
 
 playervar define perkEffectCoolTime;
 
-rule: "Perk/Player/countDownTimeLimit"
+rule: "Perk/Player/StrafingSupport/countDownTimeLimit"
 Event.OngoingPlayer
 Team.Team1
 Player.All
@@ -2534,6 +2539,362 @@ if(
 
     DestroyEffect(perkEffectAndText[2]);
     DestroyEffect(perkEffectAndText[3]);
+}
+
+// TAG MissileBarrage ----------
+//define missileLandingRange: 4;
+define missileDamageRange: 4;
+define missileAttackTime: 4;
+define missileAttackCount: 8;
+define missleReloadTime: 10;
+
+rule: "Perk/Player/MissileBarrage/activate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Using
+){
+    // set time limit
+    perkTimeLimit = 300;
+    // set status
+    perkPosition = 0;
+    perkPosition2 = 0;
+    landPosition = -1;
+    landPosition2 = -1;  
+    perkEffectStatus = 0; 
+    // set hud
+    perkEffectAndText = [];
+    CreatePerkEffectHud(
+        perkEffectStatus == PerkEffectStatus.Ready ?
+            <"Hold melee button <0> to call Missile Barrage.", ButtonGuide(Button.Melee)> :
+            perkEffectStatus == PerkEffectStatus.Reloading ?
+                <"Missile barrage in preparation until <0> seconds.", perkEffectCoolTime> :
+                "Missile incoming!"
+        );
+    perkEffectAndText[0] = LastTextID();
+
+    // first use
+    StartHoldingButton(EventPlayer(), Button.Melee);
+    Wait(0.5, WaitBehavior.IgnoreCondition);
+    StopHoldingButton(EventPlayer(), Button.Melee);
+}
+rule: "Perk/Player/MissileBarrage/deactivate"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Non
+){
+    // reset hud
+    DestroyHudText(perkEffectAndText[0]);
+    // reset text
+    DestroyInWorldText(perkEffectAndText[1]);
+    // reset effect
+    DestroyEffect(perkEffectAndText[2]);
+    DestroyEffect(perkEffectAndText[3]);
+    DestroyEffect(perkEffectAndText[4]);
+    DestroyEffect(perkEffectAndText[5]);
+    StopChasingVariable(landZonePosition);
+    StopChasingVariable(perkPosition);
+    StopChasingVariable(perkPosition2);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/MissileBarrage/remindMissileBarrage"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Ready
+){
+    // remind use perk.
+    Wait(30, WaitBehavior.AbortWhenFalse);
+    SmallMessage(EventPlayer(), <"Forgotten Missile Barrage?"> );
+    SmallMessage(EventPlayer(), <"Hold melee button <0> to call Missile Barrage.", ButtonGuide(Button.Melee)> );
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/MissileBarrage/startMissile"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Ready &&
+    IsButtonHeld(EventPlayer(), Button.Melee)
+){
+    WaitLongPressConfirm();
+    // reset text
+    DestroyInWorldText(perkEffectAndText[1]);
+    // reset effect
+    DestroyEffect(perkEffectAndText[2]);
+    DestroyEffect(perkEffectAndText[3]);
+    DestroyEffect(perkEffectAndText[4]);
+    DestroyEffect(perkEffectAndText[5]);
+    StopChasingVariable(landZonePosition);
+    StopChasingVariable(perkPosition);
+    StopChasingVariable(perkPosition2);
+
+    // shell body1
+    CreateEffect(AllPlayers(), Effect.Orb, Color.White,
+        perkPosition, 1, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[2] = LastCreatedEntity();
+    // shell body2
+    CreateEffect(AllPlayers(), Effect.Orb, Color.White,
+        perkPosition2, 1, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[3] = LastCreatedEntity();
+
+    perkEffectStatus = PerkEffectStatus.Triggered;
+}
+
+rule: "Perk/Player/MissileBarrage/setLandingZone"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered
+){
+    // play set sound
+    PlayEffect(
+        EventPlayer(), PlayEffect.DebuffImpactSound,
+        Color.White, EventPlayer(), MaxValue());
+
+    aimPosition = AimingPosition();
+    perkPosition = InvalidPosition();
+    perkPosition2 = InvalidPosition();
+
+    // set missile land position to aiming position
+    landZonePosition = AimingPosition();
+
+   // landing zone text
+    CreateInWorldText(
+        AllPlayers(), <"<0> <1> <2>\n\rMissle incoming!", EventPlayer(), HeroIconString(HeroOf()), "Missile Barrage">,
+        landZonePosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    perkEffectAndText[1] = LastTextID();
+
+    // set effect
+    // landing zone blast range
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
+        landZonePosition, missileDamageRange, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[4] = LastCreatedEntity();
+    // landing zone position
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
+        landZonePosition, 0.2, EffectRev.VisibleToPositionAndRadius);
+    perkEffectAndText[5] = LastCreatedEntity(); 
+
+    firstAnimationDelay = true;
+    perkEffectCount = missileAttackCount;
+}
+
+rule: "Perk/Player/MissileBarrage/aimLandPoint"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered
+){
+    // chase missile land position to aiming position
+    Wait(0.2, WaitBehavior.AbortWhenFalse);
+    aimPosition = AimingPosition();
+    UpdateEveryFrame(landZonePosition);
+    ChaseVariableAtRate(
+        landZonePosition, aimPosition,
+        DistanceBetween(landZonePosition, aimPosition) * 3.0,
+        RateChaseReevaluation.DestinationAndRate);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/MissileBarrage/playMissleBooster"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered
+){
+    // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Orange, perkPosition, 3.0);
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Orange, perkPosition2, 3.0);
+
+    WaitUpdateVeryShortCycle();
+    LoopIfConditionIsTrue();
+}
+
+define missleAttackSpeeed:
+    (missileAttackTime / missileAttackCount) * parallelAnimationNum;
+
+rule: "Perk/Player/MissileBarrage/launchMissile"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    perkEffectCount > 0
+){
+    // set missle at random
+    perkPosition = landZonePosition +
+        Vector(0, 50, 0) + RandomPosition(25, 0, 25);
+    // start missle move
+    // landPosition = 
+    //     landZonePosition + 
+    //     RandomPosition(
+    //         missileLandingRange / 1.5,
+    //         0,
+    //         missileLandingRange / 1.5
+    //     );
+    UpdateEveryFrame(perkPosition);
+    ChaseVariableOverTime(
+        perkPosition, landZonePosition, missleAttackSpeeed,
+        TimeChaseReevaluation.DestinationAndDuration);
+    Wait(missleAttackSpeeed, WaitBehavior.AbortWhenFalse);
+    StopChasingVariable(perkPosition);
+    // hide missle
+    perkPosition = InvalidPosition();
+    // on landed play blast
+    async ExplodeMissile(landZonePosition);
+    perkEffectCount -- ;
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/MissileBarrage/launchMissle2"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Using && 
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    perkEffectCount > 0
+){
+    if(firstAnimationDelay){
+        firstAnimationDelay = false;
+        Wait(missleAttackSpeeed / 2, WaitBehavior.AbortWhenFalse);
+    }
+
+    // set missle at random
+    perkPosition2 = landZonePosition +
+        Vector(0, 50, 0) + RandomPosition(25, 0, 25);
+    // start missle move
+    // landPosition2 = 
+    //     landZonePosition + 
+    //     RandomPosition(
+    //         missileLandingRange / 1.5,
+    //         0,
+    //         missileLandingRange / 1.5
+    //     );
+    UpdateEveryFrame(perkPosition2);
+    ChaseVariableOverTime(
+        perkPosition2, landZonePosition, missleAttackSpeeed,
+        TimeChaseReevaluation.DestinationAndDuration);
+    Wait(missleAttackSpeeed, WaitBehavior.AbortWhenFalse);
+    StopChasingVariable(perkPosition2);
+    // hide missle
+    perkPosition2 = InvalidPosition();
+    // on landed play blast
+    async ExplodeMissile(landZonePosition);
+    perkEffectCount -- ;
+    LoopIfConditionIsTrue();
+}
+
+void ExplodeMissile(define position)"ExplodeMissile"{
+    // get target
+    perkTargets = 
+        PlayersWithinRadius(
+            position, missileDamageRange,
+            Team.All, RadiusLOS.Off);
+    // damage
+    Damage(
+        PlayersWithinRadius(
+            position, missileDamageRange,
+            Team.Team2, RadiusLOS.Off
+        ), EventPlayer(), 300);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White, position, 300);
+    // play blast effect
+    PlayContinuousBlast(
+        Color.Orange,
+        position,
+        missileDamageRange,
+        2);
+}
+
+rule: "Perk/Player/MissileBarrage/endMissile"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered &&
+    perkEffectCount <= 0
+){
+    // reset text
+    DestroyInWorldText(perkEffectAndText[1]);
+    // reset effect
+    DestroyEffect(perkEffectAndText[2]);
+    DestroyEffect(perkEffectAndText[3]);
+    DestroyEffect(perkEffectAndText[4]);
+    DestroyEffect(perkEffectAndText[5]);
+    StopChasingVariable(landZonePosition);
+    StopChasingVariable(perkPosition);
+    StopChasingVariable(perkPosition2);
+    // start reload
+    perkEffectStatus = PerkEffectStatus.Reloading;
+    perkEffectCoolTime = missleReloadTime;
+}
+
+rule: "Perk/Player/MissileBarrage/countDownTimeLimit"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Reloading &&
+    perkEffectCoolTime > 0
+){
+    // count down perk cooldown time
+    WaitUpdateMediumCycle();
+    perkEffectCoolTime -= 1;
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/MissileBarrage/coolDownComplete"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.MissileBarrage &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Reloading &&
+    perkEffectCoolTime <= 0
+){
+    // play ready sound
+    PlayEffect(
+        EventPlayer(), PlayEffect.BuffImpactSound,
+        Color.White, EventPlayer(), 100);
+    perkEffectStatus = PerkEffectStatus.Ready;
 }
 
 // TAG CruisingMissile ----------
@@ -4093,7 +4454,7 @@ if(
     perkEffectStatus = PerkEffectStatus.Ready;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud("More hold to shot dragon storm.");
+    CreatePerkEffectHud(<"Hold ultimate button <0> to shot dragon storm.", ButtonGuide(Button.Ultimate)>);
     perkEffectAndText[0] = LastTextID();
     CreatePerkEffectHud(<"Press ultimate button <0> to shot dragon strike.", ButtonGuide(Button.Ultimate)>);
     perkEffectAndText[1] = LastTextID();
