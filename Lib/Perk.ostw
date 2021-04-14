@@ -107,17 +107,6 @@ if(
     StartHoldingButton(EventPlayer(), Button.Crouch);
     SetMoveSpeed(EventPlayer(), 0);
 
-    // play blast
-    PlayEffect(
-        AllPlayers(), PlayEffect.GoodExplosion,
-        Color.White, PositionOf(), superLandingRange);
-    PlayEffect(
-        AllPlayers(), PlayEffect.RingExplosion,
-        Color.White, PositionOf(), superLandingRange);
-    // play blast sound
-    PlayEffect(
-        AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.White, PositionOf(), 200);
     // apply blast impulse
     perkTargets = PlayersWithinRadius(
         PositionOf(EventPlayer()), 
@@ -125,23 +114,46 @@ if(
     ApplyBlastImpulse(perkTargets, PositionOf(), superLandingRange);
     // splash damage
     Damage(perkTargets, EventPlayer(), 100);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White, PositionOf(), 200);
+    // play blast effect
+    PlayContinuousBlast(
+        Color.White,
+        PositionOf(),
+        superLandingRange,
+        2);
 
-    Wait(1.0, WaitBehavior.IgnoreCondition);
-    StopHoldingButton(EventPlayer(), Button.Crouch);
-    SetMoveSpeed(EventPlayer(), 100);
+    perkEffectStatus = PerkEffectStatus.Reloading;
 }
 
-rule: "Perk/Player/SuperLanding/resetUsedFlag"
+rule: "Perk/Player/SuperLanding/resetUsedFlagOnHighJump"
 Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
     perkType == PerkType.SuperLanding &&
     perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.Triggered &&
     IsOnGround()
-)
-{
-    WaitConditionConfirmed();
+){
+    perkEffectStatus = PerkEffectStatus.Ready;
+}
+
+rule: "Perk/Player/SuperLanding/resetUsedFlagOnDescent"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    perkType == PerkType.SuperLanding &&
+    perkState == PerkState.Using &&
+    perkEffectStatus == PerkEffectStatus.SecondTriggered &&
+    IsOnGround()
+){
+    Wait(1.0, WaitBehavior.IgnoreCondition);
+    StopHoldingButton(EventPlayer(), Button.Crouch);
+    SetMoveSpeed(EventPlayer(), 100);
     perkEffectStatus = PerkEffectStatus.Ready;
 }
 
