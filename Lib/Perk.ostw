@@ -2650,7 +2650,6 @@ if(
     CreateEffect(AllPlayers(), Effect.Orb, Color.White,
         perkPosition2, 1, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[3] = LastCreatedEntity();
-
     perkEffectStatus = PerkEffectStatus.Triggered;
 }
 
@@ -2690,10 +2689,14 @@ if(
     // landing zone position
     CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
         landZonePosition, 0.2, EffectRev.VisibleToPositionAndRadius);
-    perkEffectAndText[5] = LastCreatedEntity(); 
+    perkEffectAndText[5] = LastCreatedEntity();
+
+    Wait(2, WaitBehavior.AbortWhenFalse);
+    DestroyEffect(perkEffectAndText[4]);
 
     firstAnimationDelay = true;
     perkEffectCount = missileAttackCount;
+    perkEffectStatus = PerkEffectStatus.SecondTriggered;
 }
 
 rule: "Perk/Player/MissileBarrage/aimLandPoint"
@@ -2703,10 +2706,10 @@ Player.All
 if(
     perkType == PerkType.MissileBarrage &&
     perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Triggered
+    (perkEffectStatus == PerkEffectStatus.Triggered || perkEffectStatus == PerkEffectStatus.SecondTriggered)
 ){
     // chase missile land position to aiming position
-    Wait(0.2, WaitBehavior.AbortWhenFalse);
+    Wait(0.3, WaitBehavior.AbortWhenFalse);
     aimPosition = AimingPosition();
     UpdateEveryFrame(landZonePosition);
     ChaseVariableAtRate(
@@ -2723,15 +2726,16 @@ Player.All
 if(
     perkType == PerkType.MissileBarrage &&
     perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Triggered
+    perkEffectStatus == PerkEffectStatus.SecondTriggered &&
+    perkEffectCount > 0
 ){
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.Orange, perkPosition, 3.0);
+        Color.Orange, perkPosition, 1.5);
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.Orange, perkPosition2, 3.0);
+        Color.Orange, perkPosition2, 1.5);
 
     WaitUpdateVeryShortCycle();
     LoopIfConditionIsTrue();
@@ -2747,7 +2751,7 @@ Player.All
 if(
     perkType == PerkType.MissileBarrage &&
     perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Triggered &&
+    perkEffectStatus == PerkEffectStatus.SecondTriggered &&
     perkEffectCount > 0
 ){
     // set missle at random
@@ -2782,7 +2786,7 @@ Player.All
 if(
     perkType == PerkType.MissileBarrage &&
     perkState == PerkState.Using && 
-    perkEffectStatus == PerkEffectStatus.Triggered &&
+    perkEffectStatus == PerkEffectStatus.SecondTriggered &&
     perkEffectCount > 0
 ){
     if(firstAnimationDelay){
@@ -2846,7 +2850,7 @@ Player.All
 if(
     perkType == PerkType.MissileBarrage &&
     perkState == PerkState.Using &&
-    perkEffectStatus == PerkEffectStatus.Triggered &&
+    perkEffectStatus == PerkEffectStatus.SecondTriggered &&
     perkEffectCount <= 0
 ){
     // reset text
@@ -2854,7 +2858,6 @@ if(
     // reset effect
     DestroyEffect(perkEffectAndText[2]);
     DestroyEffect(perkEffectAndText[3]);
-    DestroyEffect(perkEffectAndText[4]);
     DestroyEffect(perkEffectAndText[5]);
     StopChasingVariable(landZonePosition);
     StopChasingVariable(perkPosition);
@@ -3053,12 +3056,12 @@ if(
     perkEffectStatus == PerkEffectStatus.Ready
 ){
     // chase missile land position to aiming position
-    Wait(0.2, WaitBehavior.AbortWhenFalse);
+    Wait(0.3, WaitBehavior.AbortWhenFalse);
     aimPosition = AimingPosition();
     UpdateEveryFrame(landPosition);
     ChaseVariableAtRate(
         landPosition, aimPosition,
-        DistanceBetween(landPosition, aimPosition) * 1.0,
+        DistanceBetween(landPosition, aimPosition) * 3.0,
         RateChaseReevaluation.DestinationAndRate);
     LoopIfConditionIsTrue();
 }
@@ -3255,7 +3258,7 @@ if(
     perkEffectStatus == PerkEffectStatus.Ready
 ){
     // chase lazer land position to aiming position
-    Wait(0.2, WaitBehavior.AbortWhenFalse);
+    Wait(0.3, WaitBehavior.AbortWhenFalse);
     aimPosition = BelowPosition(AimingPosition());
     define distanceBetween = DistanceBetween(landPosition, aimPosition) * 3.0;
     UpdateEveryFrame(landPosition);
