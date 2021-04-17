@@ -109,9 +109,9 @@ if(
 
     // apply blast impulse
     perkTargets = PlayersWithinRadius(
-        PositionOf(EventPlayer()), 
-        superLandingRange, Team.Team2, RadiusLOS.Off);
-    ApplyBlastImpulse(perkTargets, PositionOf(), superLandingRange);
+        PositionOf(), superLandingRange, Team.Team2, RadiusLOS.Off);
+    // apply blast impulse
+    ApplyBlastImpulse(perkTargets, PositionOf(), superLandingRange, false);
     // splash damage
     Damage(perkTargets, EventPlayer(), 100);
     // play blast sound
@@ -172,7 +172,7 @@ if(
     perkEffectStatus = PerkEffectStatus.Ready;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(<"Hold melee button <0> to pull enemy with grapple beam.", ButtonGuide(Button.Melee)>);
+    CreatePerkEffectHud(<"Hold melee button <0> to attract enemy with grapple beam.", ButtonGuide(Button.Melee)>);
     perkEffectAndText[0] = LastTextID();
     CreatePerkEffectHud(<"Hold jump button <0> to move in air with grapple beam.", ButtonGuide(Button.Jump)>);
     perkEffectAndText[1] = LastTextID();
@@ -613,8 +613,7 @@ if(
         FilteredArray(
             PlayersWithinRadius(
                 PositionOf(EventPlayer()), fearlessRange, Team.Team2, RadiusLOS.Off
-            ),
-            IsAlive(ArrayElement())
+            ), IsAlive(ArrayElement())
         )
     );
 
@@ -623,7 +622,7 @@ if(
         perkEffectStatus += (nearEnemyCount * 2);
     
     else
-        perkEffectStatus -= 5;
+        perkEffectStatus -= 10;
     
     // round status value
     if(300 < perkEffectStatus)
@@ -700,8 +699,7 @@ if(
         FilteredArray(
             PlayersWithinRadius(
                 PositionOf(EventPlayer()), steelRange, Team.Team1, RadiusLOS.Off
-            ),
-            IsAlive(ArrayElement())
+            ), IsAlive(ArrayElement())
         )
     );
     WaitUpdateMediumCycle();
@@ -1104,7 +1102,7 @@ if(
     CountOf(nearBattleFlag) > 0
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 2));
+    SetUltimateCharge(EventPlayer(), UltimateChargePercent() + 2);
     LoopIfConditionIsTrue();
 }
 
@@ -1234,8 +1232,8 @@ if(
         // splash damage
         Damage(
             PlayersWithinRadius(
-                PositionOf(Victim()), chainExplosionRange, Team.Team2, RadiusLOS.Off),
-            EventPlayer(), 300);
+                PositionOf(Victim()), chainExplosionRange, Team.Team2, RadiusLOS.Off
+            ), EventPlayer(), 300);
         // play blast
         PlayEffect(
             AllPlayers(), PlayEffect.GoodExplosion,
@@ -1290,8 +1288,8 @@ if(
         // splash freeze
         SetStatus(
             PlayersWithinRadius(
-                PositionOf(Victim()), IceAgeRange, Team.Team2, RadiusLOS.Off),
-            EventPlayer(), Status.Frozen, 1.5);
+                PositionOf(Victim()), IceAgeRange, Team.Team2, RadiusLOS.Off
+            ), EventPlayer(), Status.Frozen, 1.5);
         // play blast
         PlayEffect(
             AllPlayers(), PlayEffect.GoodExplosion,
@@ -1625,9 +1623,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(),
-        UltimateChargePercent() +
-        NumberOfSlots(Team.Team2) - NumberOfPlayers(Team.Team2));
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 2));
     LoopIfConditionIsTrue();
 }
 
@@ -1820,7 +1816,7 @@ void ExplodeFireBall()"ExplodeFireBall"{
             perkPosition, Max(fireBallMinCollisionRange, fireBallBlastRange),
             Team.Team2, RadiusLOS.Off);
     // apply blast impulse
-    ApplyBlastImpulse(perkTargets, perkPosition, fireBallBlastRange);
+    ApplyBlastImpulse(perkTargets, perkPosition, fireBallBlastRange, false);
     // damage
     Damage(perkTargets, EventPlayer(), fireBallPower);
     // play blast sound
@@ -2197,13 +2193,11 @@ void ExplodeArtillery(define position)"ExplodeArtilleryShell"{
     perkTargets = 
         PlayersWithinRadius(
             position, artilleryDamageRange,
-            Team.All, RadiusLOS.Off);
+            Team.Team2, RadiusLOS.Off);
+    // apply blast impulse
+    ApplyBlastImpulse(perkTargets, position, artilleryDamageRange, false);
     // damage
-    Damage(
-        PlayersWithinRadius(
-            position, artilleryDamageRange,
-            Team.Team2, RadiusLOS.Off
-        ), EventPlayer(), 300);
+    Damage(perkTargets, EventPlayer(), 300);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
@@ -2439,12 +2433,14 @@ if(
             0,
             strafReqLandingRange / 1.5
         );
-    // splash damage
-    Damage(
+    perkTargets =
         PlayersWithinRadius(
             landPosition2, strafReqDamageRange,
-            Team.Team2, RadiusLOS.Off),
-        EventPlayer(), 200);
+            Team.Team2, RadiusLOS.Off);
+    // apply blast impulse
+    ApplyBlastImpulse(perkTargets, landPosition2, strafReqDamageRange, true);
+    // splash damage
+    Damage(perkTargets, EventPlayer(), 200);
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
@@ -2544,8 +2540,8 @@ if(
 // TAG MissileBarrage ----------
 //define missileLandingRange: 4;
 define missileDamageRange: 4;
-define missileAttackTime: 4;
-define missileAttackCount: 8;
+define missileAttackTime: 5;
+define missileAttackCount: 10;
 define missleReloadTime: 10;
 
 rule: "Perk/Player/MissileBarrage/activate"
@@ -2824,13 +2820,11 @@ void ExplodeMissile(define position)"ExplodeMissile"{
     perkTargets = 
         PlayersWithinRadius(
             position, missileDamageRange,
-            Team.All, RadiusLOS.Off);
+            Team.Team2, RadiusLOS.Off);
+    // apply blast impulse
+    ApplyBlastImpulse(perkTargets, position, missileDamageRange, false);
     // damage
-    Damage(
-        PlayersWithinRadius(
-            position, missileDamageRange,
-            Team.Team2, RadiusLOS.Off
-        ), EventPlayer(), 300);
+    Damage(perkTargets, EventPlayer(), 300);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
@@ -2901,7 +2895,7 @@ if(
 }
 
 // TAG CruisingMissile ----------
-define missleDamageRange: 20;
+define crusingMissileDamageRange: 20;
 rule: "Perk/Player/CruisingMissile/activate"
 Event.OngoingPlayer
 Team.Team1
@@ -2943,7 +2937,7 @@ if(
     perkEffectAndText[4] = LastCreatedEntity();
     // landing zone blast range
     CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
-        landPosition, missleDamageRange, EffectRev.VisibleToPositionAndRadius);
+        landPosition, crusingMissileDamageRange, EffectRev.VisibleToPositionAndRadius);
     perkEffectAndText[5] = LastCreatedEntity();
     // landing zone position
     CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
@@ -3093,31 +3087,31 @@ if(
     // apply knockout
     SetStatus(
         PlayersWithinRadius(
-            perkPosition, missleDamageRange,
+            landPosition, crusingMissileDamageRange,
             Team.Team1, RadiusLOS.Off
         ), null, Status.KnockedDown, 3);
     // get target
     perkTargets = 
         PlayersWithinRadius(
-            aimPosition, missleDamageRange,
+            landPosition, crusingMissileDamageRange,
             Team.Team2, RadiusLOS.Off);
     // apply blast impulse
-    ApplyBlastImpulse(perkTargets, perkPosition, missleDamageRange);
+    ApplyBlastImpulse(perkTargets, landPosition, crusingMissileDamageRange, false);
     // damage
     Damage(
         PlayersWithinRadius(
-            perkPosition, missleDamageRange,
+            landPosition, crusingMissileDamageRange,
             Team.Team2, RadiusLOS.Off
         ), EventPlayer(), MaxValue());
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.White, perkPosition, MaxLength());
+        Color.White, landPosition, MaxLength());
     // play blast effect
     PlayContinuousBlast(
         Color.Orange,
-        perkPosition,
-        missleDamageRange,
+        landPosition,
+        crusingMissileDamageRange,
         7);
 
     perkState = PerkState.Non;
@@ -3653,7 +3647,7 @@ if(
         PlayersWithinRadius(
             aimPosition + randomPosition, splashDamageRangeMinigun,
             Team.Team2, RadiusLOS.Off),
-        EventPlayer(), 60);
+        EventPlayer(), 80);
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
@@ -3688,7 +3682,7 @@ if(
         PlayersWithinRadius(
             aimPosition + landPosition, splashDamageRangeAutoCanon,
             Team.Team2, RadiusLOS.Off),
-        EventPlayer(), 80);
+        EventPlayer(), 120);
     // play blast
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.GoodExplosion,
@@ -3753,7 +3747,7 @@ if(
     perkEffectStatus = PerkEffectStatus.Ready;
     // set hud
     perkEffectAndText = [];
-    CreatePerkEffectHud(<"Hold melee button <0> to pull enemy with grapple hook.", ButtonGuide(Button.Melee)>);
+    CreatePerkEffectHud(<"Hold melee button <0> to attract enemy with grapple hook.", ButtonGuide(Button.Melee)>);
     perkEffectAndText[0] = LastTextID();
     CreatePerkEffectHud(<"Hold jump button <0> to move in air with grapple hook.", ButtonGuide(Button.Jump)>);
     perkEffectAndText[1] = LastTextID();
@@ -4209,7 +4203,7 @@ void ExplodeGravityBomb()"ExplodeGravityBomb"{
             perkPosition2, gravityBombDamageRange,
             Team.Team2, RadiusLOS.Off);
     // apply blast impulse
-    ApplyBlastImpulse(perkTargets, perkPosition2, gravityBombDamageRange);
+    ApplyBlastImpulse(perkTargets, perkPosition2, gravityBombDamageRange, false);
     // damage
     Damage(perkTargets, EventPlayer(), 600);
     // play blast sound
