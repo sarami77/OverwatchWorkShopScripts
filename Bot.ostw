@@ -71,7 +71,7 @@ if(
 
     // show targetPos path
     CreateBeamEffect(
-        ep.state == State.Combat || ep.state == State.Combat ? HostPlayer() : null,
+        ep.state == State.Combat || ep.state == State.Searching ? HostPlayer() : null,
         BeamType.GoodBeam,
         EyePosition(), targetPos,
         Color.Red,
@@ -85,8 +85,8 @@ if(
     // show stackPos
     CreateEffect(
         ep.state == State.Stacked ? HostPlayer() : null,
-        Effect.Sphere, Color.White,
-        stackPos, 1, EffectRev.VisibleToPositionAndRadius);
+        Effect.Ring, Color.White,
+        stackPos, stackPosRange, EffectRev.VisibleToPositionAndRadius);
 
 }
 
@@ -687,10 +687,10 @@ playervar define state;
 playervar define tuneDir;
 playervar define target;
 playervar define watchUpdateRate;
-define basicUpdateRate: 1.0;
+define basicUpdateRate: 0.7;
 
 define isStacking:
-    SpeedOf() <= 5.0;
+    SpeedOf() <= 3.0;
 
 define isContactPlayer: 
     HasSpawned(ClosestPlayerTo(ep, OppositeTeamOf(TeamOf()))) &&
@@ -729,8 +729,18 @@ if(
         }
     }
 
-    Wait(1, WaitBehavior.AbortWhenFalse);
+    Wait(basicUpdateRate, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
+}
+
+// TAG Enemy/State/Non ----------
+rule: "Enemy/State/Non"
+Event.OngoingPlayer
+if(
+    state == State.Non
+){
+    statusText = <"Non">;
+    targetPos = 0;
 }
 
 // TAG Enemy/State/Wandering ----------
@@ -813,7 +823,7 @@ if(
 
         // check stack
         if(isStacking){
-            while(RandomInteger(0, 100) <= 50){
+            while(RandomInteger(0, 100) <= 40){
                 StartHoldingButton(ep, Button.Jump);
                 Wait(RandomReal(1, 2), WaitBehavior.AbortWhenFalse);
                 StopHoldingButton(ep, Button.Jump);
@@ -887,7 +897,7 @@ if(
         // check stack
         if(isStacking){
             StartMove(-sideStepDir + Forward());
-            while(RandomInteger(0, 100) <= 50){
+            while(RandomInteger(0, 100) <= 40){
                 StartHoldingButton(ep, Button.Jump);
                 Wait(RandomReal(1, 2), WaitBehavior.AbortWhenFalse);
                 StopHoldingButton(ep, Button.Jump);
@@ -1012,6 +1022,7 @@ if(
 
 // TAG Enemy/State/Stacked ----------
 playervar define stackPos;
+define stackPosRange: 2;
 
 rule: "Enemy/State/Stacked"
 Event.OngoingPlayer
@@ -1020,12 +1031,11 @@ if(
 ){
     statusText = <"Stacked">;
     stackPos = PositionOf();
-    Wait(1, WaitBehavior.RestartWhenTrue);
+    Wait(2, WaitBehavior.RestartWhenTrue);
 
-    if(DistanceBetween(stackPos, ep) <= 1){
+    if(DistanceBetween(stackPos, ep) <= stackPosRange){
         statusText = <"Stacked/Reset">;
         SetFacing(ep, Backward(), Relative.ToPlayer);
-        targetPos = 0;
         state = State.Wandering;
     }
 }
