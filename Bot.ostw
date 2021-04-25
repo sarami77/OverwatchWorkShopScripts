@@ -5,86 +5,27 @@ import "Lib/Debug.ostw";
 // TAG Builtin -----------------------------------------------
 define playerTeam: Team.Team1;
 define playerList: AllPlayers(playerTeam);
-define playerExist: NumberOfPlayers(Team.Team1) > 0;
+define playerExist: NumberOfPlayers(playerTeam) > 0;
 define botTeam: Team.Team2;
 define botList: AllPlayers(botTeam);
+define botExist: NumberOfPlayers(botTeam) > 0;
 
+define enemyColor: Color.Purple;
 
-// TAG Player/Config ----------
-globalvar define balanceRate;
-rule: "Builtin"
-Event.OngoingPlayer
-if(
-    initialWaitFin
-){
-    while(true){
-        balanceRate = maxBotNum / NumberOfPlayers(playerTeam);
-        SetDamageReceived(playerList, 100 / (balanceRate * 1.00));
-        SetDamageDealt(playerList, 100 * (balanceRate * 0.75));
-        SetRespawnMaxTime(playerList, 10);
-        Wait(10, WaitBehavior.AbortWhenFalse);
-    }
-}
+define ClosestSpawnPosPlayerList():
+    SortedArray(
+        FilteredArray(
+            AllLivingPlayers(playerTeam), 
+            (
+                !IsInSpawnRoom(ArrayElement())
+            )
+        ),
+        -DistanceBetween(botSpawnPos, ArrayElement())
+    );
 
-// TAG Bot/Debug ----------
-define debug: false;
-disabled rule: "Bot/ShowDebugInfo"
-Event.OngoingPlayer
-if(
-    debug &&
-    HasSpawned() &&
-    IsDummyBot()
-){  
-    // show status text
-    CreateInWorldText(
-        HostPlayer(), statusText,
-        ep + (Up() * 3), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-        Color.White, Spectators.DefaultVisibility);
-    // show status2 text
-    CreateInWorldText(
-        HostPlayer(), statusText2,
-        ep + (Up() * 2), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-        Color.White, Spectators.DefaultVisibility);
+define ClosestSpawnPosPlayer():
+    ClosestSpawnPosPlayerList()[0];
 
-    // show frontDetector path
-    CreateBeamEffect(
-        ep.state == State.Wandering ? HostPlayer() : null, BeamType.GoodBeam,
-        detectorRoot, frontDetector,
-        Color.White,
-        EffectRev.VisibleToPositionRadiusAndColor);
-    // show upperDetector path
-    CreateBeamEffect(
-        ep.state == State.Wandering ? HostPlayer() : null, BeamType.GoodBeam,
-        detectorRoot, upperDetector,
-        Color.Blue,
-        EffectRev.VisibleToPositionRadiusAndColor);
-    // show underDetector path
-    CreateBeamEffect(
-        ep.state == State.Wandering ? HostPlayer() : null, BeamType.GoodBeam,
-        frontDetector, underDetector,
-        Color.Green,
-        EffectRev.VisibleToPositionRadiusAndColor);
-
-    // show targetPos path
-    CreateBeamEffect(
-        ep.state == State.Combat || ep.state == State.Searching ? HostPlayer() : null,
-        BeamType.GoodBeam,
-        EyePosition(), targetPos,
-        Color.Red,
-        EffectRev.VisibleToPositionRadiusAndColor);
-    // show targetPos
-    CreateEffect(
-        ep.state == State.Searching ? HostPlayer() : null,
-        Effect.Ring, Color.Red,
-        targetPos, targetPosRange, EffectRev.VisibleToPositionAndRadius);
-
-    // show stackPos
-    CreateEffect(
-        ep.state == State.Stacked ? HostPlayer() : null,
-        Effect.Ring, Color.White,
-        stackPos, stackPosRange, EffectRev.VisibleToPositionAndRadius);
-
-}
 
 // TAG Debug/SpawnControl ----------
 define spawnHeroList: [
@@ -158,137 +99,28 @@ define heroNameList: [
 ];
 
 define maxBotNum: 18;
-globalvar define spawnHero = 0;
 
-rule: "Debug/SpawnControl/changeBotHero"
-Event.OngoingPlayer
-if(
-    debug &&
-    ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Jump) &&
-    IsButtonHeld(ep, Button.Interact)
-){
-    spawnHero ++;
-    if(spawnHero >= CountOf(spawnHeroList)){
-        spawnHero = 0;
-    }
-}
-
-
-rule: "Debug/SpawnControl/SpawnOneBot"
-Event.OngoingPlayer
-if(
-    debug &&
-    ep == HostPlayer() &&
-    !IsButtonHeld(ep, Button.Jump) &&
-    intaractDoublePressed
-){
-    botSpawnPos = AimingPosition();
-    CreateOneBot(
-        botSpawnPos,
-        RandomValueInArray(
-            IsButtonHeld(ep, Button.Crouch) ?
-                AllHeroes() :
-                spawnHeroList[spawnHero]
-        ),
-        NumberOfPlayers(botTeam)
-    );
-}
-
-globalvar define isSpawningAllBot = false;
-globalvar define botSpawnPos = 0;
-
-rule: "Debug/SpawnControl/CreateSpawnAllBot"
-Event.OngoingPlayer
-if(
-    debug &&
-    ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact) &&
-    !isSpawningAllBot
-){
-    WaitLongPressConfirm();
-
-    botSpawnPos = AimingPosition();
-    CreateAllBot(
-        botSpawnPos,
-        IsButtonHeld(ep, Button.Crouch) ?
-            AllHeroes() :
-            spawnHeroList[spawnHero]
-    );
-}
-
-rule: "Debug/SpawnControl/DestroyAllBot"
-Event.OngoingPlayer
-if(
-    debug &&
-    ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact) &&
-    isSpawningAllBot
-){
-    WaitLongPressConfirm();
-    DestroyAllBot();
-}
-
-void CreateOneBot(define position, define hero, define slot)"CreateOneBot"{
-    CreateDummyBot(
-        hero,
-        botTeam,
-        slot,
-        position,
-        DirectionTowards(
-            position,
-            ClosestPlayerTo(position, OppositeTeamOf(botTeam))
-        )
-    );
-}
-
-void CreateAllBot(define position, define heroList)"CreateAllBot"{
-    dbgMsg("Start Create All Bot");
-    isSpawningAllBot = true;
-
-    while(
-        NumberOfPlayers(botTeam) < maxBotNum &&
-        isSpawningAllBot
-    ){
-        define nextHero = RandomValueInArray(heroList);
-        define slot = NumberOfPlayers(botTeam);
-        CreateOneBot(botSpawnPos, nextHero, slot);
-        WaitByServerLoad();
-    }
-    dbgMsg("Finish Create All Bot");
-}
-
-void WaitByServerLoad()"WaitByServerLoad"{
-    if(ServerLoadAverage() < 100)
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
-    else if(ServerLoadAverage() < 200)
-        Wait(0.3, WaitBehavior.AbortWhenFalse);
-    else if(ServerLoadAverage() < 255)
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
-    else
-        Wait(5, WaitBehavior.AbortWhenFalse);
-}
-
-void DestroyAllBot()"DestroyAllBot"{
-    dbgMsg("Start Destroy All Bot");
-    isSpawningAllBot = false;
-
-    for(define idx = 0; idx < maxBotNum; idx ++){
-        DestroyDummyBot(
-            botTeam, idx);
-        Wait(0.01);
-    }
-    dbgMsg("Finish Destroy All Bot"); 
-}
-
-// TAG Bot/SpawnControl ----------
+// TAG Bot/SpawnControl -----------------------------------------------
 globalvar define initialWaitFin;
 rule: "Bot/SpawnControl/initialWait"
-Event.OngoingGlobal
+Event.OngoingPlayer
+Team.Team1
 if(
-    true
+    !initialWaitFin &&
+    HasSpawned()
 ){
-    Wait(12, WaitBehavior.AbortWhenFalse);
+    // show botSpawnPos
+    CreateIcon(AllPlayers(), botSpawnPos, Icon.ArrowDown,
+        IconRev.VisibleToAndPosition, Color.Purple, true);
+
+    // show teleportRange
+    // CreateEffect(
+    //     HostPlayer(),
+    //     Effect.Sphere, Color.Purple,
+    //     teleportRangePosition, teleportRangeSize, EffectRev.VisibleToPositionAndRadius);
+        
+
+
     initialWaitFin = true;
 }
 
@@ -298,58 +130,306 @@ if(
     initialWaitFin &&
     playerExist
 ){
-    CreateIcon(AllPlayers(), botSpawnPos + (Up() * 2), Icon.ArrowDown,
-        IconRev.VisibleToAndPosition, Color.Purple, true);
+    botSpawnPos = PositionOf(RandomValueInArray(playerList));
 
     while(true){
         dbgMsg("ChangeBotSpawnPos"); 
         // change botSpawnPos
-        botSpawnPos = 
-            NearestWalkablePosition(
-                botSpawnPos +
-                // add random direction
-                DirectionFromAngles(
-                    RandomReal(0, 360),
-                    RandomReal(90, -90)
-                ) * 
-                // add random distance
-                RandomReal(50, 200)
-            );
+        ChangeBotSpawnPos();
         Wait(120, WaitBehavior.AbortWhenFalse);
     }
 }
+
+
+
+// TAG Bot/SpawnControl/ReloadBotList -----------------------------------------------
+
+define BotInfo_EnemyType: 0;
+define BotInfo_Count: 1;
+define BotInfo_Hero: 2;
+
+globalvar define isAllBotsSpawned;
 
 rule: "Bot/SpawnControl/ReloadBotList"
 Event.OngoingGlobal
 if(
     initialWaitFin &&
-    playerExist
+    playerExist &&
+    botSpawnPos != 0
 ){
-    while(true){
-        dbgMsg("ReloadBotList");
-        DestroyAllBot();
-        WaitUntil(NumberOfPlayers(Team.Team2) <= 0, 30);
+    isAllBotsSpawned = false;
+    DestroyAllBot();
+    WaitUntil(NumberOfPlayers(Team.Team2) <= 0, 10);
 
-        define heros = [
-            Hero.Reaper,
-            Hero.Soldier76,
-            Hero.Widowmaker,
-            Hero.Doomfist,
-            Hero.Dva,
-            Hero.Reinhardt,
-            Hero.Genji,
-            Hero.Mccree];
-        heros = AllHeroes();
-        CreateAllBot(botSpawnPos, heros);
+    // hero type until 5, hero count until 18
+    define botInfoList = [
+        [EnemyType.Minion, 7, Hero.Reinhardt],
+        [EnemyType.Elite,  3, Hero.Bastion],
+        [EnemyType.Elite,  3, Hero.Reaper],
+        [EnemyType.Elite,  3, Hero.Widowmaker],
+        [EnemyType.Boss,   2, Hero.Reinhardt]
+    ];
+    CreateAllBot(botInfoList);
+    isAllBotsSpawned = true;
 
-        SetRespawnMaxTime(botList, 10);
+    Wait(180, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
 
-        Wait(10, WaitBehavior.AbortWhenFalse);
+void CreateAllBot(define botInfoList)"CreateAllBot"{
+    define slot = 0;
+    for(define idx = 0; idx < CountOf(botInfoList); idx ++){
+        define botInfo = botInfoList[idx];
+        for(define idx2 = 0; idx2 < botInfo[BotInfo_Count]; idx2 ++){
+            CreateOneBot(botInfo, slot);
+            slot ++;
+        }
     }
 }
 
-// TAG Bot/TeleportControl -----------------------------------------------
-rule: "Bot/TeleportControl/teleportBotWhenRespawn"
+void CreateOneBot(define botInfoList, define slot)"CreateOneBot"{
+    // create bot
+    while(botInfoList[BotInfo_Hero] != HeroOf(PlayersInSlot(slot, botTeam))){
+        CreateDummyBot(
+            botInfoList[BotInfo_Hero], botTeam, slot, botSpawnPos,
+            DirectionTowards(botSpawnPos,
+                ClosestSpawnPosPlayer()
+            )
+        );
+        Wait(0.3, WaitBehavior.AbortWhenFalse);
+    }
+    // set enemyType
+    PlayersInSlot(slot, botTeam).enemyType = botInfoList[BotInfo_EnemyType];
+}
+
+void DestroyAllBot()"DestroyAllBot"{
+    for(define idx = 0; idx < maxBotNum; idx ++){
+        DestroyDummyBot(
+            botTeam, idx);
+        Wait(0.01);
+    }
+}
+
+// TAG Bot/SpawnControl/DetectInvalidArea -----------------------------------------------
+globalvar define sucideCount;
+
+rule: "Bot/SpawnControl/DetectInvalidArea/countupSucideCount"
+Event.OnDeath 
+Team.Team2
+Player.All
+if(
+    Attacker() == ep
+){
+    sucideCount ++;
+}
+
+rule: "Bot/SpawnControl/DetectInvalidArea/reduceSucideCount"
+Event.OngoingGlobal
+if(
+    sucideCount > 0
+){
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    sucideCount --;
+    LoopIfConditionIsTrue();
+}
+
+rule: "Bot/SpawnControl/DetectInvalidArea/changeBotSpawn"
+Event.OngoingGlobal
+if(
+    sucideCount >= (NumberOfPlayers(botTeam) / 4)
+){
+    dbgMsg("ChangeBotSpawnPos By SucideCount");
+    ChangeBotSpawnPos();
+}
+
+void ChangeBotSpawnPos()"ChangeBotSpawnPos"{
+    // change botSpawnPos
+    botSpawnPos = 
+        NearestWalkablePosition(
+            botSpawnPos +
+            // add random direction
+            DirectionFromAngles(
+                RandomReal(0, 360),
+                RandomReal(90, -90)
+            ) * 
+            // add random distance
+            RandomReal(50, 200)
+        );
+}
+
+// TAG Bot/EnemyType -----------------------------------------------
+define minionList: 
+    FilteredArray(botList, 
+        ArrayElement().enemyType == EnemyType.Minion);
+define eliteList: 
+    FilteredArray(botList, 
+        ArrayElement().enemyType == EnemyType.Elite);
+
+define bossList:
+    FilteredArray(botList, 
+        ArrayElement().enemyType == EnemyType.Boss);
+
+playervar define enemyType;
+enum EnemyType{
+    None,
+    Minion,
+    Elite,
+    Boss
+}
+
+playervar define enemyTypeDamageDealtRate;
+
+rule: "Bot/EnemyType/setParameter"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    enemyType != EnemyType.None
+){
+    if(enemyType == EnemyType.Minion){ 
+        SetMaxHealth(ep, 100);
+        SetMoveSpeed(ep, 100);
+        SetGravity(ep, 100);
+        StartScalingPlayer(ep, 0.5, false);
+        StartModifyingHeroVoiceLines(ep, 1.5, false);
+        enemyTypeDamageDealtRate = 0.1;
+    }
+    else if(enemyType == EnemyType.Elite){
+        SetMaxHealth(ep, 300);
+        SetMoveSpeed(ep, 90);
+        SetGravity(ep, 150);
+        StartScalingPlayer(ep, 1.0, false);
+        StartModifyingHeroVoiceLines(ep, 1.0, false);
+        enemyTypeDamageDealtRate = 0.3;
+    }
+    else if(enemyType == EnemyType.Boss){
+        SetMaxHealth(ep, 1000);
+        SetMoveSpeed(ep, 80);
+        SetGravity(ep, 300);
+        StartScalingPlayer(ep, 1.5, false);
+        StartModifyingHeroVoiceLines(ep, 0.5, false);
+        enemyTypeDamageDealtRate = 0.6;
+    }
+
+    enemyDamageReceived = 100 * enemyBalanceRate * 1.0;
+    SetDamageReceived(ep, enemyDamageReceived);
+
+    enemyDamageDealt = 100 / enemyBalanceRate * 1.0;
+    SetDamageDealt(ep, enemyDamageDealt * enemyTypeDamageDealtRate);
+
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
+    Heal(ep, null, MaxValue());
+}
+
+playervar define enemyTypeEntity;
+
+rule: "Bot/EnemyType/setEffect&Text"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    enemyType != EnemyType.None && IsAlive()
+){
+    enemyTypeEntity = [];
+    if(enemyType == EnemyType.Minion){
+        CreateInWorldText(
+            AllPlayers(Team.All), "Minion", 
+            ep, 0.8, Clipping.ClipAgainstSurfaces,
+            InworldTextRev.VisibleToPositionAndString,
+            Color.White, Spectators.DefaultVisibility);
+        enemyTypeEntity[0] = LastTextID();
+
+        CreateEffect(AllPlayers(Team.All),
+            Effect.Cloud, enemyColor,
+            ep, 1.0, EffectRev.VisibleToPositionAndRadius);
+        enemyTypeEntity[1] = LastCreatedEntity();
+    }
+    else if(enemyType == EnemyType.Elite){
+        CreateInWorldText(
+            AllPlayers(Team.All), "Elite", 
+            ep, 1.4, Clipping.ClipAgainstSurfaces,
+            InworldTextRev.VisibleToPositionAndString,
+            Color.Yellow, Spectators.DefaultVisibility);
+        enemyTypeEntity[0] = LastTextID();
+
+        CreateEffect(AllPlayers(Team.All),
+            Effect.Cloud, enemyColor,
+            ep, 2.0, EffectRev.VisibleToPositionAndRadius);
+        enemyTypeEntity[1] = LastCreatedEntity();
+    }
+    else if(enemyType == EnemyType.Boss){
+        CreateInWorldText(
+            AllPlayers(Team.All), "Boss", 
+            ep, 2.0, Clipping.ClipAgainstSurfaces,
+            InworldTextRev.VisibleToPositionAndString,
+            Color.Red, Spectators.DefaultVisibility);
+        enemyTypeEntity[0] = LastTextID();
+        
+        CreateEffect(AllPlayers(Team.All),
+            Effect.Cloud, enemyColor,
+            ep, 4.0, EffectRev.VisibleToPositionAndRadius);
+        enemyTypeEntity[1] = LastCreatedEntity();
+    }
+}
+
+rule: "Bot/EnemyType/resetEffect&Text"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    !(enemyType != EnemyType.None && IsAlive())
+){
+    DestroyInWorldText(enemyTypeEntity[0]);
+    DestroyEffect(enemyTypeEntity[1]);
+}
+
+rule: "Bot/EnemyType/chargeUltimateAbility"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    enemyType != EnemyType.None
+){
+    if(enemyType == EnemyType.Minion){
+        Wait(180, WaitBehavior.AbortWhenFalse);
+    }
+    else if(enemyType == EnemyType.Elite){
+        Wait(60, WaitBehavior.AbortWhenFalse);
+    }
+    else if(enemyType == EnemyType.Boss){
+        Wait(10, WaitBehavior.AbortWhenFalse);
+    }
+    
+    SetUltimateCharge(ep, 100);
+
+    LoopIfConditionIsTrue();
+}
+
+// TAG Bot/Balance -----------------------------------------------
+define enemyBalanceRate: NumberOfSlots(playerTeam) / NumberOfPlayers(playerTeam);
+globalvar define enemyDamageDealt;
+globalvar define enemyDamageReceived;
+
+rule: "Bot/setBalance"
+Event.OngoingGlobal
+Player.All
+if(
+    initialWaitFin
+){
+    enemyDamageReceived = 100 * enemyBalanceRate * 1.0;
+    SetDamageReceived(botList, enemyDamageReceived);
+
+    for(define idx; idx < CountOf(botList); idx ++){
+        enemyDamageDealt = 100 / enemyBalanceRate * 1.0;
+        SetDamageDealt(botList[idx], enemyDamageDealt * botList[idx].enemyTypeDamageDealtRate);
+    }    
+    
+    Wait(10, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+// TAG Bot/Teleport -----------------------------------------------
+rule: "Bot/Teleport/teleportBotWhenRespawn"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -359,87 +439,96 @@ if(
     ep.state = State.Non;
 }
 
-rule: "Bot/TeleportControl/teleportBotToPlayer"
+rule: "Bot/Teleport/teleportBotToPlayer"
 Event.OngoingGlobal
 if(
-    0 < NumberOfPlayers(Team.Team1) &&
-    isSpawningAllBot
+    playerExist &&
+    botExist
 ){
-    // get waiting bot
-    define teleportBotList =   
-        FilteredArray(
-            AllPlayers(botTeam),
-            (
-                ArrayElement().state == State.Non &&
-                IsAlive(ArrayElement())
-            )
-        );
-    if(teleportBotList == null){
-        // get wandering bot
-        teleportBotList =   
+    // get far bot
+    define closestPlayer = ClosestSpawnPosPlayer();
+    define teleportBotList;
+
+    if(closestPlayer != null){
+    teleportBotList =  
+        SortedArray(
             FilteredArray(
-                AllPlayers(botTeam),
+                AllLivingPlayers(botTeam), 
                 (
-                    ArrayElement().state == State.Wandering
+                    !IsInLineOfSight(
+                        closestPlayer, ArrayElement(),
+                        BarrierLOS.NoBarriersBlock)
                 )
-            );  
-        if(teleportBotList == null){
-            // get searching bot
-            teleportBotList =   
-                FilteredArray(
-                    AllPlayers(botTeam),
-                    (
-                        ArrayElement().state == State.Searching
-                    )
-                ); 
-        }
+            ),
+            -DistanceBetween(closestPlayer, ArrayElement())
+        );
     }
+    
     if(teleportBotList != []){
         // pickup multiple teleportTarget
         define listNum = CountOf(teleportBotList);
-        define teleportNum = RandomReal(5, 10);
-        if(teleportNum > listNum)
-            teleportNum = listNum;
+        define teleportNum = RandomInteger(1, 10);
         teleportBotList = ArraySlice(teleportBotList, 0, teleportNum);
         // teleport
-        define targetToPlayer = ClosestPlayerTo(botSpawnPos, Team.Team1);
-        TeleportToPlayersFront(teleportBotList, targetToPlayer, botSpawnPos);
+        TeleportToPlayersFront(teleportBotList);
+        // show icon
+        define icon = CreateIcon(AllPlayers(), teleportPosition, Icon.Warning,
+            IconRev.VisibleToAndPosition, Color.Yellow, true);
+        Wait(3, WaitBehavior.IgnoreCondition);
+        DestroyIcon(icon);
     }
-    Wait(1);
+    Wait(RandomReal(5, 20), WaitBehavior.AbortWhenFalse);
+
     LoopIfConditionIsTrue();
 }
 
 define teleportRangeSize: 15;
+globalvar define teleportRangePosition;
+globalvar define teleportPosition;
 
-void TeleportToPlayersFront(define terelportTarget, define playerPosition, define basePosition)"TeleportToPlayerRoad"{
+void TeleportToPlayersFront(define terelportTarget)"TeleportToPlayerRoad"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
-    define teleportPosition;
+    //define teleportPosition;
     define hasLine;
     define inSight;
+    define nearPlayer = ClosestSpawnPosPlayer();
+    define distSpawnPosToPlayer = DistanceBetween(botSpawnPos, nearPlayer);
+
+
     for(gLoopIndex = 0; gLoopIndex < 10; gLoopIndex++){
-        teleportPosition =
+        // outside teleport range
+        if(distSpawnPosToPlayer >= teleportRangeSize){
+            // set teleport range position to player front
+            teleportRangePosition = 
+                nearPlayer +
+                (
+                    Normalize(DirectionTowards(nearPlayer, botSpawnPos)) *
+                    teleportRangeSize
+                );
+        }
+        else{
+            // set teleport range position to botSpawnPos
+            teleportRangePosition = botSpawnPos;
+        }
+
+        // randomize set teleport position in range
+        teleportPosition = 
             NearestWalkablePosition(
-                playerPosition +
-                (Normalize(DirectionTowards(playerPosition, basePosition)) * teleportRangeSize) +
+                teleportRangePosition +
                 RandomPosition(teleportRangeSize, teleportRangeSize, teleportRangeSize)
-            ) +
-            Up();
-        define nearPlayer = ClosestPlayerTo(teleportPosition, Team.Team1);
+            );
+        // get hasLine
         hasLine = IsInLineOfSight(
             nearPlayer,
             teleportPosition + Up(),
             BarrierLOS.NoBarriersBlock);
-        inSight = IsInViewAngle(
-            nearPlayer,
-            teleportPosition + Up(),
-            90);
+        
         if(
-            DistanceBetween(playerPosition, teleportPosition) > (teleportRangeSize / 2)
-                &&
-            (
-                (hasLine)
-            )
+            // not too close
+            DistanceBetween(teleportPosition, nearPlayer) > (teleportRangeSize / 2) &&
+            // has line
+            hasLine
         ){
             break;
         }
@@ -450,341 +539,7 @@ void TeleportToPlayersFront(define terelportTarget, define playerPosition, defin
         Color.Purple, teleportPosition, CountOf(terelportTarget) * 1.5);
 }
 
-void TeleportToPlayerAround(define terelportTarget, define teleportToPlayer)"TeleportToPlayerAround"{
-    // set teleport position by blind spot from player
-    // find place that will be a blind spot up to 10 times
-    define teleportPosition;
-    define hasLine;
-    define inSight;
-    for(gLoopIndex = 0; gLoopIndex < 10; gLoopIndex++){
-        teleportPosition =
-            NearestWalkablePosition(
-                teleportToPlayer +
-                RandomPosition(teleportRangeSize, teleportRangeSize, teleportRangeSize)
-            ) +
-            Up();
-        hasLine = IsInLineOfSight(
-            teleportToPlayer,
-            teleportPosition + Up(),
-            BarrierLOS.NoBarriersBlock);
-        inSight = IsInViewAngle(
-            teleportToPlayer,
-            teleportPosition + Up(),
-            90);
-        if(
-            DistanceBetween(teleportToPlayer, teleportPosition) > (teleportRangeSize / 2)
-                &&
-            (
-                (hasLine && !inSight) ||
-                (!hasLine && inSight)
-            )
-        ){
-            break;
-        }
-    }
-    Teleport(terelportTarget, teleportPosition);
-    PlayEffect(
-        AllPlayers(), PlayEffect.BadExplosion,
-        Color.Purple, teleportPosition, CountOf(terelportTarget) * 1.5);
-}
-
-// TAG Bot/SetBotInfo ----------
-playervar define heroName;
-playervar define combatRange;
-playervar define combatRangeMin;
-playervar define combatRangeMax;
-
-playervar define primaryFireButtonBehaivor;
-playervar define primaryFireButtonWaitMin;
-playervar define primaryFireButtonWaitMax;
-playervar define primaryFireButtonHoldMin;
-playervar define primaryFireButtonHoldMax;
-
-playervar define secondaryFireButtonBehaivor;
-playervar define secondaryFireButtonWaitMin;
-playervar define secondaryFireButtonWaitMax;
-playervar define secondaryFireButtonHoldMin;
-playervar define secondaryFireButtonHoldMax;
-
-playervar define ability1ButtonWaitMin;
-playervar define ability1ButtonWaitMax;
-playervar define ability1ButtonHoldMin;
-playervar define ability1ButtonHoldMax;
-
-playervar define ability2ButtonWaitMin;
-playervar define ability2ButtonWaitMax;
-playervar define ability2ButtonHoldMin;
-playervar define ability2ButtonHoldMax;
-
-rule: "Bot/SetBotInfo"
-Event.OngoingPlayer
-if(
-    HasSpawned() &&
-    IsDummyBot()
-){
-        combatRange = CombatRange.Middle;
-        primaryFireButtonBehaivor = ButtonBehaivor.HoldOnly;
-        primaryFireButtonWaitMin = 0;
-        primaryFireButtonWaitMax = 1;
-        primaryFireButtonHoldMin = 0;
-        primaryFireButtonHoldMax = 10;
-
-        secondaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
-        secondaryFireButtonWaitMin = 0;
-        secondaryFireButtonWaitMax = 10;
-        secondaryFireButtonHoldMin = 0;
-        secondaryFireButtonHoldMax = 5;
-
-        ability1ButtonWaitMin = 0;
-        ability1ButtonWaitMax = 10;
-        ability1ButtonHoldMin = 0;
-        ability1ButtonHoldMax = 5;
-
-        ability2ButtonWaitMin = 0;
-        ability2ButtonWaitMax = 10;
-        ability2ButtonHoldMin = 0;
-        ability2ButtonHoldMax = 5;
-
-    switch(HeroOf()){
-        case Hero.Ana:
-        heroName = "Ana";
-        combatRange = CombatRange.Far;
-        primaryFireButtonBehaivor = ButtonBehaivor.HoldOnly;
-        secondaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
-        secondaryFireButtonWaitMin = 0;
-        secondaryFireButtonWaitMax = 5;
-        secondaryFireButtonHoldMin = 5;
-        secondaryFireButtonHoldMax = 10;
-        break;
-
-        case Hero.Ashe:
-        heroName = "Ashe";
-        combatRange = CombatRange.Far;
-        primaryFireButtonBehaivor = ButtonBehaivor.Repeat;
-        secondaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
-        secondaryFireButtonWaitMin = 0;
-        secondaryFireButtonWaitMax = 5;
-        secondaryFireButtonHoldMin = 5;
-        secondaryFireButtonHoldMax = 10;
-        break;
-
-        case Hero.Baptiste:
-        heroName = "Baptiste";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Bastion:
-        heroName = "Bastion";
-        combatRange = CombatRange.Far;
-        break;
-
-        case Hero.Brigitte:
-        heroName = "Brigitte";
-        combatRange = CombatRange.Melee;
-        break;
-
-        case Hero.Doomfist:
-        heroName = "Doomfist";
-        combatRange = CombatRange.Close;
-        break;
-
-        case Hero.Dva:
-        heroName = "Doomfist";
-        combatRange = CombatRange.Close;
-        break;
-
-        case Hero.Echo:
-        heroName = "Echo";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Genji:
-        heroName = "Genji";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Hanzo:
-        heroName = "Hanzo";
-        combatRange = CombatRange.Far;
-        primaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
-        primaryFireButtonWaitMin = 0;
-        primaryFireButtonWaitMax = 1;
-        primaryFireButtonHoldMin = 1;
-        primaryFireButtonHoldMax = 3;
-        secondaryFireButtonBehaivor = ButtonBehaivor.Non;
-        break;
-
-        case Hero.Junkrat:
-        heroName = "Junkrat";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Lucio:
-        heroName = "Lucio";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Mccree:
-        heroName = "Mccree";
-        combatRange = CombatRange.Close;
-        break;
-
-        case Hero.Mei:
-        heroName = "Mei";
-        combatRange = CombatRange.Close;
-        primaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
-        break;
-
-        case Hero.Mercy:
-        heroName = "Mercy";
-        combatRange = CombatRange.Far;
-        break;
-
-        case Hero.Moira:
-        heroName = "Moira";
-        combatRange = CombatRange.Middle;
-        primaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
-        secondaryFireButtonBehaivor = ButtonBehaivor.HoldOnly;
-        break;
-
-        case Hero.Orisa:
-        heroName = "Orisa";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Pharah:
-        heroName = "Pharah";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Reaper:
-        heroName = "Reaper";
-        combatRange = CombatRange.Close;
-        break;
-
-        case Hero.Reinhardt:
-        heroName = "Reinhardt";
-        combatRange = CombatRange.Melee;
-        break;
-
-        case Hero.Roadhog:
-        heroName = "Reaper";
-        combatRange = CombatRange.Close;
-        break;
-
-        case Hero.Sigma:
-        heroName = "Sigma";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Soldier76:
-        heroName = "Soldier76";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Sombra:
-        heroName = "Sombra";
-        combatRange = CombatRange.Close;
-        break;
-
-        case Hero.Symmetra:
-        heroName = "Symmetra";
-        combatRange = CombatRange.Close;
-        break;
-
-        case Hero.Torbjorn:
-        heroName = "Torbjorn";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Tracer:
-        heroName = "Tracer";
-        combatRange = CombatRange.Close;
-        break;
-
-        case Hero.Widowmaker:
-        heroName = "Widowmaker";
-        combatRange = CombatRange.Far;
-        primaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
-        secondaryFireButtonWaitMin = 0;
-        secondaryFireButtonWaitMax = 5;
-        secondaryFireButtonHoldMin = 5;
-        secondaryFireButtonHoldMax = 10;
-        break;
-
-        case Hero.Winston:
-        heroName = "Winston";
-        combatRange = CombatRange.Close;
-        break;
-
-        case Hero.WreckingBall:
-        heroName = "WreckingBall";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Zarya:
-        heroName = "Zarya";
-        combatRange = CombatRange.Middle;
-        break;
-
-        case Hero.Zenyatta:
-        heroName = "Zenyatta";
-        combatRange = CombatRange.Far;
-        break;
-    }
-
-    // set combat range
-    switch(combatRange){
-        case CombatRange.Melee:
-            combatRangeMin = 1;
-            combatRangeMax = 3;
-            break;
-        case CombatRange.Close:
-            combatRangeMin = 1;
-            combatRangeMax = 8;
-            break;
-        case CombatRange.Middle:
-            combatRangeMin = 8;
-            combatRangeMax = 16;
-            break;
-        case CombatRange.Far:
-            combatRangeMin = 16;
-            combatRangeMax = 24;
-            break;
-    }
-}
-
-enum State{
-    Non,
-    Wandering,
-    Combat,
-    Searching,
-    Stacked
-}
-
-enum CombatRange{
-    Non,
-    Melee,
-    Close,
-    Middle,
-    Far
-}
-
-enum ButtonBehaivor{
-    Non,
-    HoldOnly,
-    HoldAndRelease,
-    Repeat
-}
-
-enum WeaponTarget{
-    Non,
-    Enemy,
-    Friend,
-    Both
-}
-
-// TAG Bot/ObjectDetector ----------
+// TAG Bot/ObjectDetect -----------------------------------------------
 playervar define detectorRoot;
 playervar define upperDetector;
 playervar define frontDetector;
@@ -835,26 +590,35 @@ Boolean getDetectedObject()"getDetectedObject"{
     return detecObj;
 }
 
-// TAG Bot/State/StateControl ----------
+// TAG Bot/State/StateControl -----------------------------------------------
 playervar define statusText;
 playervar define statusText2;
-playervar define state;
 playervar define tuneDir;
 playervar define target;
 playervar define updateRate;
 define basicUpdateRate: 1.0;
 
-define isStacking:
+define IsStacking():
     SpeedOf() <= 3.0;
 
-define isContactPlayer: 
-    HasSpawned(ClosestPlayerTo(ep, OppositeTeamOf(TeamOf()))) &&
-    IsAlive(ClosestPlayerTo(ep, OppositeTeamOf(TeamOf()))) &&
-    IsInLineOfSight(ep, ClosestPlayerTo(ep, OppositeTeamOf(TeamOf()))) &&
+define IsContactPlayer():
+    IsAlive(ClosestPlayerTo(ep, playerTeam)) &&
+    IsInLineOfSight(ep, ClosestPlayerTo(ep, playerTeam)) &&
     !(
-        HeroOf(target) == Hero.Sombra && IsUsingAbility1(target) &&
-        DistanceBetween(ep, ClosestPlayerTo(ep, OppositeTeamOf(TeamOf()))) >= 2
+        HeroOf(ClosestPlayerTo(ep, playerTeam)) == Hero.Sombra &&
+        IsUsingAbility1(ClosestPlayerTo(ep, playerTeam)) &&
+        DistanceBetween(ep, ClosestPlayerTo(ep, playerTeam)) >= 2
     );
+
+
+playervar define state;
+enum State{
+    Non,
+    Wandering, 
+    Combat,
+    Searching,
+    Stacked
+}
 
 rule: "Bot/State/StateControl"
 Event.OngoingPlayer
@@ -866,7 +630,7 @@ if(
         // idle
         state = State.Non; 
     }
-    else if(isContactPlayer){
+    else if(IsContactPlayer()){
         // combat by contact player
         state = State.Combat; 
     }
@@ -888,18 +652,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Bot/State/CombatOnDamageTaken"
-Event.OnDamageTaken
-if(
-    IsDummyBot() &&
-    IsAlive()
-){
-    target = Attacker();
-    state = State.Combat; 
-    Wait(3, WaitBehavior.IgnoreCondition);
-}
-
-// TAG Bot/State/Non ----------
+// TAG Bot/State/Non -----------------------------------------------
 rule: "Bot/State/Non"
 Event.OngoingPlayer
 if(
@@ -911,7 +664,7 @@ if(
     StopMove();
 }
 
-// TAG Bot/State/Wandering ----------
+// TAG Bot/State/Wandering -----------------------------------------------
 define StartMove(define dir):
             StartThrottleInDirection(
                 ep, dir, 1,
@@ -982,7 +735,7 @@ if(
                     ep,
                     DirectionTowards(
                         EyePosition(),
-                        ClosestPlayerTo(ep, OppositeTeamOf(TeamOf()))),
+                        ClosestSpawnPosPlayer()),
                     Relative.ToWorld
                 );   
             }
@@ -990,13 +743,13 @@ if(
         }
 
         // check stack
-        if(isStacking){
+        if(IsStacking()){
             while(RandomInteger(0, 100) <= 40){
                 StartHoldingButton(ep, Button.Jump);
                 Wait(RandomReal(1, 2), WaitBehavior.AbortWhenFalse);
                 StopHoldingButton(ep, Button.Jump);
             }
-            if(isStacking){
+            if(IsStacking()){
                 state = State.Stacked;
             }
         }
@@ -1010,7 +763,7 @@ define targetPosRange: 5;
 playervar define sideStepDir;
 playervar define sideStepKeepSecond;
 
-// TAG Bot/State/Searching ----------
+// TAG Bot/State/Searching -----------------------------------------------
 rule: "Bot/State/Searching"
 Event.OngoingPlayer
 if(
@@ -1062,14 +815,14 @@ if(
         }
 
         // check stack
-        if(isStacking){
+        if(IsStacking()){
             StartMove(-sideStepDir + Forward());
             while(RandomInteger(0, 100) <= 40){
                 StartHoldingButton(ep, Button.Jump);
                 Wait(RandomReal(1, 2), WaitBehavior.AbortWhenFalse);
                 StopHoldingButton(ep, Button.Jump);
             }
-            if(isStacking){
+            if(IsStacking()){
                 state = State.Stacked;
             }
         }
@@ -1091,13 +844,12 @@ Event.OngoingPlayer
 if(
     0 < sideStepKeepSecond
 ){
-    while(true){
-        Wait(1, WaitBehavior.AbortWhenFalse);
-        sideStepKeepSecond--;
-    }
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    sideStepKeepSecond--;
+    LoopIfConditionIsTrue();
 }
 
-// TAG Bot/State/Combat ----------
+// TAG Bot/State/Combat -----------------------------------------------
 playervar define moveDir;
 
 rule: "Bot/State/Combat"
@@ -1123,7 +875,7 @@ if(
     // action loop
     while(true){
         // set target
-        target = ClosestPlayerTo(ep, OppositeTeamOf(TeamOf()));
+        target = ClosestSpawnPosPlayer();
         targetPos = PositionOf(target);
 
         // change combat distance
@@ -1161,7 +913,7 @@ if(
         }
 
         // check stack
-        if(isStacking){
+        if(IsStacking()){
             sideStepDir = -sideStepDir; 
         }
 
@@ -1183,7 +935,7 @@ if(
     }
 }
 
-// TAG Bot/State/Stacked ----------
+// TAG Bot/State/Stacked -----------------------------------------------
 playervar define stackPos;
 define stackPosRange: 2;
 
@@ -1203,29 +955,263 @@ if(
     }
 }
 
-// TAG Bot/CooldownControl
-disabled rule: "Bot/CooldownControl"
+// TAG Bot/ButtonControl -----------------------------------------------
+playervar define combatRange;
+playervar define combatRangeMin;
+playervar define combatRangeMax;
+
+playervar define primaryFireButtonBehaivor;
+playervar define primaryFireButtonWaitMin;
+playervar define primaryFireButtonWaitMax;
+playervar define primaryFireButtonHoldMin;
+playervar define primaryFireButtonHoldMax;
+
+playervar define secondaryFireButtonBehaivor;
+playervar define secondaryFireButtonWaitMin;
+playervar define secondaryFireButtonWaitMax;
+playervar define secondaryFireButtonHoldMin;
+playervar define secondaryFireButtonHoldMax;
+
+playervar define ability1ButtonWaitMin;
+playervar define ability1ButtonWaitMax;
+playervar define ability1ButtonHoldMin;
+playervar define ability1ButtonHoldMax;
+
+playervar define ability2ButtonWaitMin;
+playervar define ability2ButtonWaitMax;
+playervar define ability2ButtonHoldMin;
+playervar define ability2ButtonHoldMax;
+
+rule: "Bot/SetButtonControl&CombatRange"
 Event.OngoingPlayer
 if(
-    state == State.Combat
+    HasSpawned() &&
+    IsDummyBot()
 ){
-    while(true){
-        SetAbilityCooldown(ep, Button.Jump, 0);
-        SetAbilityCooldown(ep, Button.Crouch, 0);
-        SetAbilityCooldown(ep, Button.Ability1, 0);
-        SetAbilityCooldown(ep, Button.Ability2, 0);
-        SetAbilityCooldown(ep, Button.PrimaryFire, 0);
-        SetAbilityCooldown(ep, Button.SecondaryFire, 0);
-        SetUltimateCharge (ep, 100);
-        Wait(1, WaitBehavior.AbortWhenFalse);
+        combatRange = CombatRange.Middle;
+        primaryFireButtonBehaivor = ButtonBehaivor.HoldOnly;
+        primaryFireButtonWaitMin = 0;
+        primaryFireButtonWaitMax = 1;
+        primaryFireButtonHoldMin = 0;
+        primaryFireButtonHoldMax = 10;
+
+        secondaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
+        secondaryFireButtonWaitMin = 0;
+        secondaryFireButtonWaitMax = 10;
+        secondaryFireButtonHoldMin = 0;
+        secondaryFireButtonHoldMax = 5;
+
+        ability1ButtonWaitMin = 0;
+        ability1ButtonWaitMax = 10;
+        ability1ButtonHoldMin = 0;
+        ability1ButtonHoldMax = 5;
+
+        ability2ButtonWaitMin = 0;
+        ability2ButtonWaitMax = 10;
+        ability2ButtonHoldMin = 0;
+        ability2ButtonHoldMax = 5;
+
+    switch(HeroOf()){
+        case Hero.Ana:
+        combatRange = CombatRange.Far;
+        primaryFireButtonBehaivor = ButtonBehaivor.HoldOnly;
+        secondaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
+        secondaryFireButtonWaitMin = 0;
+        secondaryFireButtonWaitMax = 5;
+        secondaryFireButtonHoldMin = 5;
+        secondaryFireButtonHoldMax = 20;
+        break;
+
+        case Hero.Ashe:
+        combatRange = CombatRange.Far;
+        primaryFireButtonBehaivor = ButtonBehaivor.Repeat;
+        secondaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
+        secondaryFireButtonWaitMin = 0;
+        secondaryFireButtonWaitMax = 5;
+        secondaryFireButtonHoldMin = 5;
+        secondaryFireButtonHoldMax = 20;
+        break;
+
+        case Hero.Baptiste:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Bastion:
+        combatRange = CombatRange.Far;
+        break;
+
+        case Hero.Brigitte:
+        combatRange = CombatRange.Melee;
+        break;
+
+        case Hero.Doomfist:
+        combatRange = CombatRange.Close;
+        break;
+
+        case Hero.Dva:
+        combatRange = CombatRange.Close;
+        break;
+
+        case Hero.Echo:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Genji:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Hanzo:
+        combatRange = CombatRange.Far;
+        primaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
+        primaryFireButtonWaitMin = 0;
+        primaryFireButtonWaitMax = 1;
+        primaryFireButtonHoldMin = 1;
+        primaryFireButtonHoldMax = 3;
+        secondaryFireButtonBehaivor = ButtonBehaivor.Non;
+        break;
+
+        case Hero.Junkrat:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Lucio:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Mccree:
+        combatRange = CombatRange.Close;
+        break;
+
+        case Hero.Mei:
+        combatRange = CombatRange.Close;
+        primaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
+        break;
+
+        case Hero.Mercy:
+        combatRange = CombatRange.Far;
+        break;
+
+        case Hero.Moira:
+        combatRange = CombatRange.Middle;
+        primaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
+        secondaryFireButtonBehaivor = ButtonBehaivor.HoldOnly;
+        break;
+
+        case Hero.Orisa:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Pharah:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Reaper:
+        combatRange = CombatRange.Close;
+        break;
+
+        case Hero.Reinhardt:
+        combatRange = CombatRange.Melee;
+        break;
+
+        case Hero.Roadhog:
+        combatRange = CombatRange.Close;
+        break;
+
+        case Hero.Sigma:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Soldier76:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Sombra:
+        combatRange = CombatRange.Close;
+        break;
+
+        case Hero.Symmetra:
+        combatRange = CombatRange.Close;
+        primaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
+        break;
+
+        case Hero.Torbjorn:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Tracer:
+        combatRange = CombatRange.Close;
+        break;
+
+        case Hero.Widowmaker:
+        combatRange = CombatRange.Far;
+        primaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
+        secondaryFireButtonWaitMin = 0;
+        secondaryFireButtonWaitMax = 5;
+        secondaryFireButtonHoldMin = 5;
+        secondaryFireButtonHoldMax = 20;
+        break;
+
+        case Hero.Winston:
+        combatRange = CombatRange.Close;
+        break;
+
+        case Hero.WreckingBall:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Zarya:
+        combatRange = CombatRange.Middle;
+        break;
+
+        case Hero.Zenyatta:
+        combatRange = CombatRange.Far;
+        break;
+    }
+
+    // set combat range
+    switch(combatRange){
+        case CombatRange.Melee:
+            combatRangeMin = 1;
+            combatRangeMax = 3;
+            break;
+        case CombatRange.Close:
+            combatRangeMin = 1;
+            combatRangeMax = 8;
+            break;
+        case CombatRange.Middle:
+            combatRangeMin = 8;
+            combatRangeMax = 16;
+            break;
+        case CombatRange.Far:
+            combatRangeMin = 16;
+            combatRangeMax = 24;
+            break;
     }
 }
 
-// TAG Bot/ButtonControl
-// define waitPrimaryFireButton: RandomReal(0, 5);
-// define holdPrimaryFireButton: RandomReal(0, 5);
-// define holdPrimaryFireButtonForSniper: RandomReal(1, 2);
 
+
+enum CombatRange{
+    Non,
+    Melee,
+    Close,
+    Middle,
+    Far
+}
+
+enum ButtonBehaivor{
+    Non,
+    HoldOnly,
+    HoldAndRelease,
+    Repeat
+}
+
+enum WeaponTarget{
+    Non,
+    Enemy,
+    Friend,
+    Both
+}
 void StartButtonControl(
     define button, define buttonOperation,
     define waitDuringMin, define waitDuringMax,
@@ -1370,7 +1356,7 @@ if(
         0,
         5,
         0,
-        5
+        3
     );
 }
 
@@ -1401,16 +1387,152 @@ if(
     StopHoldingButton(ep, Button.Crouch);
 }
 
+// TAG Bot/Debug -----------------------------------------------
+define debug: false;
 
+disabled rule: "Bot/Debug/ShowDebugInfo"
+Event.OngoingPlayer
+if(
+    //debug &&
+    HasSpawned() &&
+    IsDummyBot()
+){  
+    // // show status text
+    // CreateInWorldText(
+    //     HostPlayer(), statusText,
+    //     ep + (Up() * 3), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+    //     Color.White, Spectators.DefaultVisibility);
+    // // show status2 text
+    // CreateInWorldText(
+    //     HostPlayer(), statusText2,
+    //     ep + (Up() * 2), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+    //     Color.White, Spectators.DefaultVisibility);
 
-// Debug -----------------------------------------------
+    // // show frontDetector path
+    // CreateBeamEffect(
+    //     ep.state == State.Wandering ? HostPlayer() : null, BeamType.GoodBeam,
+    //     detectorRoot, frontDetector,
+    //     Color.White,
+    //     EffectRev.VisibleToPositionRadiusAndColor);
+    // // show upperDetector path
+    // CreateBeamEffect(
+    //     ep.state == State.Wandering ? HostPlayer() : null, BeamType.GoodBeam,
+    //     detectorRoot, upperDetector,
+    //     Color.Blue,
+    //     EffectRev.VisibleToPositionRadiusAndColor);
+    // // show underDetector path
+    // CreateBeamEffect(
+    //     ep.state == State.Wandering ? HostPlayer() : null, BeamType.GoodBeam,
+    //     frontDetector, underDetector,
+    //     Color.Green,
+    //     EffectRev.VisibleToPositionRadiusAndColor);
+
+    // // show targetPos path
+    // CreateBeamEffect(
+    //     ep.state == State.Combat || ep.state == State.Searching ? HostPlayer() : null,
+    //     BeamType.GoodBeam,
+    //     EyePosition(), targetPos,
+    //     Color.Red,
+    //     EffectRev.VisibleToPositionRadiusAndColor);
+    // // show targetPos
+    // CreateEffect(
+    //     ep.state == State.Searching ? HostPlayer() : null,
+    //     Effect.Ring, Color.Red,
+    //     targetPos, targetPosRange, EffectRev.VisibleToPositionAndRadius);
+
+    // // show stackPos
+    // CreateEffect(
+    //     ep.state == State.Stacked ? HostPlayer() : null,
+    //     Effect.Ring, Color.White,
+    //     stackPos, stackPosRange, EffectRev.VisibleToPositionAndRadius);
+}
+
+// TAG Bot/Debug/SpawnControl -----------------------------------------------
+
+globalvar define botHero = 0;
+globalvar define botSpawnPos;
+
+rule: "Bot/Debug/SpawnControl/ChangeBotHero"
+Event.OngoingPlayer
+if(
+    debug &&
+    ep == HostPlayer() &&
+    IsButtonHeld(ep, Button.Jump) &&
+    IsButtonHeld(ep, Button.Interact)
+){
+    botHero ++;
+    if(botHero >= CountOf(spawnHeroList)){
+        botHero = 0;
+    }
+}
+
+rule: "Bot/Debug/SpawnControl/CreateOneBot"
+Event.OngoingPlayer
+if(
+    debug &&
+    ep == HostPlayer() &&
+    !IsButtonHeld(ep, Button.Jump) &&
+    intaractDoublePressed
+){
+    botSpawnPos = AimingPosition();
+    CreateOneBot(
+        RandomValueInArray(
+            IsButtonHeld(ep, Button.Crouch) ?
+                AllHeroes() :
+                spawnHeroList[botHero]
+        ),
+        NumberOfPlayers(botTeam)
+    );
+}
+
+rule: "Debug/SpawnControl/CreateAllBot"
+Event.OngoingPlayer
+if(
+    debug &&
+    ep == HostPlayer() &&
+    IsButtonHeld(ep, Button.Interact)
+){
+    WaitLongPressConfirm();
+
+    botSpawnPos = AimingPosition();
+    CreateAllBot(
+        IsButtonHeld(ep, Button.Crouch) ?
+            AllHeroes() :
+            spawnHeroList[botHero]
+    );
+}
+
+rule: "Debug/SpawnControl/DestroyAllBot"
+Event.OngoingPlayer
+if(
+    debug &&
+    ep == HostPlayer() &&
+    IsButtonHeld(ep, Button.Interact)
+){
+    WaitLongPressConfirm();
+
+    DestroyAllBot();
+}
+
+rule: "Debug/SpawnControl/ChangeBotSpawnPos"
+Event.OngoingPlayer
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    !IsButtonHeld(EventPlayer(), Button.Reload) &&
+    IsButtonHeld(EventPlayer(), Button.Crouch)
+){
+    ChangeBotSpawnPos();
+}
+
+// TAG Debug/Builtin ----------
 define changeTimeInterval: 0.2;
 globalvar define tuneVal = 1;
 globalvar define consecutiveChangeCount = 0;
 define initialTuneUnit : 0.1;
 globalvar define tuneUnit = initialTuneUnit;
 
-rule: "showParam"
+rule: "Debug/Builtin/showParam"
 Event.OngoingGlobal
 {
     CreateHudText(HostPlayer(),
@@ -1447,7 +1569,7 @@ Event.OngoingGlobal
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "spawn hero name", heroNameList[spawnHero]>,
+        <"<0> <1>", "spawn hero name", heroNameList[botHero]>,
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
@@ -1455,7 +1577,7 @@ Event.OngoingGlobal
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "Number Of Bot Team", NumberOfPlayers(botTeam)>,
+        <"<0> <1>", "Number Of Player Bot Team", NumberOfPlayers(botTeam)>,
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
@@ -1463,20 +1585,27 @@ Event.OngoingGlobal
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "balance Rate", balanceRate>,
+        <"<0> <1>", "enemy Damage Received", enemyDamageReceived>,
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);    
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);   
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "enemy Damage Dealt", enemyDamageDealt>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);   
 }
 
-rule: "startIncreaseParam"
+rule: "Debug/Builtin/startIncreaseParam"
 Event.OngoingPlayer
 if(
     HostPlayer() &&
     (
-        IsButtonHeld(EventPlayer(), Button.Interact) &&
-        IsButtonHeld(EventPlayer(), Button.Ability2)
+        IsButtonHeld(ep, Button.Interact) &&
+        IsButtonHeld(ep, Button.Ability2)
     )
 ){
     tuneVal += tuneUnit;
@@ -1485,25 +1614,25 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "stopIncreaseParam"
+rule: "Debug/Builtin/stopIncreaseParam"
 Event.OngoingPlayer
 if(
     HostPlayer() &&
     !(
-        IsButtonHeld(EventPlayer(), Button.Interact) &&
-        IsButtonHeld(EventPlayer(), Button.Ability2)
+        IsButtonHeld(ep, Button.Interact) &&
+        IsButtonHeld(ep, Button.Ability2)
     )
 ){
     resetTuneUnit();
 }
 
-rule: "startDecreaseParam"
+rule: "Debug/Builtin/startDecreaseParam"
 Event.OngoingPlayer
 if(
     HostPlayer() &&
     (
-        IsButtonHeld(EventPlayer(), Button.Interact) &&
-        IsButtonHeld(EventPlayer(), Button.Ability1)
+        IsButtonHeld(ep, Button.Interact) &&
+        IsButtonHeld(ep, Button.Ability1)
     )
 ){
     tuneVal -= tuneUnit;
@@ -1512,13 +1641,13 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "stopDecreaseParam"
+rule: "Debug/Builtin/stopDecreaseParam"
 Event.OngoingPlayer
 if(
     HostPlayer() &&
     !(
-        IsButtonHeld(EventPlayer(), Button.Interact) &&
-        IsButtonHeld(EventPlayer(), Button.Ability1)
+        IsButtonHeld(ep, Button.Interact) &&
+        IsButtonHeld(ep, Button.Ability1)
     )
 ){
     resetTuneUnit();
