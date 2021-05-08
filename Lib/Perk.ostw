@@ -1,5 +1,11 @@
 import "PerkCore.ostw";
 
+playervar define landZonePosition;
+playervar define perkEffectCount;
+playervar define perkEffectCoolTime;
+playervar define firstAnimationDelay;
+define parallelAnimationNum: 2;
+
 // TAG SuperLanding ----------
 define superLandingRange: 8;
 
@@ -113,7 +119,7 @@ if(
     // apply blast impulse
     ApplyBlastImpulse(perkTargets, PositionOf(), superLandingRange, false);
     // splash damage
-    Damage(perkTargets, EventPlayer(), 100);
+    Damage(perkTargets, EventPlayer(), 200);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
@@ -1622,7 +1628,7 @@ playervar define fireBallTriggerDelay;
 define fireBallMinSpeed: 10;
 define fireBallMaxSpeed: 60;
 define fireBallMinCollisionRange: 2.0;
-define fireBallChargeRate: 3.0;
+define fireBallChargeRate: 4.0;
 
 rule: "Perk/Player/GrudgeFireBall/activate"
 Event.OngoingPlayer
@@ -1698,9 +1704,9 @@ if(
     fireBallSpeed = fireBallMaxSpeed - (fireBallPower / fireBallMaxSpeed);
     fireBallSpeed = Max(fireBallMinSpeed, fireBallSpeed);
     fireBallSpeed = Min(fireBallMaxSpeed, fireBallSpeed);
-    fireBallSize = fireBallPower * 0.002;
-    fireBallBlastRange = fireBallPower * 0.01;
-    fireBallTriggerDelay = fireBallPower * 0.001;
+    fireBallSize = fireBallPower * 0.004;
+    fireBallBlastRange = fireBallPower * 0.02;
+    fireBallTriggerDelay = fireBallPower * 0.0002;
     // start movement
     UpdateEveryFrame(perkPosition);
     ChaseVariableAtRate(
@@ -1755,7 +1761,7 @@ if(
     ExplodeFireBall();
 }
 
-rule: "Perk/Player/GrudgeFireBall/hitToPlyer"
+rule: "Perk/Player/GrudgeFireBall/hitToPlayer"
 Event.OngoingPlayer
 Team.Team1
 Player.All
@@ -1768,9 +1774,9 @@ if(
         perkPosition,
         ClosestPlayerTo(perkPosition, Team.Team2))
         	<= 
-    Max(fireBallMinCollisionRange, fireBallSize)
+        Max(fireBallMinCollisionRange, fireBallSize)
 ){
-    Wait(fireBallTriggerDelay, WaitBehavior.AbortWhenFalse);
+    Wait(fireBallTriggerDelay, WaitBehavior.IgnoreCondition);
     ExplodeFireBall();
 }
 
@@ -1788,7 +1794,8 @@ if(
 }
 
 void ExplodeFireBall()"ExplodeFireBall"{
-    perkEffectStatus = PerkEffectStatus.Reloading;
+    AbortIf(perkEffectStatus != PerkEffectStatus.Triggered);
+    perkEffectStatus = PerkEffectStatus.SecondTriggered;
 
     // stop movement
     StopChasingVariable(perkPosition);
@@ -2002,8 +2009,6 @@ define artilleryLandingRange: 20;
 define artilleryDamageRange: 7;
 define artilleryAttackTime: 10;
 define artilleryAttackCount: 30;
-playervar define landZonePosition;
-playervar define perkEffectCount;
 
 rule: "Perk/Player/ArtilleryRequest/activate"
 Event.OngoingPlayer
@@ -2096,8 +2101,6 @@ if(
     perkEffectCount = artilleryAttackCount;
 }
 
-playervar define firstAnimationDelay;
-define parallelAnimationNum: 2;
 define artilleryAttackSpeeed:
     (artilleryAttackTime / artilleryAttackCount) * parallelAnimationNum;
 
@@ -2444,8 +2447,6 @@ if(
     LoopIfConditionIsTrue();
 }
 
-playervar define perkEffectCoolTime;
-
 rule: "Perk/Player/StrafingSupport/countDownTimeLimit"
 Event.OngoingPlayer
 Team.Team1
@@ -2526,8 +2527,8 @@ if(
 // TAG MissileBarrage ----------
 //define missileLandingRange: 4;
 define missileDamageRange: 4;
-define missileAttackTime: 5;
-define missileAttackCount: 10;
+define missileAttackTime: 6;
+define missileAttackCount: 12;
 define missleReloadTime: 10;
 
 rule: "Perk/Player/MissileBarrage/activate"
@@ -2658,10 +2659,11 @@ if(
 
    // landing zone text
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\rMissle incoming!", EventPlayer(), HeroIconString(HeroOf()), "Missile Barrage">,
+        AllPlayers(), <"<0> <1> <2>\n\r<3> Missles incoming!", EventPlayer(), HeroIconString(HeroOf()), "Missile Barrage", perkEffectCount>,
         landZonePosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perkEffectAndText[1] = LastTextID();
+    perkEffectCount = missileAttackCount;
 
     // set effect
     // landing zone blast range
@@ -2677,7 +2679,6 @@ if(
     DestroyEffect(perkEffectAndText[4]);
 
     firstAnimationDelay = true;
-    perkEffectCount = missileAttackCount;
     perkEffectStatus = PerkEffectStatus.SecondTriggered;
 }
 
