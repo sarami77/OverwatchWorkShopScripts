@@ -186,7 +186,6 @@ enum BotAsset{
 }
 
 globalvar define botSlot;
-globalvar define activeAssetNo;
 globalvar define isSpawnedBot;
 
 void CreateAllBotByAsset()"CreateAllBotByAsset"{
@@ -218,16 +217,11 @@ void CreateAllBotByAsset()"CreateAllBotByAsset"{
             [EnemyType.Minion, Hero.Reinhardt, 17]
         ]
     ];
-    // change asset no
-    define tempAssetNo = RandomInteger(0, CountOf(assetList) - 1);
-    while(tempAssetNo == activeAssetNo){
-        // retry when some no
-        tempAssetNo = RandomInteger(0, CountOf(assetList) - 1);
-    }
-    activeAssetNo = tempAssetNo;
     // create bot by asset
     isSpawnedBot = true;
-    define asset = ValueInArray(assetList, activeAssetNo);
+    define asset = ValueInArray(
+        assetList,
+        RandomInteger(0, CountOf(assetList) - 1));
     for(define assetIdx = 0; assetIdx < CountOf(asset); assetIdx++){
         for(define botCount = 0; botCount < asset[assetIdx][BotAsset.count]; botCount++){
             // create bot
@@ -609,21 +603,24 @@ enum DetectedObject{
     UpStair
 }
 
+define isFrontBlocked: IsBlockedBetween(botInfo[BotInfo.detectorRoot], botInfo[BotInfo.frontDetector]);
+define isUpperBlocked: IsBlockedBetween(botInfo[BotInfo.detectorRoot], botInfo[BotInfo.upperDetector]);
+define isUnderBlocked: IsBlockedBetween(botInfo[BotInfo.frontDetector], botInfo[BotInfo.underDetector]);
+
 Boolean getDetectedObject()"getDetectedObject"{
     DetectedObject detecObj = DetectedObject.None;
-    define moveDir = Vector(
-        XOf(FacingDirectionOf()),
-        0,
-        ZOf(FacingDirectionOf())
-    );
-    moveDir = Normalize(moveDir);
     botInfo[BotInfo.detectorRoot] = EyePosition();
-    botInfo[BotInfo.frontDetector] = ShiftedPosition(botInfo[BotInfo.detectorRoot], moveDir, frontDetectorLength);
+    botInfo[BotInfo.frontDetector] = ShiftedPosition(botInfo[BotInfo.detectorRoot],
+        Normalize(
+            Vector(
+                XOf(FacingDirectionOf()),
+                0,
+                ZOf(FacingDirectionOf())
+            )
+        ),
+        frontDetectorLength);
     botInfo[BotInfo.upperDetector] = ShiftedPosition(botInfo[BotInfo.frontDetector], Up(), upperDetectorLength);
     botInfo[BotInfo.underDetector] = ShiftedPosition(botInfo[BotInfo.frontDetector], Down(), underDetectorLength);
-    define isFrontBlocked = IsBlockedBetween(botInfo[BotInfo.detectorRoot], botInfo[BotInfo.frontDetector]);
-    define isUpperBlocked = IsBlockedBetween(botInfo[BotInfo.detectorRoot], botInfo[BotInfo.upperDetector]);
-    define isUnderBlocked = IsBlockedBetween(botInfo[BotInfo.frontDetector], botInfo[BotInfo.underDetector]);
     if(isFrontBlocked){
         if(isUpperBlocked){
             detecObj = DetectedObject.Wall;
@@ -820,7 +817,6 @@ if(
 
         // blocked by cliff
         DetectedObject detectObj = getDetectedObject();
-        define distToTarget = DistanceBetween(ep, botInfo[BotInfo.target]);
         if(detectObj == DetectedObject.Criff){
             botInfo[BotInfo.moveDir] = 0;
             botInfo[BotInfo.statusText] = <"Searching/Blocked_By_Cliff">;
