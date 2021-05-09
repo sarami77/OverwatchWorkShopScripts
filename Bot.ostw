@@ -3,68 +3,6 @@ import "Lib/Debug.ostw";
 //import "Lib/PerkCore.ostw";
 
 // Builtin -----------------------------------------------
-rule: "Builtin/HostOption"
-Event.OngoingPlayer
-if(
-    HostPlayer() == EventPlayer() &&
-    HasSpawned()
-){
-    SetDamageReceived(EventPlayer(), 1);
-    SetMoveSpeed(EventPlayer(), 1000);
-    SetGravity(EventPlayer(), 10);
-    // SetDamageDealt(EventPlayer(), 600);
-    // SetHealingDealt(EventPlayer(), 100);
-    // SetHealingReceived(EventPlayer(), 100);
-    // SetMaxHealth(EventPlayer(), 100);
-    // SetJumpVerticalSpeed(EventPlayer(), 100);
-    // SetProjectileSpeed(EventPlayer(), 100);
-    // SetProjectileGravity(EventPlayer(), 100);
-    // StartScalingPlayer(EventPlayer(), 1);
-    // StartScalingBarriers(EventPlayer(), 1);
-    // SetUltimateCharge(EventPlayer(), 0);
-}
-
-rule: "Builtin/ShowOperationHUD"
-Event.OngoingGlobal
-{
-    // show HUD of bot operation
-    CreateHudText(AllPlayers(Team.Team1),
-        null, <"hold intaract key <0> to spawn/destory all bot.\n\r  with crouch key <1> to random hero.",
-            ButtonGuide(Button.Interact), ButtonGuide(Button.Crouch)>, null,
-        Location.Left, -2,
-        Color.Yellow, Color.Yellow, Color.Yellow,
-        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
-    CreateHudText(AllPlayers(Team.Team1),
-        null, <"double press intaract key <0> to spawn one bot.\n\r  with crouch key <1> to random hero.",
-            ButtonGuide(Button.Interact), ButtonGuide(Button.Crouch)>, null,
-        Location.Left, -2,
-        Color.Yellow, Color.Yellow, Color.Yellow,
-        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
-    CreateHudText(AllPlayers(Team.Team1),
-        null, <"press intaract key <0> & melee key <1> to change spawn hero.\n\r  with crouch key <1> to reverse order.",
-            ButtonGuide(Button.Interact), ButtonGuide(Button.Melee)>, null,
-        Location.Left, -2,
-        Color.Yellow, Color.Yellow, Color.Yellow,
-        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);     
-}
-
-rule: "Builtin/AutoResurrectBot"
-Event.OngoingPlayer
-if(
-    IsDummyBot(ep) &&
-    IsDead(ep)
-){
-    Wait(3, WaitBehavior.AbortWhenFalse);
-    Teleport(ep, 
-        NearestWalkablePosition(
-            PositionOf(ep) +
-            RandomPosition(10, 0, 10)
-        )
-    );
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
-    Resurrect(ep);
-}
-
 // TAG Enemy/Debug ----------
 rule: "Enemy/ShowDebugInfo"
 Event.OngoingPlayer
@@ -123,116 +61,6 @@ if(
         ep.botInfo[BotInfo.stackPos], stackPosRange, EffectRev.VisibleToPositionAndRadius);
 }
 
-// TAG Enemy/SpawnControl ----------
-define spawnHeroList: [
-    Hero.Ana,
-    Hero.Ashe,
-    Hero.Baptiste,
-    Hero.Bastion,
-    Hero.Brigitte,
-    Hero.Doomfist,
-    Hero.Dva,
-    Hero.Echo,
-    Hero.Genji,
-    Hero.Hanzo,
-    Hero.Junkrat,
-    Hero.Lucio,
-    Hero.Mccree,
-    Hero.Mei,
-    Hero.Mercy,
-    Hero.Moira,
-    Hero.Orisa,
-    Hero.Pharah,
-    Hero.Reaper,
-    Hero.Reinhardt,
-    Hero.Roadhog,
-    Hero.Sigma,
-    Hero.Soldier76,
-    Hero.Sombra,
-    Hero.Symmetra,
-    Hero.Torbjorn,
-    Hero.Tracer,
-    Hero.Widowmaker,
-    Hero.Winston,
-    Hero.WreckingBall,
-    Hero.Zarya,
-    Hero.Zenyatta
-];
-
-define heroNameList: [
-    "Ana",
-    "Ashe",
-    "Baptiste",
-    "Bastion",
-    "Brigitte",
-    "Doomfist",
-    "Dva",
-    "Echo",
-    "Genji",
-    "Hanzo",
-    "Junkrat",
-    "Lucio",
-    "Mccree",
-    "Mei",
-    "Mercy",
-    "Moira",
-    "Orisa",
-    "Pharah",
-    "Reaper",
-    "Reinhardt",
-    "Roadhog",
-    "Sigma",
-    "Soldier76",
-    "Sombra",
-    "Symmetra",
-    "Torbjorn",
-    "Tracer",
-    "Widowmaker",
-    "Winston",
-    "WreckingBall",
-    "Zarya",
-    "Zenyatta"
-];
-
-define maxBotNum: 24;
-globalvar define spawnHero = 0;
-
-rule: "Enemy/SpawnControl/changeBotHero"
-Event.OngoingPlayer
-if(
-    ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact) &&
-    IsButtonHeld(ep, Button.Melee)
-){
-    if(!IsButtonHeld(ep, Button.Crouch))
-        spawnHero ++;
-    else
-        spawnHero --;
-
-    if(spawnHero >= CountOf(spawnHeroList))
-        spawnHero = 0;
-    else if(spawnHero < 0)
-        spawnHero = CountOf(spawnHeroList) - 1;
-}
-
-rule: "Enemy/SpawnControl/CreateOneBot"
-Event.OngoingPlayer
-if(
-    ep == HostPlayer() &&
-    intaractDoublePressed
-){
-    isSpawnedBot = true;
-    spawnPos = AimingPosition();
-    CreateOneBot(
-        spawnPos,
-        IsButtonHeld(ep, Button.Crouch) ?
-            AllHeroes() :
-            spawnHeroList[spawnHero]);
-}
-
-globalvar define isSpawnedBot = false;
-globalvar define spawnPos = 0;
-
 // TAG EnemyType Function ----------
 define enemyColor: Color.Purple;
 
@@ -254,20 +82,23 @@ if(
     enemyType != EnemyType.None
 ){
     if(enemyType == EnemyType.Minion){ 
+        SetMoveSpeed(EventPlayer(), 1.2);
         SetMaxHealth(EventPlayer(), 100 * 0.5);
-        SetGravity(EventPlayer(), 50);
+        SetGravity(EventPlayer(), 75);
         StartScalingPlayer(EventPlayer(), 0.5, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 1.5, false);
     }
     else if(enemyType == EnemyType.Elite){
+        SetMoveSpeed(EventPlayer(), 1.0);
         SetMaxHealth(EventPlayer(), 100 * 2);
         SetGravity(EventPlayer(), 100);
         StartScalingPlayer(EventPlayer(), 1.0, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 1.0, false);
     }
     else if(enemyType == EnemyType.Boss){
+        SetMoveSpeed(EventPlayer(), 0.8);
         SetMaxHealth(EventPlayer(), 100 * 10);
-        SetGravity(EventPlayer(), 1000);
+        SetGravity(EventPlayer(), 200);
         StartScalingPlayer(EventPlayer(), 1.5, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.5, false);
     }
@@ -347,6 +178,7 @@ if(
     }
 }
 
+// TAG Enemy/SpawnControl ----------
 enum BotAsset{
     enemyType,
     hero,
@@ -355,17 +187,9 @@ enum BotAsset{
 
 globalvar define botSlot;
 globalvar define activeAssetNo;
+globalvar define isSpawnedBot;
 
-rule: "Enemy/SpawnControl/CreateAllBotByBotAsset"
-Event.OngoingPlayer
-if(
-    ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact) &&
-    !isSpawnedBot
-){
-    WaitLongPressConfirm();
-    dbgMsg("Start Create All Bot By Bot Asset");
-
+void CreateAllBotByAsset()"CreateAllBotByAsset"{
     isSpawnedBot = false;
     DestroyAllBot();
     // define asset list
@@ -402,7 +226,6 @@ if(
     }
     activeAssetNo = tempAssetNo;
     // create bot by asset
-    botSlot = 0;
     isSpawnedBot = true;
     define asset = ValueInArray(assetList, activeAssetNo);
     for(define assetIdx = 0; assetIdx < CountOf(asset); assetIdx++){
@@ -412,8 +235,8 @@ if(
                 asset[assetIdx][BotAsset.hero],
                 Team.Team2,
                 botSlot,
-                AimingPosition(),
-                FacingDirectionOf()
+                SpawnPoints(Team.Team2)[0],
+                Up()
             );
             // set enemy type
             PlayersInSlot(botSlot, Team.Team2).enemyType = asset[assetIdx][BotAsset.enemyType];
@@ -421,93 +244,11 @@ if(
             botSlot ++;
         }
     }
-
-    dbgMsg("Finish Create All Bot By Bot Asset");
-}
-
-disabled rule: "Enemy/SpawnControl/CreateAllBot"
-Event.OngoingPlayer
-if(
-    ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact) &&
-    !isSpawnedBot
-){
-    WaitLongPressConfirm();
-    isSpawnedBot = true;
-    spawnPos = AimingPosition();
-    CreateAllBot(
-        spawnPos,
-        FacingDirectionOf(),
-        IsButtonHeld(ep, Button.Crouch) ?
-            AllHeroes() :
-            spawnHeroList[spawnHero]
-    );
-}
-
-rule: "Enemy/SpawnControl/DestroyAllBot"
-Event.OngoingPlayer
-if(
-    ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact) &&
-    isSpawnedBot
-){
-    WaitLongPressConfirm();
-    isSpawnedBot = false;
-    DestroyAllBot();
-}
-
-define teamAsign: NumberOfPlayers() % 2 == 0 ? Team.Team1 : Team.Team2;
-
-void CreateOneBot(define position, define heroList)"CreateOneBot"{
-    CreateDummyBot(
-        RandomValueInArray(heroList),
-        teamAsign,
-        NumberOfPlayers(teamAsign),
-        position,
-        FacingDirectionOf());
-}
-
-define tryLimit: 200;
-
-void CreateAllBot(define position, define direction, define heroList)"CreateAllBot"{
-    dbgMsg("Start Create All Bot");
-    define tryCount = 0;
-    while(
-        NumberOfPlayers() < maxBotNum &&
-        tryCount < tryLimit &&
-        isSpawnedBot
-    ){
-        CreateDummyBot(
-            RandomValueInArray(heroList),
-            teamAsign,
-            NumberOfPlayers(teamAsign),
-            position,
-            direction);
-        tryCount ++;
-        if(ServerLoad() >= 200)
-            Wait(0.5);
-        else
-            Wait(0.1);
-    }
-    if(tryCount >= tryLimit){
-        dbgMsg("Cancel Create All Bot By Try Limit");
-    }
-    else{
-        dbgMsg("Finish Create All Bot");
-    }
 }
 
 void DestroyAllBot()"DestroyAllBot"{
     dbgMsg("Start Destroy All Bot");
-    for(define idx = 0; idx < maxBotNum; idx ++){
-        DestroyDummyBot(
-            Team.Team1, idx);
-        if(ServerLoad() >= 200)
-            Wait(0.05);
-        else
-            Wait(0.01);
-    }
-    for(define idx = 0; idx < maxBotNum; idx ++){
+    for(define idx = 0; idx < botSlot; idx ++){
         DestroyDummyBot(
             Team.Team2, idx);
         if(ServerLoad() >= 200)
@@ -515,6 +256,7 @@ void DestroyAllBot()"DestroyAllBot"{
         else
             Wait(0.01);
     }
+    botSlot = 0;
     dbgMsg("Finish Destroy All Bot"); 
 }
 
@@ -1482,13 +1224,5 @@ Event.OngoingGlobal
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "spawn hero name", heroNameList[spawnHero]>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);      
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);    
 }
