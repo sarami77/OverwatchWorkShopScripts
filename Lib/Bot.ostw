@@ -1039,6 +1039,10 @@ enum DetectedObject{
     UpStair
 }
 
+define isFrontBlocked: IsBlockedBetween(botInfo[BotInfo.detectorRoot], botInfo[BotInfo.frontDetector]);
+define isUpperBlocked: IsBlockedBetween(botInfo[BotInfo.detectorRoot], botInfo[BotInfo.upperDetector]);
+define isUnderBlocked: IsBlockedBetween(botInfo[BotInfo.frontDetector], botInfo[BotInfo.underDetector]);
+
 Boolean getDetectedObject()"getDetectedObject"{
     DetectedObject detecObj = DetectedObject.None;
     define moveDir = Vector(
@@ -1051,9 +1055,7 @@ Boolean getDetectedObject()"getDetectedObject"{
     botInfo[BotInfo.frontDetector] = ShiftedPosition(botInfo[BotInfo.detectorRoot], moveDir, frontDetectorLength);
     botInfo[BotInfo.upperDetector] = ShiftedPosition(botInfo[BotInfo.frontDetector], Up(), upperDetectorLength);
     botInfo[BotInfo.underDetector] = ShiftedPosition(botInfo[BotInfo.frontDetector], Down(), underDetectorLength);
-    define isFrontBlocked = IsBlockedBetween(botInfo[BotInfo.detectorRoot], botInfo[BotInfo.frontDetector]);
-    define isUpperBlocked = IsBlockedBetween(botInfo[BotInfo.detectorRoot], botInfo[BotInfo.upperDetector]);
-    define isUnderBlocked = IsBlockedBetween(botInfo[BotInfo.frontDetector], botInfo[BotInfo.underDetector]);
+
     if(isFrontBlocked){
         if(isUpperBlocked){
             detecObj = DetectedObject.Wall;
@@ -1074,34 +1076,39 @@ Boolean getDetectedObject()"getDetectedObject"{
 }
 
 // TAG Bot/ButtonControl ----------
-void StartButtonControl(
-    define button, define buttonOperation,
-    define waitDuringMin, define waitDuringMax,
-    define holdDuringMin, define holdDuringMax
-){
-    if(buttonOperation == ButtonBehaivor.HoldOnly){
+enum ButtonControl{
+    button,
+    buttonOperation,
+    waitDuringMin,
+    waitDuringMax,
+    holdDuringMin,
+    holdDuringMax
+}
+
+void StartButtonControl(define buttonControl){
+    if(buttonControl[ButtonControl.buttonOperation] == ButtonBehaivor.HoldOnly){
         while(true){
-            StartHoldingButton(ep, button);
-            Wait(RandomReal(holdDuringMin, holdDuringMax), WaitBehavior.AbortWhenFalse);
-            StopHoldingButton(ep, button);
+            StartHoldingButton(ep, buttonControl[ButtonControl.button]);
+            Wait(RandomReal(buttonControl[ButtonControl.holdDuringMin], buttonControl[ButtonControl.holdDuringMax]), WaitBehavior.AbortWhenFalse);
+            StopHoldingButton(ep, buttonControl[ButtonControl.button]);
         }
     }
-    else if(buttonOperation == ButtonBehaivor.HoldAndRelease){
+    else if(buttonControl[ButtonControl.buttonOperation] == ButtonBehaivor.HoldAndRelease){
         while(true){
-            Wait(RandomReal(waitDuringMin, waitDuringMax), WaitBehavior.AbortWhenFalse);
-            StartHoldingButton(ep, button);
-            Wait(RandomReal(holdDuringMin, holdDuringMax), WaitBehavior.AbortWhenFalse);
-            StopHoldingButton(ep, button);
+            Wait(RandomReal(buttonControl[ButtonControl.waitDuringMin], buttonControl[ButtonControl.waitDuringMax]), WaitBehavior.AbortWhenFalse);
+            StartHoldingButton(ep, buttonControl[ButtonControl.button]);
+            Wait(RandomReal(buttonControl[ButtonControl.holdDuringMin], buttonControl[ButtonControl.holdDuringMax]), WaitBehavior.AbortWhenFalse);
+            StopHoldingButton(ep, buttonControl[ButtonControl.button]);
         }
     }
-    else if(buttonOperation == ButtonBehaivor.Repeat){
-        botInfo[BotInfo.repeatDuringMin] = holdDuringMin;
-        botInfo[BotInfo.repeatDuringMax] = holdDuringMax;
+    else if(buttonControl[ButtonControl.buttonOperation] == ButtonBehaivor.Repeat){
+        botInfo[BotInfo.repeatDuringMin] = buttonControl[ButtonControl.holdDuringMin];
+        botInfo[BotInfo.repeatDuringMax] = buttonControl[ButtonControl.holdDuringMax];
         while(true){
-            Wait(RandomReal(waitDuringMin, waitDuringMax), WaitBehavior.AbortWhenFalse);
+            Wait(RandomReal(buttonControl[ButtonControl.waitDuringMin], buttonControl[ButtonControl.waitDuringMax]), WaitBehavior.AbortWhenFalse);
             botInfo[BotInfo.isRepeating] = true;
             while(botInfo[BotInfo.isRepeating]){
-                PressButton(ep, button); 
+                PressButton(ep, buttonControl[ButtonControl.button]); 
                 Wait(0.5, WaitBehavior.AbortWhenFalse);
             }
         }
@@ -1124,12 +1131,14 @@ if(
     botInfo[BotInfo.state] == State.Combat
 ){
     StartButtonControl(
-        Button.PrimaryFire,
-        botInfo[BotInfo.primaryFireButtonBehaivor],
-        botInfo[BotInfo.primaryFireButtonWaitMin],
-        botInfo[BotInfo.primaryFireButtonWaitMax],
-        botInfo[BotInfo.primaryFireButtonHoldMin],
-        botInfo[BotInfo.primaryFireButtonHoldMax]
+        [
+            Button.PrimaryFire,
+            botInfo[BotInfo.primaryFireButtonBehaivor],
+            botInfo[BotInfo.primaryFireButtonWaitMin],
+            botInfo[BotInfo.primaryFireButtonWaitMax],
+            botInfo[BotInfo.primaryFireButtonHoldMin],
+            botInfo[BotInfo.primaryFireButtonHoldMax]
+        ]
     );
 }
 
@@ -1138,13 +1147,15 @@ Event.OngoingPlayer
 if(
     botInfo[BotInfo.state] == State.Combat
 ){
-     StartButtonControl(
-        Button.SecondaryFire,
-        botInfo[BotInfo.secondaryFireButtonBehaivor],
-        botInfo[BotInfo.secondaryFireButtonWaitMin],
-        botInfo[BotInfo.secondaryFireButtonWaitMax],
-        botInfo[BotInfo.secondaryFireButtonHoldMin],
-        botInfo[BotInfo.secondaryFireButtonHoldMax]
+    StartButtonControl(
+        [
+            Button.SecondaryFire,
+            botInfo[BotInfo.secondaryFireButtonBehaivor],
+            botInfo[BotInfo.secondaryFireButtonWaitMin],
+            botInfo[BotInfo.secondaryFireButtonWaitMax],
+            botInfo[BotInfo.secondaryFireButtonHoldMin],
+            botInfo[BotInfo.secondaryFireButtonHoldMax]
+        ]
     );
 }
 
@@ -1153,13 +1164,15 @@ Event.OngoingPlayer
 if(
     botInfo[BotInfo.state] == State.Combat
 ){
-     StartButtonControl(
-        Button.Ability1,
-        ButtonBehaivor.HoldAndRelease,
-        botInfo[BotInfo.ability1ButtonWaitMin],
-        botInfo[BotInfo.ability1ButtonWaitMax],
-        botInfo[BotInfo.ability1ButtonHoldMin],
-        botInfo[BotInfo.ability1ButtonHoldMax]
+    StartButtonControl(
+        [
+            Button.Ability1,
+            ButtonBehaivor.HoldAndRelease,
+            botInfo[BotInfo.ability1ButtonWaitMin],
+            botInfo[BotInfo.ability1ButtonWaitMax],
+            botInfo[BotInfo.ability1ButtonHoldMin],
+            botInfo[BotInfo.ability1ButtonHoldMax]
+        ]
     );
 }
 
@@ -1168,13 +1181,15 @@ Event.OngoingPlayer
 if(
     botInfo[BotInfo.state] == State.Combat
 ){
-     StartButtonControl(
-        Button.Ability2,
-        ButtonBehaivor.HoldAndRelease,
-        botInfo[BotInfo.ability2ButtonWaitMin],
-        botInfo[BotInfo.ability2ButtonWaitMax],
-        botInfo[BotInfo.ability2ButtonHoldMin],
-        botInfo[BotInfo.ability2ButtonHoldMax]
+    StartButtonControl(
+        [
+            Button.Ability2,
+            ButtonBehaivor.HoldAndRelease,
+            botInfo[BotInfo.ability2ButtonWaitMin],
+            botInfo[BotInfo.ability2ButtonWaitMax],
+            botInfo[BotInfo.ability2ButtonHoldMin],
+            botInfo[BotInfo.ability2ButtonHoldMax]
+        ]
     );
 }
 
@@ -1184,13 +1199,15 @@ if(
     botInfo[BotInfo.state] == State.Combat &&
     UltimateChargePercent() == 100
 ){
-     StartButtonControl(
-        Button.Ultimate,
-        ButtonBehaivor.HoldAndRelease,
-        0,
-        5,
-        0,
-        1
+    StartButtonControl(
+        [
+            Button.Ultimate,
+            ButtonBehaivor.HoldAndRelease,
+            0,
+            5,
+            0,
+            1
+        ]
     );
 }
 
@@ -1199,12 +1216,15 @@ Event.OngoingPlayer
 if(
     botInfo[BotInfo.state] == State.Combat
 ){
-     StartButtonControl(
-        Button.Jump, ButtonBehaivor.HoldAndRelease,
-        0,
-        10,
-        0,
-        5
+    StartButtonControl(
+        [
+            Button.Jump,
+            ButtonBehaivor.HoldAndRelease,
+            0,
+            10,
+            0,
+            5
+        ]
     );
 }
 
@@ -1213,12 +1233,15 @@ Event.OngoingPlayer
 if(
     botInfo[BotInfo.state] == State.Combat
 ){
-     StartButtonControl(
-        Button.Crouch, ButtonBehaivor.HoldAndRelease,
-        0,
-        10,
-        0,
-        3
+    StartButtonControl(
+        [
+            Button.Crouch,
+            ButtonBehaivor.HoldAndRelease,
+            0,
+            10,
+            0,
+            3
+        ]
     );
 }
 
@@ -1227,12 +1250,15 @@ Event.OngoingPlayer
 if(
     botInfo[BotInfo.state] == State.Combat
 ){
-     StartButtonControl(
-        Button.Reload, ButtonBehaivor.HoldAndRelease,
-        5,
-        10,
-        0,
-        1
+    StartButtonControl(
+        [
+            Button.Reload,
+            ButtonBehaivor.HoldAndRelease,
+            5,
+            10,
+            0,
+            1
+        ]
     );
 }
 
@@ -1265,7 +1291,7 @@ if(
 
 
 // TAG Bot/StateControl ----------
-define basicUpdateRate: 1.0;
+define basicUpdateRate: 2.0;
 
 define isStacking:
     SpeedOf() <= 3.0;
@@ -1527,7 +1553,11 @@ if(
     // action loop
     while(true){
         // set botInfo state
-        botInfo[BotInfo.target] = ClosestPlayerTo(ep, OppositeTeamOf(TeamOf()));
+        define target = ClosestPlayerTo(ep, OppositeTeamOf(TeamOf()));
+        if(!IsAlive(target)){
+            target = RandomValueInArray(AllLivingPlayers(Team.Team1));
+        }
+        botInfo[BotInfo.target] = target;
         botInfo[BotInfo.targetPos] = PositionOf(botInfo[BotInfo.target]);
 
         // change combat distance
