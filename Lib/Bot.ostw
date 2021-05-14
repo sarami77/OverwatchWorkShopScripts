@@ -126,7 +126,7 @@ void CreateAllBotByAsset()"CreateAllBotByAsset"{
         ],
         // snipers
         [
-            [BotType.Boss,      RandomValueInArray(AllTankHeroes()), 1],
+            [BotType.Boss,      Hero.Reinhardt, 1],
             [BotType.Elite,     Hero.Widowmaker, 2],
             [BotType.Elite,     Hero.Hanzo, 1],
             [BotType.Elite,     Hero.Ana, 1],
@@ -139,14 +139,17 @@ void CreateAllBotByAsset()"CreateAllBotByAsset"{
             [BotType.Elite,     RandomValueInArray(AllDamageHeroes()),  1],
             [BotType.Minion,    RandomValueInArray(AllSupportHeroes()), 3]
         ],
-        // dual boss
+        // triple boss
         [
-            [BotType.Boss,      RandomValueInArray(AllTankHeroes()), 1],
+            [BotType.Boss,      RandomValueInArray(AllTankHeroes()),   1],
+            [BotType.Boss,      RandomValueInArray(AllDamageHeroes()), 1],
             [BotType.Boss,      RandomValueInArray(AllDamageHeroes()), 1]
         ],
-        // minion force
+        // Reinhardt forces
         [
-            [BotType.Minion,    Hero.Reinhardt, 18]
+            [BotType.Boss,      Hero.Reinhardt, 1],
+            [BotType.Elite,     Hero.Reinhardt, 2],
+            [BotType.Minion,    Hero.Reinhardt, 3]
         ]
     ];
     // change asset no
@@ -313,85 +316,6 @@ if(
     }
 }
 
-// TAG Bot/ReceivedDamage ----------
-globalvar define confirmReceiveDamage;
-
-rule: "Bot/ReceivedDamage/updateByBalance //for game balance, increase by missing players count"
-Event.OngoingGlobal
-{
-    // If don't enough players, adjust Bot received damage rate to make the game fair
-    // Multiply damage rate
-    confirmReceiveDamage = 100;
-    // Apply balance multiplier
-    confirmReceiveDamage *= ConvertToBalancedValue(0.7, Team.Team1);     // TAG Bot received damage scale
-    SetDamageReceived(AllPlayers(Team.Team2), confirmReceiveDamage);
-
-    WaitUpdateLongCycle();
-    LoopIfConditionIsTrue();
-}
-
-// TAG Bot/DealtDamage ----------
-playervar define confirmDealDamage;
-
-rule: "Bot/DealtDamage/update"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    HasSpawned()
-){
-    // If don't enough players, adjust Bot dealt damage rate to make the game fair
-    // And the round progresses, the Bot deal damage increases and becomes more difficult
-    // Add damage rate according to the round progress
-    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Initial Deal Damage", 25, 0, 1000, 1);
-    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round Progress", 1.0, 0, 1000, 2);
-    confirmDealDamage *= eachDealtDamageScale;
-    // Apply balance multiplier
-    confirmDealDamage /= ConvertToBalancedValue(0.7, Team.Team1);     // TAG Bot dealt damage scale
-    SetDamageDealt(EventPlayer(), confirmDealDamage);
-
-    WaitUpdateLongCycle();
-    LoopIfConditionIsTrue();
-}
-
-// TAG Bot/SpawnInterval ----------
-playervar define confirmSpawnInterval;
-
-rule: "Bot/SpawnInterval/update"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    portalState == PortalState.Growing
-){
-    // Shortens Bot spawn interval depending on portal size
-    // Portals that have grown significantly over time will spawn more enemies.
-    define spawnIntervalScale = (portalSize / maxPortalSize) * eachMaxSpawnInterval;
-    confirmSpawnInterval = eachMaxSpawnInterval - spawnIntervalScale;
-
-    confirmSpawnInterval -= (roundNo / 10);
-    if(0 > confirmSpawnInterval){
-        confirmSpawnInterval = 0;
-    }
-    
-    // set +1 interval for show dead effect
-    SetRespawnMaxTime(EventPlayer(), confirmSpawnInterval + deadEffectTime);
-
-    WaitUpdateMediumCycle();
-    LoopIf(portalSize < maxPortalSize);
-}
-
-rule: "Bot/SpawnInterval/respawnBySucide"
-Event.OnDeath
-Team.Team2
-Player.All
-if(
-    Attacker() == EventPlayer()
-){
-    Wait(1, WaitBehavior.AbortWhenFalse);
-    Respawn();
-}
-
 // TAG Bot/Ability ----------
 disabled rule: "Bot/Ability/chargeAbility"
 Event.OngoingPlayer
@@ -424,269 +348,6 @@ if(
     Wait(eachChargeUltInterval, WaitBehavior.AbortWhenFalse);
     SetUltimateCharge(EventPlayer(), 100);
 
-    LoopIfConditionIsTrue();
-}
-
-// TAG Bot/Teleport ----------
-playervar define teleportEffectEntity;
-playervar define teleportPosition;
-define minSpawnAreaSize: 10;
-define spawnAreaSizeRate: 1.0;
-define spawnAreaSize:
-    (portalSize * spawnAreaSizeRate) <= minSpawnAreaSize ?
-    minSpawnAreaSize :
-    (portalSize * spawnAreaSizeRate);
-
-define teleportPositionClosestPlayer: ClosestPlayerTo(teleportPosition, Team.Team1);
-define portalPositionClosestPlayer: ClosestPlayerTo(portalPosition, Team.Team1);
-
-void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
-    // set teleport position by blind spot from player
-    // find place that will be a blind spot up to 10 times
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        teleportPosition =
-            NearestWalkablePosition(
-                portalPositionClosestPlayer
-                    + 
-                (
-                    DirectionTowards(
-                        portalPositionClosestPlayer,
-                        portalPosition
-                    )
-                        *
-                    (DistanceBetween(portalPosition, portalPositionClosestPlayer) * 0.5)
-                )
-                    +
-                RandomPosition(10, 10, 10)
-            );
-
-        if(
-            DistanceBetween(    // Not too close to player
-                teleportPositionClosestPlayer, teleportPosition)
-            > 5
-        ){
-            break;
-        }
-    }
-}
-
-void SetTeleportPositionToPortal()"SetTeleportPositionToPortal"{
-    // set teleport position by blind spot from player
-    // find place that will be a blind spot up to 10 times
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        teleportPosition =
-            NearestWalkablePosition(
-                portalPosition
-                    +
-                RandomPosition(spawnAreaSize, spawnAreaSize, spawnAreaSize)
-            );
-
-        if(
-            DistanceBetween(    // Inside portal
-                portalPosition, teleportPosition)
-            <= (portalSize * spawnAreaSizeRate)
-                    &&
-            !IsInLineOfSight(   // Blind spot from player 
-                teleportPositionClosestPlayer,
-                teleportPosition + Up(),
-                BarrierLOS.NoBarriersBlock)
-        ){
-            break;
-        }
-    }
-}
-
-void SetTeleportPositionToPlayer()"SetTeleportPositionToPlayer"{
-    // set teleport position by blind spot from player
-    // find place that will be a blind spot up to 10 times
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        teleportPosition =
-            NearestWalkablePosition(
-                portalPositionClosestPlayer
-                    +
-                RandomPosition(20, 20, 20)
-            );
-        
-        if(
-            DistanceBetween(    // Not too close to player
-                teleportPositionClosestPlayer, teleportPosition)
-            > 5
-                    &&
-            !IsInLineOfSight(   // Blind spot from player 
-                teleportPositionClosestPlayer,
-                teleportPosition + Up(),
-                BarrierLOS.NoBarriersBlock)
-        ){
-            break;
-        }
-    }
-}
-
-void SetTeleportPositionToCamper()"SetTeleportPositionToCamper"{
-    // set teleport position by blind spot from player
-    // find place that will be a blind spot up to 10 times
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        teleportPosition = 
-            portalPositionClosestPlayer
-                +
-            RandomPosition(3, 0, 3);
-                
-        if(
-            DistanceBetween(    // Not too close to player
-                teleportPositionClosestPlayer, teleportPosition)
-            > 1
-                    &&
-            !IsInViewAngle(    // Out of player field view
-                teleportPositionClosestPlayer,
-                teleportPosition + Up(),
-                90)
-                    &&
-            IsInLineOfSight(    // Not buried in wall
-                teleportPositionClosestPlayer,
-                teleportPosition + Up(),
-                BarrierLOS.NoBarriersBlock)
-        ){
-            break;
-        }
-    }
-}
-
-void PlayTeleportEffect()"PlayTeleportEffect"{
-    // Play blast effect when Bot teleport
-    if(BotType == BotType.Minion){
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.BadExplosion,
-            enemyColor, EventPlayer(), 4);
-    }
-    else if(BotType == BotType.Elite){
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.BadExplosion,
-            enemyColor, EventPlayer(), 6);
-    }
-    else if(BotType == BotType.Boss){
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.BadExplosion,
-            enemyColor, EventPlayer(), 10);
-    }
-    // show effect at root position
-    WaitPlayEffect();
-}
-
-define deadEffectTime: 1.5;
-
-rule: "Bot/Teleport/teleportToSpawnRoomByPortalDisabled"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    initCompleted &&
-    !portalEnable
-){
-    // Teleport Bot to spawn room when portal disable
-    Wait(deadEffectTime, WaitBehavior.AbortWhenFalse);   // wait show dead effect when portal closing
-    if(IsAlive()){
-        // show pre teleport effect
-        PlayTeleportEffect();
-    }
-    // Teleport to spawn room
-    Respawn(AllPlayers(Team.Team2));
-    // show teleport effect
-    PlayTeleportEffect();
-}
-
-rule: "Bot/Teleport/teleportToPortalByPortalEnabled"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    initCompleted &&
-    portalEnable
-){
-    // Teleport Bot to portal when spawn
-
-    // set teleport position
-    SetTeleportPositionToPlayerFront();
-    // show pre teleport effect
-    PlayTeleportEffect();
-    // Teleport
-    Teleport(EventPlayer(), teleportPosition);
-    // show teleport effect
-    PlayTeleportEffect();
-}
-
-rule: "Bot/Teleport/teleportToPortalBySpawn"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    portalEnable &&
-    IsInSpawnRoom()
-){
-    // Teleport Bot to portal when spawn
-
-    // set teleport position
-    if(portalState == PortalState.Suspended)
-        SetTeleportPositionToPortal();
-    else
-        SetTeleportPositionToPlayerFront();
-    // show pre teleport effect
-    //PlayTeleportEffect();
-    // Teleport
-    Teleport(EventPlayer(), teleportPosition);
-    // show teleport effect
-    PlayTeleportEffect();
-}
-
-rule: "Bot/Teleport/teleportToPortalByPlayerEntered"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    portalState == PortalState.Suspended &&
-    IsAlive(EventPlayer())
-){
-    WaitConditionConfirmed();
-    if(
-        DistanceBetween(EventPlayer(), portalPosition) > portalSize &&
-        DistanceBetween(EventPlayer(), ClosestPlayerTo(portalPosition, Team.Team1)) >= 15
-    ){
-        // Teleport Bot to portal when player enter to portal
-        // To protect the portal with the Bot
-
-        // set teleport position
-        SetTeleportPositionToPortal();
-        // show pre teleport effect
-        PlayTeleportEffect();
-        // Teleport
-        Teleport(EventPlayer(), teleportPosition);
-        // show teleport effect
-        PlayTeleportEffect();
-    }
-}
-
-rule: "Bot/Teleport/teleportToPortalByCamperDetected"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    IsAlive() &&
-    !IsInLineOfSight(EventPlayer(),
-            ClosestPlayerTo(portalPosition, Team.Team1),
-            BarrierLOS.NoBarriersBlock)
-){
-    // Teleport an Bot to camping player
-    Wait(5 - (roundNo / 5), WaitBehavior.AbortWhenFalse);
-    // set teleport position
-    if(portalState == PortalState.Suspended)
-        SetTeleportPositionToCamper();
-    else
-        SetTeleportPositionToPlayerFront();
-    // show pre teleport effect
-    PlayTeleportEffect();
-    // Teleport
-    Teleport(EventPlayer(), teleportPosition);
-    // show pre teleport effect
-    PlayTeleportEffect();
     LoopIfConditionIsTrue();
 }
 
