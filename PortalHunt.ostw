@@ -356,7 +356,7 @@ if(
     // When a player enters a portal, set progress hud and show message
     WaitConditionConfirmed();
     // kick progress
-    closingCount = RoundToInteger(portalSize, Rounding.Nearest);  // TAG portal closing count
+    closingCount = RoundToInteger(portalSize, Rounding.Nearest);
     closingCount += roundNo * 2;
     closingProgress = 0;
     ChaseVariableOverTime(closingProgress, DefaultPercentage(), closingCount, TimeChaseReevaluation.DestinationAndDuration);
@@ -619,7 +619,7 @@ if(
     // Start growing portal with warning message
     UpdateEveryFrame(portalSize);
     ChaseVariableAtRate(
-        portalSize, maxPortalSize, 1 + (roundNo / 8),   //TAG portal grow speed
+        portalSize, maxPortalSize, 1 + (roundNo / 8),
         RateChaseReevaluation.DestinationAndRate);
     // If first growing, show message
     if(isFirstGrowing == true){
@@ -797,21 +797,43 @@ if(
     LoopIfConditionIsTrue();
 }
 
+// TAG Portal/InvalidDetect/EnvironmentDamageCount ----------
+define limitCount: 10;
 globalvar define environmentDamageCount = 0;
 
-rule: "Portal/Positioner/countEnvironmentDamageCount"
+rule: "Portal/InvalidDetect/EnvironmentDamage/resetCount"
+Event.OngoingGlobal
+if(
+    !portalEnable &&
+    environmentDamageCount > 0
+){
+    environmentDamageCount = 0;
+}
+
+rule: "Portal/InvalidDetect/EnvironmentDamage/countupByDamage"
 Event.OnDamageTaken
 Team.Team2
 if(
     portalEnable &&
     ep == Attacker()
 ){
-    environmentDamageCount ++;
+    environmentDamageCount += 1;
 }
 
-rule: "Portal/Positioner/reduceEnvironmentDamageCount"
+rule: "Portal/InvalidDetect/EnvironmentDamage/countupByDamage"
+Event.OnDeath
+Team.Team2
+if(
+    portalEnable &&
+    ep == Attacker()
+){
+    environmentDamageCount += 5;
+}
+
+rule: "Portal/InvalidDetect/EnvironmentDamage/reduceCount"
 Event.OngoingGlobal
 if(
+    portalEnable &&
     0 < environmentDamageCount
 ){
     WaitUpdateMediumCycle();
@@ -819,17 +841,56 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Portal/Positioner/resetPortalByEnvironmentDamageCount"
+rule: "Portal/InvalidDetect/EnvironmentDamage/resetPortal"
 Event.OngoingGlobal
 if(
     portalEnable &&
-    50 <= environmentDamageCount
+    limitCount <= environmentDamageCount
 ){
     dbgMsg("reset Portal By Environment Damage Count");
     portalState = PortalState.Calculating;
-    environmentDamageCount = 0;
 }
 
+// TAG Portal/InvalidDetect/NoContact ----------
+define limitTime: 30;
+globalvar define noContact;
+
+rule: "Portal/InvalidDetect/NoContact/resetNoContact"
+Event.OngoingGlobal
+if(
+    !portalEnable &&
+    !noContact
+){
+    noContact = true;
+}
+
+rule: "Portal/InvalidDetect/NoContact/detectContact"
+Event.OngoingGlobal
+if(
+    portalEnable &&
+    noContact &&
+    IsTrueForAny(
+        AllPlayers(Team.Team1),
+        IsInLineOfSight(
+            ArrayElement(),
+            ClosestPlayerTo(ArrayElement(), Team.Team2)))
+){
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    noContact = false;
+}
+
+rule: "Portal/InvalidDetect/NoContact/resetPortal"
+Event.OngoingGlobal
+if(
+    portalEnable &&
+    noContact
+){
+    Wait(limitTime, WaitBehavior.AbortWhenFalse);
+    dbgMsg("reset Portal By No Countact");
+    portalState = PortalState.Calculating;
+}
+
+// TAG Portal/Growing ----------
 define maxPortalSize: 70;
 define portalStableTime: 40;
 
@@ -934,7 +995,7 @@ if(
         StartScalingPlayer(EventPlayer(), 0.8, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 1.25, false);
         eachDealtDamageScale = 0.5;
-        eachMaxSpawnInterval = 3;
+        eachMaxSpawnInterval = 2.5;
         eachChargeUltInterval = 60;
     }
     else if(enemyType == EnemyType.Elite){
@@ -944,17 +1005,17 @@ if(
         StartScalingPlayer(EventPlayer(), 1.0, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 1.0, false);
         eachDealtDamageScale = 1.0;
-        eachMaxSpawnInterval = 6;
+        eachMaxSpawnInterval = 5;
         eachChargeUltInterval = 15;
     }
     else if(enemyType == EnemyType.Boss){
         SetMaxHealth(EventPlayer(), 100 * 15);
         SetMoveSpeed(EventPlayer(), 100 * 0.75);
-        SetGravity(EventPlayer(), 100 * 2);
+        SetGravity(EventPlayer(), 100 * 3);
         StartScalingPlayer(EventPlayer(), 1.5, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.75, false);
         eachDealtDamageScale = 1.5;
-        eachMaxSpawnInterval = 12;
+        eachMaxSpawnInterval = 20;
         eachChargeUltInterval = 10;
     }    
 
@@ -1095,9 +1156,13 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
             );
 
         if(
-            DistanceBetween(    // Not too close to player
+            // Not too close to player
+            DistanceBetween(
                 teleportPositionClosestPlayer, teleportPosition)
             > 5
+                &&
+            // has not line
+            !IsInLineOfSight(ep, teleportPositionClosestPlayer)
         ){
             break;
         }
@@ -1237,17 +1302,20 @@ if(
 ){
     // Teleport an Bot to camping player
     Wait(10 - (roundNo / 10), WaitBehavior.AbortWhenFalse);
-    // set teleport position
-    if(portalState == PortalState.Suspended)
-        SetTeleportPositionToCamper();
-    else
-        SetTeleportPositionToPlayerFront();
-    // show pre teleport effect
-    PlayTeleportEffect();
-    // Teleport
-    Teleport(EventPlayer(), teleportPosition);
-    // show pre teleport effect
-    PlayTeleportEffect();
+    // not too close
+    if(5 < DistanceBetween(ep, ClosestPlayerTo(ep, Team.Team1))){
+        // set teleport position
+        if(portalState == PortalState.Suspended)
+            SetTeleportPositionToCamper();
+        else
+            SetTeleportPositionToPlayerFront();
+        // show pre teleport effect
+        PlayTeleportEffect();
+        // Teleport
+        Teleport(EventPlayer(), teleportPosition);
+        // show pre teleport effect
+        PlayTeleportEffect();
+    }
     LoopIfConditionIsTrue();
 }
 
@@ -1315,7 +1383,7 @@ if(
     // And the round progresses, the Bot deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
     confirmDealDamage = WorkshopSettingReal("Bot Settings", "Initial Deal Damage", 25, 0, 1000, 1);
-    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round Progress", 1.25, 0, 1000, 2);
+    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round Progress", 1.5, 0, 1000, 2);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
     confirmDealDamage /= ConvertToBalancedValue(0.7, Team.Team1);
@@ -1464,6 +1532,15 @@ void ShowDebugHud()"ShowDebugHud"{
         CreateHudText(HostPlayer(),
             null,
             <"<0> <1>", "environment Damage Count", environmentDamageCount>,
+            null,
+            Location.Left, -1,
+            Color.White, Color.White, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
+
+        CreateHudText(HostPlayer(),
+            null,
+            <"<0> <1>", "no Contact", noContact>,
             null,
             Location.Left, -1,
             Color.White, Color.White, Color.White,
