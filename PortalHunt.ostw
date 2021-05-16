@@ -102,10 +102,14 @@ Event.OngoingGlobal
 //        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
 
     // Set imported function property
-    Regeneration_enableTeam = Team.Team1;
+    Regeneration_enableTeam = Team.All;
     Regeneration_needBalanceTeam1 = true;
     Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 1, 0, 100, 1);
     Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 25, 0, 1000, 2);
+    
+    Regeneration_needBalanceTeam2 = false;
+    Regeneration_waitRegenTimeTeam2 = 8;
+    Regeneration_regenerationRateTeam2 = MaxValue();
 
     Revive_enableTeam = Team.Team1;
     Revive_timeLimit = WorkshopSettingReal("Player Settings", "Revive Time Limit", 10, 0, 100, 3);
@@ -308,9 +312,6 @@ if(
 ){
     // When the team lifes out, the game ends
     portalState = PortalState.End;
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.RingExplosionSound,
-        Color.White, portalPosition, MaxLength());
     BigMessage(AllPlayers(Team.All), "Our team lifes is out...");
     SetSlowMotion(10);
     Wait(1, WaitBehavior.AbortWhenFalse);   // show slow
@@ -691,12 +692,21 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.End
 ){
+    // apply blast impulse
+    ApplyBlastImpulse(AllPlayers(Team.Team2), portalPosition, portalSize);
+    // play portal closing effect and kill enemrys
+    Kill(AllPlayers(Team.Team2), null);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.RingExplosionSound,
+        Color.White, portalPosition, MaxLength());
     // play blast effect
     PlayContinuousBlast(
         Color.Yellow,
         portalPosition,
         portalSize * 1.5,
         10);
+
     // init param
     portalPosition = 0;
     portalSize = 0;
@@ -995,7 +1005,7 @@ if(
         StartModifyingHeroVoiceLines(EventPlayer(), 1.25, false);
         eachDealtDamageScale = 0.5;
         eachMaxSpawnInterval = 4;
-        eachChargeUltInterval = 60;
+        eachChargeUltInterval = 90;
     }
     else if(enemyType == EnemyType.Elite){
         SetMaxHealth(EventPlayer(), 100 * 2);
@@ -1116,7 +1126,7 @@ if(
     define spawnIntervalScale = (portalSize / maxPortalSize) * eachMaxSpawnInterval;
     confirmSpawnInterval = eachMaxSpawnInterval - spawnIntervalScale;
 
-    confirmSpawnInterval -= (roundNo / 10);
+    confirmSpawnInterval -= (roundNo / 5);
     if(0 > confirmSpawnInterval){
         confirmSpawnInterval = 0;
     }
@@ -1291,6 +1301,7 @@ Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
+    portalState == PortalState.Suspended &&
     IsAlive() &&
     !IsInLineOfSight(EventPlayer(),
             ClosestPlayerTo(portalPosition, Team.Team1),
@@ -1298,20 +1309,15 @@ if(
 ){
     // Teleport an Bot to camping player
     Wait(10 - (roundNo / 10), WaitBehavior.AbortWhenFalse);
-    // not half health
-    if(0.5 < NormalizedHealth()){
-        // set teleport position
-        if(portalState == PortalState.Suspended)
-            SetTeleportPositionToCamper();
-        else
-            SetTeleportPositionToPlayerFront();
-        // show pre teleport effect
-        PlayTeleportEffect();
-        // Teleport
-        Teleport(EventPlayer(), teleportPosition);
-        // show pre teleport effect
-        PlayTeleportEffect();
-    }
+    // set teleport position
+    SetTeleportPositionToCamper();
+    // show pre teleport effect
+    PlayTeleportEffect();
+    // Teleport
+    Teleport(EventPlayer(), teleportPosition);
+    // show pre teleport effect
+    PlayTeleportEffect();
+    
     LoopIfConditionIsTrue();
 }
 
