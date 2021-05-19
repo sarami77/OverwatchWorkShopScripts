@@ -96,7 +96,7 @@ Boolean IsBlockedBetween(define position, define position2)"IsBlockedBetween"{
         position,
         position + (Normalize(VectorTowards(position, position2)) * DistanceBetween(position, position2)),
         null,
-        EventPlayer(),
+        ep,
         false);
     if(
         DistanceBetween(position, hitPosition) < DistanceBetween(position, position2)
@@ -111,7 +111,7 @@ Vector BlockedPositon(define position, define direction, define distance)"Blocke
         position,
         position + (Normalize(direction) * distance),
         null,
-        EventPlayer(),
+        ep,
         false);
     return hitPosition;
 }
@@ -119,37 +119,37 @@ Vector BlockedPositon(define position, define direction, define distance)"Blocke
 // Aiming position of EventPlayer
 define AimingPosition():
     RayCastHitPosition(
-        EyePosition(EventPlayer()),
-        EyePosition(EventPlayer()) +
-            (FacingDirectionOf(EventPlayer()) * MaxLength()),
-        AllPlayers(OppositeTeamOf(TeamOf(EventPlayer()))),
-        EventPlayer(), false);
+        EyePosition(ep),
+        EyePosition(ep) +
+            (FacingDirectionOf(ep) * MaxLength()),
+        AllPlayers(OppositeTeamOf(TeamOf(ep))),
+        ep, false);
 
 // Aiming position of EventPlayer
 define AimingPositionWithLimit(define limit):
     RayCastHitPosition(
-        EyePosition(EventPlayer()),
-        EyePosition(EventPlayer()) +
-            (FacingDirectionOf(EventPlayer()) * limit),
-        AllPlayers(OppositeTeamOf(TeamOf(EventPlayer()))),
-        EventPlayer(), false);
+        EyePosition(ep),
+        EyePosition(ep) +
+            (FacingDirectionOf(ep) * limit),
+        AllPlayers(OppositeTeamOf(TeamOf(ep))),
+        ep, false);
 
 // Aiming position of EventPlayer. but sight line collision ignore player entity
 define AimingPositionIgnorePlayer():
     RayCastHitPosition(
-        EyePosition(EventPlayer()),
-        EyePosition(EventPlayer()) + FacingDirectionOf(
-            EventPlayer()
+        EyePosition(ep),
+        EyePosition(ep) + FacingDirectionOf(
+            ep
         ) * MaxLength(),
         null,
-        EventPlayer(), false);
+        ep, false);
 
 define BelowPosition(define position):
     RayCastHitPosition(
         (position + Vector(0, 0.1, 0)),
         (position + Vector(0, 0.1, 0)) + (Down() * MaxLength()),
-        AllPlayers(OppositeTeamOf(TeamOf(EventPlayer()))),
-        EventPlayer(), false);
+        AllPlayers(OppositeTeamOf(TeamOf(ep))),
+        ep, false);
 
 define InvalidPosition():
         Vector(0, -MaxLength(), 0);
@@ -160,16 +160,16 @@ define AimingPlayer():
         SortedArray(
             FilteredArray(
                 PlayersInViewAngle(
-                    EventPlayer(),
-                    OppositeTeamOf(TeamOf(EventPlayer())),
+                    ep,
+                    OppositeTeamOf(TeamOf(ep)),
                     8
                 ),
                 (
-                    IsAlive(ArrayElement()) &&
-                    IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock)
+                    IsAlive(ae) &&
+                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
                 )
             ),
-            DistanceBetween(EventPlayer(), ArrayElement())
+            DistanceBetween(ep, ae)
         )
     );
 
@@ -179,33 +179,24 @@ define ButtonGuide(Button button):
 // Determine if death by Abyss
 // Binding the NearestWalkablePosition to a Condition is too much for the server, so call it as a function
 define IsDeadByAbyss() :
-    DistanceBetween(EventPlayer(), NearestWalkablePosition(EventPlayer())) > 10;
+    DistanceBetween(ep, NearestWalkablePosition(ep)) > 10;
 
 // Buff scale value determined according to the unbalance of the teamscale value determined according to the unbalance of the team
 // You can change the buff amount by changing the scale value.
 define ConvertToBalancedValue(define scale, define team)"ConvertToBalancedValue"{
     define amount;
-    if(team == Team.Team1){
-        define activePlayerNum1 = 
+    define activePlayerNum;
+
+    if(team == Team.Team1 || team == Team.Team2){
+        activePlayerNum = 
             CountOf(
                 FilteredArray(
-                    AllPlayers(Team.Team1),
-                    HasSpawned(ArrayElement())
+                    AllPlayers(team),
+                    HasSpawned(ae)
                 )
             );
-        activePlayerNum1 = activePlayerNum1 <= 0 ? 1 : activePlayerNum1;
-        amount = 6 / activePlayerNum1;
-    }
-    else if(team == Team.Team2){
-        define activePlayerNum2 = 
-            CountOf(
-                FilteredArray(
-                    AllPlayers(Team.Team2),
-                    HasSpawned(ArrayElement())
-                )
-            );
-        activePlayerNum2 = activePlayerNum2 <= 0 ? 1 : activePlayerNum2;
-        amount = 6 / activePlayerNum2;
+        activePlayerNum = Max(activePlayerNum, 1);
+        amount = NumberOfSlots(team) / activePlayerNum;
     }
     else{
         amount = 1;
@@ -277,14 +268,14 @@ void StartAutoAiming()"StartAutoAiming"{
     autoAimTryCount = 0;
     while(
         !IsInViewAngle(
-            EventPlayer(), autoAimingPosition, 10) &&
+            ep, autoAimingPosition, 10) &&
         autoAimTryCount < 50
     ){
-        // StopFacing(EventPlayer());
+        // StopFacing(ep);
         // Wait(0.01, WaitBehavior.IgnoreCondition);
 
         // StartFacing(
-        //     EventPlayer(),
+        //     ep,
         //     FacingDirectionOf(),
         //     MaxValue(),
         //     Relative.ToWorld, FacingRev.DirectionAndTurnRate
@@ -292,7 +283,7 @@ void StartAutoAiming()"StartAutoAiming"{
         // Wait(0.01, WaitBehavior.IgnoreCondition);
 
         StartFacing(
-            EventPlayer(),
+            ep,
             DirectionTowards(
                 EyePosition(),
                 autoAimingPosition
@@ -328,12 +319,12 @@ Team.Team1
 Player.All
 if(
     !intaractDoublePressed &&
-    IsButtonHeld(EventPlayer(), Button.Interact)
+    IsButtonHeld(ep, Button.Interact)
 ){
-    WaitUntil(!IsButtonHeld(EventPlayer(), Button.Interact), 0.3);
-    AbortIf(IsButtonHeld(EventPlayer(), Button.Interact));
-    WaitUntil(IsButtonHeld(EventPlayer(), Button.Interact), 0.3);
-    AbortIf(!IsButtonHeld(EventPlayer(), Button.Interact));
+    WaitUntil(!IsButtonHeld(ep, Button.Interact), 0.3);
+    AbortIf(IsButtonHeld(ep, Button.Interact));
+    WaitUntil(IsButtonHeld(ep, Button.Interact), 0.3);
+    AbortIf(!IsButtonHeld(ep, Button.Interact));
     intaractDoublePressed = true;
 }
 

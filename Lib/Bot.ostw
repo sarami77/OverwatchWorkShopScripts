@@ -9,8 +9,8 @@ import "Debug.ostw";
 disabled rule: "Bot/Debug/ShowDebugInfo"
 Event.OngoingPlayer
 if(
-    HasSpawned() &&
-    IsDummyBot()
+    IsDummyBot() &&
+    HasSpawned()
 ){  
     // show status text
     CreateInWorldText(
@@ -89,7 +89,7 @@ void CreateAllBotByAsset()"CreateAllBotByAsset"{
     if(0 < NumberOfPlayers(Team.Team2)){
         DestroyAllBot();
     }
-    Wait(0.5, WaitBehavior.IgnoreCondition);
+    Wait(1, WaitBehavior.IgnoreCondition);
     // define asset list
     define assetList =
     [
@@ -175,7 +175,7 @@ void CreateAllBotByAsset()"CreateAllBotByAsset"{
                 SpawnPoints(Team.Team2)[0],
                 Forward()
             );
-            Wait(0.5, WaitBehavior.IgnoreCondition);            
+            Wait(1, WaitBehavior.IgnoreCondition);            
 
             // set Bot type as enemy type
             define spawnBot = PlayersInSlot(botSlot, Team.Team2);
@@ -252,8 +252,8 @@ define stackPosRange: 2;
 rule: "Bot/SetBotInfo"
 Event.OngoingPlayer
 if(
-    HasSpawned() &&
-    IsDummyBot()
+    IsDummyBot() &&
+    HasSpawned()
 ){
         botInfo[BotInfo.heroName] = "Default";
         botInfo[BotInfo.combatRange] = CombatRange.Middle;
@@ -510,8 +510,7 @@ enum State{
     Non,
     Wandering,
     Combat,
-    Searching,
-    Stacked
+    Searching
 }
 
 enum CombatRange{
@@ -527,13 +526,6 @@ enum ButtonBehaivor{
     HoldOnly,
     HoldAndRelease,
     Repeat
-}
-
-enum WeaponbotInfoTarget{
-    Non,
-    Bot,
-    Friend,
-    Both
 }
 
 // TAG Bot/ObjectDetector ----------
@@ -629,6 +621,7 @@ void StartButtonControl(define buttonControl){
 rule: "Bot/ButtonControl/isRepeating"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Combat &&
     botInfo[BotInfo.isRepeating]
 ){
@@ -639,6 +632,7 @@ if(
 rule: "Bot/ButtonControl/PrimaryFire/StartButtonControl"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Combat
 ){
     StartButtonControl(
@@ -656,6 +650,7 @@ if(
 rule: "Bot/ButtonControl/SeconaryFire/StartButtonControl"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Combat
 ){
     StartButtonControl(
@@ -673,6 +668,7 @@ if(
 rule: "Bot/ButtonControl/Ability1/StartButtonControl"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Combat
 ){
     StartButtonControl(
@@ -690,6 +686,7 @@ if(
 rule: "Bot/ButtonControl/Ability2/StartButtonControl"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Combat
 ){
     StartButtonControl(
@@ -707,8 +704,9 @@ if(
 rule: "Bot/ButtonControl/Ultimate/StartButtonControl"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Combat &&
-    UltimateChargePercent() == 100
+    UltimateChargePercent() >= 100
 ){
     StartButtonControl(
         [
@@ -725,6 +723,7 @@ if(
 rule: "Bot/ButtonControl/Jump/StartButtonControl"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Combat
 ){
     StartButtonControl(
@@ -742,6 +741,7 @@ if(
 rule: "Bot/ButtonControl/Crouch/StartButtonControl"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Combat
 ){
     StartButtonControl(
@@ -759,6 +759,7 @@ if(
 rule: "Bot/ButtonControl/Reload/StartButtonControl"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Combat
 ){
     StartButtonControl(
@@ -776,6 +777,7 @@ if(
 rule: "Bot/ButtonControl/WeaponSwitch/StartButtonControl"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Combat
 ){
     while(true){
@@ -787,6 +789,7 @@ if(
 rule: "Bot/ButtonControl/StopButtonControl"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] != State.Combat
 ){
     botInfo[BotInfo.statusText2] = <"Not_Combat">;
@@ -834,11 +837,11 @@ if(
                 FilteredArray(
                     AllPlayers(Team.Team1),
                     (
-                        IsAlive(ArrayElement()) &&
-                        IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock)
+                        IsAlive(ae) &&
+                        IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
                     )
                 ),
-                DistanceBetween(EventPlayer(), ArrayElement())
+                DistanceBetween(ep, ae)
             )
         );
         if(target != 0){
@@ -885,6 +888,7 @@ if(
 rule: "Bot/State/Non"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Non
 ){
     botInfo[BotInfo.statusText] = <"Non">;
@@ -907,6 +911,7 @@ define StopMove(): StopThrottleInDirection();
 disabled rule: "Bot/State/Wandering"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Wandering
 ){
     botInfo[BotInfo.statusText] = <"Wandering">;
@@ -979,9 +984,6 @@ if(
                 Wait(RandomReal(1, 2), WaitBehavior.AbortWhenFalse);
                 StopHoldingButton(ep, Button.Jump);
             }
-            if(isStacking){
-                botInfo[BotInfo.state] = State.Stacked;
-            }
         }
 
         Wait(botInfo[BotInfo.watchUpdateRate], WaitBehavior.AbortWhenFalse);
@@ -992,6 +994,7 @@ if(
 rule: "Bot/State/Searching"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Searching
 ){
     botInfo[BotInfo.statusText] = <"Searching">;
@@ -1048,9 +1051,6 @@ if(
                 Wait(RandomReal(1, 2), WaitBehavior.AbortWhenFalse);
                 StopHoldingButton(ep, Button.Jump);
             }
-            if(isStacking){
-                botInfo[BotInfo.state] = State.Stacked;
-            }
         }
 
         // arrival botInfo[BotInfo.target] lost position
@@ -1068,6 +1068,7 @@ if(
 rule: "Bot/State/Searching/Timeout"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Searching
 ){
     Wait(10, WaitBehavior.AbortWhenFalse);
@@ -1078,6 +1079,7 @@ if(
 rule: "Bot/State/Combat"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     botInfo[BotInfo.state] == State.Combat
 ){
     botInfo[BotInfo.statusText] = <"Combat">;
@@ -1157,28 +1159,12 @@ if(
 rule: "Bot/Bot/State/Combat/sideStepKeepSecond"
 Event.OngoingPlayer
 if(
+    IsDummyBot() &&
     0 < botInfo[BotInfo.sideStepKeepSecond]
 ){
     while(true){
         Wait(1, WaitBehavior.AbortWhenFalse);
         botInfo[BotInfo.sideStepKeepSecond] --;
-    }
-}
-
-// TAG Bot/State/Stacked ----------
-disabled rule: "Bot/State/Stacked"
-Event.OngoingPlayer
-if(
-    botInfo[BotInfo.state] == State.Stacked
-){
-    botInfo[BotInfo.statusText] = <"Stacked">;
-    botInfo[BotInfo.stackPos] = PositionOf();
-    Wait(1, WaitBehavior.RestartWhenTrue);
-
-    if(DistanceBetween(botInfo[BotInfo.stackPos], ep) <= stackPosRange){
-        botInfo[BotInfo.statusText] = <"Stacked/Reset">;
-        SetFacing(ep, Backward(), Relative.ToPlayer);
-        botInfo[BotInfo.state] = State.Wandering;
     }
 }
 

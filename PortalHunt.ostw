@@ -24,6 +24,11 @@ import "Lib/Bot.ostw";
 import "Lib/Debug.ostw";
 // import "Lib/InvisibleImmortalForDebug.ostw";
 
+// TAG duumy driver ----------
+// globalvar define Revive_enableTeam;
+// globalvar define Revive_timeLimit;
+// globalvar define reviveTimeoutCount;
+
 // TAG Signature and infomation ----------
 disabled rule: "PORTAL HUNT -HORDE PVE [ver 3.0] Share code [YY1N2]"-1{}
 disabled rule: "You allowed copy or modify code."-1{}
@@ -83,7 +88,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG Game Function ----------
+// TAG Game ----------
 globalvar define initCompleted;
 
 rule: "Game/initGameSetting //wait 3 _seconds because some scripts fail immediately after loading the _server"
@@ -102,14 +107,10 @@ Event.OngoingGlobal
 //        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
 
     // Set imported function property
-    Regeneration_enableTeam = Team.All;
+    Regeneration_enableTeam = Team.Team1;
     Regeneration_needBalanceTeam1 = true;
     Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 1, 0, 100, 1);
     Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 25, 0, 1000, 2);
-    
-    Regeneration_needBalanceTeam2 = false;
-    Regeneration_waitRegenTimeTeam2 = 8;
-    Regeneration_regenerationRateTeam2 = MaxValue();
 
     Revive_enableTeam = Team.Team1;
     Revive_timeLimit = WorkshopSettingReal("Player Settings", "Revive Time Limit", 10, 0, 100, 3);
@@ -130,25 +131,39 @@ Event.OngoingGlobal
     ForceSpawnRoom(Team.Team1, 2);
     Respawn(AllPlayers(Team.All));
 
-    // WARNING
-    // If you set setMatchTime right after the game starts, the server becomes unstable and ReturnToLobby and Restart stop working.
-    // StartElapsedTimer should be true after a delay of about 3 seconds.
-    startElapsedTimer = true;
-    
+    // Set initial team lifes
+    initialTeamLifes = WorkshopSettingInteger("Player Settings", "Initial Team Lifes", 6, 0, 1000, 0);
+
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
+}
+
+rule: "Game/initGame"
+Event.OngoingGlobal
+if(
+    initCompleted
+){
+    // reset team lifes
+    teamLifes = initialTeamLifes;
+    // reset round no
+    roundNo = 0;
+    // reset elapsed time
+    enableElapsedTimer = false;
+    elapsedTime = 0;
 }
 
 rule: "Game/startGame"
 Event.OngoingGlobal
 if(
     initCompleted &&
-    NumberOfPlayers(Team.Team1) > 0
+    NumberOfPlayers(Team.Team1) > 0 &&
+    IsTrueForAny(
+        AllPlayers(Team.Team1),
+        !IsInSpawnRoom(ae))
 ){
-    WaitConditionConfirmed();
-    teamLifes = initialTeamLifes;
-    elapsedTime = 0;
-    roundNo = 0;
+    // start elapsed time
+    enableElapsedTimer = true;
+    // start portal creation
     portalState = PortalState.Calculating;
 }
 
@@ -158,13 +173,22 @@ if(
     initCompleted &&
     NumberOfPlayers(Team.Team1) <= 0
 ){
-    WaitConditionConfirmed();
-    portalState = PortalState.Idle;
+    // reset team lifes
+    teamLifes = initialTeamLifes;
+    // reset round no
+    roundNo = 0;
+    // reset elapsed time
+    enableElapsedTimer = false;
+    elapsedTime = 0;
+    // reset portal
+    portalState = PortalState.Init;
 }
 
 rule: "Game/ShareCode/showGameCode"
 Event.OngoingGlobal
-{
+if(
+    initCompleted
+){
     // show ver and share code
     CreateHudText(AllPlayers(Team.Team1),
         null, "PORTAL HUNT -HORDE PVE [ver 3.0] Share code [YY1N2]", null,
@@ -175,12 +199,11 @@ Event.OngoingGlobal
 
 rule: "Game/RoundNo/showObjectMessageHUD //with update message by state"
 Event.OngoingPlayer
-Team.Team1
-Player.All
 if(
-    initCompleted
+    initCompleted &&
+    HasSpawned()
 ){
-    SetObjectiveDescription(EventPlayer(), "Find portal and attack it.", HudTextRev.String);
+    SetObjectiveDescription(ep, "Find portal and attack it.", HudTextRev.String);
 }
 
 define enemyColor: Color.Purple;
@@ -211,28 +234,29 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG Player Function ----------
+// TAG Player ----------
 playervar define isInsidePortal;
 
 rule: "Player/InsidePortal/update"
-Event.OngoingPlayer
-Team.Team1
+Event.OngoingGlobal
 Player.All
 if(
-    HasSpawned()
+    portalEnable
 ){
+    define players = AllPlayers(Team.Team1);
     // Set flag when player entered to portal
     // This flag is used for functions related to portal
-    if(
-        portalEnable &&
-        IsAlive() &&
-        !IsInSpawnRoom() &&
-        DistanceBetween(EventPlayer(), portalPosition) <= portalSize
-    ){
-        isInsidePortal = true;
-    }
-    else{
-        isInsidePortal = false;
+    for(gLoopIndex = 0; gLoopIndex < CountOf(players); gLoopIndex++){
+        if(
+            IsAlive(players[gLoopIndex]) &&
+            !IsInSpawnRoom(players[gLoopIndex]) &&
+            DistanceBetween(players[gLoopIndex], portalPosition) <= portalSize
+        ){
+            players[gLoopIndex].isInsidePortal = true;
+        }
+        else{
+            players[gLoopIndex].isInsidePortal = false;
+        }
     }
     WaitUpdateMediumCycle();
     LoopIfConditionIsTrue();
@@ -240,7 +264,9 @@ if(
 
 rule: "Player/ReturnSpawn/showOperationHUD"
 Event.OngoingGlobal
-{
+if(
+    initCompleted
+){
     // show HUD of hero change operation
     CreateHudText(AllPlayers(Team.Team1),
         null, <"Long hold reload button <0> to change hero", ButtonGuide(Button.Reload)>, null,
@@ -256,7 +282,7 @@ Player.All
 if(
     IsAlive() &&
     !IsInSpawnRoom() &&
-    IsButtonHeld(EventPlayer(), Button.Reload)
+    IsButtonHeld(ep, Button.Reload)
 ){
     // Return to spawn room with long hold on reload button
     WaitCancelPressConfirm();
@@ -266,17 +292,11 @@ if(
 globalvar define initialTeamLifes;
 globalvar define teamLifes;
 
-rule: "Player/TeamLifes/initalCount"
-Event.OngoingGlobal
-{
-    // Set initial team lifes
-    initialTeamLifes = WorkshopSettingInteger("Player Settings", "Initial Team Lifes", 6, 0, 100, 0);
-    teamLifes = initialTeamLifes;
-}
-
 rule: "Player/TeamLifes/showTeamLifesHUD"
 Event.OngoingGlobal
-{
+if(
+    initCompleted
+){
     // show HUD of team lifes
     CreateHudText(AllPlayers(Team.All),
         <"<0> <1>", "Team lifes", teamLifes>, null, null,
@@ -308,8 +328,10 @@ if(
 rule: "Player/TeamLifes/finishGame //by team lifes out"
 Event.OngoingGlobal
 if(
+    initCompleted &&
     teamLifes <= 0
 ){
+    WaitConditionConfirmed();
     // When the team lifes out, the game ends
     portalState = PortalState.End;
     BigMessage(AllPlayers(Team.All), "Our team lifes is out...");
@@ -331,9 +353,9 @@ Event.OnDeath
 Team.Team1
 Player.All
 if(
-    Attacker() == EventPlayer() &&
-    DistanceBetween(EventPlayer(),
-        ClosestPlayerTo(EventPlayer(), Team.Team2)) > 15
+    Attacker() == ep &&
+    DistanceBetween(ep,
+        ClosestPlayerTo(ep, Team.Team2)) > 15
 ){
     Wait(1, WaitBehavior.AbortWhenFalse);
     Respawn();
@@ -378,9 +400,9 @@ if(
         FirstOf(
             SortedArray(
                 FilteredArray(
-                    AllPlayers(Team.Team1), IsAlive(ArrayElement())
+                    AllPlayers(Team.Team1), IsAlive(ae)
                 ),
-                DistanceBetween(portalPosition, ArrayElement())
+                DistanceBetween(portalPosition, ae)
             )
         );
     // show big message
@@ -388,7 +410,7 @@ if(
         closestPlayerFromPortal,
         <"You are closing portal... Stay inside and Survive!">);
     BigMessage(
-        FilteredArray(AllPlayers(Team.Team1), (closestPlayerFromPortal != ArrayElement())),
+        FilteredArray(AllPlayers(Team.Team1), (closestPlayerFromPortal != ae)),
         <"<0> <1> <2>",
             closestPlayerFromPortal,
             HeroIconString(HeroOf(closestPlayerFromPortal)),
@@ -406,7 +428,7 @@ if(
     playerNumInsidePortal = CountOf(
         FilteredArray(
             AllPlayers(Team.Team1),
-            ArrayElement().isInsidePortal
+            ae.isInsidePortal
         )
     );
     WaitUpdateMediumCycle();
@@ -436,6 +458,7 @@ if(
     ) &&
     teamLifes > 0
 ){
+    WaitConditionConfirmed();
     // When the countdown is complete, clear the portal and give team lifes.
     // Later, we will generate a new portal and start the next round.
     WaitPlayEffect();   //wait portal closing effect
@@ -460,18 +483,6 @@ if(
 
 playervar define inPortalEffectEntitys;
 
-disabled rule: "Player/ClosePortal/hideInsidePortalEffect"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    !isInsidePortal
-){
-    // When a player exits the portal, hide smoke in the player view
-    DestroyEffect(inPortalEffectEntitys[0]);
-    DestroyEffect(inPortalEffectEntitys[1]);
-}
-
 rule: "Player/FairPlay/disableStealthWhenInside //sombra's stealth for fair play"
 Event.OngoingPlayer
 Team.Team1
@@ -484,8 +495,8 @@ if(
     // Some abilities are disabled inside the portal to make the game fair
     // Sombra stealth is exactly that
     Wait(5.0, WaitBehavior.AbortWhenFalse); // disable ability check cycle
-    SetStatus(EventPlayer(), null, Status.Stunned, 0.1);
-    SmallMessage(EventPlayer(), "Stealth disabled by magnetic storm of portal.");
+    SetStatus(ep, null, Status.Stunned, 0.1);
+    SmallMessage(ep, "Stealth disabled by magnetic storm of portal.");
     LoopIfConditionIsTrue();
 }
 
@@ -501,32 +512,15 @@ if(
     // Some abilities are disabled inside the portal to make the game fair
     // WreckingBall Grapple is exactly that
     Wait(5.0, WaitBehavior.AbortWhenFalse); // disable ability check cycle
-    SetStatus(EventPlayer(), null, Status.Stunned, 0.1);
-    SmallMessage(EventPlayer(), "Grapple claw disabled by magnetic storm of portal.");
+    SetStatus(ep, null, Status.Stunned, 0.1);
+    SmallMessage(ep, "Grapple claw disabled by magnetic storm of portal.");
     LoopIfConditionIsTrue();
 }
-
-disabled rule: "Player/Communicate/playVoiceOnPortalSet"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    IsAlive() &&
-    portalState == PortalState.Set
-){
-    WaitConditionConfirmed();
-    if(RandomInteger(0, 1) == 0){
-        Wait(RandomInteger(0, 2), WaitBehavior.IgnoreCondition);
-        Communicate(EventPlayer(), Communication.Go);
-    }
-}
-
-
-
 
 // TAG Portal Function ----------
 globalvar define portalState;
 enum PortalState{
+    Init,
     Idle,
     Calculating,
     Checking,
@@ -596,7 +590,7 @@ if(
     CreateEffect(
         FilteredArray(
             AllPlayers(Team.All),
-            DistanceBetween(ArrayElement(), portalPosition) > portalSize / 2), Effect.BadAura, enemyColor,
+            DistanceBetween(ae, portalPosition) > portalSize / 2), Effect.BadAura, enemyColor,
         portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionAndRadius);
     portalEntitys[3] = LastCreatedEntity();
     // sound
@@ -732,13 +726,13 @@ if(
 ){
     WaitConditionConfirmed();
     define candidatePosition;
-    for(gLoopIndex = 0; gLoopIndex < 10; gLoopIndex++){
+    for(define retryCount = 0; retryCount < 10; retryCount++){
         // select random player as base positoon
         define basePlayer =
             RandomValueInArray(
                 FilteredArray(
                     AllLivingPlayers(Team.Team1),
-                    HasSpawned(ArrayElement())
+                    HasSpawned(ae)
                 )
             );
         // select random positon from player around
@@ -887,8 +881,8 @@ if(
     IsTrueForAny(
         AllPlayers(Team.Team1),
         IsInLineOfSight(
-            ArrayElement(),
-            ClosestPlayerTo(ArrayElement(), Team.Team2)))
+            ae,
+            ClosestPlayerTo(ae, Team.Team2)))
 ){
     Wait(1, WaitBehavior.AbortWhenFalse);
     noContact = false;
@@ -942,7 +936,7 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Growing &&
     IsTrueForAny(
-        AllPlayers(Team.Team1), ArrayElement().isInsidePortal
+        AllPlayers(Team.Team1), ae.isInsidePortal
     )
 ){
     // Suspend portal growing by player enter to portal
@@ -955,7 +949,7 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Suspended &&
     !IsTrueForAny(
-        AllPlayers(Team.Team1), ArrayElement().isInsidePortal
+        AllPlayers(Team.Team1), ae.isInsidePortal
     )
 ){
     // Resume portal growing by player exit from portal
@@ -977,26 +971,7 @@ playervar define eachDealtDamageScale;
 playervar define eachMaxSpawnInterval;
 playervar define eachChargeUltInterval;
 
-disabled rule: "Bot/EnemyType/setEnemyType"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    HasSpawned()
-){
-    define slotNo = SlotOf();
-    if(slotNo == 0){
-        enemyType = EnemyType.Boss;
-    }
-    else if(slotNo == 1 || slotNo == 2){
-        enemyType = EnemyType.Elite;
-    }
-    else{
-        enemyType = EnemyType.Minion;
-    }
-}
-
-rule: "Bot/EnemyType/setEnemyTypeStatus"
+rule: "Bot/EnemyType/setEnemyType"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -1004,49 +979,60 @@ if(
     enemyType != EnemyType.None
 ){
     if(enemyType == EnemyType.Minion){ 
-        SetMaxHealth(EventPlayer(), 50);
-        SetHealingReceived(EventPlayer(), 50);
-        StartScalingPlayer(EventPlayer(), 0.75, false);
-        StartModifyingHeroVoiceLines(EventPlayer(), 1.25, false);
+        SetMaxHealth(ep, 50);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Heal(ep, null, MaxValue());
+
+        SetHealingReceived(ep, 50);
+        StartScalingPlayer(ep, 0.75, false);
+        StartModifyingHeroVoiceLines(ep, 1.25, false);
         eachDealtDamageScale = 0.5;
         eachMaxSpawnInterval = 3;
         eachChargeUltInterval = 80;
     }
     else if(enemyType == EnemyType.Elite){
-        SetMaxHealth(EventPlayer(), 200);
-        SetHealingReceived(EventPlayer(), 200);
-        StartScalingPlayer(EventPlayer(), 1.0, false);
-        StartModifyingHeroVoiceLines(EventPlayer(), 1.0, false);
+        SetMaxHealth(ep, 200);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Heal(ep, null, MaxValue());
+
+        SetHealingReceived(ep, 200);
+        StartScalingPlayer(ep, 1.0, false);
+        StartModifyingHeroVoiceLines(ep, 1.0, false);
         eachDealtDamageScale = 1.0;
         eachMaxSpawnInterval = 9;
         eachChargeUltInterval = 20;
     }
     else if(enemyType == EnemyType.Boss){
-        SetMaxHealth(EventPlayer(), 1500);
-        SetHealingReceived(EventPlayer(), 1500);
-        StartScalingPlayer(EventPlayer(), 1.5, false);
-        StartModifyingHeroVoiceLines(EventPlayer(), 0.75, false);
+        SetMaxHealth(ep, 1500);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Heal(ep, null, MaxValue());
+
+        SetHealingReceived(ep, 1500);
+        StartScalingPlayer(ep, 1.5, false);
+        StartModifyingHeroVoiceLines(ep, 0.75, false);
         eachDealtDamageScale = 1.5;
         eachMaxSpawnInterval = 27;
         eachChargeUltInterval = 10;
     }
     else if(enemyType == EnemyType.GiantBoss){
-        SetMaxHealth(EventPlayer(), 10000);
-        SetHealingReceived(EventPlayer(), 10000);
-        StartScalingPlayer(EventPlayer(), 2.5, false);
-        StartModifyingHeroVoiceLines(EventPlayer(), 0.5, false);
+        SetMaxHealth(ep, 10000);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Heal(ep, null, MaxValue());
+
+        SetHealingReceived(ep, 10000);
+        StartScalingPlayer(ep, 2.5, false);
+        StartModifyingHeroVoiceLines(ep, 0.5, false);
         eachDealtDamageScale = 5.0;
         eachMaxSpawnInterval = 10;
         eachChargeUltInterval = 10;
     }    
 
-    SetRespawnMaxTime(EventPlayer(), eachMaxSpawnInterval);
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
-    Heal(EventPlayer(), null, MaxValue());
+    UpdateEachDealtDamage();
+    UpdateEachSpawnInterval();
 }
 
 // TAG Bot/Effect ----------
-playervar define BotAppearanceEntitys;
+playervar define botAppearanceEntitys;
 
 rule: "Bot/Effect/showBotAppearance"
 Event.OngoingPlayer
@@ -1056,46 +1042,46 @@ if(
     enemyType != EnemyType.None &&
     IsAlive()
 ){
-    BotAppearanceEntitys = [];
+    botAppearanceEntitys = [];
     if(enemyType == EnemyType.Minion){
         CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
-            EventPlayer(), 1.0, EffectRev.VisibleToPositionAndRadius);
-        BotAppearanceEntitys[0] = LastCreatedEntity();
+            ep, 1.0, EffectRev.VisibleToPositionAndRadius);
+        botAppearanceEntitys[0] = LastCreatedEntity();
         CreateInWorldText(
             AllPlayers(Team.All), "Minion", 
-            EventPlayer(), 1.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            ep, 1.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.White, Spectators.DefaultVisibility);
-        BotAppearanceEntitys[1] = LastTextID();
+        botAppearanceEntitys[1] = LastTextID();
     }
     else if(enemyType == EnemyType.Elite){
         CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
-            EventPlayer(), 2.0, EffectRev.VisibleToPositionAndRadius);
-        BotAppearanceEntitys[0] = LastCreatedEntity();
+            ep, 2.0, EffectRev.VisibleToPositionAndRadius);
+        botAppearanceEntitys[0] = LastCreatedEntity();
         CreateInWorldText(
             AllPlayers(Team.All), "Elite", 
-            EventPlayer(), 1.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            ep, 1.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.Yellow, Spectators.DefaultVisibility);
-        BotAppearanceEntitys[1] = LastTextID();
+        botAppearanceEntitys[1] = LastTextID();
     }
     else if(enemyType == EnemyType.Boss){
         CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
-            EventPlayer(), 4.0, EffectRev.VisibleToPositionAndRadius);
-        BotAppearanceEntitys[0] = LastCreatedEntity();
+            ep, 4.0, EffectRev.VisibleToPositionAndRadius);
+        botAppearanceEntitys[0] = LastCreatedEntity();
         CreateInWorldText(
             AllPlayers(Team.All), "Boss", 
-            EventPlayer(), 2.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            ep, 2.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.Red, Spectators.DefaultVisibility);
-        BotAppearanceEntitys[1] = LastTextID();
+        botAppearanceEntitys[1] = LastTextID();
     }
  if(enemyType == EnemyType.GiantBoss){
         CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
-            EventPlayer(), 8.0, EffectRev.VisibleToPositionAndRadius);
-        BotAppearanceEntitys[0] = LastCreatedEntity();
+            ep, 8.0, EffectRev.VisibleToPositionAndRadius);
+        botAppearanceEntitys[0] = LastCreatedEntity();
         CreateInWorldText(
             AllPlayers(Team.All), "Giant Boss", 
-            EventPlayer(), 2.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            ep, 2.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.Red, Spectators.DefaultVisibility);
-        BotAppearanceEntitys[1] = LastTextID();
+        botAppearanceEntitys[1] = LastTextID();
     }
 }
 
@@ -1107,8 +1093,8 @@ if(
     enemyType != EnemyType.None &&
     !IsAlive()
 ){
-    DestroyEffect(BotAppearanceEntitys[0]);
-    DestroyInWorldText(BotAppearanceEntitys[1]);
+    DestroyEffect(botAppearanceEntitys[0]);
+    DestroyInWorldText(botAppearanceEntitys[1]);
 }
 
 rule: "Bot/Effect/playDeadEffect"
@@ -1135,40 +1121,12 @@ if(
     }
 }
 
-// TAG Bot/SpawnInterval ----------
-define deadEffectTime: 1.5;
-playervar define confirmSpawnInterval;
-
-rule: "Bot/SpawnInterval/update"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    portalState == PortalState.Growing
-){
-    // Shortens Bot spawn interval depending on portal size
-    // Portals that have grown significantly over time will spawn more enemies.
-    define spawnIntervalScale = (portalSize / maxPortalSize) * eachMaxSpawnInterval;
-    confirmSpawnInterval = eachMaxSpawnInterval - spawnIntervalScale;
-
-    confirmSpawnInterval -= (roundNo / 5);
-    if(0 > confirmSpawnInterval){
-        confirmSpawnInterval = 0;
-    }
-    
-    // set +1 interval for show dead effect
-    SetRespawnMaxTime(EventPlayer(), confirmSpawnInterval + deadEffectTime);
-
-    WaitUpdateMediumCycle();
-    LoopIf(portalSize < maxPortalSize);
-}
-
 // TAG Bot/Teleport ----------
-playervar define teleportPosition;
 define teleportAreaSize: 6;
 define closestPlayerTeleportPosition: ClosestPlayerTo(teleportPosition, Team.Team1);
 define closestPlayerPortal: ClosestPlayerTo(portalPosition, Team.Team1);
 define closestPlayerMe: ClosestPlayerTo(ep, Team.Team1);
+playervar define teleportPosition;
 
 void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     // set teleport position by blind spot from player
@@ -1225,24 +1183,22 @@ void SetTeleportPositionToCamper()"SetTeleportPositionToCamper"{
 
 void PlayTeleportEffect()"PlayTeleportEffect"{
     if(enemyType == EnemyType.Minion){
-        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, EventPlayer(), 2);
+        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, 2);
     }
     else if(enemyType == EnemyType.Elite){
-        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, EventPlayer(), 3);
+        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, 3);
     }
     else if(enemyType == EnemyType.Boss){
-        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, EventPlayer(), 5);
+        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, 5);
     }
     else if(enemyType == EnemyType.GiantBoss){
-        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, EventPlayer(), 7);
+        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, 7);
     }
     // Play blast effect when Bot teleport
     
     // show effect at root position
     WaitPlayEffect();
 }
-
-
 
 rule: "Bot/Teleport/teleportToSpawnRoomByPortalDisabled"
 Event.OngoingPlayer
@@ -1276,7 +1232,7 @@ if(
     // show pre teleport effect
     PlayTeleportEffect();
     // Teleport
-    Teleport(EventPlayer(), teleportPosition);
+    Teleport(ep, teleportPosition);
     // show teleport effect
     PlayTeleportEffect();
 }
@@ -1293,7 +1249,7 @@ if(
     // set teleport position
     SetTeleportPositionToPlayerFront();
     // Teleport
-    Teleport(EventPlayer(), teleportPosition);
+    Teleport(ep, teleportPosition);
     // show teleport effect
     PlayTeleportEffect();
 }
@@ -1305,27 +1261,25 @@ Player.All
 if(
     portalEnable &&
     IsAlive() &&
-    !IsInLineOfSight(EventPlayer(),
-            closestPlayerMe,
-            BarrierLOS.NoBarriersBlock)
+    !IsInLineOfSight(ep,
+        closestPlayerMe,
+        BarrierLOS.NoBarriersBlock)
 ){
     // Teleport bot to player front
-    Wait(8, WaitBehavior.AbortWhenFalse);
-    // not half health
-    if(0.5 < NormalizedHealth()){
-        if(portalState != PortalState.Suspended)
-            // set teleport position
-            SetTeleportPositionToPlayerFront();   
-        else
-            // set teleport position
-            SetTeleportPositionToCamper();
-        // show pre teleport effect
-        PlayTeleportEffect();
-        // Teleport
-        Teleport(EventPlayer(), teleportPosition);
-        // show pre teleport effect
-        PlayTeleportEffect();
-    }
+    Wait(6, WaitBehavior.AbortWhenFalse);
+
+    if(portalState != PortalState.Suspended)
+        // set teleport position player front
+        SetTeleportPositionToPlayerFront();   
+    else
+        // set teleport position to camper around
+        SetTeleportPositionToCamper();
+    // show pre teleport effect
+    PlayTeleportEffect();
+    // Teleport
+    Teleport(ep, teleportPosition);
+    // show pre teleport effect
+    PlayTeleportEffect();
     
     LoopIfConditionIsTrue();
 }
@@ -1336,67 +1290,19 @@ Team.Team2
 Player.All
 if(
     portalEnable &&
-    portalState == PortalState.Suspended &&
-    IsAlive(EventPlayer())
+    IsAlive() &&
+    portalState == PortalState.Suspended
 ){
     // Teleport bot to player front
     WaitConditionConfirmed();
-    // not half health
-    if(0.5 < NormalizedHealth()){
-        // set teleport position
-        SetTeleportPositionToPlayerFront();
-        // show pre teleport effect
-        PlayTeleportEffect();
-        // Teleport
-        Teleport(EventPlayer(), teleportPosition);
-        // show teleport effect
-        PlayTeleportEffect();
-    }
-}
-
-disabled rule: "Bot/Teleport/teleportToPlayerAroundByPlayerCamping"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    portalEnable &&
-    portalState == PortalState.Suspended &&
-    IsAlive() &&
-    !IsInLineOfSight(EventPlayer(),
-            closestPlayerPortal,
-            BarrierLOS.NoBarriersBlock)
-){
-    // Teleport bot to invade portal player
-    Wait(10, WaitBehavior.AbortWhenFalse);
-    // set teleport position
-    SetTeleportPositionToCamper();
+    // set teleport position to player front
+    SetTeleportPositionToPlayerFront();
     // show pre teleport effect
     PlayTeleportEffect();
     // Teleport
-    Teleport(EventPlayer(), teleportPosition);
-    // show pre teleport effect
+    Teleport(ep, teleportPosition);
+    // show teleport effect
     PlayTeleportEffect();
-    
-    LoopIfConditionIsTrue();
-}
-
-// TAG Bot/Ability ----------
-disabled rule: "Bot/Ability/chargeAbility"
-Event.OngoingPlayer
-if(
-    HasSpawned()
-){
-    Wait(1, WaitBehavior.AbortWhenFalse);
-
-    SetAbilityCooldown(ep, Button.Jump, 0);
-    SetAbilityCooldown(ep, Button.Crouch, 0);
-    SetAbilityCooldown(ep, Button.Ability1, 0);
-    SetAbilityCooldown(ep, Button.Ability2, 0);
-    SetAbilityCooldown(ep, Button.PrimaryFire, 0);
-    SetAbilityCooldown(ep, Button.SecondaryFire, 0);
-    SetUltimateCharge (ep, 100);
-
-    LoopIfConditionIsTrue();
 }
 
 // TAG Bot/Ultimate ----------
@@ -1409,24 +1315,52 @@ if(
     enemyType != EnemyType.None &&
     !IsUsingUltimate()
 ){
-    SetUltimateCharge(EventPlayer(), UltimateChargePercent() + (100 / eachChargeUltInterval));
+    SetUltimateCharge(ep, UltimateChargePercent() + (100 / eachChargeUltInterval));
     WaitUpdateMediumCycle();
     LoopIfConditionIsTrue();
+}
+
+// TAG Bot/SpawnInterval ----------
+define deadEffectTime: 1.5;
+playervar define confirmSpawnInterval;
+
+void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
+    confirmSpawnInterval = eachMaxSpawnInterval;
+    confirmSpawnInterval *= (1 - (portalSize / maxPortalSize));
+    confirmSpawnInterval -= (roundNo / 5);
+    confirmSpawnInterval = Max(confirmSpawnInterval, 0);
+    SetRespawnMaxTime(ep, confirmSpawnInterval + deadEffectTime); 
+}
+
+rule: "Bot/SpawnInterval/update"
+Event.OngoingPlayer
+Team.Team2
+if(
+    portalState == PortalState.Growing
+){
+    UpdateEachSpawnInterval();
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    LoopIf(portalSize < maxPortalSize);
 }
 
 // TAG Bot/ReceivedDamage ----------
 globalvar define confirmReceiveDamage;
 
-rule: "Bot/ReceivedDamage/updateByBalance //for game balance, increase by missing players count"
-Event.OngoingGlobal
-{
+void UpdateEachReceivedDamage()"UpdateEachReceivedDamage"{
     // If don't enough players, adjust Bot received damage rate to make the game fair
     // Multiply damage rate
     confirmReceiveDamage = 100;
     // Apply balance multiplier
     confirmReceiveDamage *= ConvertToBalancedValue(0.7, Team.Team1);
     SetDamageReceived(AllPlayers(Team.Team2), confirmReceiveDamage);
+}
 
+rule: "Bot/ReceivedDamage/updateByBalance //for game balance, increase by missing players count"
+Event.OngoingGlobal
+if(
+    initCompleted
+){
+    UpdateEachReceivedDamage();
     WaitUpdateLongCycle();
     LoopIfConditionIsTrue();
 }
@@ -1434,13 +1368,7 @@ Event.OngoingGlobal
 // TAG Bot/DealtDamage ----------
 playervar define confirmDealDamage;
 
-rule: "Bot/DealtDamage/update"
-Event.OngoingPlayer
-Team.Team2
-Player.All
-if(
-    HasSpawned()
-){
+void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // If don't enough players, adjust Bot dealt damage rate to make the game fair
     // And the round progresses, the Bot deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
@@ -1449,20 +1377,28 @@ if(
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
     confirmDealDamage /= ConvertToBalancedValue(0.7, Team.Team1);
-    SetDamageDealt(EventPlayer(), confirmDealDamage);
+    SetDamageDealt(ep, confirmDealDamage);
+}
 
+rule: "Bot/DealtDamage/update"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    HasSpawned() &&
+    enemyType != EnemyType.None
+){
+    UpdateEachDealtDamage();
     WaitUpdateLongCycle();
     LoopIfConditionIsTrue();
 }
-
-
 
 rule: "Bot/SpawnInterval/respawnBySucide"
 Event.OnDeath
 Team.Team2
 Player.All
 if(
-    Attacker() == EventPlayer()
+    Attacker() == ep
 ){
     Wait(1, WaitBehavior.AbortWhenFalse);
     Respawn();
@@ -1483,9 +1419,9 @@ Event.OngoingPlayer
 Team.All
 Player.All
 if(
-    HostPlayer() == EventPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.Jump) 
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Jump) 
 ){
     // change debug mode
     WaitLongPressConfirm();
@@ -1524,6 +1460,7 @@ if(
 }
 
 define End(): CountOf(debugHudEntitys);
+define botOfEnemyType(define enemyType): FirstOf(FilteredArray(AllPlayers(Team.Team2), ae.enemyType == enemyType));
 globalvar define debugHudEntitys;
 
 // show debug icon and hud
@@ -1549,6 +1486,15 @@ void ShowDebugHud()"ShowDebugHud"{
         CreateHudText(HostPlayer(),
             null,
             <"<0> <1>", "revive Timeout Count", reviveTimeoutCount>,
+            null,
+            Location.Left, -1,
+            Color.White, Color.Blue, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
+
+        CreateHudText(HostPlayer(),
+            null,
+            <"<0> <1>", "Regeneration Rate", playerRegenerationRateTeam1>,
             null,
             Location.Left, -1,
             Color.White, Color.Blue, Color.White,
@@ -1584,7 +1530,7 @@ void ShowDebugHud()"ShowDebugHud"{
 
         CreateHudText(HostPlayer(),
             null,
-            <"<0> <1>", "distance to protal", DistanceBetween(EventPlayer(), portalPosition)>,
+            <"<0> <1>", "distance to protal", DistanceBetween(ep, portalPosition)>,
             null,
             Location.Left, -1,
             Color.White, enemyColor, Color.White,
@@ -1593,7 +1539,49 @@ void ShowDebugHud()"ShowDebugHud"{
 
         CreateHudText(HostPlayer(),
             null,
-            <"<0> <1>", "Invalid Area Score", invalidAreaScore>,
+            <"<0> DelDmg=<1> RcvDmg=<2> SpwInt=<3> ChgUlt=<4>", "Boss Status",
+                botOfEnemyType(EnemyType.Boss).confirmDealDamage,
+                confirmReceiveDamage,
+                botOfEnemyType(EnemyType.Boss).confirmSpawnInterval,
+                botOfEnemyType(EnemyType.Boss).eachChargeUltInterval
+            >,
+            null,
+            Location.Left, -1,
+            Color.White, Color.Red, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
+
+        CreateHudText(HostPlayer(),
+            null,
+            <"<0> DelDmg=<1> RcvDmg=<2> SpwInt=<3> ChgUlt=<4>", "Elite Status",
+                botOfEnemyType(EnemyType.Elite).confirmDealDamage,
+                confirmReceiveDamage,
+                botOfEnemyType(EnemyType.Elite).confirmSpawnInterval,
+                botOfEnemyType(EnemyType.Elite).eachChargeUltInterval
+            >,
+            null,
+            Location.Left, -1,
+            Color.White, Color.Red, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
+
+        CreateHudText(HostPlayer(),
+            null,
+            <"<0> DelDmg=<1> RcvDmg=<2> SpwInt=<3> ChgUlt=<4>", "Minion Status",
+                botOfEnemyType(EnemyType.Minion).confirmDealDamage,
+                confirmReceiveDamage,
+                botOfEnemyType(EnemyType.Minion).confirmSpawnInterval,
+                botOfEnemyType(EnemyType.Minion).eachChargeUltInterval
+            >,
+            null,
+            Location.Left, -1,
+            Color.White, Color.Red, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
+
+        CreateHudText(HostPlayer(),
+            null,
+            <"<0> <1>", "invalid Area Score", invalidAreaScore>,
             null,
             Location.Left, -1,
             Color.White, Color.White, Color.White,
@@ -1659,9 +1647,9 @@ Event.OngoingPlayer
 Team.All
 Player.All
 if(
-    HostPlayer() == EventPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.Ability2)
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Ability2)
 ){
     // Increase TeamLifes
     WaitLongPressConfirm();
@@ -1674,9 +1662,9 @@ Event.OngoingPlayer
 Team.All
 Player.All
 if(
-    HostPlayer() == EventPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.Ability1)
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Ability1)
 ){
     // Increase RoundNo
     WaitLongPressConfirm();
@@ -1689,10 +1677,10 @@ Event.OngoingPlayer
 Team.All
 Player.All
 if(
-    HostPlayer() == EventPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    !IsButtonHeld(EventPlayer(), Button.Reload) &&
-    IsButtonHeld(EventPlayer(), Button.Crouch)
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    !IsButtonHeld(ep, Button.Reload) &&
+    IsButtonHeld(ep, Button.Crouch)
 ){
     // Recalculate portal
     WaitLongPressConfirm();
@@ -1708,10 +1696,10 @@ Event.OngoingPlayer
 Team.All
 Player.All
 if(
-    HostPlayer() == EventPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.Reload) &&
-    !IsButtonHeld(EventPlayer(), Button.Crouch)
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Reload) &&
+    !IsButtonHeld(ep, Button.Crouch)
 ){
     // Set portal position to aim center
     WaitLongPressConfirm();
@@ -1728,10 +1716,10 @@ Event.OngoingPlayer
 Team.All
 Player.All
 if(
-    HostPlayer() == EventPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.Reload) &&
-    IsButtonHeld(EventPlayer(), Button.Crouch)
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Reload) &&
+    IsButtonHeld(ep, Button.Crouch)
 ){
     // Set portal position to aim center
     WaitLongPressConfirm();
