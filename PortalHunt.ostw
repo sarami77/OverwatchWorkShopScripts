@@ -20,7 +20,7 @@ import "Lib/DamageText.ostw";
 import "Lib/Regeneration.ostw";
 import "Lib/Revive.ostw";
 import "Lib/Perk.ostw";
-// import "Lib/Bot.ostw";
+import "Lib/Bot.ostw";
 import "Lib/Debug.ostw";
 // import "Lib/InvisibleImmortalForDebug.ostw";
 
@@ -341,7 +341,6 @@ if(
 
 globalvar define closingCount;
 globalvar define closingProgress;
-globalvar define closestPlayerToPortal;
 globalvar define closingProgressHudEntity;
 globalvar define playerNumInsidePortal;
 
@@ -375,7 +374,7 @@ if(
         closingProgressHudEntity = LastTextID();
     }
     // get closest surviver to portal center
-    closestPlayerToPortal = 
+    define closestPlayerFromPortal = 
         FirstOf(
             SortedArray(
                 FilteredArray(
@@ -386,13 +385,13 @@ if(
         );
     // show big message
     BigMessage(
-        closestPlayerToPortal,
+        closestPlayerFromPortal,
         <"You are closing portal... Stay inside and Survive!">);
     BigMessage(
-        FilteredArray(AllPlayers(Team.Team1), (closestPlayerToPortal != ArrayElement())),
+        FilteredArray(AllPlayers(Team.Team1), (closestPlayerFromPortal != ArrayElement())),
         <"<0> <1> <2>",
-            closestPlayerToPortal,
-            HeroIconString(HeroOf(closestPlayerToPortal)),
+            closestPlayerFromPortal,
+            HeroIconString(HeroOf(closestPlayerFromPortal)),
             "closing portal... Cover one!">);
     // Wait closingCount
     Wait(closingCount, WaitBehavior.AbortWhenFalse);
@@ -443,11 +442,14 @@ if(
     portalState = PortalState.Closed;
     WaitNextPhase();
 
+    // show got life sound message
     BigMessage(AllPlayers(Team.All), "We got new team lifes!");
+    // play got life sound
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.BuffImpactSound,
         Color.White, portalPosition, MaxLength()
     );
+    // got life sound
     teamLifes += 1;
     WaitNextPhase();
 
@@ -564,8 +566,6 @@ if(
     DestroyEffect(portalEntitys[2]);
     DestroyEffect(portalEntitys[3]);
     DestroyEffect(portalEntitys[4]);
-    // destroy all bot
-    //DestroyAllBot();
 }
 
 rule: "Portal/State/Set  // waiting for found by players"
@@ -605,8 +605,16 @@ if(
     portalEntitys[4] = LastCreatedEntity();
     // show message
     BigMessage(AllPlayers(Team.All), "Detected more portal... find and attack it!");
-    // create all bot
-    //CreateAllBotByAsset();
+    // change bot asset by random
+    if(
+        0 >= NumberOfPlayers(Team.Team2) ||
+        RandomInteger(1, 100) <= 70
+    ){
+        // destroy all bot
+        DestroyAllBot();
+        // create all bot
+        CreateAllBotByAsset();   
+    }
     // Hide icon to let the player search the portal
     Wait(6, WaitBehavior.AbortWhenFalse);
     DestroyIcon(portalEntitys[0]);
@@ -682,9 +690,6 @@ if(
     DestroyEffect(portalEntitys[2]);
     DestroyEffect(portalEntitys[3]);
     DestroyEffect(portalEntitys[4]);
-    // destroy all bot
-    Wait(3, WaitBehavior.IgnoreCondition);
-    //DestroyAllBot();
 }
 
 rule: "Portal/State/End"
@@ -806,47 +811,47 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG Portal/InvalidDetect/EnvironmentDamageCount ----------
-define limitCount: 10;
-globalvar define environmentDamageCount = 0;
+// TAG Portal/InvalidDetect/InvalidAreaScore ----------
+define limitCount: 3;
+globalvar define invalidAreaScore = 0;
 
 rule: "Portal/InvalidDetect/EnvironmentDamage/resetCount"
 Event.OngoingGlobal
 if(
     !portalEnable &&
-    environmentDamageCount > 0
+    invalidAreaScore > 0
 ){
-    environmentDamageCount = 0;
+    invalidAreaScore = 0;
 }
 
-rule: "Portal/InvalidDetect/EnvironmentDamage/countupByDamage"
-Event.OnDamageTaken
-Team.Team2
-if(
-    portalEnable &&
-    ep == Attacker()
-){
-    environmentDamageCount += 1;
-}
-
-rule: "Portal/InvalidDetect/EnvironmentDamage/countupByDamage"
+rule: "Portal/InvalidDetect/EnvironmentDamage/countupBySuside"
 Event.OnDeath
 Team.Team2
 if(
     portalEnable &&
     ep == Attacker()
 ){
-    environmentDamageCount += 5;
+    invalidAreaScore += 1;
+}
+
+rule: "Portal/InvalidDetect/EnvironmentDamage/countupByKilledFromSpawnRoom"
+Event.OnDeath
+Team.Team2
+if(
+    portalEnable &&
+    IsInSpawnRoom(Attacker())
+){
+    invalidAreaScore += 3;
 }
 
 rule: "Portal/InvalidDetect/EnvironmentDamage/reduceCount"
 Event.OngoingGlobal
 if(
     portalEnable &&
-    0 < environmentDamageCount
+    0 < invalidAreaScore
 ){
     WaitUpdateMediumCycle();
-    environmentDamageCount --;
+    invalidAreaScore --;
     LoopIfConditionIsTrue();
 }
 
@@ -854,14 +859,14 @@ rule: "Portal/InvalidDetect/EnvironmentDamage/resetPortal"
 Event.OngoingGlobal
 if(
     portalEnable &&
-    limitCount <= environmentDamageCount
+    limitCount <= invalidAreaScore
 ){
     dbgMsg("reset Portal By Environment Damage Count");
     portalState = PortalState.Calculating;
 }
 
 // TAG Portal/InvalidDetect/NoContact ----------
-define limitTime: 30;
+define limitTime: 40;
 globalvar define noContact;
 
 rule: "Portal/InvalidDetect/NoContact/resetNoContact"
@@ -870,6 +875,7 @@ if(
     !portalEnable &&
     !noContact
 ){
+    WaitConditionConfirmed();
     noContact = true;
 }
 
@@ -910,7 +916,7 @@ if(
 ){
     if(
         IsInLineOfSight(portalPosition,
-            ClosestPlayerTo(portalPosition, Team.Team1),
+            closestPlayerPortal,
             BarrierLOS.NoBarriersBlock)
     ){
         WaitConditionConfirmed();
@@ -963,14 +969,15 @@ enum EnemyType{
     None,
     Minion,
     Elite,
-    Boss
+    Boss,
+    GiantBoss
 }
 
 playervar define eachDealtDamageScale;
 playervar define eachMaxSpawnInterval;
 playervar define eachChargeUltInterval;
 
-rule: "Bot/EnemyType/setEnemyType"
+disabled rule: "Bot/EnemyType/setEnemyType"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -996,35 +1003,40 @@ Player.All
 if(
     enemyType != EnemyType.None
 ){
-    WaitConditionConfirmed();
     if(enemyType == EnemyType.Minion){ 
-        SetMaxHealth(EventPlayer(), 100 * 0.5);
-        SetMoveSpeed(EventPlayer(), 100 * 1.10);
-        SetGravity(EventPlayer(), 100 * 0.75);
-        StartScalingPlayer(EventPlayer(), 0.8, false);
+        SetMaxHealth(EventPlayer(), 50);
+        SetHealingReceived(EventPlayer(), 50);
+        StartScalingPlayer(EventPlayer(), 0.75, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 1.25, false);
         eachDealtDamageScale = 0.5;
-        eachMaxSpawnInterval = 4;
-        eachChargeUltInterval = 90;
+        eachMaxSpawnInterval = 3;
+        eachChargeUltInterval = 80;
     }
     else if(enemyType == EnemyType.Elite){
-        SetMaxHealth(EventPlayer(), 100 * 2);
-        SetMoveSpeed(EventPlayer(), 100 * 1);
-        SetGravity(EventPlayer(), 100 * 1);
+        SetMaxHealth(EventPlayer(), 200);
+        SetHealingReceived(EventPlayer(), 200);
         StartScalingPlayer(EventPlayer(), 1.0, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 1.0, false);
         eachDealtDamageScale = 1.0;
-        eachMaxSpawnInterval = 8;
-        eachChargeUltInterval = 15;
+        eachMaxSpawnInterval = 9;
+        eachChargeUltInterval = 20;
     }
     else if(enemyType == EnemyType.Boss){
-        SetMaxHealth(EventPlayer(), 100 * 15);
-        SetMoveSpeed(EventPlayer(), 100 * 0.75);
-        SetGravity(EventPlayer(), 100 * 3);
+        SetMaxHealth(EventPlayer(), 1500);
+        SetHealingReceived(EventPlayer(), 1500);
         StartScalingPlayer(EventPlayer(), 1.5, false);
         StartModifyingHeroVoiceLines(EventPlayer(), 0.75, false);
         eachDealtDamageScale = 1.5;
-        eachMaxSpawnInterval = 30;
+        eachMaxSpawnInterval = 27;
+        eachChargeUltInterval = 10;
+    }
+    else if(enemyType == EnemyType.GiantBoss){
+        SetMaxHealth(EventPlayer(), 10000);
+        SetHealingReceived(EventPlayer(), 10000);
+        StartScalingPlayer(EventPlayer(), 2.5, false);
+        StartModifyingHeroVoiceLines(EventPlayer(), 0.5, false);
+        eachDealtDamageScale = 5.0;
+        eachMaxSpawnInterval = 10;
         eachChargeUltInterval = 10;
     }    
 
@@ -1051,7 +1063,7 @@ if(
         BotAppearanceEntitys[0] = LastCreatedEntity();
         CreateInWorldText(
             AllPlayers(Team.All), "Minion", 
-            EventPlayer(), 0.8, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            EventPlayer(), 1.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.White, Spectators.DefaultVisibility);
         BotAppearanceEntitys[1] = LastTextID();
     }
@@ -1061,7 +1073,7 @@ if(
         BotAppearanceEntitys[0] = LastCreatedEntity();
         CreateInWorldText(
             AllPlayers(Team.All), "Elite", 
-            EventPlayer(), 1.4, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            EventPlayer(), 1.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.Yellow, Spectators.DefaultVisibility);
         BotAppearanceEntitys[1] = LastTextID();
     }
@@ -1072,6 +1084,16 @@ if(
         CreateInWorldText(
             AllPlayers(Team.All), "Boss", 
             EventPlayer(), 2.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            Color.Red, Spectators.DefaultVisibility);
+        BotAppearanceEntitys[1] = LastTextID();
+    }
+ if(enemyType == EnemyType.GiantBoss){
+        CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
+            EventPlayer(), 8.0, EffectRev.VisibleToPositionAndRadius);
+        BotAppearanceEntitys[0] = LastCreatedEntity();
+        CreateInWorldText(
+            AllPlayers(Team.All), "Giant Boss", 
+            EventPlayer(), 2.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             Color.Red, Spectators.DefaultVisibility);
         BotAppearanceEntitys[1] = LastTextID();
     }
@@ -1108,6 +1130,9 @@ if(
     else if(enemyType == EnemyType.Boss){
         PlayContinuousBlast(Color.Red, PositionOf(), 5, 3);
     }
+    else if(enemyType == EnemyType.GiantBoss){
+        PlayContinuousBlast(Color.Red, PositionOf(), 7, 5);
+    }
 }
 
 // TAG Bot/SpawnInterval ----------
@@ -1140,9 +1165,10 @@ if(
 
 // TAG Bot/Teleport ----------
 playervar define teleportPosition;
-define teleportAreaSiez: 10;
-define teleportPositionClosestPlayer: ClosestPlayerTo(teleportPosition, Team.Team1);
-define portalPositionClosestPlayer: ClosestPlayerTo(portalPosition, Team.Team1);
+define teleportAreaSize: 6;
+define closestPlayerTeleportPosition: ClosestPlayerTo(teleportPosition, Team.Team1);
+define closestPlayerPortal: ClosestPlayerTo(portalPosition, Team.Team1);
+define closestPlayerMe: ClosestPlayerTo(ep, Team.Team1);
 
 void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     // set teleport position by blind spot from player
@@ -1150,28 +1176,27 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         teleportPosition =
             NearestWalkablePosition(
-                PositionOf(portalPositionClosestPlayer)
+                PositionOf(closestPlayerPortal)
                     + 
                 (
                     DirectionTowards(
-                        portalPositionClosestPlayer,
+                        closestPlayerPortal,
                         portalPosition
                     )
                         *
-                    (DistanceBetween(portalPosition, portalPositionClosestPlayer) * 0.5)
+                    (DistanceBetween(portalPosition, closestPlayerPortal) * 0.5)
                 )
                     +
-                RandomPosition(teleportAreaSiez, teleportAreaSiez, teleportAreaSiez)
+                RandomPosition(teleportAreaSize, teleportAreaSize, teleportAreaSize)
             );
 
         if(
-            // Not too close to player
-            DistanceBetween(
-                teleportPositionClosestPlayer, teleportPosition)
+            DistanceBetween(    // Not too close to player
+                closestPlayerTeleportPosition, teleportPosition)
             > 5
                 &&
-            // has not line
-            !IsInLineOfSight(ep, teleportPositionClosestPlayer)
+            IsInLineOfSight(    // Has line
+                closestPlayerTeleportPosition, teleportPosition, BarrierLOS.NoBarriersBlock)
         ){
             break;
         }
@@ -1182,18 +1207,16 @@ void SetTeleportPositionToCamper()"SetTeleportPositionToCamper"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        teleportPosition = 
-            PositionOf(portalPositionClosestPlayer)
-                +
-            RandomPosition(3, 0, 3);
-                
+        teleportPosition =
+            NearestWalkablePosition(
+                PositionOf(closestPlayerPortal)
+                    + 
+                RandomPosition(teleportAreaSize / 2, teleportAreaSize / 2, teleportAreaSize / 2)
+            );
+
         if(
-            DistanceBetween(    // Not too close to player
-                teleportPositionClosestPlayer, teleportPosition)
-            > 1
-                &&
             IsInLineOfSight(    // Has line
-                teleportPositionClosestPlayer, teleportPosition, BarrierLOS.NoBarriersBlock)
+                closestPlayerTeleportPosition, teleportPosition, BarrierLOS.NoBarriersBlock)
         ){
             break;
         }
@@ -1210,11 +1233,16 @@ void PlayTeleportEffect()"PlayTeleportEffect"{
     else if(enemyType == EnemyType.Boss){
         PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, EventPlayer(), 5);
     }
+    else if(enemyType == EnemyType.GiantBoss){
+        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, EventPlayer(), 7);
+    }
     // Play blast effect when Bot teleport
     
     // show effect at root position
     WaitPlayEffect();
 }
+
+
 
 rule: "Bot/Teleport/teleportToSpawnRoomByPortalDisabled"
 Event.OngoingPlayer
@@ -1222,7 +1250,6 @@ Team.Team2
 Player.All
 if(
     HasSpawned() &&
-    IsAlive() &&
     !portalEnable
 ){
     // Teleport Bot to spawn room when portal disable
@@ -1240,10 +1267,8 @@ Team.Team2
 Player.All
 if(
     HasSpawned() &&
-    IsAlive() &&
     portalEnable
 ){
-    // Teleport Bot to portal when spawn
     // clear root
     ClearStatus(ep, Status.Rooted);
     // set teleport position
@@ -1256,7 +1281,7 @@ if(
     PlayTeleportEffect();
 }
 
-rule: "Bot/Teleport/teleportToPortalBySpawn"
+rule: "Bot/Teleport/teleportToPlayerFrontBySpawn"
 Event.OngoingPlayer
 Team.Team2
 Player.All
@@ -1265,7 +1290,6 @@ if(
     IsInSpawnRoom()
 ){
     // Teleport Bot to player front
-
     // set teleport position
     SetTeleportPositionToPlayerFront();
     // Teleport
@@ -1274,14 +1298,48 @@ if(
     PlayTeleportEffect();
 }
 
-rule: "Bot/Teleport/teleportToPortalByPlayerEntered"
+rule: "Bot/Teleport/teleportToPlayerFrontByPlayerNotFound"
 Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
+    portalEnable &&
+    IsAlive() &&
+    !IsInLineOfSight(EventPlayer(),
+            closestPlayerMe,
+            BarrierLOS.NoBarriersBlock)
+){
+    // Teleport bot to player front
+    Wait(8, WaitBehavior.AbortWhenFalse);
+    // not half health
+    if(0.5 < NormalizedHealth()){
+        if(portalState != PortalState.Suspended)
+            // set teleport position
+            SetTeleportPositionToPlayerFront();   
+        else
+            // set teleport position
+            SetTeleportPositionToCamper();
+        // show pre teleport effect
+        PlayTeleportEffect();
+        // Teleport
+        Teleport(EventPlayer(), teleportPosition);
+        // show pre teleport effect
+        PlayTeleportEffect();
+    }
+    
+    LoopIfConditionIsTrue();
+}
+
+rule: "Bot/Teleport/teleportToPlayerFrontByPlayerEntered"
+Event.OngoingPlayer
+Team.Team2
+Player.All
+if(
+    portalEnable &&
     portalState == PortalState.Suspended &&
     IsAlive(EventPlayer())
 ){
+    // Teleport bot to player front
     WaitConditionConfirmed();
     // not half health
     if(0.5 < NormalizedHealth()){
@@ -1296,19 +1354,20 @@ if(
     }
 }
 
-rule: "Bot/Teleport/teleportToPortalByPlayerNotFound"
+disabled rule: "Bot/Teleport/teleportToPlayerAroundByPlayerCamping"
 Event.OngoingPlayer
 Team.Team2
 Player.All
 if(
+    portalEnable &&
     portalState == PortalState.Suspended &&
     IsAlive() &&
     !IsInLineOfSight(EventPlayer(),
-            ClosestPlayerTo(portalPosition, Team.Team1),
+            closestPlayerPortal,
             BarrierLOS.NoBarriersBlock)
 ){
-    // Teleport an Bot to camping player
-    Wait(10 - (roundNo / 10), WaitBehavior.AbortWhenFalse);
+    // Teleport bot to invade portal player
+    Wait(10, WaitBehavior.AbortWhenFalse);
     // set teleport position
     SetTeleportPositionToCamper();
     // show pre teleport effect
@@ -1336,6 +1395,7 @@ if(
     SetAbilityCooldown(ep, Button.PrimaryFire, 0);
     SetAbilityCooldown(ep, Button.SecondaryFire, 0);
     SetUltimateCharge (ep, 100);
+
     LoopIfConditionIsTrue();
 }
 
@@ -1384,8 +1444,8 @@ if(
     // If don't enough players, adjust Bot dealt damage rate to make the game fair
     // And the round progresses, the Bot deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Initial Deal Damage", 25, 0, 1000, 1);
-    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round Progress", 1.5, 0, 1000, 2);
+    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Initial Deal Damage", 30, 0, 1000, 1);
+    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round Progress", 2.0, 0, 1000, 2);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
     confirmDealDamage /= ConvertToBalancedValue(0.7, Team.Team1);
@@ -1533,7 +1593,7 @@ void ShowDebugHud()"ShowDebugHud"{
 
         CreateHudText(HostPlayer(),
             null,
-            <"<0> <1>", "environment Damage Count", environmentDamageCount>,
+            <"<0> <1>", "Invalid Area Score", invalidAreaScore>,
             null,
             Location.Left, -1,
             Color.White, Color.White, Color.White,
