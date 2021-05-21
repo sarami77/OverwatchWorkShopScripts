@@ -2,13 +2,16 @@ import "Utility.ostw";
 import "Debug.ostw";
 
 // Function enable team is Team1
+
+playervar define perkType;
+playervar define perkState;
 playervar define perk = [];
 enum Perk{
     perkCratePosition,
     perkCrateState,
     perkCrateEntitys,
-    perkType,
-    perkState,
+    // perkType,
+    // perkState,
     perkHudEntitys,
     playerClosestCrate,
     perkTimeLimit,
@@ -219,8 +222,8 @@ define canPickupCratePlayers:
         AllPlayers(Team.Team1),
         (
             IsAlive(ArrayElement()) &&
-            ArrayElement().perk[Perk.perkState] == PerkState.Non &&
-            ArrayElement().perk[Perk.perkType] == PerkType.Non &&
+            ArrayElement().perkState == PerkState.Non &&
+            ArrayElement().perkType == PerkType.Non &&
             DistanceBetween(perk[Perk.perkCratePosition], ArrayElement()) <= pickupRange &&
             !(ArrayElement().perk[Perk.notPickupPerk] && ArrayElement() == EventPlayer())
         )
@@ -249,13 +252,13 @@ if(
 
     // set perk
     if(perk[Perk.dropedPerkType] != PerkType.Non){
-        perk[Perk.playerClosestCrate].perk[Perk.perkType] = perk[Perk.dropedPerkType];
+        perk[Perk.playerClosestCrate].perkType = perk[Perk.dropedPerkType];
         perk[Perk.dropedPerkType] = PerkType.Non;
     }
     else{
-        perk[Perk.playerClosestCrate].perk[Perk.perkType] = RandomValueInArray(lotteryPerkList);
+        perk[Perk.playerClosestCrate].perkType = RandomValueInArray(lotteryPerkList);
     }
-    perk[Perk.playerClosestCrate].perk[Perk.perkState] = PerkState.Ready;
+    perk[Perk.playerClosestCrate].perkState = PerkState.Ready;
     // delete perk crate when picked up
     perk[Perk.perkCrateState] = PerkCrateState.NotDropped;
 }
@@ -272,7 +275,7 @@ if(
             (
                 TeamOf(ArrayElement()) == Team.Team1 &&
                 IsAlive(ArrayElement()) &&
-                ArrayElement().perk[Perk.perkState] != PerkState.Non &&
+                ArrayElement().perkState != PerkState.Non &&
                 DistanceBetween(perk[Perk.perkCratePosition], ArrayElement()) <= pickupRange
             )
         )
@@ -286,7 +289,7 @@ if(
                 (
                     TeamOf(ArrayElement()) == Team.Team1 &&
                     IsAlive(ArrayElement()) &&
-                    ArrayElement().perk[Perk.perkState] != PerkState.Non &&
+                    ArrayElement().perkState != PerkState.Non &&
                     DistanceBetween(perk[Perk.perkCratePosition], ArrayElement()) <= pickupRange
                 )
             )
@@ -302,8 +305,8 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perk[Perk.perkType] == PerkType.Non &&
-    perk[Perk.perkState] == PerkState.Non
+    perkType == PerkType.Non &&
+    perkState == PerkState.Non
 ){
     // Hide perk hud
     HidePerkHUD();
@@ -314,8 +317,8 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perk[Perk.perkType] != PerkType.Non &&
-    perk[Perk.perkState] == PerkState.Ready
+    perkType != PerkType.Non &&
+    perkState == PerkState.Ready
 ){
     // Update perk hud
     HidePerkHUD();
@@ -327,8 +330,8 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perk[Perk.perkType] != PerkType.Non &&
-    perk[Perk.perkState] == PerkState.Using
+    perkType != PerkType.Non &&
+    perkState == PerkState.Using
 ){
     // Update perk hud
     HidePerkHUD();
@@ -469,12 +472,12 @@ define CreateperkDetailHud(define detail):
 define CreatePerkStatusHud():
     CreateHudText(AllPlayers(),
         null, null, 
-        perk[Perk.perkState] == PerkState.Ready ? 
+        perkState == PerkState.Ready ? 
             <"  perk ready."> :
             <"  perk active until <0> seconds.", perk[Perk.perkTimeLimit]>,
         Location.Left, (SlotOf() * 10) + 2,
         Color.White, Color.White,
-        perk[Perk.perkState] == PerkState.Ready ?
+        perkState == PerkState.Ready ?
             Color.Yellow : Color.Orange,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
 
@@ -482,12 +485,12 @@ define CreatePerkStatusHud():
 define CreatePerkOperationHud():
     CreateHudText(EventPlayer(),
         null, null, 
-        perk[Perk.perkState] == PerkState.Ready ?
+        perkState == PerkState.Ready ?
             <"  Hold interact button <0> to activate.\n\r  Double press interact button <0> to drop as crate.", ButtonGuide(Button.Interact)> :
             <"  Double press interact button <0> to cancel.", ButtonGuide(Button.Interact)>,
         Location.Left, (SlotOf() * 10) + 3,
         Color.White, Color.White, 
-        perk[Perk.perkState] == PerkState.Ready ?
+        perkState == PerkState.Ready ?
             Color.Yellow : Color.Orange,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
 
@@ -510,139 +513,139 @@ define CreateHeadUpText(define text):
 // show each perk hud
 void ShowPerkHUD()"ShowPerkHUD"{
     // TAG perk detail text HUD
-    if(perk[Perk.perkType] == PerkType.SuperLanding){
+    if(perkType == PerkType.SuperLanding){
         perk[Perk.perkName] = "Super Landing";
         perk[Perk.perkDetail] = "Jump more higher and landing attack with impact. Can also hovering in air a little.";
     }
-    else if(perk[Perk.perkType] == PerkType.GrapplingBeam){
+    else if(perkType == PerkType.GrapplingBeam){
         perk[Perk.perkName] = "Grappling Beam";
         perk[Perk.perkDetail] = "Shot grappling beam and move quickly in air. Can also attract enemies until close range.";
     }
-    else if(perk[Perk.perkType] == PerkType.Sprinter){
+    else if(perkType == PerkType.Sprinter){
         perk[Perk.perkName] = "Sprinter";
         perk[Perk.perkDetail] = "Move faster when keep moving. Reset by stop or received damage.";
     }
-    else if(perk[Perk.perkType] == PerkType.Adrenaline){
+    else if(perkType == PerkType.Adrenaline){
         perk[Perk.perkName] = "Adrenaline";
         perk[Perk.perkDetail] = "Move faster when low health. Ideal for avoiding danger.";
     }
-    else if(perk[Perk.perkType] == PerkType.HeroicAgility){
+    else if(perkType == PerkType.HeroicAgility){
         perk[Perk.perkName] = "Heroic Agility";
         perk[Perk.perkDetail] = "Movement speed and jump length are enhanced. Fight with agility.";
     }
-    else if(perk[Perk.perkType] == PerkType.Savior){
+    else if(perkType == PerkType.Savior){
         perk[Perk.perkName] = "Savior";
         perk[Perk.perkDetail] = "Instantly revives teammate. Stun enemy when attacked enemy near low health teammates.";
     }
-    else if(perk[Perk.perkType] == PerkType.Fearless){
+    else if(perkType == PerkType.Fearless){
         perk[Perk.perkName] = "Fearless";
         perk[Perk.perkDetail] = "When surrounded by enemies, damage dealt and healing received continues to increase.";
     }
-    else if(perk[Perk.perkType] == PerkType.SteelFormation){
+    else if(perkType == PerkType.SteelFormation){
         perk[Perk.perkName] = "Steel Formation";
         perk[Perk.perkDetail] = "Reduce half received damage of near teammate and you. Let's unite.";
     }
-    else if(perk[Perk.perkType] == PerkType.PersonalShelter){
+    else if(perkType == PerkType.PersonalShelter){
         perk[Perk.perkName] = "Personal Shelter";
         perk[Perk.perkDetail] = "Place safe shelter. But for personal use only. Recommend for sniper or support hero.";
     }
-    else if(perk[Perk.perkType] == PerkType.BioticStation){
+    else if(perkType == PerkType.BioticStation){
         perk[Perk.perkName] = "Biotic Station";
         perk[Perk.perkDetail] = "Place powerful healing field. But effective time is short.";
     }
-    else if(perk[Perk.perkType] == PerkType.TrapBeam){
+    else if(perkType == PerkType.TrapBeam){
         perk[Perk.perkName] = "Trap Beam";
         perk[Perk.perkDetail] = "Place beam to between own position and aiming point. Beam stuns touching enemies.";
     }
-    else if(perk[Perk.perkType] == PerkType.BattleFlag){
+    else if(perkType == PerkType.BattleFlag){
         perk[Perk.perkName] = "Battle Flag";
         perk[Perk.perkDetail] = "Teammate can teleport at you from spawn room. Promote ultimate charge of near teammates and you.";
     }
-    else if(perk[Perk.perkType] == PerkType.ChainExplosion){
+    else if(perkType == PerkType.ChainExplosion){
         perk[Perk.perkName] = "Chain Explosion";
         perk[Perk.perkDetail] = "Killed enemy explodes and splash addtinal damage to around. Explosion is chain around.";
     }
-    else if(perk[Perk.perkType] == PerkType.IceAge){
+    else if(perkType == PerkType.IceAge){
         perk[Perk.perkName] = "Ice Age";
         perk[Perk.perkDetail] = "killed enemy explode and splash freeze effect to around. Freeze time is short but range is wide.";
     }
-    else if(perk[Perk.perkType] == PerkType.AimHack){
+    else if(perkType == PerkType.AimHack){
         perk[Perk.perkName] = "Aim Hack";
         perk[Perk.perkDetail] = "Automatically aim at enemy's head. No problem, bot can't report.";
     }
-    else if(perk[Perk.perkType] == PerkType.Vampire){
+    else if(perkType == PerkType.Vampire){
         perk[Perk.perkName] = "Vampire";
         perk[Perk.perkDetail] = "When deal damage to enemy, absorbs half of dealt damage as own health.";
     }
-    else if(perk[Perk.perkType] == PerkType.HotShot){
+    else if(perkType == PerkType.HotShot){
         perk[Perk.perkName] = "Hot Shot";
         perk[Perk.perkDetail] = "When kill enemy, ammo instantly reloaded and ability instantly recharged. barrier resource excluded.";
     }
-    else if(perk[Perk.perkType] == PerkType.ShotCaller){
+    else if(perkType == PerkType.ShotCaller){
         perk[Perk.perkName] = "Shot Caller";
         perk[Perk.perkDetail] = "When use ultimate ability, teammate's ultimate ability instantly full charged.";
     }
-    else if(perk[Perk.perkType] == PerkType.GrudgeFireBall){
+    else if(perkType == PerkType.GrudgeFireBall){
         perk[Perk.perkName] = "Grudge Fire Ball";
         perk[Perk.perkDetail] = "Charge power by received damage, shot power as fire ball. More power make more damage and blast range.";
     }
-    else if(perk[Perk.perkType] == PerkType.GrudgeThunderStrike){
+    else if(perkType == PerkType.GrudgeThunderStrike){
         perk[Perk.perkName] = "Grudge Thunder Strike";
         perk[Perk.perkDetail] = "Charge power by received damage, shot power as thunder strike. More power make more strike count.";
     }
-    else if(perk[Perk.perkType] == PerkType.ArtilleryRequest){
+    else if(perkType == PerkType.ArtilleryRequest){
         perk[Perk.perkName] = "Artillery Request";
         perk[Perk.perkDetail] = "Request artillery fire to aim point. Attack wide area with 10-second shell barrage.";
     }
-    else if(perk[Perk.perkType] == PerkType.StrafingSupport){
+    else if(perkType == PerkType.StrafingSupport){
         perk[Perk.perkName] = "Strafing Support";
         perk[Perk.perkDetail] = "Request strafing of attack jet at aim point. Can be reused after cool down.";
     }
-    else if(perk[Perk.perkType] == PerkType.MissileBarrage){
+    else if(perkType == PerkType.MissileBarrage){
         perk[Perk.perkName] = "Missile Barrage";
         perk[Perk.perkDetail] = "Request guided missiles barrage at aim point. Can be reused after cool down.";
     }
-    else if(perk[Perk.perkType] == PerkType.CruisingMissile){
+    else if(perkType == PerkType.CruisingMissile){
         perk[Perk.perkName] = "Cruising Missile";
         perk[Perk.perkDetail] = "Big missile that guiding to aim point. Destroy enemies of wide area.";
     }
-    else if(perk[Perk.perkType] == PerkType.OrbitalLaser){
+    else if(perkType == PerkType.OrbitalLaser){
         perk[Perk.perkName] = "Orbital Laser";
         perk[Perk.perkDetail] = "Laser irradiation from orbital satellite. Can control irradiation point for 60 seconds.";
     }
-    else if(perk[Perk.perkType] == PerkType.CarePackage){
+    else if(perkType == PerkType.CarePackage){
         perk[Perk.perkName] = "Care Package";
         perk[Perk.perkDetail] = "Request drop of support supplies. Can get multiple perk crates.";
     }
-    else if(perk[Perk.perkType] == PerkType.DeathFromAbove){
+    else if(perkType == PerkType.DeathFromAbove){
         perk[Perk.perkName] = "Death From Above";
         perk[Perk.perkDetail] = "Raining cannon shells and bullets from gunship. Turn the earth into hell!";
     }
-    else if(perk[Perk.perkType] == PerkType.LegendalyNinja){
+    else if(perkType == PerkType.LegendalyNinja){
         perk[Perk.perkName] = "Legendaly Ninja";
         perk[Perk.perkDetail] = "Ninja with super agility, dragon blade, immortality. Can add activity time by kill enemy.";
     }
-    else if(perk[Perk.perkType] == PerkType.MachDelivery){
+    else if(perkType == PerkType.MachDelivery){
         perk[Perk.perkName] = "Mach Delivery";
         perk[Perk.perkDetail] = "When kill or deal critical damage by pulse bomb, pulse bomb instantly full charged.";
     }
-    else if(perk[Perk.perkType] == PerkType.Juggernaut){
+    else if(perkType == PerkType.Juggernaut){
         perk[Perk.perkName] = "Juggernaut";
         perk[Perk.perkDetail] = "Heavy mechanical infantry with plasma auto canon and powerful gravity bomb.";
     }
-    else if(perk[Perk.perkType] == PerkType.BeamSniper){
+    else if(perkType == PerkType.BeamSniper){
         perk[Perk.perkName] = "Beam Sniper";
         perk[Perk.perkDetail] = "Sniper with powerful beam rifle. Penetrate wall and enemy body when max charge shot.";
     }
-    else if(perk[Perk.perkType] == PerkType.DragonStorm){
+    else if(perkType == PerkType.DragonStorm){
         perk[Perk.perkName] = "Dragon Storm";
         perk[Perk.perkDetail] = "Many dragons fall from sky, massive damage enemy of wide area. Can add activity time by kill enemy.";
     }
-    else if(perk[Perk.perkType] == PerkType.Titan){
+    else if(perkType == PerkType.Titan){
         perk[Perk.perkName] = "Titan";
         perk[Perk.perkDetail] = "Giant with big barrier, big hammer, super toughness. Protect team and rampage!";
     }
-    else if(perk[Perk.perkType] == PerkType.Annihilator){
+    else if(perkType == PerkType.Annihilator){
         perk[Perk.perkName] = "Annihilator";
         perk[Perk.perkDetail] = "Execute in sight enemies one after another by super-fast attack like lightning bolt.";
     }
@@ -667,13 +670,13 @@ void ShowPerkHUD()"ShowPerkHUD"{
     perk[Perk.perkHudEntitys][3] = LastTextID();
     WaitRedraw();
     // show head up text
-    if(perk[Perk.perkState] == PerkState.Using){
+    if(perkState == PerkState.Using){
         CreateHeadUpText(perk[Perk.perkName]);
         perk[Perk.perkHudEntitys][4] = LastTextID();
         WaitRedraw();
     }
     // show Aura effct
-    if(perk[Perk.perkState] == PerkState.Using){
+    if(perkState == PerkState.Using){
         CreateEffect(AllPlayers(), Effect.BadAura, Color.White,
             EventPlayer(), 1, EffectRev.VisibleToPositionAndRadius);
         perk[Perk.perkHudEntitys][5] = LastCreatedEntity();
@@ -696,7 +699,7 @@ Team.Team1
 Player.All
 if(
     IsAlive() &&
-    perk[Perk.perkState] == PerkState.Ready &&
+    perkState == PerkState.Ready &&
     IsButtonHeld(EventPlayer(), Button.Interact)
 ){
     WaitLongPressConfirm();
@@ -706,7 +709,7 @@ if(
     PlayEffect(
         EventPlayer(), PlayEffect.BuffExplosionSound,
         Color.White, EventPlayer(), MaxLength());
-    perk[Perk.perkState] = PerkState.Using;
+    perkState = PerkState.Using;
 }
 
 rule: "Perk/Player/dropPerk"
@@ -715,15 +718,15 @@ Team.Team1
 Player.All
 if(
     IsAlive() &&
-    perk[Perk.perkState] == PerkState.Ready &&
+    perkState == PerkState.Ready &&
     intaractDoublePressed
 ){
     WaitConditionConfirmed();
     perk[Perk.notPickupPerk] = true;
-    perk[Perk.dropedPerkType] = perk[Perk.perkType];
+    perk[Perk.dropedPerkType] = perkType;
     perk[Perk.perkCratePosition] = BelowPosition(PositionOf()) + PositionOffset();
     perk[Perk.perkCrateState] = PerkCrateState.Dropped;
-    perk[Perk.perkState] = PerkState.Non;
+    perkState = PerkState.Non;
 }
 
 rule: "Perk/Player/releaseNotPickupPerk"
@@ -742,7 +745,7 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perk[Perk.perkState] == PerkState.Using &&
+    perkState == PerkState.Using &&
     perk[Perk.perkTimeLimit] > 0
 ){
     // count down perk active limit time
@@ -756,12 +759,12 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perk[Perk.perkState] == PerkState.Using &&
+    perkState == PerkState.Using &&
     perk[Perk.perkTimeLimit] <= 0
 ){
     // lose perk by active limit time out
     WaitConditionConfirmed();
-    perk[Perk.perkState] = PerkState.Non;
+    perkState = PerkState.Non;
 }
 
 rule: "Perk/Player/cancelPerk"
@@ -770,7 +773,7 @@ Team.Team1
 Player.All
 if(
     IsAlive() &&
-    perk[Perk.perkState] == PerkState.Using &&
+    perkState == PerkState.Using &&
     intaractDoublePressed
 ){
     // lose perk by cancel operation of interact key hold
@@ -778,7 +781,7 @@ if(
     PlayEffect(
         EventPlayer(), PlayEffect.DebuffImpactSound,
         Color.White, EventPlayer(), MaxLength());
-    perk[Perk.perkState] = PerkState.Non;
+    perkState = PerkState.Non;
 }
 
 rule: "Perk/Player/remindPerk"
@@ -786,7 +789,7 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perk[Perk.perkState] == PerkState.Ready
+    perkState == PerkState.Ready
 ){
     // remind use perk.
     Wait(30, WaitBehavior.AbortWhenFalse);
@@ -801,11 +804,11 @@ Team.Team1
 Player.All
 if(
     IsDead() &&
-    perk[Perk.perkState] == PerkState.Using
+    perkState == PerkState.Using
 ){
     // lose perk by player dead
     SmallMessage(EventPlayer(), "Lost active perk due to death.");
-    perk[Perk.perkState] = PerkState.Non;
+    perkState = PerkState.Non;
 }
 
 // TAG Debug ----------
@@ -840,30 +843,30 @@ if(
 ){
     WaitShortPressConfirm();
     AbortIf(IsButtonHeld(EventPlayer(), Button.Interact));
-    AbortIf(perk[Perk.perkState] == PerkState.Using);
+    AbortIf(perkState == PerkState.Using);
 
-    backupPerkPerkState = perk[Perk.perkState];
-    perk[Perk.perkState] = PerkState.Non;
-    WaitUntil(perk[Perk.perkType] == PerkType.Non, 1);
+    backupPerkPerkState = perkState;
+    perkState = PerkState.Non;
+    WaitUntil(perkType == PerkType.Non, 1);
 
     if(backupPerkPerkState == PerkState.Non){
         if(backupPerkPerkType == PerkType.Non){
             backupPerkPerkType ++;
         }
-        perk[Perk.perkType] = backupPerkPerkType;
-        perk[Perk.perkState] = PerkState.Ready;  
+        perkType = backupPerkPerkType;
+        perkState = PerkState.Ready;  
     }
     else if(backupPerkPerkState == PerkState.Ready){
         if(backupPerkPerkType < PerkType.End){
-            perk[Perk.perkType] = backupPerkPerkType + 1;
+            perkType = backupPerkPerkType + 1;
         }
         else{
-            perk[Perk.perkType] = 1;
+            perkType = 1;
         }
-        backupPerkPerkType = perk[Perk.perkType];
-        perk[Perk.perkState] = PerkState.Ready;  
+        backupPerkPerkType = perkType;
+        perkState = PerkState.Ready;  
     }
-    backupPerkPerkState = perk[Perk.perkState];
+    backupPerkPerkState = perkState;
 }
 
 rule: "Debug/givePerkRandomToSelf"
@@ -878,14 +881,14 @@ if(
     WaitLongPressConfirm();
 
     // Give perk to own player
-    perk[Perk.perkState] = PerkState.Non;
-    WaitUntil(perk[Perk.perkType] == PerkType.Non, 1);
-    perk[Perk.perkType] = RandomValueInArray(lotteryPerkList);
-    perk[Perk.perkState] = PerkState.Ready;   
+    perkState = PerkState.Non;
+    WaitUntil(perkType == PerkType.Non, 1);
+    perkType = RandomValueInArray(lotteryPerkList);
+    perkState = PerkState.Ready;   
 
     // Use perk by force
     Wait(0.5, WaitBehavior.AbortWhenFalse);
-    perk[Perk.perkState] = PerkState.Using;       
+    perkState = PerkState.Using;       
 }
 
 rule: "Debug/givePerkRandomToAll"
@@ -900,14 +903,14 @@ if(
     WaitLongPressConfirm();
 
     // Give perk to all player
-    AllPlayers(Team.Team1).perk[Perk.perkState] = PerkState.Non;   
-    WaitUntil(AllPlayers(Team.Team1).perk[Perk.perkType] == PerkType.Non, 1);
-    AllPlayers(Team.Team1).perk[Perk.perkType] = RandomValueInArray(lotteryPerkList);
-    AllPlayers(Team.Team1).perk[Perk.perkState] = PerkState.Ready;
+    AllPlayers(Team.Team1).perkState = PerkState.Non;   
+    WaitUntil(AllPlayers(Team.Team1).perkType == PerkType.Non, 1);
+    AllPlayers(Team.Team1).perkType = RandomValueInArray(lotteryPerkList);
+    AllPlayers(Team.Team1).perkState = PerkState.Ready;
 
     // Use perk by force    
     Wait(0.5, WaitBehavior.AbortWhenFalse);
-    AllPlayers(Team.Team1).perk[Perk.perkState] = PerkState.Using;
+    AllPlayers(Team.Team1).perkState = PerkState.Using;
 }
 
 define isInCombat: 
@@ -920,13 +923,13 @@ Team.Team1
 Player.All
 if(
     isInCombat &&
-    perk[Perk.perkState] == PerkState.Non
+    perkState == PerkState.Non
 ){
     Wait(RandomInteger(1, 5), WaitBehavior.AbortWhenFalse);
 
-    WaitUntil(AllPlayers(Team.Team1).perk[Perk.perkType] == PerkType.Non, 1);
-    EventPlayer().perk[Perk.perkType] = RandomValueInArray(lotteryPerkList);
-    EventPlayer().perk[Perk.perkState] = PerkState.Ready;
+    WaitUntil(AllPlayers(Team.Team1).perkType == PerkType.Non, 1);
+    EventPlayer().perkType = RandomValueInArray(lotteryPerkList);
+    EventPlayer().perkState = PerkState.Ready;
 }
 
 disabled rule: "Debug/forceUsePerk // for bot only"
@@ -935,7 +938,7 @@ Team.Team1
 Player.All
 if(
     isInCombat &&
-    perk[Perk.perkState] == PerkState.Ready
+    perkState == PerkState.Ready
 ){
     Wait(RandomInteger(1, 5), WaitBehavior.AbortWhenFalse);
 
@@ -950,7 +953,7 @@ Team.Team1
 Player.All
 if(
     isInCombat &&
-    perk[Perk.perkState] == PerkState.Using
+    perkState == PerkState.Using
 ){
     Wait(RandomInteger(1, 5), WaitBehavior.AbortWhenFalse);
 
@@ -964,7 +967,7 @@ Event.OngoingPlayer
 Team.Team1
 Player.All
 if(
-    perk[Perk.perkState] == PerkState.Using
+    perkState == PerkState.Using
 ){
-    perk[Perk.perkType] = PerkType.StrafingSupport;
+    perkType = PerkType.StrafingSupport;
 }
