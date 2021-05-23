@@ -70,14 +70,12 @@ enum BotAsset{
 }
 
 globalvar define botSlot;
-globalvar define isSpawnedBot;
 
 rule: "Bot/Spawn/CreateAllBotByBotAsset"
 Event.OngoingPlayer
 if(
     ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact) &&
-    !isSpawnedBot
+    IsButtonHeld(ep, Button.Interact)
 ){
     WaitLongPressConfirm();
     CreateAllBotByAsset();
@@ -94,6 +92,36 @@ void CreateAllBotByAsset()"CreateAllBotByAsset"{
     [
         // basic
         [
+            [EnemyType.Boss,      RandomValueInArray(AllTankHeroes()),    1],
+            [EnemyType.Elite,     RandomValueInArray(AllDamageHeroes()),  1],
+            [EnemyType.Elite,     RandomValueInArray(AllDamageHeroes()),  1],
+            [EnemyType.Minion,    RandomValueInArray(AllSupportHeroes()), 3]
+        ],
+        // 4 elite
+        [
+            [EnemyType.Elite,       RandomValueInArray(AllTankHeroes()), 1],
+            [EnemyType.Elite,       RandomValueInArray(AllTankHeroes()), 1],
+            [EnemyType.Elite,       RandomValueInArray(AllDamageHeroes()), 1],
+            [EnemyType.Elite,       RandomValueInArray(AllDamageHeroes()), 1],
+            [EnemyType.Minion,      RandomValueInArray(AllSupportHeroes()), 1],
+            [EnemyType.Minion,      RandomValueInArray(AllSupportHeroes()), 1]
+        ],
+        // triple boss
+        [
+            [EnemyType.Boss,      RandomValueInArray(AllTankHeroes()),    1],
+            [EnemyType.Boss,      RandomValueInArray(AllDamageHeroes()),  1],
+            [EnemyType.Boss,      RandomValueInArray(AllSupportHeroes()), 1]
+        ],
+        // Giant boss
+        [
+            [EnemyType.GiantBoss,       RandomValueInArray(
+                                            RandomValueInArray(
+                                                [AllDamageHeroes(), AllTankHeroes()]
+                                            )
+                                        ), 1]
+        ],
+        // basic
+        [
             [EnemyType.Boss,      Hero.Roadhog, 1],
             [EnemyType.Elite,     Hero.Mccree, 1],
             [EnemyType.Elite,     Hero.Reaper, 1],
@@ -102,8 +130,7 @@ void CreateAllBotByAsset()"CreateAllBotByAsset"{
         // melees
         [
             [EnemyType.Boss,      Hero.Reinhardt, 1],
-            [EnemyType.Elite,     Hero.Reaper, 1],
-            [EnemyType.Elite,     Hero.Mei, 1],
+            [EnemyType.Elite,     Hero.Doomfist, 2],
             [EnemyType.Minion,    Hero.Brigitte, 3]
         ],
         // long range
@@ -126,41 +153,14 @@ void CreateAllBotByAsset()"CreateAllBotByAsset"{
             [EnemyType.Elite,     Hero.Ana, 1],
             [EnemyType.Elite,     Hero.Ashe, 1]
         ],
-        // balanced
-        [
-            [EnemyType.Elite,       RandomValueInArray(AllTankHeroes()), 1],
-            [EnemyType.Elite,       RandomValueInArray(AllTankHeroes()), 1],
-            [EnemyType.Elite,       RandomValueInArray(AllDamageHeroes()), 2],
-            [EnemyType.Elite,       RandomValueInArray(AllDamageHeroes()), 1],
-            [EnemyType.Minion,      RandomValueInArray(AllSupportHeroes()), 1],
-            [EnemyType.Minion,      RandomValueInArray(AllSupportHeroes()), 1]
-        ],
-        // random
-        [
-            [EnemyType.Boss,      RandomValueInArray(AllTankHeroes()),    1],
-            [EnemyType.Elite,     RandomValueInArray(AllDamageHeroes()),  1],
-            [EnemyType.Elite,     RandomValueInArray(AllDamageHeroes()),  1],
-            [EnemyType.Minion,    RandomValueInArray(AllSupportHeroes()), 3]
-        ],
-        // triple boss
-        [
-            [EnemyType.Boss,      RandomValueInArray(AllTankHeroes()),    1],
-            [EnemyType.Boss,      RandomValueInArray(AllDamageHeroes()),  1],
-            [EnemyType.Boss,      RandomValueInArray(AllSupportHeroes()), 1]
-        ],
-        // Reinhardt forces
+        // Melee forces
         [
             [EnemyType.Boss,      Hero.Reinhardt, 1],
             [EnemyType.Elite,     Hero.Reinhardt, 2],
             [EnemyType.Minion,    Hero.Brigitte, 3]
-        ],
-        // Giant boss
-        [
-            [EnemyType.GiantBoss,      RandomValueInArray(AllTankHeroes()),    1]
         ]
     ];
     // create bot by asset
-    isSpawnedBot = true;
     define asset = ValueInArray(assetList, RandomInteger(0, CountOf(assetList) - 1));
     for(define idx = 0; idx < CountOf(asset); idx++){
         for(define botCount = 0; botCount < asset[idx][BotAsset.count]; botCount++){
@@ -545,14 +545,16 @@ define isUnderBlocked: IsBlockedBetween(botInfo[BotInfo.frontDetector], botInfo[
 
 Boolean getDetectedObject()"getDetectedObject"{
     DetectedObject detecObj = DetectedObject.None;
-    define moveDir = Vector(
-        XOf(FacingDirectionOf()),
-        0,
-        ZOf(FacingDirectionOf())
-    );
-    moveDir = Normalize(moveDir);
     botInfo[BotInfo.detectorRoot] = EyePosition();
-    botInfo[BotInfo.frontDetector] = ShiftedPosition(botInfo[BotInfo.detectorRoot], moveDir, frontDetectorLength);
+    botInfo[BotInfo.frontDetector] = ShiftedPosition(botInfo[BotInfo.detectorRoot],
+        Normalize(
+            Vector(
+                XOf(FacingDirectionOf()),
+                0,
+                ZOf(FacingDirectionOf())
+            )
+        ),
+        frontDetectorLength);
     botInfo[BotInfo.upperDetector] = ShiftedPosition(botInfo[BotInfo.frontDetector], Up(), upperDetectorLength);
     botInfo[BotInfo.underDetector] = ShiftedPosition(botInfo[BotInfo.frontDetector], Down(), underDetectorLength);
 
@@ -1168,7 +1170,6 @@ if(
     IsButtonHeld(ep, Button.Interact)
 ){
     WaitLongPressConfirm();
-    isSpawnedBot = false;
     DestroyAllBot();
     CreateAllBotByAsset();
 }

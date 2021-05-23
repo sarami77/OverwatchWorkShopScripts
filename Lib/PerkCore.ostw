@@ -486,8 +486,10 @@ define CreatePerkOperationHud():
     CreateHudText(EventPlayer(),
         null, null, 
         perkState == PerkState.Ready ?
-            <"  Hold interact button <0> to activate.\n\r  Double press interact button <0> to drop as crate.", ButtonGuide(Button.Interact)> :
-            <"  Double press interact button <0> to cancel.", ButtonGuide(Button.Interact)>,
+            <"  Hold interact button <0> to activate.\n\r  Double press interact button <0> to drop as crate.",
+                ButtonGuide(Button.Interact)> :
+            <"  Double press interact button <0> to abort.",
+                ButtonGuide(Button.Interact)>,
         Location.Left, (SlotOf() * 10) + 3,
         Color.White, Color.White, 
         perkState == PerkState.Ready ?
@@ -827,46 +829,6 @@ if(
         Location.Left, -1,
         Color.White, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-}
-
-globalvar define backupPerkPerkState;
-globalvar define backupPerkPerkType;
-
-rule: "Debug/choicePerk"
-Event.OngoingPlayer
-Team.All
-Player.All
-if(
-    enableDebugPerk &&
-    HostPlayer() == EventPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact)
-){
-    WaitShortPressConfirm();
-    AbortIf(IsButtonHeld(EventPlayer(), Button.Interact));
-    AbortIf(perkState == PerkState.Using);
-
-    backupPerkPerkState = perkState;
-    perkState = PerkState.Non;
-    WaitUntil(perkType == PerkType.Non, 1);
-
-    if(backupPerkPerkState == PerkState.Non){
-        if(backupPerkPerkType == PerkType.Non){
-            backupPerkPerkType ++;
-        }
-        perkType = backupPerkPerkType;
-        perkState = PerkState.Ready;  
-    }
-    else if(backupPerkPerkState == PerkState.Ready){
-        if(backupPerkPerkType < PerkType.End){
-            perkType = backupPerkPerkType + 1;
-        }
-        else{
-            perkType = 1;
-        }
-        backupPerkPerkType = perkType;
-        perkState = PerkState.Ready;  
-    }
-    backupPerkPerkState = perkState;
 }
 
 rule: "Debug/givePerkRandomToSelf"
