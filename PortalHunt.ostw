@@ -50,37 +50,37 @@ disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopS
 
 // TAG System ----------
 define enableOverLoadMeasures: true;
-globalvar define currentMotionSpeed;
 define isServerOverLoading: 255 <= ServerLoad();
+globalvar define currentSlowLevel;
+define slowLevel: [100, 90, 80, 60, 40];
 
 rule: "System/ServerOverLoadMeasures"
 Event.OngoingGlobal
 if(
     enableOverLoadMeasures &&
-    teamLifes > 0
+    portalState != PortalState.End
 ){
     // If the server is overloaded,
     //  apply slow motion every second to reduce the load to
     //  avoid shutting down due to server overload.
-    if(isServerOverLoading){
-        WaitUntil(!isServerOverLoading, 3);
+    while(
+        isServerOverLoading
+    ){
+        // wait cooldown of overload
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        // is continues overload
         if(isServerOverLoading){
-            if(currentMotionSpeed != 25){
-                SetSlowMotion(25);
-                currentMotionSpeed = 25;
+            // can change next slow level
+            if(currentSlowLevel < CountOf(slowLevel)){
+                // change next slow level
+                currentSlowLevel++;
+                SetSlowMotion(slowLevel[currentSlowLevel]);
             }
         }
         else{
-            if(currentMotionSpeed != 100){
-                SetSlowMotion(100);
-                currentMotionSpeed = 100;
-            }
-        }
-    }
-    else{
-        if(currentMotionSpeed != 100){
-            SetSlowMotion(100);
-            currentMotionSpeed = 100;
+            // reset slow level
+            currentSlowLevel = 0;
+            SetSlowMotion(slowLevel[currentSlowLevel]);
         }
     }
 
@@ -89,8 +89,8 @@ if(
 }
 
 // TAG Game ----------
-globalvar define initCompleted;
 define enemyColor: Color.Purple;
+globalvar define initCompleted;
 globalvar define roundNo;
 
 rule: "Game/initGameSetting //wait 3 _seconds because some scripts fail immediately after loading the _server"
@@ -99,10 +99,10 @@ Event.OngoingGlobal
     // Stop records to reduce server load
     DisableInspectorRecording();
 
-    // // for perfomance debug
+    // for perfomance debug
     // CreateHudText(HostPlayer(),
     //     null,
-    //     <"<0> <1>", "Server Load", ServerLoad()>,
+    //     <"<0> <1>", "current Slow Level", currentSlowLevel>,
     //     null,
     //     Location.Left, -1,
     //     Color.White, Color.Orange, Color.White,
@@ -833,7 +833,7 @@ if(
 }
 
 // TAG Portal/InvalidDetect/NoContact ----------
-define limitTime: 180;
+define limitTime: 120;
 globalvar define noContactTime;
 
 rule: "Portal/InvalidDetect/NoContactTime/resetTime"
@@ -873,7 +873,6 @@ if(
     portalEnable &&
     limitTime <= noContactTime
 ){
-    Wait(limitTime, WaitBehavior.AbortWhenFalse);
     dbgMsg("reset Portal By No Contact");
     portalState = PortalState.Calculating;
 }
@@ -968,7 +967,6 @@ playervar define eachDealtDamageScale;
 playervar define eachMaxSpawnInterval;
 playervar define eachChargeUltInterval;
 
-
 void SetMaxHealthWithRecover(define player, define maxHelth)"SetMaxHealthWithRecover"{
     SetMaxHealth(player, maxHelth);
     Wait(0.1, WaitBehavior.AbortWhenFalse);
@@ -1005,8 +1003,8 @@ if(
         StartScalingPlayer(ep, 1.5, false);
         StartModifyingHeroVoiceLines(ep, 0.75, false);
         SetMaxHealthWithRecover(ep, 1000);
-        SetHealingReceived(ep, 400);
-        SetHealingDealt(ep, 400);
+        SetHealingReceived(ep, 300);
+        SetHealingDealt(ep, 300);
         eachDealtDamageScale = 1.5;
         eachChargeUltInterval = 10;
         eachMaxSpawnInterval = 30;
@@ -1155,33 +1153,15 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     }
 }
 
-void SetTeleportPositionToCamper()"SetTeleportPositionToCamper"{
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        teleportPosition =
-            NearestWalkablePosition(
-                PositionOf(closestPlayerToPortal)
-                    + 
-                RandomPosition(teleportAreaSize / 2, 0, teleportAreaSize / 2)
-            );
-
-        if(
-            IsInLineOfSight(    // Has line
-                closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
-        ){
-            break;
-        }
-    }
-}
-
 void SetTeleportPositionToShutter()"SetTeleportPositionToShutter"{
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         teleportPosition =
-                BlockedPositon(
-                    PositionOf(closestPlayerToPortal),
-                    DirectionFromAngles(
-                        RandomReal(0, 360), 0
-                    ),
-                    30);
+            BlockedPositon(
+                closestPlayerToPortal,
+                DirectionFromAngles(
+                    RandomReal(0, 360), 0
+                ), 30
+            );
         if(
             DistanceBetween(    // Not too close to player
                 closestPlayerToTelPos, teleportPosition)
@@ -1189,6 +1169,10 @@ void SetTeleportPositionToShutter()"SetTeleportPositionToShutter"{
                 &&
             IsInLineOfSight(    // Has line
                 closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
+                &&
+            IsBlockedBetween(   // Has ground
+                teleportPosition, ShiftedPosition(teleportPosition, Down(), 6))
+
         ){
             break;
         }
@@ -1645,14 +1629,14 @@ void ShowDebugHud()"ShowDebugHud"{
         debugHudEntitys[End()] = LastTextID();
     }
 
-    // CreateHudText(HostPlayer(),
-    //     null,
-    //     <"<0> <1>", "over load during", serverLoad>,
-    //     null,
-    //     Location.Left, -1,
-    //     Color.White, Color.Orange, Color.White,
-    //     HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-    // debugHudEntitys[End()] = LastTextID();
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "current Slow Level", currentSlowLevel>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHudEntitys[End()] = LastTextID();
 }
 
 // Hide debug icon and hud

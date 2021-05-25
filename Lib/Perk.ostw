@@ -2,6 +2,20 @@ import "PerkCore.ostw";
 
 define parallelAnimationNum: 2;
 
+// TAG System ----------
+define isReduceAnimation: currentSlowLevel > 2;
+
+rule: "Perk/System/ServerOverLoadMeasures"
+Event.OngoingGlobal
+if(
+    isReduceAnimation
+){
+    StopChasingVariable(AllPlayers(Team.Team1).perkPosition);
+    StopChasingVariable(AllPlayers(Team.Team1).perkPosition2);
+    StopChasingVariable(AllPlayers(Team.Team1).landPosition);
+    StopChasingVariable(AllPlayers(Team.Team1).landZonePosition);
+}
+
 // TAG SuperLanding ----------
 define superLandingRange: 8;
 
@@ -956,7 +970,7 @@ if(
     aimPosition = AimingPositionIgnorePlayer();
 }
 
-rule: "Perk/Player/TrapBeam/moveDetectorToAimPosition"
+rule: "Perk/Player/TrapBeam/moveDetector"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -1453,6 +1467,8 @@ if(
     perkType == PerkType.HotShot &&
     perkState  == PerkState.Using
 ){
+    Wait(0.75, WaitBehavior.AbortWhenFalse);
+
     define clips = [0, 1];
     for(define idx = 0; idx < CountOf(clips); idx++){
         SetAmmo(EventPlayer(), clips[idx], MaxAmmo(EventPlayer(), clips[idx]));
@@ -1637,7 +1653,7 @@ if(
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
 }
 
-rule: "Perk/Player/GrudgeFireBall/playFireBallTrajectory"
+rule: "Perk/Player/GrudgeFireBall/playTrajectory"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -1650,7 +1666,7 @@ if(
         AllPlayers(), PlayEffect.BadExplosion,
         Color.Yellow, perkPosition, perk[Perk.fireBallSize] * 1.5);
 
-    WaitUpdateShortCycle();
+    WaitUpdateVeryShortCycle();
     LoopIfConditionIsTrue();
 }
 
@@ -2017,11 +2033,14 @@ if(
             0,
             artilleryLandingRange / 1.5
         );
-    UpdateEveryFrame(perkPosition);
-    if(!isServerOverLoading)
+    
+    if(!isReduceAnimation){
+        UpdateEveryFrame(perkPosition);
         ChaseVariableOverTime(
             perkPosition, landPosition, artilleryAttackSpeeed,
             TimeChaseReevaluation.DestinationAndDuration);
+    }
+
     Wait(artilleryAttackSpeeed, WaitBehavior.AbortWhenFalse);
     StopChasingVariable(perkPosition);
     // hide shell
@@ -2056,11 +2075,14 @@ if(
             0,
             artilleryLandingRange / 1.5
         );
-    UpdateEveryFrame(perkPosition2);
-    if(!isServerOverLoading)
+
+    if(!isReduceAnimation){
+        UpdateEveryFrame(perkPosition2);
         ChaseVariableOverTime(
             perkPosition2, landPosition2, artilleryAttackSpeeed,
             TimeChaseReevaluation.DestinationAndDuration);
+    }
+
     Wait(artilleryAttackSpeeed, WaitBehavior.AbortWhenFalse);
     StopChasingVariable(perkPosition2);
     // hide shell
@@ -2185,7 +2207,7 @@ if(
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
 }
 
-rule: "Perk/Player/StrafingSupport/setLandingZone"
+rule: "Perk/Player/StrafingSupport/playLandingZone"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -2244,20 +2266,21 @@ if(
 
     // play landing animation
     landPosition = perkPosition;
+
+    UpdateEveryFrame(landPosition);
     ChaseVariableOverTime(
         landPosition, perkPosition2,
         strafReqAttackTime,
         TimeChaseReevaluation.DestinationAndDuration);
-    Wait(strafReqAttackTime, WaitBehavior.AbortWhenFalse);
 
+    Wait(strafReqAttackTime, WaitBehavior.AbortWhenFalse);
     StopChasingVariable(landPosition);
     DestroyEffect(perk[Perk.perkEffectAndText] [2]);
-
     // start attack
     perk[Perk.perkEffectStatus] = PerkEffectStatus.SecondTriggered;
 }
 
-rule: "Perk/Player/StrafingSupport/moveLandPoint"
+rule: "Perk/Player/StrafingSupport/playLanding"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -2273,6 +2296,7 @@ if(
 
     // chase landing position
     landPosition = perkPosition;
+
     UpdateEveryFrame(landPosition);
     ChaseVariableOverTime(
         landPosition, perkPosition2,
@@ -2280,12 +2304,10 @@ if(
         TimeChaseReevaluation.DestinationAndDuration);
 
     Wait(strafReqAttackTime, WaitBehavior.AbortWhenFalse);
-
     StopChasingVariable(landPosition);
     DestroyInWorldText(perk[Perk.perkEffectAndText] [1]);
     DestroyEffect(perk[Perk.perkEffectAndText] [3]);
     DestroyEffect(perk[Perk.perkEffectAndText] [4]);
-
     // start reload
     perk[Perk.perkEffectCoolTime] = strafReloadTime;
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
@@ -2361,7 +2383,7 @@ if(
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
 }
 
-rule: "Perk/Player/StrafingSupport/playAircraftAnimation"
+rule: "Perk/Player/StrafingSupport/playAircraft"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -2392,15 +2414,17 @@ if(
 
     // play air craft animation
     landPosition = perkPosition;
-    UpdateEveryFrame(landPosition);
-    if(!isServerOverLoading)
+    
+    if(!isReduceAnimation){
+        UpdateEveryFrame(landPosition);
         ChaseVariableOverTime(
             landPosition, perkPosition2,
             3,
             TimeChaseReevaluation.DestinationAndDuration);
+    }
+
     Wait(3, WaitBehavior.IgnoreCondition);
     StopChasingVariable(landPosition);
-
     DestroyEffect(perk[Perk.perkEffectAndText] [2]);
     DestroyEffect(perk[Perk.perkEffectAndText] [3]);
 }
@@ -2580,7 +2604,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Perk/Player/MissileBarrage/playMissleBooster"
+rule: "Perk/Player/MissileBarrage/playTrajectory"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -2624,11 +2648,14 @@ if(
     //         0,
     //         missileLandingRange / 1.5
     //     );
-    UpdateEveryFrame(perkPosition);
-    if(!isServerOverLoading)
+
+    if(!isReduceAnimation){
+        UpdateEveryFrame(perkPosition);
         ChaseVariableOverTime(
             perkPosition, landZonePosition, missleAttackSpeeed,
             TimeChaseReevaluation.DestinationAndDuration);
+    }
+
     Wait(missleAttackSpeeed, WaitBehavior.AbortWhenFalse);
     StopChasingVariable(perkPosition);
     // hide missle
@@ -2664,11 +2691,14 @@ if(
     //         0,
     //         missileLandingRange / 1.5
     //     );
-    UpdateEveryFrame(perkPosition2);
-    if(!isServerOverLoading)
+
+    if(!isReduceAnimation){
+        UpdateEveryFrame(perkPosition2);
         ChaseVariableOverTime(
             perkPosition2, landZonePosition, missleAttackSpeeed,
             TimeChaseReevaluation.DestinationAndDuration);
+    }
+
     Wait(missleAttackSpeeed, WaitBehavior.AbortWhenFalse);
     StopChasingVariable(perkPosition2);
     // hide missle
@@ -2861,7 +2891,7 @@ if(
         Color.White, EventPlayer(), MaxValue());
 }
 
-rule: "Perk/Player/CruisingMissile/playMissleBooster"
+rule: "Perk/Player/CruisingMissile/playTrajectory"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -2877,7 +2907,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Perk/Player/CruisingMissile/setLandingZone"
+rule: "Perk/Player/CruisingMissile/launchMissle"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -2890,11 +2920,12 @@ if(
     // set missile land position to aiming position
     landPosition = AimingPosition();
     // start missile move
-    UpdateEveryFrame(perkPosition);
-    if(!isServerOverLoading)
+    if(!isReduceAnimation){
+        UpdateEveryFrame(perkPosition);
         ChaseVariableOverTime(
             perkPosition, landPosition, perk[Perk.perkTimeLimit] ,
             TimeChaseReevaluation.DestinationAndDuration);
+    }
 }
 
 rule: "Perk/Player/CruisingMissile/aimLandPoint"
@@ -2913,6 +2944,7 @@ if(
         landPosition, aimPosition,
         DistanceBetween(landPosition, aimPosition) * 3.0,
         RateChaseReevaluation.DestinationAndRate);
+        
     LoopIfConditionIsTrue();
 }
 
@@ -3105,6 +3137,7 @@ if(
         landPosition, aimPosition,
         distanceBetween,
         RateChaseReevaluation.DestinationAndRate);
+
     perkPosition = aimPosition + Vector(0, 500, 0);
     LoopIfConditionIsTrue();
 }
@@ -3206,7 +3239,7 @@ if(
     perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/CarePackage/playPackageBooster"
+rule: "Perk/Player/CarePackage/playTrajectory"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -3235,11 +3268,12 @@ if(
     // set package land position to player position
     landPosition = BelowPosition(EventPlayer());
     // start package move
-    UpdateEveryFrame(perkPosition);
-    if(!isServerOverLoading)
+    if(!isReduceAnimation){
+        UpdateEveryFrame(perkPosition);
         ChaseVariableOverTime(
             perkPosition, landPosition, perk[Perk.perkTimeLimit] ,
             TimeChaseReevaluation.DestinationAndDuration);
+    }
 }
 
 rule: "Perk/Player/CarePackage/landedToPoint"
@@ -3957,6 +3991,7 @@ if(
     UpdateEveryFrame(perkPosition2);
     ChaseVariableAtRate(perkPosition2, aimPosition2,
         26, RateChaseReevaluation.DestinationAndRate);
+
     // wait can trigger
     Wait(0.2, WaitBehavior.IgnoreCondition);    
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
@@ -4330,6 +4365,7 @@ if(
 ){
     // reset status
     ClearStatus(EventPlayer(), Status.Rooted);
+    ClearStatus(EventPlayer(), Status.Invincible);
     StopFacing();
     if(perk[Perk.isInAir]){
         Teleport(EventPlayer(), PositionOf() + Vector(0, -60, 0));
@@ -4385,6 +4421,7 @@ if(
     perkPosition = PositionOf();
     // set status
     SetStatus(EventPlayer(), null, Status.Rooted, MaxValue());
+    SetStatus(EventPlayer(), null, Status.Invincible, MaxValue());
     SetGravity(EventPlayer(), 0);
     SetDamageDealt(EventPlayer(), 700);
     // show enemy outline
@@ -4445,6 +4482,7 @@ if(
     // reset status
     SetProjectileSpeed(EventPlayer(), DefaultPercentage());
     ClearStatus(EventPlayer(), Status.Rooted);
+    ClearStatus(EventPlayer(), Status.Invincible);
     SetGravity(EventPlayer(), DefaultPercentage());
     SetDamageDealt(EventPlayer(), 150);
     // hide enemy outline
