@@ -194,10 +194,15 @@ rule: "Game/startGame"
 Event.OngoingGlobal
 if(
     initCompleted &&
+    portalState == PortalState.Init &&
     NumberOfPlayers(Team.Team1) > 0 &&
     IsTrueForAny(
         AllPlayers(Team.Team1),
-        !IsInSpawnRoom(ae))
+        (
+            !IsInSpawnRoom(ae) &&
+            IsMoving(ae)
+        )
+    )
 ){
     // start portal creation
     portalState = PortalState.Calculating;
@@ -207,6 +212,7 @@ rule: "Game/stopGame"
 Event.OngoingGlobal
 if(
     initCompleted &&
+    portalState != PortalState.Init &&
     NumberOfPlayers(Team.Team1) <= 0
 ){
     // reset team lifes
@@ -808,7 +814,7 @@ if(
     portalEnable &&
     IsInSpawnRoom(Attacker())
 ){
-    environmentDeathCount += 3;
+    environmentDeathCount += limitCount;
 }
 
 rule: "Portal/InvalidDetect/EnvironmentDeathCount/reduceCount"
@@ -1129,12 +1135,9 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
                 PositionOf(closestPlayerToPortal)
                     + 
                 (
-                    DirectionTowards(
-                        closestPlayerToPortal,
-                        portalPosition
-                    )
+                    DirectionTowards(closestPlayerToPortal, portalPosition)
                         *
-                    (DistanceBetween(portalPosition, closestPlayerToPortal) * 0.5)
+                    DistanceBetween(closestPlayerToPortal, portalPosition, ) * 0.5
                 )
                     +
                 RandomPosition(teleportAreaSize, teleportAreaSize, teleportAreaSize)
@@ -1153,7 +1156,7 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     }
 }
 
-void SetTeleportPositionToShutter()"SetTeleportPositionToShutter"{
+void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         teleportPosition =
             BlockedPositon(
@@ -1180,7 +1183,8 @@ void SetTeleportPositionToShutter()"SetTeleportPositionToShutter"{
 }
 
 
-void PlayTeleportEffect()"PlayTeleportEffect"{
+void PlayTeleportEffect(define isBefore)"PlayTeleportEffect"{
+    // Play blast effect when Bot teleport
     if(enemyType == EnemyType.Minion){
         PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, 2);
     }
@@ -1193,13 +1197,13 @@ void PlayTeleportEffect()"PlayTeleportEffect"{
     else if(enemyType == EnemyType.GiantBoss){
         PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, 7);
     }
-    // Play blast effect when Bot teleport
     
     // show effect at root position
-    WaitPlayEffect();
+    if(isBefore)
+        WaitPlayEffect();
 }
 
-rule: "Bot/Teleport/teleportToSpawnRoomByPortalDisabled"
+rule: "Bot/Teleport/teleportByPortalDisabled"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1215,7 +1219,7 @@ if(
     SetStatus(ep, null, Status.Rooted, MaxValue());
 }
 
-rule: "Bot/Teleport/teleportToPortalByPortalEnabled"
+rule: "Bot/Teleport/teleportByPortalEnabled"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1227,14 +1231,14 @@ if(
     // set teleport position
     SetTeleportPositionToPlayerFront();
     // show pre teleport effect
-    PlayTeleportEffect();
+    PlayTeleportEffect(true);
     // Teleport
     Teleport(ep, teleportPosition);
     // show teleport effect
-    PlayTeleportEffect();
+    PlayTeleportEffect(false);
 }
 
-rule: "Bot/Teleport/teleportToPlayerFrontBySpawn"
+rule: "Bot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1245,7 +1249,7 @@ if(
         portalState == PortalState.Suspended
     ){
         // set teleport position to camper around
-        SetTeleportPositionToShutter();
+        SetTeleportPositionToPlayerAround();
     }
     else{
         // set teleport position player front
@@ -1254,10 +1258,30 @@ if(
     // Teleport
     Teleport(ep, teleportPosition);
     // show teleport effect
-    PlayTeleportEffect();
+    PlayTeleportEffect(false);
 }
 
-rule: "Bot/Teleport/teleportToPlayerFrontByPlayerNotFound"
+rule: "Bot/Teleport/teleportByPlayerEntered"
+Event.OngoingPlayer
+Team.Team2
+if(
+    portalEnable &&
+    IsAlive() &&
+    portalState == PortalState.Suspended
+){
+    // Teleport bot to player front
+    WaitConditionConfirmed();
+    // set teleport position to player around
+    SetTeleportPositionToPlayerAround();
+    // show pre teleport effect
+    PlayTeleportEffect(true);
+    // Teleport
+    Teleport(ep, teleportPosition);
+    // show teleport effect
+    PlayTeleportEffect(false);
+}
+
+rule: "Bot/Teleport/teleportByPlayerNotFound"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1273,44 +1297,21 @@ if(
     if(
         portalState == PortalState.Suspended
     ){
-        // set teleport position to camper around
-        SetTeleportPositionToShutter();
+        // set teleport position player around
+        SetTeleportPositionToPlayerAround();
     }
     else{
         // set teleport position player front
         SetTeleportPositionToPlayerFront();   
     }
     // show pre teleport effect
-    PlayTeleportEffect();
+    PlayTeleportEffect(true);
     // Teleport
     Teleport(ep, teleportPosition);
     // show pre teleport effect
-    PlayTeleportEffect();
+    PlayTeleportEffect(false);
     
     LoopIfConditionIsTrue();
-}
-
-rule: "Bot/Teleport/teleportToPlayerFrontByPlayerEntered"
-Event.OngoingPlayer
-Team.Team2
-if(
-    portalEnable &&
-    IsAlive() &&
-    portalState == PortalState.Suspended
-){
-    if(DistanceBetween(ep, closestPlayerToMe) >= 5)
-    {
-        // Teleport bot to player front
-        WaitConditionConfirmed();
-        // set teleport position to player front
-        SetTeleportPositionToPlayerFront();
-        // show pre teleport effect
-        PlayTeleportEffect();
-        // Teleport
-        Teleport(ep, teleportPosition);
-        // show teleport effect
-        PlayTeleportEffect();
-    }
 }
 
 // TAG Bot/Ultimate ----------
@@ -1345,8 +1346,8 @@ Team.Team2
 if(
     portalEnable
 ){
-    UpdateEachSpawnInterval();
     Wait(5, WaitBehavior.AbortWhenFalse);
+    UpdateEachSpawnInterval();
     LoopIf(portalSize < maxPortalSize);
 }
 
