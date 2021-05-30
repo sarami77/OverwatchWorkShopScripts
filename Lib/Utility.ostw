@@ -1,12 +1,13 @@
-
+// TAG ArgumentAlias ----------
 define ep: EventPlayer();
 define ae: ArrayElement();
 
-// Loop Index
+// TAG LoopIndex ----------
 // If Wait occurs during a loop, it conflicts with other processing and the loop index, so use a separate variable.
 globalvar define gLoopIndex;
 playervar define pLoopIndex;
 
+// TAG Constants ----------
 // Maximum value in game script
 // Use in unlimited changing status, unlimited dealt heal or damage, etc
 define MaxValue(): 1000000;
@@ -21,13 +22,7 @@ define DefaultPercentage(): 100;
 // An offset in the Y direction because the point is buried in the surface
 define PositionOffset(): Vector(0, 0.6, 0);
 
-// Random position within a specified vector
-define RandomPosition(define x, define y, define z): Vector(
-        RandomReal(-x, x),
-        RandomReal(-y, y), 
-        RandomReal(-z, z)
-    );
-
+// TAG Wait ----------
 // Wait for the large message to be erased for the player to read
 define WaitBigMessageHide(): Wait(4, WaitBehavior.AbortWhenFalse);
 
@@ -85,27 +80,40 @@ define WaitUpdateLongCycle(): Wait(10, WaitBehavior.AbortWhenFalse);
 // A wait to immediately force the operation associated with the changed state property.
 define WaitChangeState(): Wait(0.1, WaitBehavior.IgnoreCondition);
 
-Vector ShiftedPosition(define position, define direction, define distance)"ShiftedPosition"{
-    Vector movedPosition = position + (Normalize(direction) * distance);
-    return movedPosition;
+// TAG ButtonGuide ----------
+define ButtonGuide(Button button):
+    <"[<0>]",InputBindingString(button)>;
+
+// TAG ButtonPress ----------
+playervar define intaractDoublePressed;
+
+rule: "Player/intaractDoublePressed"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    !intaractDoublePressed &&
+    IsButtonHeld(ep, Button.Interact)
+){
+    WaitUntil(!IsButtonHeld(ep, Button.Interact), 0.3);
+    AbortIf(IsButtonHeld(ep, Button.Interact));
+    WaitUntil(IsButtonHeld(ep, Button.Interact), 0.3);
+    AbortIf(!IsButtonHeld(ep, Button.Interact));
+    intaractDoublePressed = true;
 }
 
-Boolean IsBlockedBetween(define position, define position2)"IsBlockedBetween"{
-    Boolean isBlocked = false;
-    define hitPosition = RayCastHitPosition(
-        position,
-        position + (Normalize(VectorTowards(position, position2)) * DistanceBetween(position, position2)),
-        null,
-        ep,
-        false);
-    if(
-        DistanceBetween(position, hitPosition) < DistanceBetween(position, position2)
-    ){
-        isBlocked = true;
-    }
-    return isBlocked;
+rule: "Player/releaseDoublePressed"
+Event.OngoingPlayer
+Team.Team1
+Player.All
+if(
+    intaractDoublePressed
+){
+    WaitConditionConfirmed();
+    intaractDoublePressed = false;
 }
 
+// TAG BlockDetect ----------
 Vector BlockedPositon(define position, define direction, define distance)"BlockedPositon"{
     define hitPosition = RayCastHitPosition(
         position,
@@ -114,6 +122,69 @@ Vector BlockedPositon(define position, define direction, define distance)"Blocke
         ep,
         false);
     return hitPosition;
+}
+
+Boolean IsBlockedBetween(define position1, define position2)"IsBlockedBetween"{
+    Boolean isBlocked = false;
+    define hitPosition = RayCastHitPosition(
+        position1,
+        position1 + (Normalize(VectorTowards(position1, position2)) * DistanceBetween(position1, position2)),
+        null,
+        ep,
+        false);  
+    if(
+        DistanceBetween(position1, hitPosition) < DistanceBetween(position1, position2)
+    ){
+        isBlocked = true;
+    }
+    return isBlocked;
+}
+
+define senserLength: 8;
+Vector ForwardSensor()"ForwardSensor"{
+    return BlockedPositon(
+        EyePosition(), 
+        ExcludeY(FacingDirectionOf()),
+        senserLength);
+}
+
+Vector BackwardSensor()"BackwardSensor"{
+    return BlockedPositon(
+        EyePosition(),
+        ExcludeY(-FacingDirectionOf()),
+        senserLength);
+}
+
+define ExcludeY(define direction): 
+    Normalize(
+        Vector(
+            XOf(direction),
+            0,
+            ZOf(direction)
+        )
+    );
+
+// TAG AbyssDetect ----------
+Boolean IsBelowAbyss(define basePos)"IsBelowAbyss"{
+    return !IsBlockedBetween(basePos, basePos + (Down() * senserLength));
+}
+
+// Determine if death by Abyss
+// Binding the NearestWalkablePosition to a Condition is too much for the server, so call it as a function
+define IsDeadByAbyss() :
+    DistanceBetween(ep, NearestWalkablePosition(ep)) > 10;
+
+// TAG Position ----------
+// Random position within a specified vector
+define RandomPosition(define x, define y, define z): Vector(
+        RandomReal(-x, x),
+        RandomReal(-y, y), 
+        RandomReal(-z, z)
+    );
+
+Vector ShiftedPosition(define position, define direction, define distance)"ShiftedPosition"{
+    Vector movedPosition = position + (Normalize(direction) * distance);
+    return movedPosition;
 }
 
 // Aiming position of EventPlayer
@@ -154,6 +225,7 @@ define BelowPosition(define position):
 define InvalidPosition():
         Vector(0, -MaxLength(), 0);
 
+// TAG Player ----------
 // Aiming Player of EventPlayer.
 define AimingPlayer():
     FirstOf(
@@ -173,14 +245,7 @@ define AimingPlayer():
         )
     );
 
-define ButtonGuide(Button button):
-    <"[<0>]",InputBindingString(button)>;
-
-// Determine if death by Abyss
-// Binding the NearestWalkablePosition to a Condition is too much for the server, so call it as a function
-define IsDeadByAbyss() :
-    DistanceBetween(ep, NearestWalkablePosition(ep)) > 10;
-
+// TAG Balance ----------
 // Buff scale value determined according to the unbalance of the teamscale value determined according to the unbalance of the team
 // You can change the buff amount by changing the scale value.
 define ConvertToBalancedValue(define scale, define team)"ConvertToBalancedValue"{
@@ -208,21 +273,9 @@ define ConvertToBalancedValue(define scale, define team)"ConvertToBalancedValue"
     return amount;
 }
 
-// Conspicuous explosion that repeatedly plays effects
-void PlayContinuousBlast(Color color, define position, define size, define count){
-    while(0 < count){
-        // play blast
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.BadExplosion,
-            color, position, size * 2.0);
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.RingExplosion,
-            color, position, size * 3.0);
-        WaitContinuousBlastCycle();
-        count--;
-    }
-}
 
+
+// TAG Communication ----------
 void PlayRandomVoiceLine(define player)"PlayRandomVoiceLine"{
     define voiceLineNo = RandomInteger(0, 3);
     switch(voiceLineNo){
@@ -261,6 +314,35 @@ void PlayRandomEmote(define player)"PlayRandomEmote"{
     }
 }
 
+// TAG Effect ----------
+// Conspicuous explosion that repeatedly plays effects
+void PlayContinuousBlast(Color color, define position, define size, define count){
+    while(0 < count){
+        // play blast
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.BadExplosion,
+            color, position, size * 2.0);
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.RingExplosion,
+            color, position, size * 3.0);
+        WaitContinuousBlastCycle();
+        count--;
+    }
+}
+
+// TAG Impulse ----------
+void ApplyBlastImpulse(define targets, define blastCenter, define blastRange)"ApplyBlastImpulse"{
+    // apply Impulse
+    for(gLoopIndex = 0; gLoopIndex < CountOf(targets); gLoopIndex++){
+        ApplyImpulse(targets[gLoopIndex],
+            VectorTowards(blastCenter, targets[gLoopIndex] + (Up() * 2)),
+            blastRange * 4,
+            Relative.ToWorld, ContraryMotion.Cancel);
+    }
+    WaitEntityImpulse();
+}
+
+// TAG AutoAim ----------
 define autoAimingPosition: EyePosition(autoAimingTarget) + (Up() * 0.175);
 playervar define autoAimingTarget;
 playervar define autoAimTryCount;
@@ -271,17 +353,6 @@ void StartAutoAiming()"StartAutoAiming"{
             ep, autoAimingPosition, 10) &&
         autoAimTryCount < 50
     ){
-        // StopFacing(ep);
-        // Wait(0.01, WaitBehavior.IgnoreCondition);
-
-        // StartFacing(
-        //     ep,
-        //     FacingDirectionOf(),
-        //     MaxValue(),
-        //     Relative.ToWorld, FacingRev.DirectionAndTurnRate
-        // );   
-        // Wait(0.01, WaitBehavior.IgnoreCondition);
-
         StartFacing(
             ep,
             DirectionTowards(
@@ -295,46 +366,4 @@ void StartAutoAiming()"StartAutoAiming"{
 
         autoAimTryCount ++;
     }
-
-
-
-}
-
-void ApplyBlastImpulse(define targets, define blastCenter, define blastRange)"ApplyBlastImpulse"{
-    // apply Impulse
-    for(gLoopIndex = 0; gLoopIndex < CountOf(targets); gLoopIndex++){
-        ApplyImpulse(targets[gLoopIndex],
-            VectorTowards(blastCenter, targets[gLoopIndex] + (Up() * 2)),
-            blastRange * 4,
-            Relative.ToWorld, ContraryMotion.Cancel);
-    }
-    WaitEntityImpulse();
-}
-
-playervar define intaractDoublePressed;
-
-rule: "Player/intaractDoublePressed"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    !intaractDoublePressed &&
-    IsButtonHeld(ep, Button.Interact)
-){
-    WaitUntil(!IsButtonHeld(ep, Button.Interact), 0.3);
-    AbortIf(IsButtonHeld(ep, Button.Interact));
-    WaitUntil(IsButtonHeld(ep, Button.Interact), 0.3);
-    AbortIf(!IsButtonHeld(ep, Button.Interact));
-    intaractDoublePressed = true;
-}
-
-rule: "Player/releaseDoublePressed"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    intaractDoublePressed
-){
-    WaitConditionConfirmed();
-    intaractDoublePressed = false;
 }

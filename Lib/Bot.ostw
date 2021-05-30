@@ -1,6 +1,16 @@
 import "Utility.ostw";
 import "Debug.ostw";
 
+// TAG duumy driver ----------
+// playervar define enemyType;
+// enum EnemyType{
+//     None,
+//     Minion,
+//     Elite,
+//     Boss,
+//     GiantBoss
+// }
+
 // TAG Bot/Spawn ----------
 enum BotAsset{
     EnemyType,
@@ -93,8 +103,9 @@ void CreateAllBotByAsset()"CreateAllBotByAsset"{
         ],
         // airforce
         [
-            [EnemyType.Elite,     Hero.Pharah, 3],
-            [EnemyType.Elite,     Hero.Echo, 3]
+            [EnemyType.Elite,     Hero.Echo, 3],
+            [EnemyType.Minion,    Hero.Pharah, 3]
+
         ],
         // snipers
         [
@@ -146,6 +157,14 @@ void DestroyAllBot()"DestroyAllBot"{
 // TAG Bot/SetBotInfo ----------
 playervar define botInfo = [];
 enum BotInfo{
+    state,
+    statusText,
+    target,
+    targetPos,
+    watchUpdateRate,
+    moveDir,
+    sideStepDir,
+    sideStepSecond,
     heroName,
     combatRange,
     combatRangeMin,
@@ -170,25 +189,12 @@ enum BotInfo{
     ability2ButtonHoldMax,
     isRepeating,
     repeatDuringMin,
-    repeatDuringMax,
-    detectorRoot,
-    upperDetector,
-    frontDetector,
-    underDetector,
-    statusText,
-    state,
-    tuneDir,
-    target,
-    targetPos,
-    watchUpdateRate,
-    sideStepDir,
-    sideStepSecond,
-    moveDir
+    repeatDuringMax
 }
 
 define targetPosRange: 6;
 
-rule: "Bot/SetBotInfo"
+rule: "Bot/SetCombatRoutine"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
@@ -406,9 +412,9 @@ if(
         botInfo[BotInfo.combatRange] = CombatRange.Middle;
         botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
         botInfo[BotInfo.primaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.primaryFireButtonWaitMax] = 5;
+        botInfo[BotInfo.primaryFireButtonWaitMax] = 10;
         botInfo[BotInfo.primaryFireButtonHoldMin] = 0;
-        botInfo[BotInfo.primaryFireButtonHoldMax] = 10;
+        botInfo[BotInfo.primaryFireButtonHoldMax] = 15;
         break;
 
         case Hero.Zarya:
@@ -468,7 +474,6 @@ enum ButtonBehaivor{
 
 // TAG Bot/ObjectDetector ----------
 
-
 // TAG Bot/ButtonControl ----------
 enum ButtonControl{
     button,
@@ -479,7 +484,11 @@ enum ButtonControl{
     holdDuringMax
 }
 
+define noShooting: false;
+
 void StartButtonControl(define buttonControl){
+    AbortIf(noShooting);
+
     if(buttonControl[ButtonControl.buttonOperation] == ButtonBehaivor.HoldOnly){
         while(true){
             StartHoldingButton(ep, buttonControl[ButtonControl.button]);
@@ -604,7 +613,7 @@ if(
             Button.Ultimate,
             ButtonBehaivor.HoldAndRelease,
             0,
-            5,
+            10,
             0,
             1
         ]
@@ -657,7 +666,7 @@ if(
         [
             Button.Reload,
             ButtonBehaivor.HoldAndRelease,
-            5,
+            0,
             10,
             0,
             1
@@ -696,9 +705,6 @@ if(
 // TAG Bot/StateControl ----------
 define basicUpdateRate: 1.0;
 
-define isStacking:
-    SpeedOf() <= 3.0;
-
 define isContactPlayer: 
     botInfo[BotInfo.target] != 0 &&
     IsAlive(botInfo[BotInfo.target]) &&
@@ -725,7 +731,7 @@ if(
         define target = FirstOf(
             SortedArray(
                 FilteredArray(
-                    AllPlayers(Team.Team1),
+                    AllPlayers(OppositeTeamOf(TeamOf())),
                     (
                         IsAlive(ae) &&
                         IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
@@ -772,7 +778,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define StartMove(define dir):
+define StartMoveInDir(define dir):
     StartThrottleInDirection(
         ep, dir, 1,
         Relative.ToPlayer,
@@ -780,6 +786,60 @@ define StartMove(define dir):
         ThrottleRev.DirectionAndMagnitude);
 
 define StopMove(): StopThrottleInDirection();
+
+void StartMove()"StartMove"{
+    if(botInfo[BotInfo.moveDir] != 0 && botInfo[BotInfo.sideStepDir] != 0){
+        StartMoveInDir(botInfo[BotInfo.moveDir] + botInfo[BotInfo.sideStepDir]);
+    }
+    else if(botInfo[BotInfo.moveDir] == 0 && botInfo[BotInfo.sideStepDir] != 0){
+        StartMoveInDir(botInfo[BotInfo.sideStepDir]);
+    }
+    else if(botInfo[BotInfo.moveDir] != 0 && botInfo[BotInfo.sideStepDir] == 0){
+        StartMoveInDir(botInfo[BotInfo.moveDir]);
+    }
+    else{
+        StopMove();
+    }
+}
+
+define stackRange: 0.75;
+
+playervar define prevPosition;
+
+void checkStackAndBreak()"checkStackAndBreak"{
+    if(
+        prevPosition != 0 &&
+        IsMoving() &&
+        DistanceBetween(PositionOf(), prevPosition) < stackRange
+    ){
+        botInfo[BotInfo.statusText] = <"Combat/BreakStack">;
+        
+        while(
+            DistanceBetween(PositionOf(), prevPosition) < stackRange &&
+            RandomInteger(0, 100) <= 75
+        ){
+            botInfo[BotInfo.sideStepDir] = RandomValueInArray([Right(), Left(), 0]);
+            botInfo[BotInfo.moveDir] = RandomValueInArray([Forward(), Forward(), Backward(), 0]);
+            StartMove();
+
+            if(RandomInteger(0, 100) <= 50){
+                // try jump
+                StartHoldingButton(ep, Button.Jump);
+                Wait(RandomReal(1, 2), WaitBehavior.AbortWhenFalse);
+                StopHoldingButton(ep, Button.Jump);
+            }
+            else{
+                // try croch
+                StartHoldingButton(ep, Button.Crouch);
+                Wait(RandomReal(1, 2), WaitBehavior.AbortWhenFalse);
+                StopHoldingButton(ep, Button.Crouch);                
+            }
+        }
+    }
+    else{
+        prevPosition = PositionOf();
+    }
+}
 
 // TAG Bot/State/Non ----------
 rule: "Bot/State/Non"
@@ -820,45 +880,35 @@ if(
     
     // action loop
     while(true){
+        // set face direction
         botInfo[BotInfo.targetPos] = BelowPosition(botInfo[BotInfo.targetPos]);
         SetFacing(ep, DirectionTowards(ep, botInfo[BotInfo.targetPos]), Relative.ToWorld);
 
-        botInfo[BotInfo.moveDir] = Forward();
-        botInfo[BotInfo.statusText] = <"Searching/Walking">;
-
-        // set move direction
-        if(botInfo[BotInfo.moveDir] != 0 && botInfo[BotInfo.sideStepDir] != 0){
-            StartMove(botInfo[BotInfo.moveDir] + botInfo[BotInfo.sideStepDir]);
-        }
-        else if(botInfo[BotInfo.moveDir] == 0 && botInfo[BotInfo.sideStepDir] != 0){
-            StartMove(botInfo[BotInfo.sideStepDir]);
-        }
-        else if(botInfo[BotInfo.moveDir] != 0 && botInfo[BotInfo.sideStepDir] == 0){
-            StartMove(botInfo[BotInfo.moveDir]);
+        // set move directiion
+        if(!IsBelowAbyss(ForwardSensor())){
+            botInfo[BotInfo.moveDir] = Forward();
+            botInfo[BotInfo.statusText] = <"Searching/Walking">;
         }
         else{
-            StopMove();
+            botInfo[BotInfo.moveDir] = 0;
+            botInfo[BotInfo.statusText] = <"Searching/Keep_Distance">;
         }
 
-        // check stack
-        if(isStacking){
-            StartMove(-botInfo[BotInfo.sideStepDir]);
-            while(RandomInteger(0, 100) <= 40){
-                StartHoldingButton(ep, Button.Jump);
-                Wait(RandomReal(1, 2), WaitBehavior.AbortWhenFalse);
-                StopHoldingButton(ep, Button.Jump);
-            }
-        }
-
-        // arrival target lost position
+        // arrivaled target lost position
         if(DistanceBetween(botInfo[BotInfo.targetPos], ep) <= targetPosRange){
-            Wait(3, WaitBehavior.AbortWhenFalse);
+            Wait(1, WaitBehavior.AbortWhenFalse);
 
             botInfo[BotInfo.statusText] = <"Searching/Canceled">;
             Wait(1, WaitBehavior.AbortWhenFalse);
             botInfo[BotInfo.state] = State.Non;
         }
- 
+
+        // set move direction
+        StartMove();
+
+        // check stack
+        checkStackAndBreak();
+
         Wait(botInfo[BotInfo.watchUpdateRate], WaitBehavior.AbortWhenFalse);
     }
 }
@@ -889,6 +939,8 @@ if(
     botInfo[BotInfo.watchUpdateRate] = basicUpdateRate;
     botInfo[BotInfo.moveDir] = 0;
     botInfo[BotInfo.sideStepDir] = 0;
+
+    // set face direction
     StartFacing(
         ep,
         DirectionTowards(
@@ -901,30 +953,54 @@ if(
     // action loop
     while(true){
         // update target pos
-        botInfo[BotInfo.targetPos] = PositionOf(botInfo[BotInfo.target]);
+        define tempTargetPos = PositionOf(botInfo[BotInfo.target]);
+        if(tempTargetPos != 0)
+            botInfo[BotInfo.targetPos] = tempTargetPos;
 
-        // change combat distance
+        // set move direction
         define distToTarget = DistanceBetween(ep, botInfo[BotInfo.target]);
-        if(distToTarget > botInfo[BotInfo.combatRangeMax]){
-            botInfo[BotInfo.moveDir] = Forward();
-            botInfo[BotInfo.statusText] = <"Combat/Forward">;
+        if(
+            distToTarget > botInfo[BotInfo.combatRangeMax]
+        ){
+            if(!IsBelowAbyss(ForwardSensor())){
+                botInfo[BotInfo.moveDir] = Forward();
+                botInfo[BotInfo.statusText] = <"Combat/Forward">;
+            }
+            else{
+                botInfo[BotInfo.moveDir] = 0;
+                botInfo[BotInfo.statusText] = <"Combat/Keep_Distance_By_Abyss">;
+            }
         }
-        else if(distToTarget < botInfo[BotInfo.combatRangeMin]){
-            botInfo[BotInfo.moveDir] = Backward();
-            botInfo[BotInfo.statusText] = <"Combat/Backward">;
+        else if(
+            distToTarget < botInfo[BotInfo.combatRangeMin]
+        ){
+            if(!IsBelowAbyss(BackwardSensor())){
+                botInfo[BotInfo.moveDir] = Backward();
+                botInfo[BotInfo.statusText] = <"Combat/Backward">;
+            }
+            else{
+                botInfo[BotInfo.moveDir] = 0;
+                botInfo[BotInfo.statusText] = <"Combat/Keep_Distance_By_Abyss">;
+            }
         }
         else{
             botInfo[BotInfo.moveDir] = 0;
             botInfo[BotInfo.statusText] = <"Combat/Keep_Distance">;
         }
 
-        // change side step
+        // set sidestep direction
         if(
             botInfo[BotInfo.sideStepSecond] == 0
         ){
             if(RandomInteger(0, 100) <= 50){
-                botInfo[BotInfo.sideStepDir] = RandomValueInArray([Right(),Left()]);
-                botInfo[BotInfo.sideStepSecond] = RandomInteger(0, 3);
+                if(RandomInteger(0, 100) <= 50){
+                    botInfo[BotInfo.sideStepDir] = Right();
+                    botInfo[BotInfo.sideStepSecond] = RandomInteger(0, 3);
+                }
+                else{
+                    botInfo[BotInfo.sideStepDir] = Left();
+                    botInfo[BotInfo.sideStepSecond] = RandomInteger(0, 3);
+                }
             }
             else{
                 botInfo[BotInfo.sideStepDir] = 0;
@@ -932,29 +1008,11 @@ if(
             }
         }
 
-        // check stack
-        if(isStacking){
-            StartMove(-botInfo[BotInfo.sideStepDir]);
-            while(RandomInteger(0, 100) <= 40){
-                StartHoldingButton(ep, Button.Jump);
-                Wait(RandomReal(1, 2), WaitBehavior.AbortWhenFalse);
-                StopHoldingButton(ep, Button.Jump);
-            }
-        }
-
         // set move direction
-        if(botInfo[BotInfo.moveDir] != 0 && botInfo[BotInfo.sideStepDir] != 0){
-            StartMove(botInfo[BotInfo.moveDir] + botInfo[BotInfo.sideStepDir]);
-        }
-        else if(botInfo[BotInfo.moveDir] == 0 && botInfo[BotInfo.sideStepDir] != 0){
-            StartMove(botInfo[BotInfo.sideStepDir]);
-        }
-        else if(botInfo[BotInfo.moveDir] != 0 && botInfo[BotInfo.sideStepDir] == 0){
-            StartMove(botInfo[BotInfo.moveDir]);
-        }
-        else{
-            StopMove();
-        }
+        StartMove();
+
+        // check stack
+        checkStackAndBreak();
 
         Wait(botInfo[BotInfo.watchUpdateRate], WaitBehavior.AbortWhenFalse);
     }
@@ -973,15 +1031,26 @@ if(
 }
 
 // Debug -----------------------------------------------
-disabled rule: "Debug/ReloadBotAsset"
+define maxBotNum: 6;
+disabled rule: "Debug/SpawnOneBot"
 Event.OngoingPlayer
 if(
     ep == HostPlayer() &&
     IsButtonHeld(ep, Button.Interact)
 ){
     WaitLongPressConfirm();
-    DestroyAllBot();
-    CreateAllBotByAsset();
+    define team = botSlot % 2 == 0 ? Team.Team2 : Team.Team1;
+    DestroyDummyBot(team, botSlot);
+    CreateDummyBot(RandomValueInArray(AllHeroes()), team, botSlot,
+        AimingPosition(), FacingDirectionOf()
+    );
+    if(
+        botSlot < maxBotNum &&
+        team == Team.Team2
+    )
+        botSlot ++;
+    else
+        botSlot = 0;
 }
 
 disabled rule: "Debug/ShowDebugInfo"
@@ -993,9 +1062,8 @@ if(
     // show status text
     CreateInWorldText(
         HostPlayer(), botInfo[BotInfo.statusText],
-        ep + (Up() * 3), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        ep + (Up() * 1.5), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
-
     // show targetPos path
     CreateBeamEffect(
         ep.botInfo[BotInfo.state] == State.Combat || ep.botInfo[BotInfo.state] == State.Searching ? HostPlayer() : null,
@@ -1005,7 +1073,7 @@ if(
         EffectRev.VisibleToPositionRadiusAndColor);
     // show targetPos
     CreateEffect(
-        ep.botInfo[BotInfo.state] == State.Searching ? HostPlayer() : null,
+        ep.botInfo[BotInfo.state] == State.Combat || ep.botInfo[BotInfo.state] == State.Searching ? HostPlayer() : null,
         Effect.Ring, Color.Red,
         botInfo[BotInfo.targetPos], targetPosRange, EffectRev.VisibleToPositionAndRadius);
 }
