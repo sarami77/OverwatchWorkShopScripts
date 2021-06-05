@@ -46,7 +46,6 @@ define WaitReduce(): WaitUntil(!isServerOverLoading, 3);
 
 define enableOverLoadMeasures: true;
 define isServerOverLoading: 255 <= ServerLoad();
-globalvar define targetSlowLevel!;
 globalvar define currentSlowLevel!;
 define slowLevel: [100, 90, 80, 60, 40];
 
@@ -59,6 +58,7 @@ if(
     // If the server is overloaded,
     //  apply slow motion every second to reduce the load to
     //  avoid shutting down due to server overload.
+    define targetSlowLevel;
 
     // is overload
     if(isServerOverLoading){
@@ -73,7 +73,7 @@ if(
             // change next slow level
             targetSlowLevel --;
     }
-
+    // apply slow motion
     if(currentSlowLevel != targetSlowLevel){
         currentSlowLevel = targetSlowLevel;
         SetSlowMotion(slowLevel[targetSlowLevel]);
@@ -1265,14 +1265,17 @@ if(
 ){
     // Teleport bot to player front
     WaitConditionConfirmed();
-    // set teleport position to player around
-    SetTeleportPositionToPlayerAround();
-    // show pre teleport effect
-    PlayTeleportEffect(true);
-    // Teleport
-    Teleport(ep, teleportPosition);
-    // show teleport effect
-    PlayTeleportEffect(false);
+    // has half over health
+    if(NormalizedHealth(ep) >= 0.5){
+        // set teleport position to player around
+        SetTeleportPositionToPlayerAround();
+        // show pre teleport effect
+        PlayTeleportEffect(true);
+        // Teleport
+        Teleport(ep, teleportPosition);
+        // show teleport effect
+        PlayTeleportEffect(false);
+    }
 }
 
 rule: "Bot/Teleport/teleportByPlayerNotFound"
@@ -1627,7 +1630,7 @@ void ShowDebugHud()"ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "current Slow Level", targetSlowLevel>,
+        <"<0> <1>", "current Slow Level", currentSlowLevel>,
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
