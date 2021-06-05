@@ -1,11 +1,5 @@
 // [Detail]
-// [Portal Hunt -HORDE PVE] -The evil portal has been opened… 
-// -Defeat enemie horde that spawn from portal and close portal.
-// -When you enter portal, start countdown until close portal. Survive to 0.
-// -Over time, portal grow. Grown portal spawn more enemie and get harder.
-// -Survive using PERK dropped by enemy. PERK has uniqe buffs, new weapon, powerful custom heroes, others.
-// -ex) GrapplingBeam, CruiseMissile, LegendaryNinja and more than 25 types!
-// -Unlimited rounds. How many rounds can you survive?
+// [Portal Hunt -HORDE PVE] The hell portal has been opened… Defeat enemie horde that spawn from portal and close portal!  When enter portal, start sequence of close. survive to complete.  Over time, portal grow. Grown portal spawn more enemie and get harder.  Survive using PERK dropped by enemy.  PERK has uniqe buffs, new weapon, powerful custom heroes, others.  ex) GrapplingBeam, CruisingMissile, LegendaryNinja and more than 25 types!  Unlimited rounds. How many rounds can you survive?
 // [Share Code]
 // YY1N2
 // [ToDo]
@@ -20,7 +14,7 @@ import "Lib/Revive.ostw";
 import "Lib/Perk.ostw";
 import "Lib/Bot.ostw";
 import "Lib/Debug.ostw";
-// import "Lib/ElapsedTimer.ostw";
+import "Lib/ElapsedTimer.ostw";
 // import "Lib/InvisibleImmortalForDebug.ostw";
 
 // TAG duumy driver ----------
@@ -48,9 +42,12 @@ disabled rule: "Original source code was created by [sarami77#1868]"-1{}
 disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopScripts"-1{}
 
 // TAG System ----------
+define WaitReduce(): WaitUntil(!isServerOverLoading, 3);
+
 define enableOverLoadMeasures: true;
 define isServerOverLoading: 255 <= ServerLoad();
-globalvar define currentSlowLevel;
+globalvar define targetSlowLevel!;
+globalvar define currentSlowLevel!;
 define slowLevel: [100, 90, 80, 60, 40];
 
 rule: "System/ServerOverLoadMeasures"
@@ -62,35 +59,34 @@ if(
     // If the server is overloaded,
     //  apply slow motion every second to reduce the load to
     //  avoid shutting down due to server overload.
-    while(
-        isServerOverLoading
-    ){
-        // wait cooldown of overload
-        Wait(1, WaitBehavior.AbortWhenFalse);
-        // is continues overload
-        if(isServerOverLoading){
-            // can change next slow level
-            if(currentSlowLevel < CountOf(slowLevel)){
-                // change next slow level
-                currentSlowLevel++;
-                SetSlowMotion(slowLevel[currentSlowLevel]);
-            }
-        }
-        else{
-            // reset slow level
-            currentSlowLevel = 0;
-            SetSlowMotion(slowLevel[currentSlowLevel]);
-        }
+
+    // is overload
+    if(isServerOverLoading){
+        // can change next slow level
+        if(targetSlowLevel < (CountOf(slowLevel) - 1))
+            // change next slow level
+            targetSlowLevel ++;
+    }
+    else{
+        // can change next slow level
+        if(targetSlowLevel > 0)
+            // change next slow level
+            targetSlowLevel --;
     }
 
+    if(currentSlowLevel != targetSlowLevel){
+        currentSlowLevel = targetSlowLevel;
+        SetSlowMotion(slowLevel[targetSlowLevel]);
+    }
+    
     Wait(1, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
 // TAG Game ----------
 define enemyColor: Color.Purple;
-globalvar define initCompleted;
-globalvar define roundNo;
+globalvar define initCompleted!;
+globalvar define roundNo!;
 
 rule: "Game/initGameSetting //wait 3 _seconds because some scripts fail immediately after loading the _server"
 Event.OngoingGlobal
@@ -126,9 +122,8 @@ Event.OngoingGlobal
     DisableScoring();
     DisableCompletion();
 
-    DisableGameModeHud(AllPlayers());
-    DisableGameModeInworldUI(AllPlayers());
-    SetObjectiveDescription(AllPlayers(), null, HudTextRev.None);
+    // set objective message
+    SetObjectiveDescription(AllPlayers(Team.Team1), "Find portal and attack it!", HudTextRev.None);
 
     // Calculate the approximate center position of the map from the spawn room position.
     // Therefore, change the spawn room and then spawn the entity.
@@ -159,21 +154,17 @@ Event.OngoingGlobal
         enemyColor, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
 
-    // show objective message
-    CreateHudText(AllPlayers(Team.Team1),
-        "Find portal and attack it!", null, null,
-        Location.Top, 1,
-        Color.White, Color.White, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
+    // show objective message and elapsed time
+    enableElapsedTimer = true;
+    elapsedTime = 0;
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
 
     while(true){
-        // disable bultin objective message
-        DisableGameModeHud(AllPlayers());
-        DisableGameModeInworldUI(AllPlayers());
-        SetObjectiveDescription(AllPlayers(), null, HudTextRev.None);
+        // repeat action for joined player
+        // set objective message
+        SetObjectiveDescription(AllPlayers(Team.Team1), "find portal and attack!", HudTextRev.None);
         Wait(10, WaitBehavior.AbortWhenFalse);
     } 
 }
@@ -187,6 +178,8 @@ if(
     teamLifes = initialTeamLifes;
     // reset round no
     roundNo = 0;
+    // reset elapsed time
+    elapsedTime = 0;
 }
 
 rule: "Game/startGame"
@@ -218,6 +211,8 @@ if(
     teamLifes = initialTeamLifes;
     // reset round no
     roundNo = 0;
+    // reset elapsed time
+    elapsedTime = 0;
     // reset portal
     portalState = PortalState.Init;
 }
@@ -262,14 +257,6 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Player/ReturnSpawn/showOperationHUD"
-Event.OngoingGlobal
-if(
-    initCompleted
-){
-
-}
-
 rule: "Player/ReturnSpawn/returnSpawn"
 Event.OngoingPlayer
 Team.Team1
@@ -283,8 +270,8 @@ if(
     Respawn();
 }
 
-globalvar define initialTeamLifes;
-globalvar define teamLifes;
+globalvar define initialTeamLifes!;
+globalvar define teamLifes!;
 
 rule: "Player/TeamLifes/showTeamLifesHUD"
 Event.OngoingGlobal
@@ -589,7 +576,7 @@ if(
         portalPosition, portalSize / 2, EffectRev.VisibleToPositionAndRadius);
     portalEntitys[4] = LastCreatedEntity();
     // show message
-    BigMessage(AllPlayers(Team.All), "Detected more portal... find and attack it!");
+    BigMessage(AllPlayers(Team.All), "Detected more portal... find and attack!");
     // Hide icon to let the player search the portal
     Wait(6, WaitBehavior.AbortWhenFalse);
     DestroyIcon(portalEntitys[0]);
@@ -708,6 +695,8 @@ if(
     WaitConditionConfirmed();
     define candidatePosition;
     for(define retryCount = 0; retryCount < 10; retryCount++){
+        WaitReduce();
+        
         // select random player as base positoon
         define basePlayer =
             RandomValueInArray(
@@ -1129,6 +1118,8 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        WaitReduce();
+
         teleportPosition =
             NearestWalkablePosition(
                 PositionOf(closestPlayerToPortal)
@@ -1157,6 +1148,8 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
 
 void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        WaitReduce();
+        
         teleportPosition =
             BlockedPositon(
                 closestPlayerToPortal,
@@ -1164,6 +1157,8 @@ void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
                     RandomReal(0, 360), 0
                 ), 30
             );
+        // avoid map wall edge
+        teleportPosition += (DirectionTowards(teleportPosition, closestPlayerToPortal) * 0.5);
         if(
             DistanceBetween(    // Not too close to player
                 closestPlayerToTelPos, teleportPosition)
@@ -1294,7 +1289,7 @@ if(
     Wait(6, WaitBehavior.AbortWhenFalse);
 
     if(
-        RandomInteger(1, 100) <= 10 ||
+        RandomInteger(1, 100) <= 30 ||
         portalState == PortalState.Suspended
     ){
         // set teleport position player around
@@ -1632,7 +1627,7 @@ void ShowDebugHud()"ShowDebugHud"{
 
     CreateHudText(HostPlayer(),
         null,
-        <"<0> <1>", "current Slow Level", currentSlowLevel>,
+        <"<0> <1>", "current Slow Level", targetSlowLevel>,
         null,
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
