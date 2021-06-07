@@ -1,7 +1,6 @@
 import "Lib/Utility.ostw";
 import "Lib/Debug.ostw";
 import "Lib/PerkCore.ostw";
-import "Lib/Bot.ostw";
 
 // Builtin -----------------------------------------------
 define parallelAnimationNum: 2;
@@ -13,39 +12,41 @@ if(
     HasSpawned()
 ){
     SetDamageDealt(EventPlayer(), 600);
-    SetDamageReceived(EventPlayer(), 1);
-
+    SetDamageReceived(EventPlayer(), 100);
     SetHealingDealt(EventPlayer(), 100);
     SetHealingReceived(EventPlayer(), 100);
-
-    SetMaxHealth(EventPlayer(), 100);
-
     SetJumpVerticalSpeed(EventPlayer(), 100);
     SetMoveSpeed(EventPlayer(), 1000);
     SetGravity(EventPlayer(), 100);
-
     SetProjectileSpeed(EventPlayer(), 100);
     SetProjectileGravity(EventPlayer(), 100);
-
     StartScalingPlayer(EventPlayer(), 1);
     StartScalingBarriers(EventPlayer(), 1);
-
     SetUltimateCharge(EventPlayer(), 0);
 
-    define others = FilteredArray(AllPlayers(), ArrayElement() != EventPlayer());
 //    SetMoveSpeed(others, 1000);
-
+    SetMaxHealth(AllPlayers(Team.Team2), 10000);
     SetRespawnMaxTime(AllPlayers(Team.Team2), 5);
+    StartScalingPlayer(AllPlayers(Team.Team2), 3);
 
     // SetStatus(AllPlayers(Team.Team2), null, Status.Rooted, 99999);
     // ForcePlayerHero(EventPlayer(), Hero.Widowmaker);
 
-    // CreateEffect(EventPlayer(), Effect.Ring, Color.White,
-    //     EventPlayer(), 10, EffectRev.VisibleToPositionAndRadius);
-    // CreateEffect(EventPlayer(), Effect.Ring, Color.White,
-    //     EventPlayer(), 20, EffectRev.VisibleToPositionAndRadius);
-    // CreateEffect(EventPlayer(), Effect.Ring, Color.White,
-    //     EventPlayer(), 30, EffectRev.VisibleToPositionAndRadius);
+    CreateEffect(EventPlayer(), Effect.Ring, Color.Red,
+        EventPlayer(), 10, EffectRev.VisibleToPositionAndRadius);
+    CreateEffect(EventPlayer(), Effect.Ring, Color.Orange,
+        EventPlayer(), 20, EffectRev.VisibleToPositionAndRadius);
+    CreateEffect(EventPlayer(), Effect.Ring, Color.Yellow,
+        EventPlayer(), 30, EffectRev.VisibleToPositionAndRadius);
+    CreateEffect(EventPlayer(), Effect.Ring, Color.SkyBlue,
+        EventPlayer(), 40, EffectRev.VisibleToPositionAndRadius);
+    CreateEffect(EventPlayer(), Effect.Ring, Color.Blue,
+        EventPlayer(), 50, EffectRev.VisibleToPositionAndRadius);
+
+    while(true){
+        SetMoveSpeed(EventPlayer(), 1000);
+        Wait(1, WaitBehavior.AbortWhenFalse);
+    }
 }
 
 rule: "Debug/overridePerk"
@@ -54,30 +55,324 @@ Team.Team1
 if(
     perkState == PerkState.Using
 ){
-    perkType = PerkType.Juggernaut;
+    perkType = PerkType.Behemoth;
 }
+
+define canRidingRange : 6.0;
+
 
 // Test Code -----------------------------------------------
-rule: "Debug/CheckIsAbyss"
-Event.OngoingPlayer
-if(
-    !IsDummyBot() &&
-    HostPlayer() &&
-    IsButtonHeld(ep, Button.PrimaryFire)
-){ 
-    define fs = ForwardSensor();
-    define result = IsBelowAbyss(fs);
 
-    CreateHudText(AllPlayers(Team.Team1),
-        null, 
-        <"fs <0>, result <1>", fs, result>, null,
-        Location.Left, 0, Color.White, Color.White, Color.White,
-        HudTextRev.None, Spectators.DefaultVisibility);
+
+
+// TAG Behemoth ----------
+rule: "Perk/Player/Behemoth/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Behemoth &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 120;
+    // set param
+    perk[Perk.perkEffectStatus] = 0;
+    perk[Perk.rider] = 0;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud(
+        perk[Perk.rider] != 0 ?
+            <"<0> <1> riding on your back.", perk[Perk.rider], HeroIconString(HeroOf(perk[Perk.rider]))> :
+            "Teammate can ride your back.");
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    CreatePerkEffectHud(<"Hold crouch button <0> to get smaller.", ButtonGuide(Button.Crouch)>);
+    perk[Perk.perkEffectAndText] [1] = LastTextID();
+    // set perk hero
+    PerkHero perkHero = new PerkHero();
+    perkHero.hero = Hero.Roadhog;
+    perkHero.statusUnkillable = true;
+    perkHero.maxHealth = 200;
+    perkHero.healingReceived = 10.0;
+    perkHero.damageDealt = 125;
+    perkHero.ultimateCharge = 100;
+    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+
+    // use ult
+    PressButton(EventPlayer(), Button.Ultimate);
+
+    // start grow big
+    PressButton(EventPlayer(), Button.Crouch);
 }
+
+rule: "Perk/Player/Behemoth/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Behemoth &&
+    perkState  == PerkState.Non
+){
+    // set param
+    perk[Perk.perkEffectStatus] = 0;
+    DetachPlayers(perk[Perk.rider]);
+    Teleport(perk[Perk.rider], EventPlayer());
+    perk[Perk.rider].perk[Perk.ridingTarget] = 0;
+    perk[Perk.rider] = 0;
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [1]);
+    // reset perk hero
+    StopForcingPerkHero(EventPlayer());
+    // reset status
+    StopScalingPlayer(EventPlayer());
+    StopModifyingHeroVoiceLines(EventPlayer());
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/Behemoth/brokenPerk //by helth 1"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Behemoth &&
+    perkState  == PerkState.Using &&
+    Health() <= 1
+){
+    WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
+    perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/Behemoth/growBig"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Behemoth &&
+    perkState  == PerkState.Using &&
+    !(IsCrouching() || IsButtonHeld(EventPlayer(), Button.Crouch))
+){
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodPickupEffect,
+        Color.White, EventPlayer(), 1);
+
+    if(!( 0 <= perk[Perk.perkEffectStatus]  && perk[Perk.perkEffectStatus]  <= 1)) perk[Perk.perkEffectStatus] = 0;
+    while(perk[Perk.perkEffectStatus]  < 1){
+        StartScalingPlayer(EventPlayer(), 1 + (perk[Perk.perkEffectStatus]  * 1.25), false);
+        perk[Perk.perkEffectStatus]  += 0.1;
+        WaitUpdateVeryShortCycle();
+    }
+    StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
+}
+
+rule: "Perk/Player/Behemoth/getSmall"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Behemoth &&
+    perkState  == PerkState.Using &&
+    (IsCrouching() || IsButtonHeld(EventPlayer(), Button.Crouch))
+){
+    DetachPlayers(perk[Perk.rider]);
+    Teleport(perk[Perk.rider], EventPlayer());
+    perk[Perk.rider].perk[Perk.ridingTarget] = 0;
+    perk[Perk.rider] = 0;
+
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodPickupEffect,
+        Color.White, EventPlayer(), 1);
+
+    if(!( 0 <= perk[Perk.perkEffectStatus]  && perk[Perk.perkEffectStatus]  <= 1)) perk[Perk.perkEffectStatus] = 1;
+    while(perk[Perk.perkEffectStatus]  > 0){
+        StartScalingPlayer(EventPlayer(), 1 + (perk[Perk.perkEffectStatus]  * 1.25), false);
+        perk[Perk.perkEffectStatus]  -= 0.1;
+        WaitUpdateVeryShortCycle();
+    }
+    StartModifyingHeroVoiceLines(EventPlayer(), 1.0, false);
+}
+
+rule: "Perk/Player/Behemoth/chargingUlt"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Behemoth &&
+    perkState  == PerkState.Using &&
+    !IsUsingUltimate() &&
+    UltimateChargePercent() < 100
+){
+    WaitUpdateMediumCycle();
+    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 10));
+    LoopIfConditionIsTrue();
+}
+
+define nearCanRideBehemoth:
+    FilteredArray(
+        AllPlayers(Team.Team1),
+        (
+            ArrayElement() != EventPlayer() &&
+            ArrayElement().perkType == PerkType.Behemoth &&
+            ArrayElement().perkState  == PerkState.Using &&
+            ArrayElement().perk[Perk.rider] == 0 &&
+            ArrayElement().perk[Perk.perkEffectStatus]  == 1 &&
+            IsAlive(ArrayElement()) &&
+            DistanceBetween(EventPlayer(), ArrayElement()) <= canRidingRange
+        )
+    );
+define canRideBehemoth:
+    IsAlive() &&
+    !isRidingBehemoth &&
+    CountOf(nearCanRideBehemoth) > 0;
+
+define isRidingBehemoth: 
+    perk[Perk.ridingTarget] != 0 &&
+    perk[Perk.ridingTarget].perkType == PerkType.Behemoth;
+
+rule: "Perk/Player/Behemoth/showOperationGetOn"
+Event.OngoingPlayer
+Team.Team1
+if(
+    canRideBehemoth
+){
+    // set hud
+    CreatePerkEffectHud(<"Can add Behemoth's activity time by kill enemy when riding Behemoth.">);
+    perk[Perk.perkEffectAndText] [300] = LastTextID();
+    CreatePerkEffectHud(<"Hold jump button <0> to get on Behemoth.", ButtonGuide(Button.Jump)>);
+    perk[Perk.perkEffectAndText] [301] = LastTextID();
+}
+
+rule: "Perk/Player/Behemoth/hideOperationGetOn"
+Event.OngoingPlayer
+Team.Team1
+if(
+    !canRideBehemoth
+){
+    DestroyHudText(perk[Perk.perkEffectAndText] [300]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [301]);
+}
+
+rule: "Perk/Player/Behemoth/showOperationGetOff"
+Event.OngoingPlayer
+Team.Team1
+if(
+    isRidingBehemoth
+){
+    // set hud
+    CreatePerkEffectHud(<"Hold crouch button <0> to get off Behemoth.", ButtonGuide(Button.Crouch)>);
+    perk[Perk.perkEffectAndText] [302] = LastTextID();
+}
+
+rule: "Perk/Player/Behemoth/hideOperationGetOff"
+Event.OngoingPlayer
+Team.Team1
+if(
+    !isRidingBehemoth
+){
+    DestroyHudText(perk[Perk.perkEffectAndText] [302]);
+}
+
+rule: "Perk/Player/Behemoth/getOn"
+Event.OngoingPlayer
+Team.Team1
+if(
+    canRideBehemoth &&
+    IsButtonHeld(EventPlayer(), Button.Jump)
+){
+    WaitLongPressConfirm();
+    perk[Perk.ridingTarget] = FirstOf(nearCanRideBehemoth);
+    AttachPlayers(EventPlayer(), perk[Perk.ridingTarget], Up() * 3.75);
+    perk[Perk.ridingTarget].perk[Perk.rider] = EventPlayer();
+}
+
+rule: "Perk/Player/Behemoth/getOff"
+Event.OngoingPlayer
+Team.Team1
+if(
+    isRidingBehemoth &&
+    (
+        IsButtonHeld(EventPlayer(), Button.Crouch) ||
+        IsDead(EventPlayer())
+    )
+){
+    if(IsButtonHeld(EventPlayer(), Button.Crouch))
+        WaitLongPressConfirm();
+    DetachPlayers(perk[Perk.ridingTarget].perk[Perk.rider]);
+    Teleport(ep, perk[Perk.ridingTarget] + PositionOffset());
+    perk[Perk.ridingTarget].perk[Perk.rider] = 0;
+    perk[Perk.ridingTarget] = 0;
+}
+
+rule: "Perk/Player/Behemoth/getOffBehemothByDead"
+Event.OngoingPlayer
+Team.Team1
+if(
+    isRidingBehemoth &&
+    IsDead(EventPlayer())
+){
+    DetachPlayers(perk[Perk.ridingTarget].perk[Perk.rider]);
+    Teleport(ep, perk[Perk.ridingTarget] + PositionOffset());
+    perk[Perk.ridingTarget].perk[Perk.rider] = 0;
+    perk[Perk.ridingTarget] = 0;
+}
+
+rule: "Perk/Player/Behemoth/addActivityTime"
+Event.OnFinalBlow
+Team.Team1
+if(
+    perk[Perk.ridingTarget].perkType == PerkType.Behemoth &&
+    perk[Perk.ridingTarget].perkState  == PerkState.Using &&
+    perk[Perk.ridingTarget].perk[Perk.perkTimeLimit]  > 0
+
+){
+    SmallMessage(EventPlayer(), "Added 10 seconds of Behemoth's activity time.");
+    perk[Perk.ridingTarget].perk[Perk.perkTimeLimit]  += 10;
+}
+
+rule: "Perk/Player/Behemoth/addtionalHeal"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Behemoth &&
+    perkState  == PerkState.Using &&
+
+    IsUsingAbility2()
+){
+    // heal
+    Heal(EventPlayer(), EventPlayer(), 500);
+    WaitUpdateShortCycle();
+    LoopIfConditionIsTrue();
+}
+
+define splashDamageRangeBehemothBullet: 2.0;
+
+rule: "Perk/Player/Behemoth/splashDamage"
+Event.OnDamageDealt
+Team.Team1
+if(
+    perkType == PerkType.Behemoth &&
+    perkState  == PerkState.Using
+){
+    // get target
+    perk[Perk.perkTargets] = 
+        PlayersWithinRadius(
+            PositionOf(Victim()),
+            splashDamageRangeBehemothBullet,
+            Team.Team2, RadiusLOS.Off);
+    // splash damage
+    Damage(perk[Perk.perkTargets], ep, 80);
+    // play blast
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.BadExplosion,
+        Color.Orange, Victim(),
+        splashDamageRangeBehemothBullet);
+    // cut chain execute
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
+
+    
+}
+
+
 
 // Debug -----------------------------------------------
 define changeTimeInterval: 0.2;
-globalvar define tuneVal = 1;
+globalvar define tuneVal = 800;
 globalvar define consecutiveChangeCount = 0;
 define initialTuneUnit : 0.01;
 globalvar define tuneUnit = initialTuneUnit;
