@@ -83,6 +83,15 @@ if(
     LoopIfConditionIsTrue();
 }
 
+rule: "System/ServerOverLoadMeasures/OnPlayerJoin"
+Event.OnPlayerJoin
+if(
+    enableOverLoadMeasures &&
+    portalState != PortalState.End
+){
+    
+}
+
 // TAG Game ----------
 define enemyColor: Color.Purple;
 globalvar define initCompleted!;
@@ -1148,31 +1157,47 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
 }
 
 void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        WaitReduce();
-        
-        teleportPosition =
-            BlockedPositon(
-                closestPlayerToPortal,
-                DirectionFromAngles(
-                    RandomReal(0, 360), 0
-                ), 50
-            );
-        // avoid map wall edge
-        teleportPosition += (DirectionTowards(teleportPosition, closestPlayerToPortal) * 0.5);
-        if(
-            DistanceBetween(    // Not too close to player
-                closestPlayerToTelPos, teleportPosition)
-            > 5
-                &&
-            IsInLineOfSight(    // Has line
-                closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
-                &&
-            IsBlockedBetween(   // Has ground
-                teleportPosition, ShiftedPosition(teleportPosition, Down(), 6))
+    if(
+        IsInLineOfSight(    // Has line
+            closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock) &&
+        RandomInteger(1, 100) <= 90     // random
+    ){
+        // unify teleportPosition
+        define one = RandomValueInArray(AllPlayers(Team.Team2));
+        if(teleportPosition != one.teleportPosition){
+            AllPlayers(Team.Team2).teleportPosition = one.teleportPosition;
+            CreateIcon(AllPlayers(Team.All), one.teleportPosition, Icon.Spiral,
+                IconRev.VisibleToAndPosition, Color.White, true);
+        }
+    }
+    else{
+        // set teleportPosition to player around
+        for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+            WaitReduce();
+            
+            teleportPosition =
+                BlockedPositon(
+                    closestPlayerToPortal,
+                    DirectionFromAngles(
+                        RandomReal(0, 360), 0
+                    ), 50
+                );
+            // avoid map wall edge
+            teleportPosition += (DirectionTowards(teleportPosition, closestPlayerToPortal) * 0.5);
+            if(
+                DistanceBetween(    // Not too close to player
+                    closestPlayerToTelPos, teleportPosition)
+                > 5
+                    &&
+                IsInLineOfSight(    // Has line
+                    closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
+                    &&
+                IsBlockedBetween(   // Has ground
+                    teleportPosition, ShiftedPosition(teleportPosition, Down(), 6))
 
-        ){
-            break;
+            ){
+                break;
+            }
         }
     }
 }
