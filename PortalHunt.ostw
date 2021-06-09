@@ -17,7 +17,7 @@ import "Lib/Debug.ostw";
 import "Lib/ElapsedTimer.ostw";
 // import "Lib/InvisibleImmortalForDebug.ostw";
 
-// TAG duumy driver ----------
+// TAG duumy define ----------
 // globalvar define Revive_enableTeam;
 // globalvar define Revive_timeLimit;
 // globalvar define reviveTimeoutCount;
@@ -30,8 +30,8 @@ import "Lib/ElapsedTimer.ostw";
 
 // globalvar define DamageText_enableTeam;
 
-//void DestroyAllBot(){}
-//void CreateAllBotByAsset(){}
+// void DestroyAllBot(){}
+// void CreateAllBotByAsset(){}
 
 // TAG Signature and infomation ----------
 disabled rule: "PORTAL HUNT -HORDE PVE [ver 3.0] Share code [YY1N2]"-1{}
@@ -42,54 +42,68 @@ disabled rule: "Original source code was created by [sarami77#1868]"-1{}
 disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopScripts"-1{}
 
 // TAG System ----------
-define WaitReduce(): WaitUntil(!isServerOverLoading, 3);
+define WaitUntilServerNotOverLoad(): WaitUntil(!isServerOverLoading, 3);
 
-define enableOverLoadMeasures: true;
+globalvar define watchingOverLoad! = true;
 define isServerOverLoading: 255 <= ServerLoad();
 globalvar define currentSlowLevel!;
 define slowLevel: [100, 90, 80, 60, 40];
 
-rule: "System/ServerOverLoadMeasures"
+rule: "System/ServerOverLoadMeasures/reduceOverLoad"
 Event.OngoingGlobal
 if(
-    enableOverLoadMeasures &&
+    watchingOverLoad &&
+    initCompleted &&    
     portalState != PortalState.End
 ){
     // If the server is overloaded,
     //  apply slow motion every second to reduce the load to
     //  avoid shutting down due to server overload.
-    define targetSlowLevel;
+    define targetSlowLevel!;
 
     // is overload
     if(isServerOverLoading){
-        // can change next slow level
+        // can increase slow level
         if(targetSlowLevel < (CountOf(slowLevel) - 1))
-            // change next slow level
+            // increase slow level
             targetSlowLevel ++;
     }
     else{
-        // can change next slow level
+        // can decrease slow level
         if(targetSlowLevel > 0)
-            // change next slow level
+            // decrease slow level
             targetSlowLevel --;
     }
-    // apply slow motion
-    if(currentSlowLevel != targetSlowLevel){
-        currentSlowLevel = targetSlowLevel;
-        SetSlowMotion(slowLevel[targetSlowLevel]);
-    }
+    // apply slow level
+    ApplySlowLevel(targetSlowLevel);
     
     Wait(1, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
-rule: "System/ServerOverLoadMeasures/OnPlayerJoin"
+rule: "System/ServerOverLoadMeasures/reduceOverLoadOnPlayerJoin"
 Event.OnPlayerJoin
+Team.Team1
 if(
-    enableOverLoadMeasures &&
+    initCompleted &&
     portalState != PortalState.End
 ){
-    
+    watchingOverLoad = false;
+    // apply slow level
+    ApplySlowLevel(4);
+    Wait(1, WaitBehavior.IgnoreCondition);
+    // reset slow level
+    ApplySlowLevel(0);
+    watchingOverLoad = true;
+}
+
+void ApplySlowLevel(define setSlowLevel!)"ApplySlowLevel"{
+    // if slow level changed
+    if(currentSlowLevel != setSlowLevel){
+        // apply slow motion
+        currentSlowLevel = setSlowLevel;
+        SetSlowMotion(slowLevel[setSlowLevel]);
+    }
 }
 
 // TAG Game ----------
@@ -97,7 +111,7 @@ define enemyColor: Color.Purple;
 globalvar define initCompleted!;
 globalvar define roundNo!;
 
-rule: "Game/initGameSetting //wait 3 _seconds because some scripts fail immediately after loading the _server"
+rule: "Game/initSetting"
 Event.OngoingGlobal
 {
     // Stop records to reduce server load
@@ -705,7 +719,7 @@ if(
     WaitConditionConfirmed();
     define candidatePosition;
     for(define retryCount = 0; retryCount < 10; retryCount++){
-        WaitReduce();
+        WaitUntilServerNotOverLoad();
         
         // select random player as base positoon
         define basePlayer =
@@ -1128,7 +1142,7 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        WaitReduce();
+        WaitUntilServerNotOverLoad();
 
         teleportPosition =
             NearestWalkablePosition(
@@ -1146,7 +1160,7 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
         if(
             DistanceBetween(    // Not too close to player
                 closestPlayerToTelPos, teleportPosition)
-            > 5
+            >= 5
                 &&
             IsInLineOfSight(    // Has line
                 closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
@@ -1166,28 +1180,26 @@ void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
         define one = RandomValueInArray(AllPlayers(Team.Team2));
         if(teleportPosition != one.teleportPosition){
             AllPlayers(Team.Team2).teleportPosition = one.teleportPosition;
-            CreateIcon(AllPlayers(Team.All), one.teleportPosition, Icon.Spiral,
-                IconRev.VisibleToAndPosition, Color.White, true);
         }
     }
     else{
         // set teleportPosition to player around
         for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-            WaitReduce();
+            WaitUntilServerNotOverLoad();
             
             teleportPosition =
                 BlockedPositon(
                     closestPlayerToPortal,
                     DirectionFromAngles(
-                        RandomReal(0, 360), 0
-                    ), 50
+                        RandomReal(0, 360), RandomReal(30, -30),
+                    ), RandomReal(5, 50)
                 );
             // avoid map wall edge
             teleportPosition += (DirectionTowards(teleportPosition, closestPlayerToPortal) * 0.5);
             if(
                 DistanceBetween(    // Not too close to player
                     closestPlayerToTelPos, teleportPosition)
-                > 5
+                >= 5
                     &&
                 IsInLineOfSight(    // Has line
                     closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
@@ -1439,7 +1451,7 @@ globalvar define debugMode;
 
 enum DebugMode{
     Non,
-    OverloadOnly,
+    SlowLevelOnly,
     ShowParam,
     WithRecord
 }
@@ -1455,9 +1467,9 @@ if(
     // change debug mode
     WaitLongPressConfirm();
     if(debugMode == DebugMode.Non){
-        debugMode = DebugMode.OverloadOnly;
+        debugMode = DebugMode.SlowLevelOnly;
     }
-    else if(debugMode == DebugMode.OverloadOnly){
+    else if(debugMode == DebugMode.SlowLevelOnly){
         debugMode = DebugMode.ShowParam;
     }
     else if(debugMode == DebugMode.ShowParam){
@@ -1471,7 +1483,7 @@ if(
         DisableInspectorRecording();
         HideDebugHud();
     }
-    else if(debugMode == DebugMode.OverloadOnly){
+    else if(debugMode == DebugMode.SlowLevelOnly){
         DisableInspectorRecording();
         HideDebugHud();
         ShowDebugHud();
@@ -1713,6 +1725,9 @@ if(
     portalState = PortalState.Idle;
     WaitChangeState();  // Wait for the changed status to be processed first
     portalState = PortalState.Calculating;
+    
+    ApplySlowLevel(0);
+    watchingOverLoad = true;
 }
 
 globalvar define debugAimingPosition;

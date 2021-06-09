@@ -3,12 +3,12 @@ import "PerkCore.ostw";
 define parallelAnimationNum: 2;
 
 // TAG System ----------
-define isReduceAnimation: (currentSlowLevel >= 2);
+define isServerOverLoad: (currentSlowLevel >= 2);
 
 rule: "Perk/System/ServerOverLoadMeasures"
 Event.OngoingGlobal
 if(
-    isReduceAnimation
+    isServerOverLoad
 ){
     StopChasingVariable(AllPlayers(Team.Team1).perkPosition);
     StopChasingVariable(AllPlayers(Team.Team1).perkPosition2);
@@ -52,8 +52,8 @@ if(
     DestroyHudText(perk[Perk.perkEffectAndText][1]);
     DestroyHudText(perk[Perk.perkEffectAndText][2]);
     // reset status
-    StopHoldingButton(EventPlayer(), Button.Crouch);
-    SetMoveSpeed(EventPlayer(), 100);
+    StopHoldingButton(ep, Button.Crouch);
+    SetMoveSpeed(ep, 100);
     // reset type
     perkType = PerkType.Non;
 }
@@ -65,10 +65,10 @@ if(
     perkType == PerkType.SuperLanding &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
-    IsButtonHeld(EventPlayer(), Button.Jump)
+    IsButtonHeld(ep, Button.Jump)
 ){
     WaitLongPressConfirm();
-    ApplyImpulse(EventPlayer(), Up(), 18,
+    ApplyImpulse(ep, Up(), 18,
         Relative.ToPlayer, ContraryMotion.Cancel);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
 }
@@ -80,11 +80,11 @@ if(
     perkType == PerkType.SuperLanding &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
-    IsButtonHeld(EventPlayer(), Button.Jump)
+    IsButtonHeld(ep, Button.Jump)
 ){
     Wait(1, WaitBehavior.AbortWhenFalse);
     for(define hovringCount = 0; hovringCount < 50; hovringCount++){
-        ApplyImpulse(EventPlayer(), (Up() * 0.1), 1,
+        ApplyImpulse(ep, (Up() * 0.1), 1,
             Relative.ToPlayer, ContraryMotion.Cancel);
         WaitApplyImpulseCycle();
     }
@@ -96,11 +96,11 @@ Team.Team1
 if(
     perkType == PerkType.SuperLanding &&
     perkState  == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Crouch)
+    IsButtonHeld(ep, Button.Crouch)
 ){
-    AbortIf(6 > DistanceBetween(EventPlayer(), BelowPosition(EventPlayer())));
+    AbortIf(6 > DistanceBetween(ep, BelowPosition(ep)));
     WaitLongPressConfirm();
-    ApplyImpulse(EventPlayer(), Down(), MaxValue(),
+    ApplyImpulse(ep, Down(), MaxValue(),
         Relative.ToPlayer, ContraryMotion.Cancel);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.SecondTriggered;
 }
@@ -114,8 +114,8 @@ if(
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.SecondTriggered &&
     IsOnGround()
 ){
-    StartHoldingButton(EventPlayer(), Button.Crouch);
-    SetMoveSpeed(EventPlayer(), 0);
+    StartHoldingButton(ep, Button.Crouch);
+    SetMoveSpeed(ep, 0);
 
     // get target
     perk[Perk.perkTargets] = PlayersWithinRadius(
@@ -123,7 +123,7 @@ if(
     // apply blast impulse
     ApplyBlastImpulse(perk[Perk.perkTargets], PositionOf(), superLandingRange);
     // splash damage
-    Damage(perk[Perk.perkTargets], EventPlayer(), 200);
+    Damage(perk[Perk.perkTargets], ep, 200);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
@@ -160,8 +160,8 @@ if(
     IsOnGround()
 ){
     Wait(1.0, WaitBehavior.IgnoreCondition);
-    StopHoldingButton(EventPlayer(), Button.Crouch);
-    SetMoveSpeed(EventPlayer(), 100);
+    StopHoldingButton(ep, Button.Crouch);
+    SetMoveSpeed(ep, 100);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
 }
 
@@ -210,7 +210,7 @@ Team.Team1
 if(
     perkType == PerkType.GrapplingBeam &&
     perkState  == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Jump)
+    IsButtonHeld(ep, Button.Jump)
 ){
     AbortIf(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered);
     WaitLongPressConfirm();
@@ -218,16 +218,16 @@ if(
     // move in air
     aimPosition = AimingPosition();
     if(
-        DistanceBetween(EventPlayer(), aimPosition) <= 100
+        DistanceBetween(ep, aimPosition) <= 100
     ){
         CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
-            EventPlayer(), aimPosition,
+            ep, aimPosition,
             Color.Green, EffectRev.VisibleToPositionAndRadius);
         perk[Perk.perkEffectAndText] [2] = LastCreatedEntity();
-        ApplyImpulse(EventPlayer(), 
-            VectorTowards(EventPlayer(), aimPosition + (Up() * 1)),
-            DistanceBetween(EventPlayer(), aimPosition) * 2.5 > minMoveImpulse ?
-                DistanceBetween(EventPlayer(), aimPosition) * 2.5 :
+        ApplyImpulse(ep, 
+            VectorTowards(ep, aimPosition + (Up() * 1)),
+            DistanceBetween(ep, aimPosition) * 2.5 > minMoveImpulse ?
+                DistanceBetween(ep, aimPosition) * 2.5 :
                 minMoveImpulse,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
@@ -245,7 +245,7 @@ Team.Team1
 if(
     perkType == PerkType.GrapplingBeam &&
     perkState  == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    IsButtonHeld(ep, Button.Melee)
 ){
     AbortIf(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered);
     WaitLongPressConfirm();
@@ -253,19 +253,19 @@ if(
     // pull target
     perk[Perk.perkTargets] = AimingPlayer();
     if(
-        DistanceBetween(EventPlayer(), perk[Perk.perkTargets]) <= 100 &&
+        DistanceBetween(ep, perk[Perk.perkTargets]) <= 100 &&
         perk[Perk.perkTargets] != null
     ){
-        SetStatus(perk[Perk.perkTargets], EventPlayer(), Status.Stunned, 1.0);
+        SetStatus(perk[Perk.perkTargets], ep, Status.Stunned, 1.0);
         // wait move stop
         Wait(0.1, WaitBehavior.IgnoreCondition);
         CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
-            EventPlayer(), perk[Perk.perkTargets],
+            ep, perk[Perk.perkTargets],
             Color.Red, EffectRev.VisibleToPositionAndRadius);
         perk[Perk.perkEffectAndText] [3] = LastCreatedEntity();
         ApplyImpulse(perk[Perk.perkTargets], 
-            VectorTowards(perk[Perk.perkTargets], PositionOf(EventPlayer()) + (Up() * 2.0)),
-            DistanceBetween(perk[Perk.perkTargets], EventPlayer()) * 2.5,
+            VectorTowards(perk[Perk.perkTargets], PositionOf(ep) + (Up() * 2.0)),
+            DistanceBetween(perk[Perk.perkTargets], ep) * 2.5,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
@@ -305,7 +305,7 @@ if(
     // reset hud
     DestroyHudText(perk[Perk.perkEffectAndText] [0]);
     // reset status
-    SetMoveSpeed(EventPlayer(), 100);
+    SetMoveSpeed(ep, 100);
     // reset type
     perkType = PerkType.Non;
 }
@@ -322,7 +322,7 @@ if(
         perk[Perk.keepMovingSecond] += 1;
     perk[Perk.perkEffectStatus] = RoundToInteger((perk[Perk.keepMovingSecond] / 10) * 150);
     perk[Perk.perkEffectStatus]  += 100;
-    SetMoveSpeed(EventPlayer(), perk[Perk.perkEffectStatus] );
+    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
     Wait(0.5, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
@@ -339,7 +339,7 @@ if(
 
     perk[Perk.keepMovingSecond] = 0;
     perk[Perk.perkEffectStatus] = 100;
-    SetMoveSpeed(EventPlayer(), perk[Perk.perkEffectStatus] );
+    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
 }
 
 rule: "Perk/Player/Sprinter/resetMoveSpeedByDamage"
@@ -352,7 +352,7 @@ if(
 ){
     perk[Perk.keepMovingSecond] = 0;
     perk[Perk.perkEffectStatus] = 100;
-    SetMoveSpeed(EventPlayer(), perk[Perk.perkEffectStatus] );
+    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
 }
 
 // TAG Adrenaline ----------
@@ -383,7 +383,7 @@ if(
     // reset hud
     DestroyHudText(perk[Perk.perkEffectAndText] [0]);
     // reset status
-    SetMoveSpeed(EventPlayer(), 100);
+    SetMoveSpeed(ep, 100);
     // reset type
     perkType = PerkType.Non;
 }
@@ -398,7 +398,7 @@ if(
 ){
     perk[Perk.perkEffectStatus] = RoundToInteger((1 - NormalizedHealth()) * 150);
     perk[Perk.perkEffectStatus]  += 100;
-    SetMoveSpeed(EventPlayer(), perk[Perk.perkEffectStatus] );
+    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
     Wait(0.5, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
@@ -412,7 +412,7 @@ if(
     Health() == MaxHealth()
 ){
     perk[Perk.perkEffectStatus] = 100;
-    SetMoveSpeed(EventPlayer(), perk[Perk.perkEffectStatus] );
+    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
 }
 
 // TAG HeroicAgility ----------
@@ -426,9 +426,9 @@ if(
     // set time limit
     perk[Perk.perkTimeLimit] = 300;
     // set status
-    SetGravity(EventPlayer(), 75);
-    SetMoveSpeed(EventPlayer(), 150);
-    SetJumpVerticalSpeed(EventPlayer(), 150);
+    SetGravity(ep, 75);
+    SetMoveSpeed(ep, 150);
+    SetJumpVerticalSpeed(ep, 150);
 }
 
 rule: "Perk/Player/HeroicAgility/deactivate"
@@ -439,9 +439,9 @@ if(
     perkState  == PerkState.Non
 ){
     // reset status
-    SetGravity(EventPlayer(), 100);
-    SetMoveSpeed(EventPlayer(), 100);
-    SetJumpVerticalSpeed(EventPlayer(), 100);
+    SetGravity(ep, 100);
+    SetMoveSpeed(ep, 100);
+    SetJumpVerticalSpeed(ep, 100);
     // reset type
     perkType = PerkType.Non;
 }
@@ -480,19 +480,19 @@ if(
     perkType == PerkType.Savior &&
     perkState  == PerkState.Using
 ){
-    if(Victim() != EventPlayer()){
+    if(Victim() != ep){
         if(!HasStatus(Victim(), Status.Stunned)){
             perk[Perk.perkTargets] = FilteredArray(
                 AllPlayers(Team.Team1),
                 (
-                    ArrayElement() != EventPlayer() &&
+                    ArrayElement() != ep &&
                     Health(ArrayElement()) <= MaxHealth(ArrayElement()) / 2 &&
                     saviorStunRange >= DistanceBetween(Victim(), ArrayElement())
                 )
             );
             if(perk[Perk.perkTargets] != []){
                 // set stun
-                SetStatus(Victim(), EventPlayer(), Status.Stunned, 2.0);
+                SetStatus(Victim(), ep, Status.Stunned, 2.0);
                 // play blast
                 PlayEffect(
                     AllPlayers(), PlayEffect.GoodExplosion,
@@ -517,29 +517,29 @@ if(
                 HasSpawned(ArrayElement()) &&
                 ArrayElement().perkType == PerkType.Savior &&
                 ArrayElement().perkState  == PerkState.Using &&
-                DistanceBetween(EventPlayer(), ArrayElement()) <= saviorReviveRange
+                DistanceBetween(ep, ArrayElement()) <= saviorReviveRange
             )
         )
     ) > 0
 ){
-    define reviver = ClosestPlayerTo(EventPlayer(), Team.Team1);
+    define reviver = ClosestPlayerTo(ep, Team.Team1);
 
     // revive effect and sound
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
-        Color.Yellow, EventPlayer(), 1);
+        Color.Yellow, ep, 1);
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.RingExplosion,
-        Color.Yellow, EventPlayer(), 8);
+        Color.Yellow, ep, 8);
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.BuffExplosionSound,
-        Color.White, EventPlayer(), MaxLength());
+        Color.White, ep, MaxLength());
 
-    Resurrect(EventPlayer());
+    Resurrect(ep);
 
     SmallMessage(reviver,
-        <"<0> <1> <2>.", "revived", EventPlayer(), HeroIconString(HeroOf(EventPlayer()))>);
-    SmallMessage(EventPlayer(),
+        <"<0> <1> <2>.", "revived", ep, HeroIconString(HeroOf(ep))>);
+    SmallMessage(ep,
         <"<0> <1> <2>.", reviver, HeroIconString(HeroOf(reviver)), "revivied you">);
 }
 
@@ -562,7 +562,7 @@ if(
     perk[Perk.perkEffectAndText] [0] = LastTextID();
     // set effect
     CreateEffect(AllPlayers(), Effect.Ring, Color.SkyBlue,
-        EventPlayer(), fearlessRange, EffectRev.VisibleToPositionAndRadius);
+        ep, fearlessRange, EffectRev.VisibleToPositionAndRadius);
     perk[Perk.perkEffectAndText] [1] = LastCreatedEntity();
 }
 
@@ -578,8 +578,8 @@ if(
     // reset effect
     DestroyEffect(perk[Perk.perkEffectAndText] [1]);
     // reset status
-    SetDamageDealt(EventPlayer(), perk[Perk.perkEffectStatus] );
-    SetHealingReceived(EventPlayer(), perk[Perk.perkEffectStatus] );
+    SetDamageDealt(ep, perk[Perk.perkEffectStatus] );
+    SetHealingReceived(ep, perk[Perk.perkEffectStatus] );
     // reset type
     perkType = PerkType.Non;
 }
@@ -595,7 +595,7 @@ if(
     define nearEnemyCount = CountOf(
         FilteredArray(
             PlayersWithinRadius(
-                PositionOf(EventPlayer()), fearlessRange, Team.Team2, RadiusLOS.Off
+                PositionOf(ep), fearlessRange, Team.Team2, RadiusLOS.Off
             ), IsAlive(ArrayElement())
         )
     );
@@ -613,8 +613,8 @@ if(
     else if(100 > perk[Perk.perkEffectStatus] )
         perk[Perk.perkEffectStatus] = 100;
     
-    SetDamageDealt(EventPlayer(), perk[Perk.perkEffectStatus] );
-    SetHealingReceived(EventPlayer(), perk[Perk.perkEffectStatus] );
+    SetDamageDealt(ep, perk[Perk.perkEffectStatus] );
+    SetHealingReceived(ep, perk[Perk.perkEffectStatus] );
     WaitUpdateMediumCycle();
     LoopIfConditionIsTrue();
 }
@@ -637,7 +637,7 @@ if(
     perk[Perk.perkEffectAndText] [0] = LastTextID();
     // set effect
     CreateEffect(AllPlayers(), Effect.Ring, Color.Orange,
-        EventPlayer(), steelRange, EffectRev.VisibleToPositionAndRadius);
+        ep, steelRange, EffectRev.VisibleToPositionAndRadius);
     perk[Perk.perkEffectAndText] [1] = LastCreatedEntity();
 }
 
@@ -663,7 +663,7 @@ define nearSteel:
             (
                 ArrayElement().perkType == PerkType.SteelFormation &&
                 ArrayElement().perkState  == PerkState.Using &&
-                DistanceBetween(EventPlayer(), ArrayElement()) <= steelRange
+                DistanceBetween(ep, ArrayElement()) <= steelRange
             )
         )
     ) > 0;
@@ -678,7 +678,7 @@ if(
     perk[Perk.perkEffectStatus] = CountOf(
         FilteredArray(
             PlayersWithinRadius(
-                PositionOf(EventPlayer()), steelRange, Team.Team1, RadiusLOS.Off
+                PositionOf(ep), steelRange, Team.Team1, RadiusLOS.Off
             ), IsAlive(ArrayElement())
         )
     );
@@ -692,7 +692,7 @@ Team.Team1
 if(
     nearSteel
 ){
-    SetDamageReceived(EventPlayer(), 50);
+    SetDamageReceived(ep, 50);
 }
 
 rule: "Perk/Player/SteelFormation/disableSteel"
@@ -701,7 +701,7 @@ Team.Team1
 if(
     !nearSteel
 ){
-    SetDamageReceived(EventPlayer(), 100);
+    SetDamageReceived(ep, 100);
 }
 
 // TAG PersonalShelter ----------
@@ -713,7 +713,7 @@ define inShelter:
             (
                 ArrayElement().perkType == PerkType.PersonalShelter &&
                 ArrayElement().perkState  == PerkState.Using &&
-                DistanceBetween(EventPlayer(), ArrayElement().perkPosition) <= shelterRange
+                DistanceBetween(ep, ArrayElement().perkPosition) <= shelterRange
             )
         )
     ) > 0;
@@ -732,7 +732,7 @@ if(
     // show text
     perk[Perk.perkEffectAndText] = [];
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Personal Shelter">,
+        AllPlayers(), <"<0> <1> <2>", ep, HeroIconString(HeroOf()), "Personal Shelter">,
         perkPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
@@ -769,8 +769,8 @@ Team.Team1
 if(
     inShelter
 ){
-    SetStatus(EventPlayer(), null, Status.PhasedOut, MaxValue());
-    SetInvisible(EventPlayer(), InvisibleTo.Enemies);
+    SetStatus(ep, null, Status.PhasedOut, MaxValue());
+    SetInvisible(ep, InvisibleTo.Enemies);
 }
 
 rule: "Perk/Player/PersonalShelter/disableSafe"
@@ -779,21 +779,21 @@ Team.Team1
 if(
     !inShelter
 ){
-    ClearStatus(EventPlayer(), Status.PhasedOut);
-    SetInvisible(EventPlayer(), InvisibleTo.None);
+    ClearStatus(ep, Status.PhasedOut);
+    SetInvisible(ep, InvisibleTo.None);
 }
 
 rule: "Perk/Player/PersonalShelter/failsafeReset"
 Event.OngoingPlayer
 Team.Team1
 if(
-    HasStatus(EventPlayer(), Status.PhasedOut) &&
+    HasStatus(ep, Status.PhasedOut) &&
     !IsInSpawnRoom()
 ){
     WaitUpdateLongCycle();
     if(!inShelter){
-        ClearStatus(EventPlayer(), Status.PhasedOut);   
-        SetInvisible(EventPlayer(), InvisibleTo.None);
+        ClearStatus(ep, Status.PhasedOut);   
+        SetInvisible(ep, InvisibleTo.None);
     }
     LoopIfConditionIsTrue();
 }
@@ -830,7 +830,7 @@ define nearStation:
             (
                 ArrayElement().perkType == PerkType.BioticStation &&
                 ArrayElement().perkState  == PerkState.Using &&
-                DistanceBetween(EventPlayer(), ArrayElement().perkPosition) <= healRange
+                DistanceBetween(ep, ArrayElement().perkPosition) <= healRange
             )
         )
     ) > 0;
@@ -849,7 +849,7 @@ if(
     // show text
     perk[Perk.perkEffectAndText] = [];
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Biotic Station">,
+        AllPlayers(), <"<0> <1> <2>", ep, HeroIconString(HeroOf()), "Biotic Station">,
         perkPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
@@ -906,7 +906,7 @@ if(
     nearStation
 ){
     // heal
-    Heal(EventPlayer(), EventPlayer(), 25);
+    Heal(ep, ep, 25);
     WaitUpdateShortCycle();
     LoopIfConditionIsTrue();
 }
@@ -925,7 +925,7 @@ if(
     perk[Perk.perkTimeLimit] = 180;
     // show text
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), "Trap Beam">,
+        AllPlayers(), <"<0> <1> <2>", ep, HeroIconString(HeroOf()), "Trap Beam">,
         perkPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
@@ -1002,7 +1002,7 @@ if(
     if(IsAlive(perk[Perk.perkTargets]) &&
      !HasStatus(perk[Perk.perkTargets], Status.Stunned)){
         // set stun
-        SetStatus(perk[Perk.perkTargets], EventPlayer(), Status.Stunned, 2.0);
+        SetStatus(perk[Perk.perkTargets], ep, Status.Stunned, 2.0);
         // play blast
         PlayEffect(
             AllPlayers(), PlayEffect.GoodExplosion,
@@ -1024,7 +1024,7 @@ if(
     // set effect
     perk[Perk.perkEffectAndText] = [];
     CreateEffect(AllPlayers(Team.Team1), Effect.Ring, Color.Blue,
-        EventPlayer(), battleFlagRange, EffectRev.VisibleToPositionAndRadius);
+        ep, battleFlagRange, EffectRev.VisibleToPositionAndRadius);
     perk[Perk.perkEffectAndText] [0] = LastCreatedEntity();
     // show icon
     CreateIcon(AllPlayers(), PositionOf() + (Up() * 2), Icon.Flag,
@@ -1053,7 +1053,7 @@ define nearBattleFlag:
         (
             ArrayElement().perkType == PerkType.BattleFlag &&
             ArrayElement().perkState  == PerkState.Using &&
-            DistanceBetween(EventPlayer(), ArrayElement()) <= battleFlagRange
+            DistanceBetween(ep, ArrayElement()) <= battleFlagRange
         )
     );
 
@@ -1064,7 +1064,7 @@ if(
     CountOf(nearBattleFlag) > 0
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), UltimateChargePercent() + 2);
+    SetUltimateCharge(ep, UltimateChargePercent() + 2);
     LoopIfConditionIsTrue();
 }
 
@@ -1075,7 +1075,7 @@ define raisedBattleFlag:
             (
                 ArrayElement().perkType == PerkType.BattleFlag &&
                 ArrayElement().perkState  == PerkState.Using &&
-                ArrayElement() != EventPlayer()
+                ArrayElement() != ep
             )
         )
     ) > 0;
@@ -1096,12 +1096,12 @@ if(
     CreatePerkEffectHud(<"Our battle flag is raised on battle line.">);
     perk[Perk.perkEffectAndText] [101] = LastTextID();
     // show message
-    SmallMessage(EventPlayer(), <"Our battle flag is raised on battle line.">);
-    SmallMessage(EventPlayer(), <"Hold jump button <0> to teleport to battle flag.", ButtonGuide(Button.Jump)>);
+    SmallMessage(ep, <"Our battle flag is raised on battle line.">);
+    SmallMessage(ep, <"Hold jump button <0> to teleport to battle flag.", ButtonGuide(Button.Jump)>);
     // play ready sound
     PlayEffect(
-        EventPlayer(), PlayEffect.BuffImpactSound,
-        Color.White, EventPlayer(), 100);
+        ep, PlayEffect.BuffImpactSound,
+        Color.White, ep, 100);
 }
 
 rule: "Perk/Player/BattleFlag/hideOperationTeleport"
@@ -1127,7 +1127,7 @@ if(
         IsInSpawnRoom() &&
         raisedBattleFlag
     ) &&
-    IsButtonHeld(EventPlayer(), Button.Jump)
+    IsButtonHeld(ep, Button.Jump)
 ){
     WaitLongPressConfirm();
     perk[Perk.perkTargets] = 
@@ -1141,14 +1141,14 @@ if(
             )
         );
     // teleport to battle flag
-    Teleport(EventPlayer(), perk[Perk.perkTargets]);
+    Teleport(ep, perk[Perk.perkTargets]);
     PlayEffect(
         AllPlayers(), PlayEffect.GoodPickupEffect,
         Color.Blue, perk[Perk.perkTargets], 1);
     PlayEffect(
         AllPlayers(), PlayEffect.BuffImpactSound,
         Color.White, perk[Perk.perkTargets], MaxLength());
-    SmallMessage(perk[Perk.perkTargets], <"<0> <1> deployed from your battle flag.", EventPlayer(), HeroIconString(HeroOf())>);
+    SmallMessage(perk[Perk.perkTargets], <"<0> <1> deployed from your battle flag.", ep, HeroIconString(HeroOf())>);
 }
 
 // TAG ChainExplosion ----------
@@ -1183,13 +1183,13 @@ if(
     perkType == PerkType.ChainExplosion &&
     perkState  == PerkState.Using
 ){
-    if(Victim() != EventPlayer()){
+    if(Victim() != ep){
         WaitPlayEffect();
         // splash damage
         Damage(
             PlayersWithinRadius(
                 PositionOf(Victim()), chainExplosionRange, Team.Team2, RadiusLOS.Off
-            ), EventPlayer(), 300);
+            ), ep, 300);
         // play blast
         PlayEffect(
             AllPlayers(), PlayEffect.GoodExplosion,
@@ -1236,13 +1236,13 @@ if(
     perkType == PerkType.IceAge &&
     perkState  == PerkState.Using
 ){
-    if(Victim() != EventPlayer()){
+    if(Victim() != ep){
         WaitPlayEffect();
         // splash freeze
         SetStatus(
             PlayersWithinRadius(
                 PositionOf(Victim()), IceAgeRange, Team.Team2, RadiusLOS.Off
-            ), EventPlayer(), Status.Frozen, 1.5);
+            ), ep, Status.Frozen, 1.5);
         // play blast
         PlayEffect(
             AllPlayers(), PlayEffect.GoodExplosion,
@@ -1305,7 +1305,7 @@ Team.Team1
 if(
     perkType == PerkType.AimHack &&
     perkState  == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    IsButtonHeld(ep, Button.Melee)
 ){
     WaitLongPressConfirm();
     if(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered){
@@ -1316,8 +1316,8 @@ if(
     }
     // play change sound
     PlayEffect(
-        EventPlayer(), PlayEffect.DebuffImpactSound,
-        Color.White, EventPlayer(), MaxValue());
+        ep, PlayEffect.DebuffImpactSound,
+        Color.White, ep, MaxValue());
 }
 
 rule: "Perk/Player/AimHack/startAutoAim"
@@ -1342,7 +1342,7 @@ if(
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready
 ){
     WaitConditionConfirmed();
-    StopFacing(EventPlayer());
+    StopFacing(ep);
     autoAimingTarget = 0;
     perk[Perk.perkTargets] = 0;
 }
@@ -1356,8 +1356,8 @@ if(
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
     Health() <= MaxHealth() / 2
 ){
-    perk[Perk.perkTargets] = ClosestPlayerTo(EventPlayer(), Team.Team2);
-    if(IsInLineOfSight(EventPlayer(), perk[Perk.perkTargets])){
+    perk[Perk.perkTargets] = ClosestPlayerTo(ep, Team.Team2);
+    if(IsInLineOfSight(ep, perk[Perk.perkTargets])){
         autoAimingTarget = perk[Perk.perkTargets];
     }
 }
@@ -1367,7 +1367,7 @@ void AutoAim()"AutoAim"{
         autoAimingTarget == 0 ||    // has not target
         IsDead(autoAimingTarget) || // target dead
         !IsInLineOfSight(           // target hidden
-            EventPlayer(),
+            ep,
             autoAimingTarget,
             BarrierLOS.NoBarriersBlock
         )
@@ -1376,14 +1376,14 @@ void AutoAim()"AutoAim"{
         perk[Perk.perkTargets] = FirstOf(
             SortedArray(
                 FilteredArray(
-                    PlayersInViewAngle(EventPlayer(), Team.Team2, 90),
+                    PlayersInViewAngle(ep, Team.Team2, 90),
                     (
                         IsAlive(ArrayElement()) &&
-                        IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock) &&
+                        IsInLineOfSight(ep, ArrayElement(), BarrierLOS.NoBarriersBlock) &&
                         !HasStatus(ArrayElement(), Status.Asleep)
                     )
                 ),
-                DistanceBetween(EventPlayer(), ArrayElement())
+                DistanceBetween(ep, ArrayElement())
             )
         );
         // has new target
@@ -1398,7 +1398,7 @@ void AutoAim()"AutoAim"{
         else{
             // stop auto aim
             autoAimingTarget = 0;
-            StopFacing(EventPlayer());
+            StopFacing(ep);
         }
     }
 }
@@ -1434,7 +1434,7 @@ if(
     perkType == PerkType.Vampire &&
     perkState  == PerkState.Using
 ){
-    Heal(EventPlayer(), EventPlayer(), EventDamage() / 2);
+    Heal(ep, ep, EventDamage() / 2);
 }
 
 // TAG HotShot ----------
@@ -1471,7 +1471,7 @@ if(
 
     define clips = [0, 1];
     for(define idx = 0; idx < CountOf(clips); idx++){
-        SetAmmo(EventPlayer(), clips[idx], MaxAmmo(EventPlayer(), clips[idx]));
+        SetAmmo(ep, clips[idx], MaxAmmo(ep, clips[idx]));
     }
     
     define buttons = [
@@ -1483,9 +1483,9 @@ if(
         Button.Crouch
     ];
     for(define idx = 0; idx < CountOf(buttons); idx++){
-        SetAbilityCooldown(EventPlayer(), buttons[idx], 0);
-        SetAbilityCharge(EventPlayer(), buttons[idx], 3);
-        SetAbilityResource(EventPlayer(), buttons[idx], 100);
+        SetAbilityCooldown(ep, buttons[idx], 0);
+        SetAbilityCharge(ep, buttons[idx], 3);
+        SetAbilityResource(ep, buttons[idx], 100);
     }
 }
 
@@ -1500,7 +1500,7 @@ if(
     // set time limit
     perk[Perk.perkTimeLimit] = 300;
 
-    SetUltimateCharge(EventPlayer(), 100);
+    SetUltimateCharge(ep, 100);
 }
 
 rule: "Perk/Player/ShotCaller/deactivate"
@@ -1532,7 +1532,7 @@ if(
         );
 
     for(pLoopIndex = 0; pLoopIndex < CountOf(perk[Perk.perkTargets]); pLoopIndex++){
-        if(perk[Perk.perkTargets][pLoopIndex] != EventPlayer()){
+        if(perk[Perk.perkTargets][pLoopIndex] != ep){
             SetUltimateCharge(perk[Perk.perkTargets][pLoopIndex], 100);
         }
     }
@@ -1548,7 +1548,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 2));
+    SetUltimateCharge(ep, (UltimateChargePercent() + 2));
     LoopIfConditionIsTrue();
 }
 
@@ -1604,7 +1604,7 @@ Team.Team1
 if(
     perkType == PerkType.GrudgeFireBall &&
     perkState  == PerkState.Using &&
-    Attacker() != EventPlayer() &&
+    Attacker() != ep &&
     EventDamage() > 0
 ){
     perk[Perk.fireBallPower] += RoundToInteger(EventDamage() * fireBallChargeRate);
@@ -1617,13 +1617,13 @@ if(
     perkType == PerkType.GrudgeFireBall &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    IsButtonHeld(ep, Button.Melee)
 ){
     WaitLongPressConfirm();
     AbortIf(perk[Perk.fireBallPower] <= 0);
 
     perkPosition = EyePosition() + 
-        (FacingDirectionOf(EventPlayer()) * perk[Perk.fireBallSize] / 2);
+        (FacingDirectionOf(ep) * perk[Perk.fireBallSize] / 2);
     landPosition = AimingPositionIgnorePlayer();
     // set fireball param
     perk[Perk.fireBallSpeed] = fireBallMaxSpeed - (perk[Perk.fireBallPower] / fireBallMaxSpeed);
@@ -1732,7 +1732,7 @@ void ExplodeFireBall()"ExplodeFireBall"{
     // apply blast impulse
     ApplyBlastImpulse(perk[Perk.perkTargets], perkPosition, perk[Perk.fireBallBlastRange]);
     // damage
-    Damage(perk[Perk.perkTargets], EventPlayer(), perk[Perk.fireBallPower]);
+    Damage(perk[Perk.perkTargets], ep, perk[Perk.fireBallPower]);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
@@ -1801,7 +1801,7 @@ Team.Team1
 if(
     perkType == PerkType.GrudgeThunderStrike &&
     perkState  == PerkState.Using &&
-    Attacker() != EventPlayer() &&
+    Attacker() != ep &&
     EventDamage() > 0
 ){
     perk[Perk.thunderStrikePower] += RoundToInteger(EventDamage() * thunderStrikeChargeRate);
@@ -1814,7 +1814,7 @@ if(
     perkType == PerkType.GrudgeThunderStrike &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    IsButtonHeld(ep, Button.Melee)
 ){
     WaitLongPressConfirm();
     AbortIf(perk[Perk.thunderStrikePower] <= 0);
@@ -1835,7 +1835,7 @@ if(
     perkType == PerkType.GrudgeThunderStrike &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    IsButtonHeld(ep, Button.Melee)
 ){
     WaitLongPressConfirm();
     DestroyEffect(perk[Perk.perkEffectAndText] [4]);
@@ -1887,7 +1887,7 @@ if(
         PlayersWithinRadius(
             landPosition, thunderStrikeDamageRange,
             Team.Team2, RadiusLOS.Off),
-        EventPlayer(), thunderStrikeConsumePower);
+        ep, thunderStrikeConsumePower);
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
@@ -1942,7 +1942,7 @@ if(
     // landing zone text
     perk[Perk.perkEffectAndText] = [];
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\rBarrage incoming. Stand by...", EventPlayer(), HeroIconString(HeroOf()), "Artillery Request">,
+        AllPlayers(), <"<0> <1> <2>\n\rBarrage incoming. Stand by...", ep, HeroIconString(HeroOf()), "Artillery Request">,
         landZonePosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
@@ -2034,7 +2034,7 @@ if(
             artilleryLandingRange / 1.5
         );
     
-    if(!isReduceAnimation){
+    if(!isServerOverLoad){
         UpdateEveryFrame(perkPosition);
         ChaseVariableOverTime(
             perkPosition, landPosition, artilleryAttackSpeeed,
@@ -2076,7 +2076,7 @@ if(
             artilleryLandingRange / 1.5
         );
 
-    if(!isReduceAnimation){
+    if(!isServerOverLoad){
         UpdateEveryFrame(perkPosition2);
         ChaseVariableOverTime(
             perkPosition2, landPosition2, artilleryAttackSpeeed,
@@ -2102,7 +2102,7 @@ void ExplodeArtillery(define position)"ExplodeArtilleryShell"{
     // apply blast impulse
     ApplyBlastImpulse(perk[Perk.perkTargets], position, artilleryDamageRange);
     // damage
-    Damage(perk[Perk.perkTargets], EventPlayer(), 300);
+    Damage(perk[Perk.perkTargets], ep, 300);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
@@ -2149,9 +2149,9 @@ if(
     perk[Perk.perkEffectAndText] [0] = LastTextID();
 
     // first use
-    StartHoldingButton(EventPlayer(), Button.Melee);
+    StartHoldingButton(ep, Button.Melee);
     Wait(0.5, WaitBehavior.IgnoreCondition);
-    StopHoldingButton(EventPlayer(), Button.Melee);
+    StopHoldingButton(ep, Button.Melee);
 }
 rule: "Perk/Player/StrafingSupport/deactivate"
 Event.OngoingPlayer
@@ -2182,8 +2182,8 @@ if(
 ){
     // remind use perk.
     Wait(30, WaitBehavior.AbortWhenFalse);
-    SmallMessage(EventPlayer(), <"Forgotten Strafing Support?"> );
-    SmallMessage(EventPlayer(), <"Hold melee button <0> to call Strafing Support.", ButtonGuide(Button.Melee)> );
+    SmallMessage(ep, <"Forgotten Strafing Support?"> );
+    SmallMessage(ep, <"Hold melee button <0> to call Strafing Support.", ButtonGuide(Button.Melee)> );
     LoopIfConditionIsTrue();
 }
 
@@ -2194,7 +2194,7 @@ if(
     perkType == PerkType.StrafingSupport &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    IsButtonHeld(ep, Button.Melee)
 ){
     WaitLongPressConfirm();
     // reset hud
@@ -2217,8 +2217,8 @@ if(
 ){
     // play set sound
     PlayEffect(
-        EventPlayer(), PlayEffect.DebuffImpactSound,
-        Color.White, EventPlayer(), MaxValue());
+        ep, PlayEffect.DebuffImpactSound,
+        Color.White, ep, MaxValue());
 
     aimPosition = BelowPosition(AimingPosition());
     perk[Perk.approachingAngle] = DirectionTowards(
@@ -2249,7 +2249,7 @@ if(
 
     // landing zone text
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\rStrafing incoming!", EventPlayer(), HeroIconString(HeroOf()), "Strafing Request">,
+        AllPlayers(), <"<0> <1> <2>\n\rStrafing incoming!", ep, HeroIconString(HeroOf()), "Strafing Request">,
         aimPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perk[Perk.perkEffectAndText] [1] = LastTextID();
@@ -2334,7 +2334,7 @@ if(
             landPosition2, strafReqDamageRange,
             Team.Team2, RadiusLOS.Off);
     // damage
-    Damage(perk[Perk.perkTargets], EventPlayer(), 200);
+    Damage(perk[Perk.perkTargets], ep, 200);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
@@ -2378,8 +2378,8 @@ if(
 ){
     // play ready sound
     PlayEffect(
-        EventPlayer(), PlayEffect.BuffImpactSound,
-        Color.White, EventPlayer(), 100);
+        ep, PlayEffect.BuffImpactSound,
+        Color.White, ep, 100);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
 }
 
@@ -2415,7 +2415,7 @@ if(
     // play air craft animation
     landPosition = perkPosition;
     
-    if(!isReduceAnimation){
+    if(!isServerOverLoad){
         UpdateEveryFrame(landPosition);
         ChaseVariableOverTime(
             landPosition, perkPosition2,
@@ -2463,9 +2463,9 @@ if(
     perk[Perk.perkEffectAndText] [0] = LastTextID();
 
     // first use
-    StartHoldingButton(EventPlayer(), Button.Melee);
+    StartHoldingButton(ep, Button.Melee);
     Wait(0.5, WaitBehavior.IgnoreCondition);
-    StopHoldingButton(EventPlayer(), Button.Melee);
+    StopHoldingButton(ep, Button.Melee);
 }
 rule: "Perk/Player/MissileBarrage/deactivate"
 Event.OngoingPlayer
@@ -2500,8 +2500,8 @@ if(
 ){
     // remind use perk.
     Wait(30, WaitBehavior.AbortWhenFalse);
-    SmallMessage(EventPlayer(), <"Forgotten Missile Barrage?"> );
-    SmallMessage(EventPlayer(), <"Hold melee button <0> to call Missile Barrage.", ButtonGuide(Button.Melee)> );
+    SmallMessage(ep, <"Forgotten Missile Barrage?"> );
+    SmallMessage(ep, <"Hold melee button <0> to call Missile Barrage.", ButtonGuide(Button.Melee)> );
     LoopIfConditionIsTrue();
 }
 
@@ -2512,7 +2512,7 @@ if(
     perkType == PerkType.MissileBarrage &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    IsButtonHeld(ep, Button.Melee)
 ){
     WaitLongPressConfirm();
     // reset text
@@ -2547,8 +2547,8 @@ if(
 ){
     // play set sound
     PlayEffect(
-        EventPlayer(), PlayEffect.DebuffImpactSound,
-        Color.White, EventPlayer(), MaxValue());
+        ep, PlayEffect.DebuffImpactSound,
+        Color.White, ep, MaxValue());
 
     aimPosition = AimingPosition();
     perkPosition = InvalidPosition();
@@ -2559,7 +2559,7 @@ if(
 
    // landing zone text
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\r<3> Missles incoming!", EventPlayer(), HeroIconString(HeroOf()), "Missile Barrage", perk[Perk.perkEffectCount]>,
+        AllPlayers(), <"<0> <1> <2>\n\r<3> Missles incoming!", ep, HeroIconString(HeroOf()), "Missile Barrage", perk[Perk.perkEffectCount]>,
         landZonePosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perk[Perk.perkEffectAndText] [1] = LastTextID();
@@ -2650,7 +2650,7 @@ if(
     //         missileLandingRange / 1.5
     //     );
 
-    if(!isReduceAnimation){
+    if(!isServerOverLoad){
         UpdateEveryFrame(perkPosition);
         ChaseVariableOverTime(
             perkPosition, landZonePosition, missleAttackSpeeed,
@@ -2693,7 +2693,7 @@ if(
     //         missileLandingRange / 1.5
     //     );
 
-    if(!isReduceAnimation){
+    if(!isServerOverLoad){
         UpdateEveryFrame(perkPosition2);
         ChaseVariableOverTime(
             perkPosition2, landZonePosition, missleAttackSpeeed,
@@ -2719,7 +2719,7 @@ void ExplodeMissile(define position)"ExplodeMissile"{
     // apply blast impulse
     ApplyBlastImpulse(perk[Perk.perkTargets], position, missileDamageRange);
     // damage
-    Damage(perk[Perk.perkTargets], EventPlayer(), 300);
+    Damage(perk[Perk.perkTargets], ep, 300);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
@@ -2781,8 +2781,8 @@ if(
 ){
     // play ready sound
     PlayEffect(
-        EventPlayer(), PlayEffect.BuffImpactSound,
-        Color.White, EventPlayer(), 100);
+        ep, PlayEffect.BuffImpactSound,
+        Color.White, ep, 100);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
 }
 
@@ -2804,7 +2804,7 @@ if(
     // landing zone text
     perk[Perk.perkEffectAndText] = [];
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\rLanding at <3> second. Brace for impact!", EventPlayer(), HeroIconString(HeroOf()), "Cruising Missile", perk[Perk.perkTimeLimit] >,
+        AllPlayers(), <"<0> <1> <2>\n\rLanding at <3> second. Brace for impact!", ep, HeroIconString(HeroOf()), "Cruising Missile", perk[Perk.perkTimeLimit] >,
         landPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
@@ -2877,7 +2877,7 @@ Team.Team1
 if(
     perkType == PerkType.CruisingMissile &&
     perkState  == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    IsButtonHeld(ep, Button.Melee)
 ){
     WaitLongPressConfirm();
     if(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered){
@@ -2888,8 +2888,8 @@ if(
     }
     // play change sound
     PlayEffect(
-        EventPlayer(), PlayEffect.DebuffImpactSound,
-        Color.White, EventPlayer(), MaxValue());
+        ep, PlayEffect.DebuffImpactSound,
+        Color.White, ep, MaxValue());
 }
 
 rule: "Perk/Player/CruisingMissile/playTrajectory"
@@ -2916,12 +2916,12 @@ if(
     perkState  == PerkState.Using
 ){
     // set missiles at random horizontal positions over 500m
-    perkPosition = EventPlayer() +
+    perkPosition = ep +
         Vector(0, 500, 0) + RandomPosition(250, 0, 250);
     // set missile land position to aiming position
     landPosition = AimingPosition();
     // start missile move
-    if(!isReduceAnimation){
+    if(!isServerOverLoad){
         UpdateEveryFrame(perkPosition);
         ChaseVariableOverTime(
             perkPosition, landPosition, perk[Perk.perkTimeLimit] ,
@@ -2985,7 +2985,7 @@ if(
     // apply blast impulse
     ApplyBlastImpulse(perk[Perk.perkTargets], landPosition, crusingMissileDamageRange);
     // damage
-    Damage(perk[Perk.perkTargets], EventPlayer(), MaxValue());
+    Damage(perk[Perk.perkTargets], ep, MaxValue());
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
@@ -3018,7 +3018,7 @@ if(
     // landing zone text
     perk[Perk.perkEffectAndText] = [];
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\rIrradiating until <3> seconds.", EventPlayer(), HeroIconString(HeroOf()), "Orbital Laser", perk[Perk.perkTimeLimit] >,
+        AllPlayers(), <"<0> <1> <2>\n\rIrradiating until <3> seconds.", ep, HeroIconString(HeroOf()), "Orbital Laser", perk[Perk.perkTimeLimit] >,
         landPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
@@ -3042,7 +3042,7 @@ if(
     perk[Perk.perkEffectAndText] [4] = LastCreatedEntity();
     // above lazer aura
     CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
-         PositionOf(EventPlayer()) + Vector(0, 1000, 0), 30, EffectRev.VisibleToPositionAndRadius);
+         PositionOf(ep) + Vector(0, 1000, 0), 30, EffectRev.VisibleToPositionAndRadius);
     perk[Perk.perkEffectAndText] [5] = LastCreatedEntity();
     // lazer shell
     CreateEffect(AllPlayers(), Effect.LightShaft, Color.Red,
@@ -3092,7 +3092,7 @@ Team.Team1
 if(
     perkType == PerkType.OrbitalLaser &&
     perkState  == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    IsButtonHeld(ep, Button.Melee)
 ){
     WaitLongPressConfirm();
     if(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered){
@@ -3103,8 +3103,8 @@ if(
     }
     // play change sound
     PlayEffect(
-        EventPlayer(), PlayEffect.DebuffImpactSound,
-        Color.White, EventPlayer(), MaxValue());
+        ep, PlayEffect.DebuffImpactSound,
+        Color.White, ep, MaxValue());
 }
 
 rule: "Perk/Player/OrbitalLaser/launchLazer"
@@ -3154,7 +3154,7 @@ if(
         PlayersWithinRadius(
             landPosition, lazerDamageRange,
             Team.Team2, RadiusLOS.Off
-        ), EventPlayer(), 100);
+        ), ep, 100);
     // play blast effect
     PlayEffect(
         AllPlayers(),
@@ -3180,7 +3180,7 @@ if(
     // landing zone text
     perk[Perk.perkEffectAndText] = [];
     CreateInWorldText(
-        AllPlayers(), <"<0> <1> <2>\n\rArrival at <3> second. Stand by...", EventPlayer(), HeroIconString(HeroOf()), "Care Package", perk[Perk.perkTimeLimit] >,
+        AllPlayers(), <"<0> <1> <2>\n\rArrival at <3> second. Stand by...", ep, HeroIconString(HeroOf()), "Care Package", perk[Perk.perkTimeLimit] >,
         landPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
@@ -3263,12 +3263,12 @@ if(
     perkState  == PerkState.Using
 ){
     // set package at horizontal positions over 250
-    perkPosition = EventPlayer() +
+    perkPosition = ep +
         Vector(0, 125, 0) + RandomPosition(0, 0, 0);
     // set package land position to player position
-    landPosition = BelowPosition(EventPlayer());
+    landPosition = BelowPosition(ep);
     // start package move
-    if(!isReduceAnimation){
+    if(!isServerOverLoad){
         UpdateEveryFrame(perkPosition);
         ChaseVariableOverTime(
             perkPosition, landPosition, perk[Perk.perkTimeLimit] ,
@@ -3346,17 +3346,17 @@ if(
     perkHero.maxHealth = 300;
     perkHero.healingReceived = 5.0;
     perkHero.gravity = 5;
-    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    ForcePlayerPerkHero(ep, perkHero);
     // set status
-    StartScalingPlayer(EventPlayer(), 1.5, false);
-    StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
+    StartScalingPlayer(ep, 1.5, false);
+    StartModifyingHeroVoiceLines(ep, 0.8, false);
 
     // fly and change mode
     Wait(0.5, WaitBehavior.AbortWhenFalse);
-    StartHoldingButton(EventPlayer(), Button.Jump);
+    StartHoldingButton(ep, Button.Jump);
     Wait(0.5, WaitBehavior.IgnoreCondition);
-    StopHoldingButton(EventPlayer(), Button.Jump);
-    PressButton(EventPlayer(), Button.Ability1);
+    StopHoldingButton(ep, Button.Jump);
+    PressButton(ep, Button.Ability1);
 }
 
 rule: "Perk/Player/DeathFromAbove/deactivate"
@@ -3367,16 +3367,16 @@ if(
     perkState  == PerkState.Non
 ){
     // reset status
-    ClearStatus(EventPlayer(), Status.Rooted);
-    StopScalingPlayer(EventPlayer());
-    StopModifyingHeroVoiceLines(EventPlayer());
+    ClearStatus(ep, Status.Rooted);
+    StopScalingPlayer(ep);
+    StopModifyingHeroVoiceLines(ep);
     // reset hud
     DestroyHudText(perk[Perk.perkEffectAndText] [0]);
     DestroyHudText(perk[Perk.perkEffectAndText] [1]);
     DestroyHudText(perk[Perk.perkEffectAndText] [2]);
     DestroyHudText(perk[Perk.perkEffectAndText] [3]);
     // reset perk hero
-    StopForcingPerkHero(EventPlayer());
+    StopForcingPerkHero(ep);
     // reset type
     perkType = PerkType.Non;
 }
@@ -3400,11 +3400,11 @@ if(
     perkType == PerkType.DeathFromAbove &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
-    IsButtonHeld(EventPlayer(), Button.Jump)
+    IsButtonHeld(ep, Button.Jump)
 ){
     WaitLongPressConfirm();
-    SetStatus(EventPlayer(), null, Status.Rooted, MaxValue());
-    SetGravity(EventPlayer(), 5);
+    SetStatus(ep, null, Status.Rooted, MaxValue());
+    SetGravity(ep, 5);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
 }
 
@@ -3415,11 +3415,11 @@ if(
     perkType == PerkType.DeathFromAbove &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
-    IsButtonHeld(EventPlayer(), Button.Crouch)
+    IsButtonHeld(ep, Button.Crouch)
 ){
     WaitLongPressConfirm();
-    ClearStatus(EventPlayer(), Status.Rooted);
-    SetGravity(EventPlayer(), 100);
+    ClearStatus(ep, Status.Rooted);
+    SetGravity(ep, 100);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
 }
 
@@ -3433,14 +3433,14 @@ if(
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
 ){
-    define distanceFromSurface = DistanceBetween(EventPlayer(), NearestWalkablePosition(EventPlayer()));
+    define distanceFromSurface = DistanceBetween(ep, NearestWalkablePosition(ep));
     
     // if near surface
     if(
         distanceFromSurface < keepHeight
     ){
         // float    
-        ApplyImpulse(EventPlayer(), Up(),
+        ApplyImpulse(ep, Up(),
             (keepHeight - distanceFromSurface) * 0.04,
             Relative.ToPlayer, ContraryMotion.Incorporate);
     }
@@ -3450,19 +3450,19 @@ if(
         distanceFromSurface > keepHeight
     ){
         // dive    
-        ApplyImpulse(EventPlayer(), Down(),
+        ApplyImpulse(ep, Down(),
             (distanceFromSurface - keepHeight) * 0.04,
             Relative.ToPlayer, ContraryMotion.Incorporate);
     }
     
     // if press SF button
-    if(IsButtonHeld(EventPlayer(), Button.SecondaryFire)){
+    if(IsButtonHeld(ep, Button.SecondaryFire)){
         // move forword
-        ApplyImpulse(EventPlayer(), Forward(), 1.5,
+        ApplyImpulse(ep, Forward(), 1.5,
             Relative.ToPlayer, ContraryMotion.Incorporate);
     }
     else{
-        ApplyImpulse(EventPlayer(), Forward(), 0.05,
+        ApplyImpulse(ep, Forward(), 0.05,
             Relative.ToPlayer, ContraryMotion.Incorporate);
     }
     WaitApplyImpulseCycle();
@@ -3476,12 +3476,12 @@ if(
     perkType == PerkType.DeathFromAbove &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
-    IsButtonHeld(EventPlayer(), Button.SecondaryFire)
+    IsButtonHeld(ep, Button.SecondaryFire)
 ){
     // play Afterburner
     PlayEffect(
         AllPlayers(), PlayEffect.GoodExplosion,
-        Color.Orange, PositionOf(EventPlayer()), 0.5);
+        Color.Orange, PositionOf(ep), 0.5);
     WaitUpdateShortCycle();
     LoopIfConditionIsTrue();
 }
@@ -3500,18 +3500,18 @@ if(
 ){
     // get aimPosition
     aimPosition = AimingPosition();
-    define randomPosition = RandomPosition(0.625, 0.625, 0.625);
+    landPosition = RandomPosition(0.625, 0.625, 0.625);
     // splash damage
     Damage(
         PlayersWithinRadius(
-            aimPosition + randomPosition, splashDamageRangeMinigun,
+            aimPosition + landPosition, splashDamageRangeMinigun,
             Team.Team2, RadiusLOS.Off),
-        EventPlayer(), 80);
+        ep, 80);
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
         Color.Yellow,
-        aimPosition + randomPosition,
+        aimPosition + landPosition,
         splashDamageRangeMinigun);
     WaitContinuousBlastCycle();
 
@@ -3533,14 +3533,12 @@ if(
     // get aimPosition
     aimPosition = AimingPosition();
     landPosition = RandomPosition(1.25, 1.25, 1.25);
-
-    // auto canon
     // splash damage
     Damage(
         PlayersWithinRadius(
             aimPosition + landPosition, splashDamageRangeAutoCanon,
             Team.Team2, RadiusLOS.Off),
-        EventPlayer(), 120);
+        ep, 120);
     // play blast
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.GoodExplosion,
@@ -3561,7 +3559,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 3));
+    SetUltimateCharge(ep, (UltimateChargePercent() + 3));
     LoopIfConditionIsTrue();
 }
 
@@ -3573,7 +3571,7 @@ if(
     perkState  == PerkState.Using &&
     IsUsingUltimate()
 ){
-    SetDamageDealt(EventPlayer(), 200);
+    SetDamageDealt(ep, 200);
 }
 
 rule: "Perk/Player/DeathFromAbove/resetTankModeDamageBuff"
@@ -3584,7 +3582,7 @@ if(
     perkState  == PerkState.Using &&
     !IsUsingUltimate()
 ){
-    SetDamageDealt(EventPlayer(), 100);
+    SetDamageDealt(ep, 100);
 }
 
 // TAG LegendalyNinja ----------
@@ -3614,11 +3612,11 @@ if(
     perkHero.moveSpeed = 150;
     perkHero.jumpSpeed = 125;
     perkHero.ultimateCharge = 100;
-    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    ForcePlayerPerkHero(ep, perkHero);
     Wait(0.5, WaitBehavior.AbortWhenFalse);
 
     // use ult
-    PressButton(EventPlayer(), Button.Ultimate);
+    PressButton(ep, Button.Ultimate);
 }
 
 rule: "Perk/Player/LegendalyNinja/deactivate"
@@ -3635,7 +3633,7 @@ if(
     DestroyEffect(perk[Perk.perkEffectAndText] [2]);
     DestroyEffect(perk[Perk.perkEffectAndText] [3]);
     // reset perk hero
-    StopForcingPerkHero(EventPlayer());
+    StopForcingPerkHero(ep);
     // reset type
     perkType = PerkType.Non;
 }
@@ -3646,7 +3644,7 @@ Team.Team1
 if(
     perkType == PerkType.LegendalyNinja &&
     perkState  == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Jump)
+    IsButtonHeld(ep, Button.Jump)
 ){
     AbortIf(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered);
     WaitLongPressConfirm();
@@ -3654,16 +3652,16 @@ if(
     // move in air
     aimPosition = AimingPosition();
     if(
-        DistanceBetween(EventPlayer(), aimPosition) <= 100
+        DistanceBetween(ep, aimPosition) <= 100
     ){
         CreateBeamEffect(AllPlayers(), BeamType.GrappleBeam,
-            EventPlayer(), aimPosition,
+            ep, aimPosition,
             Color.Green, EffectRev.VisibleToPositionAndRadius);
         perk[Perk.perkEffectAndText] [2] = LastCreatedEntity();
-        ApplyImpulse(EventPlayer(), 
-            VectorTowards(EventPlayer(), aimPosition + (Up() * 1)),
-            DistanceBetween(EventPlayer(), aimPosition) * 2.5 > minMoveImpulse ?
-                DistanceBetween(EventPlayer(), aimPosition) * 2.5 :
+        ApplyImpulse(ep, 
+            VectorTowards(ep, aimPosition + (Up() * 1)),
+            DistanceBetween(ep, aimPosition) * 2.5 > minMoveImpulse ?
+                DistanceBetween(ep, aimPosition) * 2.5 :
                 minMoveImpulse,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
@@ -3681,7 +3679,7 @@ Team.Team1
 if(
     perkType == PerkType.LegendalyNinja &&
     perkState  == PerkState.Using &&
-    IsButtonHeld(EventPlayer(), Button.Melee)
+    IsButtonHeld(ep, Button.Melee)
 ){
     AbortIf(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered);
     WaitLongPressConfirm();
@@ -3689,19 +3687,19 @@ if(
     // pull target
     perk[Perk.perkTargets] = AimingPlayer();
     if(
-        DistanceBetween(EventPlayer(), perk[Perk.perkTargets]) <= 100 &&
+        DistanceBetween(ep, perk[Perk.perkTargets]) <= 100 &&
         perk[Perk.perkTargets] != null
     ){
-        SetStatus(perk[Perk.perkTargets], EventPlayer(), Status.Stunned, 1.0);
+        SetStatus(perk[Perk.perkTargets], ep, Status.Stunned, 1.0);
         // wait move stop
         Wait(0.1, WaitBehavior.IgnoreCondition);
         CreateBeamEffect(AllPlayers(), BeamType.GrappleBeam,
-            EventPlayer(), perk[Perk.perkTargets],
+            ep, perk[Perk.perkTargets],
             Color.Red, EffectRev.VisibleToPositionAndRadius);
         perk[Perk.perkEffectAndText] [3] = LastCreatedEntity();
         ApplyImpulse(perk[Perk.perkTargets], 
-            VectorTowards(perk[Perk.perkTargets], PositionOf(EventPlayer()) + (Up() * 2.0)),
-            DistanceBetween(perk[Perk.perkTargets], EventPlayer()) * 2.5,
+            VectorTowards(perk[Perk.perkTargets], PositionOf(ep) + (Up() * 2.0)),
+            DistanceBetween(perk[Perk.perkTargets], ep) * 2.5,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
@@ -3720,7 +3718,7 @@ if(
     perkState  == PerkState.Using &&
     perk[Perk.perkTimeLimit]  > 0
 ){
-    SmallMessage(EventPlayer(), "Added 2 seconds of activity time.");
+    SmallMessage(ep, "Added 2 seconds of activity time.");
     perk[Perk.perkTimeLimit]  += 2;
 }
 
@@ -3734,7 +3732,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 8));
+    SetUltimateCharge(ep, (UltimateChargePercent() + 8));
     LoopIfConditionIsTrue();
 }
 
@@ -3758,7 +3756,7 @@ if(
     perkHero.moveSpeed = 150;
     perkHero.jumpSpeed = 125;
     perkHero.ultimateCharge = 100;
-    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    ForcePlayerPerkHero(ep, perkHero);
 }
 
 rule: "Perk/Player/MachDelivery/deactivate"
@@ -3769,7 +3767,7 @@ if(
     perkState  == PerkState.Non
 ){
     // reset perk hero
-    StopForcingPerkHero(EventPlayer());
+    StopForcingPerkHero(ep);
     // reset type
     perkType = PerkType.Non;
 }
@@ -3808,7 +3806,7 @@ if(
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
     EventDamage() >= 300
 ){
-    SetUltimateCharge(EventPlayer(), 100);
+    SetUltimateCharge(ep, 100);
 }
 
 rule: "Perk/Player/MachDelivery/rechargeByBombKill"
@@ -3819,7 +3817,7 @@ if(
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
 ){
-    SetUltimateCharge(EventPlayer(), 100);
+    SetUltimateCharge(ep, 100);
 }
 
 rule: "Perk/Player/MachDelivery/chargingUlt"
@@ -3832,7 +3830,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 6));
+    SetUltimateCharge(ep, (UltimateChargePercent() + 6));
     LoopIfConditionIsTrue();
 }
 
@@ -3872,14 +3870,14 @@ if(
     perkHero.damageDealt = 150;
     perkHero.gravity = 300;
     perkHero.moveSpeed = 75;
-    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    ForcePlayerPerkHero(ep, perkHero);
     // set status
-    StartScalingPlayer(EventPlayer(), 1.5, false);
-    StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
+    StartScalingPlayer(ep, 1.5, false);
+    StartModifyingHeroVoiceLines(ep, 0.8, false);
 
     // use secondary
     Wait(0.5, WaitBehavior.AbortWhenFalse);
-    PressButton(EventPlayer(), Button.SecondaryFire);
+    PressButton(ep, Button.SecondaryFire);
 }
 
 rule: "Perk/Player/Juggernaut/deactivate"
@@ -3890,8 +3888,8 @@ if(
     perkState  == PerkState.Non
 ){
     // reset status
-    StopScalingPlayer(EventPlayer());
-    StopModifyingHeroVoiceLines(EventPlayer());
+    StopScalingPlayer(ep);
+    StopModifyingHeroVoiceLines(ep);
     // reset hud
     DestroyHudText(perk[Perk.perkEffectAndText] [0]);
     // reset effect
@@ -3899,7 +3897,7 @@ if(
     StopChasingVariable(perkPosition);
     StopChasingVariable(perkPosition2);
     // reset perk hero
-    StopForcingPerkHero(EventPlayer());
+    StopForcingPerkHero(ep);
     // reset type
     perkType = PerkType.Non;
 }
@@ -3925,7 +3923,7 @@ if(
     IsFiringPrimary()
 )
 {
-    SetMoveSpeed(EventPlayer(), 25);
+    SetMoveSpeed(ep, 25);
 }
 
 rule: "Perk/Player/Juggernaut/resetFiringSlow"
@@ -3937,7 +3935,7 @@ if(
     !IsFiringPrimary()
 )
 {
-    SetMoveSpeed(EventPlayer(), 75);
+    SetMoveSpeed(ep, 75);
 }
 
 rule: "Perk/Player/Juggernaut/splashDamage"
@@ -3958,7 +3956,7 @@ if(
             aimPosition + landPosition,
             splashDamageRangePlasmaCanon,
             Team.Team2, RadiusLOS.Off),
-        EventPlayer(), 40);
+        ep, 40);
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
@@ -4005,7 +4003,7 @@ if(
     perkType == PerkType.Juggernaut &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
-    IsButtonHeld(EventPlayer(), Button.SecondaryFire)
+    IsButtonHeld(ep, Button.SecondaryFire)
 ){
     ExplodeGravityBomb();
 }
@@ -4067,7 +4065,7 @@ void ExplodeGravityBomb()"ExplodeGravityBomb"{
     ApplyBlastImpulse(perk[Perk.perkTargets], perkPosition2,
         gravityBombDamageRange);
     // damage
-    Damage(perk[Perk.perkTargets], EventPlayer(), 600);
+    Damage(perk[Perk.perkTargets], ep, 600);
     // play blast sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
@@ -4106,8 +4104,8 @@ if(
 ){
     // play ready sound
     PlayEffect(
-        EventPlayer(), PlayEffect.BuffImpactSound,
-        Color.White, EventPlayer(), 100);
+        ep, PlayEffect.BuffImpactSound,
+        Color.White, ep, 100);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
 }
 
@@ -4149,11 +4147,11 @@ if(
     perkHero.statusUnkillable = true;
     perkHero.damageDealt = 200;
     perkHero.ultimateCharge = 100;
-    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    ForcePlayerPerkHero(ep, perkHero);
 
     // use ult
     Wait(0.5, WaitBehavior.AbortWhenFalse);
-    PressButton(EventPlayer(), Button.Ultimate);
+    PressButton(ep, Button.Ultimate);
 }
 
 rule: "Perk/Player/BeamSniper/deactivate"
@@ -4169,7 +4167,7 @@ if(
     // reset hud
     DestroyHudText(perk[Perk.perkEffectAndText] [0]);
     // reset perk hero
-    StopForcingPerkHero(EventPlayer());
+    StopForcingPerkHero(ep);
     // reset type
     perkType = PerkType.Non;
 }
@@ -4196,7 +4194,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 6));
+    SetUltimateCharge(ep, (UltimateChargePercent() + 6));
     LoopIfConditionIsTrue();
 }
 
@@ -4207,7 +4205,7 @@ if(
     perkType == PerkType.BeamSniper &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Reloading &&
-    IsButtonHeld(EventPlayer(), Button.SecondaryFire) &&
+    IsButtonHeld(ep, Button.SecondaryFire) &&
     IsFiringSecondary() &&
     !IsFiringPrimary()
 ){
@@ -4221,7 +4219,7 @@ Team.Team1
 if(
     perkType == PerkType.BeamSniper &&
     perkState  == PerkState.Using &&
-    !IsButtonHeld(EventPlayer(), Button.SecondaryFire)
+    !IsButtonHeld(ep, Button.SecondaryFire)
 ){
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
 }
@@ -4235,14 +4233,14 @@ if(
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready
 ){
     perk[Perk.perkTargets] = FilteredArray(
-        PlayersInViewAngle(EventPlayer(), Team.Team2, 1.25),
+        PlayersInViewAngle(ep, Team.Team2, 1.25),
         IsAlive(ArrayElement()));
     if(perk[Perk.perkTargets] != []){
         PlayEffect(
-            EventPlayer(), PlayEffect.GoodPickupEffect,
+            ep, PlayEffect.GoodPickupEffect,
             Color.Aqua, perk[Perk.perkTargets], 1.0);
         PlayEffect(
-            EventPlayer(), PlayEffect.GoodExplosion,
+            ep, PlayEffect.GoodExplosion,
             Color.Aqua, AimingPosition(), 0.01);
     }
 
@@ -4262,8 +4260,8 @@ if(
     perkType == PerkType.BeamSniper &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
-    IsButtonHeld(EventPlayer(), Button.SecondaryFire) &&
-    IsButtonHeld(EventPlayer(), Button.PrimaryFire)
+    IsButtonHeld(ep, Button.SecondaryFire) &&
+    IsButtonHeld(ep, Button.PrimaryFire)
 ){
     AbortIf(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Reloading);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
@@ -4273,14 +4271,14 @@ if(
         PlayEffect(
             AllPlayers(), PlayEffect.GoodExplosion,
             Color.Aqua, perk[Perk.perkTargets], beamSniperDamageRange);
-        Damage(perk[Perk.perkTargets], EventPlayer(), 400);
+        Damage(perk[Perk.perkTargets], ep, 400);
     }
     // give splash damage to enemy near landed position
     perk[Perk.perkTargets] = FilteredArray(
         PlayersWithinRadius(aimPosition, beamSniperDamageRange, Team.Team2, RadiusLOS.Off),
         IsAlive(ArrayElement()));
     if(perk[Perk.perkTargets] != []){
-        Damage(perk[Perk.perkTargets], EventPlayer(), 100);
+        Damage(perk[Perk.perkTargets], ep, 100);
     }
 
     // set offset for gun sight
@@ -4293,7 +4291,7 @@ if(
     // play shot sound
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.Aqua, EventPlayer(), 100);
+        Color.Aqua, ep, 100);
     // play shot fire
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
@@ -4347,13 +4345,13 @@ if(
     perkHero.gravity = 75;
     perkHero.moveSpeed = 150;
     perkHero.ultimateCharge = 100;
-    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    ForcePlayerPerkHero(ep, perkHero);
 
     // use ult
     Wait(0.5, WaitBehavior.AbortWhenFalse);
-    StartHoldingButton(EventPlayer(), Button.Ultimate);
+    StartHoldingButton(ep, Button.Ultimate);
     Wait(0.5, WaitBehavior.IgnoreCondition);
-    StopHoldingButton(EventPlayer(), Button.Ultimate);
+    StopHoldingButton(ep, Button.Ultimate);
 }
 
 rule: "Perk/Player/DragonStorm/deactivate"
@@ -4364,23 +4362,23 @@ if(
     perkState  == PerkState.Non
 ){
     // reset status
-    ClearStatus(EventPlayer(), Status.Rooted);
-    ClearStatus(EventPlayer(), Status.PhasedOut);
+    ClearStatus(ep, Status.Rooted);
+    ClearStatus(ep, Status.PhasedOut);
     StopFacing();
     if(perk[Perk.isInAir]){
-        Teleport(EventPlayer(), PositionOf() + Vector(0, -60, 0));
+        Teleport(ep, PositionOf() + Vector(0, -60, 0));
     }
     perk[Perk.isInAir] = false;
     // hide enemy outline
     StopForcingPlayerOutlines(
         AllPlayers(Team.Team2),
-        EventPlayer()
+        ep
     );
     // reset hud
     DestroyHudText(perk[Perk.perkEffectAndText] [0]);
     DestroyHudText(perk[Perk.perkEffectAndText] [1]);
     // reset perk hero
-    StopForcingPerkHero(EventPlayer());
+    StopForcingPerkHero(ep);
     // reset type
     perkType = PerkType.Non;
 }
@@ -4408,32 +4406,32 @@ if(
     IsUsingUltimate()
 ){
     WaitLongPressConfirm();
-    AbortIf(!IsButtonHeld(EventPlayer(), Button.Ultimate));
+    AbortIf(!IsButtonHeld(ep, Button.Ultimate));
 
     CancelPrimaryAction();
     // jump movement
-    ApplyImpulse(EventPlayer(), Up(),
+    ApplyImpulse(ep, Up(),
         25, Relative.ToWorld, ContraryMotion.Cancel);
     Wait(0.5, WaitBehavior.IgnoreCondition);
     // set position
-    Teleport(EventPlayer(), PositionOf() + Vector(0, 60, 0));
+    Teleport(ep, PositionOf() + Vector(0, 60, 0));
     perk[Perk.isInAir] = true;
     perkPosition = PositionOf();
     // set status
-    SetStatus(EventPlayer(), null, Status.Rooted, MaxValue());
-    SetStatus(EventPlayer(), null, Status.PhasedOut, MaxValue());
-    SetGravity(EventPlayer(), 0);
-    SetDamageDealt(EventPlayer(), 700);
+    SetStatus(ep, null, Status.Rooted, MaxValue());
+    SetStatus(ep, null, Status.PhasedOut, MaxValue());
+    SetGravity(ep, 0);
+    SetDamageDealt(ep, 700);
     // show enemy outline
     StartForcingPlayerOutlines(
         AllLivingPlayers(Team.Team2),
-        EventPlayer(),
+        ep,
         true,
         Color.Red,
         OutlineType.Always
     );  
     // face enemy
-    perk[Perk.perkTargets] = ClosestPlayerTo(EventPlayer(), Team.Team2);
+    perk[Perk.perkTargets] = ClosestPlayerTo(ep, Team.Team2);
     // start auto aim
     autoAimingTarget = perk[Perk.perkTargets];
     StartAutoAiming();
@@ -4457,9 +4455,9 @@ if(
     perk[Perk.deployDragonNum] < maxOfDragon &&
     !IsUsingUltimate()
 ){
-    SetUltimateCharge(EventPlayer(), 100);
-    SetProjectileSpeed(EventPlayer(), 5 + perk[Perk.deployDragonNum]);
-    PressButton(EventPlayer(), Button.Ultimate);
+    SetUltimateCharge(ep, 100);
+    SetProjectileSpeed(ep, 5 + perk[Perk.deployDragonNum]);
+    PressButton(ep, Button.Ultimate);
     perk[Perk.deployDragonNum] ++;
 }
 
@@ -4473,25 +4471,25 @@ if(
     perk[Perk.deployDragonNum] >= maxOfDragon
 ){
     Wait(1.0, WaitBehavior.AbortWhenFalse);
-    SetProjectileSpeed(EventPlayer(), DefaultPercentage());
+    SetProjectileSpeed(ep, DefaultPercentage());
     // wait deploy dragon
     Wait(4.0, WaitBehavior.AbortWhenFalse);
     // reset position
-    Teleport(EventPlayer(), PositionOf() - Vector(0, 60, 0));
+    Teleport(ep, PositionOf() - Vector(0, 60, 0));
     perk[Perk.isInAir] = false;
     // reset status
-    SetProjectileSpeed(EventPlayer(), DefaultPercentage());
-    ClearStatus(EventPlayer(), Status.Rooted);
-    ClearStatus(EventPlayer(), Status.PhasedOut);
-    SetGravity(EventPlayer(), DefaultPercentage());
-    SetDamageDealt(EventPlayer(), 150);
+    SetProjectileSpeed(ep, DefaultPercentage());
+    ClearStatus(ep, Status.Rooted);
+    ClearStatus(ep, Status.PhasedOut);
+    SetGravity(ep, DefaultPercentage());
+    SetDamageDealt(ep, 150);
     // hide enemy outline
     StopForcingPlayerOutlines(
         AllPlayers(Team.Team2),
-        EventPlayer()
+        ep
     );
     // face enemy
-    perk[Perk.perkTargets] = ClosestPlayerTo(EventPlayer(), Team.Team2);
+    perk[Perk.perkTargets] = ClosestPlayerTo(ep, Team.Team2);
     // start auto aim
     autoAimingTarget = perk[Perk.perkTargets];
     StartAutoAiming();
@@ -4508,10 +4506,10 @@ if(
     perkType == PerkType.DragonStorm &&
     perkState  == PerkState.Using &&
     perk[Perk.isInAir] &&
-    DistanceBetween(EventPlayer(), perkPosition) >= 0.01
+    DistanceBetween(ep, perkPosition) >= 0.01
 ){
-    ApplyImpulse(EventPlayer(), VectorTowards(EventPlayer(), perkPosition),
-        DistanceBetween(EventPlayer(), perkPosition),
+    ApplyImpulse(ep, VectorTowards(ep, perkPosition),
+        DistanceBetween(ep, perkPosition),
         Relative.ToWorld, ContraryMotion.Cancel);
     WaitApplyImpulseCycle();
     LoopIfConditionIsTrue();
@@ -4525,7 +4523,7 @@ if(
     perkState  == PerkState.Using &&
     perk[Perk.perkTimeLimit]  > 0
 ){
-    SmallMessage(EventPlayer(), "Added 3 seconds of activity time.");
+    SmallMessage(ep, "Added 3 seconds of activity time.");
     perk[Perk.perkTimeLimit]  += 3;
 }
 
@@ -4539,7 +4537,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 3));
+    SetUltimateCharge(ep, (UltimateChargePercent() + 3));
     LoopIfConditionIsTrue();
 }
 
@@ -4573,15 +4571,15 @@ if(
     perkHero.healingReceived = 10.0;
     perkHero.damageDealt = 300;
     perkHero.ultimateCharge = 100;
-    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    ForcePlayerPerkHero(ep, perkHero);
     Wait(0.5, WaitBehavior.AbortWhenFalse);
 
     // set pool health
-    AddHealthPoolToPlayer(EventPlayer(), HealthType.Armor, 1500, true, false);
+    AddHealthPoolToPlayer(ep, HealthType.Armor, 1500, true, false);
     perk[Perk.healthPoolID] = LastCreatedHealthPool();
 
     // start grow big
-    PressButton(EventPlayer(), Button.Crouch);
+    PressButton(ep, Button.Crouch);
 }
 
 rule: "Perk/Player/Titan/deactivate"
@@ -4594,18 +4592,18 @@ if(
     // set param
     perk[Perk.perkEffectStatus] = 0;
     DetachPlayers(perk[Perk.rider]);
-    Teleport(perk[Perk.rider], EventPlayer());
+    Teleport(perk[Perk.rider], ep);
     perk[Perk.rider].perk[Perk.ridingTarget] = 0;
     perk[Perk.rider] = 0;
     // reset hud
     DestroyHudText(perk[Perk.perkEffectAndText] [0]);
     DestroyHudText(perk[Perk.perkEffectAndText] [1]);
     // reset perk hero
-    StopForcingPerkHero(EventPlayer());
+    StopForcingPerkHero(ep);
     // reset status
     RemoveHealthPoolFromPlayer(perk[Perk.healthPoolID]);
-    StopScalingPlayer(EventPlayer());
-    StopModifyingHeroVoiceLines(EventPlayer());
+    StopScalingPlayer(ep);
+    StopModifyingHeroVoiceLines(ep);
     // reset type
     perkType = PerkType.Non;
 }
@@ -4628,19 +4626,19 @@ Team.Team1
 if(
     perkType == PerkType.Titan &&
     perkState  == PerkState.Using &&
-    !(IsCrouching() || IsButtonHeld(EventPlayer(), Button.Crouch))
+    !(IsCrouching() || IsButtonHeld(ep, Button.Crouch))
 ){
     PlayEffect(
         AllPlayers(), PlayEffect.GoodPickupEffect,
-        Color.White, EventPlayer(), 1);
+        Color.White, ep, 1);
 
     if(!( 0 <= perk[Perk.perkEffectStatus]  && perk[Perk.perkEffectStatus]  <= 1)) perk[Perk.perkEffectStatus] = 0;
     while(perk[Perk.perkEffectStatus]  < 1){
-        StartScalingPlayer(EventPlayer(), 1 + (perk[Perk.perkEffectStatus]  * 1.25), false);
+        StartScalingPlayer(ep, 1 + (perk[Perk.perkEffectStatus]  * 1.25), false);
         perk[Perk.perkEffectStatus]  += 0.1;
         WaitUpdateVeryShortCycle();
     }
-    StartModifyingHeroVoiceLines(EventPlayer(), 0.8, false);
+    StartModifyingHeroVoiceLines(ep, 0.8, false);
 }
 
 rule: "Perk/Player/Titan/getSmall"
@@ -4649,24 +4647,24 @@ Team.Team1
 if(
     perkType == PerkType.Titan &&
     perkState  == PerkState.Using &&
-    (IsCrouching() || IsButtonHeld(EventPlayer(), Button.Crouch))
+    (IsCrouching() || IsButtonHeld(ep, Button.Crouch))
 ){
     DetachPlayers(perk[Perk.rider]);
-    Teleport(perk[Perk.rider], EventPlayer());
+    Teleport(perk[Perk.rider], ep);
     perk[Perk.rider].perk[Perk.ridingTarget] = 0;
     perk[Perk.rider] = 0;
 
     PlayEffect(
         AllPlayers(), PlayEffect.GoodPickupEffect,
-        Color.White, EventPlayer(), 1);
+        Color.White, ep, 1);
 
     if(!( 0 <= perk[Perk.perkEffectStatus]  && perk[Perk.perkEffectStatus]  <= 1)) perk[Perk.perkEffectStatus] = 1;
     while(perk[Perk.perkEffectStatus]  > 0){
-        StartScalingPlayer(EventPlayer(), 1 + (perk[Perk.perkEffectStatus]  * 1.25), false);
+        StartScalingPlayer(ep, 1 + (perk[Perk.perkEffectStatus]  * 1.25), false);
         perk[Perk.perkEffectStatus]  -= 0.1;
         WaitUpdateVeryShortCycle();
     }
-    StartModifyingHeroVoiceLines(EventPlayer(), 1.0, false);
+    StartModifyingHeroVoiceLines(ep, 1.0, false);
 }
 
 rule: "Perk/Player/Titan/chargingUlt"
@@ -4679,7 +4677,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 3));
+    SetUltimateCharge(ep, (UltimateChargePercent() + 3));
     LoopIfConditionIsTrue();
 }
 
@@ -4688,13 +4686,13 @@ define nearCanRideTitan:
     FilteredArray(
         AllPlayers(Team.Team1),
         (
-            ArrayElement() != EventPlayer() &&
+            ArrayElement() != ep &&
             ArrayElement().perkType == PerkType.Titan &&
             ArrayElement().perkState  == PerkState.Using &&
             ArrayElement().perk[Perk.rider] == 0 &&
             ArrayElement().perk[Perk.perkEffectStatus]  == 1 &&
             IsAlive(ArrayElement()) &&
-            DistanceBetween(EventPlayer(), ArrayElement()) <= canRidingRange
+            DistanceBetween(ep, ArrayElement()) <= canRidingRange
         )
     );
 define canRideTitan:
@@ -4754,12 +4752,12 @@ Event.OngoingPlayer
 Team.Team1
 if(
     canRideTitan &&
-    IsButtonHeld(EventPlayer(), Button.Jump)
+    IsButtonHeld(ep, Button.Jump)
 ){
     WaitLongPressConfirm();
     perk[Perk.ridingTarget] = FirstOf(nearCanRideTitan);
-    AttachPlayers(EventPlayer(), perk[Perk.ridingTarget], Up() * 3.75);
-    perk[Perk.ridingTarget].perk[Perk.rider] = EventPlayer();
+    AttachPlayers(ep, perk[Perk.ridingTarget], Up() * 3.75);
+    perk[Perk.ridingTarget].perk[Perk.rider] = ep;
 }
 
 rule: "Perk/Player/Titan/getOff"
@@ -4768,11 +4766,11 @@ Team.Team1
 if(
     isRidingTitan &&
     (
-        IsButtonHeld(EventPlayer(), Button.Crouch) ||
-        IsDead(EventPlayer())
+        IsButtonHeld(ep, Button.Crouch) ||
+        IsDead(ep)
     )
 ){
-    if(IsButtonHeld(EventPlayer(), Button.Crouch))
+    if(IsButtonHeld(ep, Button.Crouch))
         WaitLongPressConfirm();
     DetachPlayers(perk[Perk.ridingTarget].perk[Perk.rider]);
     Teleport(ep, perk[Perk.ridingTarget] + PositionOffset());
@@ -4789,7 +4787,7 @@ if(
     perk[Perk.ridingTarget].perk[Perk.perkTimeLimit]  > 0
 
 ){
-    SmallMessage(EventPlayer(), "Added 10 seconds of titan's activity time.");
+    SmallMessage(ep, "Added 10 seconds of titan's activity time.");
     perk[Perk.ridingTarget].perk[Perk.perkTimeLimit]  += 10;
 }
 
@@ -5071,27 +5069,44 @@ if(
 define splashDamageRangeBehemothBullet: 2.0;
 
 rule: "Perk/Player/Behemoth/splashDamage"
-Event.OnDamageDealt
+Event.OngoingPlayer
 Team.Team1
 if(
     perkType == PerkType.Behemoth &&
-    perkState  == PerkState.Using
+    perkState  == PerkState.Using &&
+    (
+        IsFiringPrimary() ||
+        IsFiringSecondary() ||
+        IsUsingUltimate()
+    )
 ){
-    // get target
-    perk[Perk.perkTargets] = 
-        PlayersWithinRadius(
-            PositionOf(Victim()),
-            splashDamageRangeBehemothBullet,
-            Team.Team2, RadiusLOS.Off);
-    // splash damage
-    Damage(perk[Perk.perkTargets], ep, 80);
-    // play blast
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.BadExplosion,
-        Color.Orange, Victim(),
-        splashDamageRangeBehemothBullet);
-    // cut chain execute
-    Wait(0.2, WaitBehavior.AbortWhenFalse);
+    if(!IsUsingUltimate())
+        Wait(0.05, WaitBehavior.IgnoreCondition);
+
+    define splashRange! = IsUsingUltimate() ? 3 : 1.5;
+    define pelletCount! = IsUsingUltimate() ? 8 : 4;
+    aimPosition = AimingPosition();
+    for(pLoopIndex = 0; pLoopIndex < pelletCount; pLoopIndex++){   
+        landPosition = RandomPosition(splashRange, splashRange, splashRange);
+        // splash damage
+        Damage(
+            PlayersWithinRadius(
+                aimPosition + landPosition,
+                splashDamageRangeBehemothBullet,
+                Team.Team2, RadiusLOS.Off),
+            ep, 50);
+        // play blast
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.BadExplosion,
+            Color.Orange, aimPosition + landPosition,
+            splashDamageRangeBehemothBullet);
+        Wait(RandomReal(0, 0.05), WaitBehavior.IgnoreCondition);
+    }
+
+    if(IsUsingUltimate()){
+        WaitContinuousBlastCycle();
+        LoopIfConditionIsTrue();
+    }
 }
 
 // TAG Annihilator ----------
@@ -5116,11 +5131,11 @@ if(
     perkHero.moveSpeed = 150;
     perkHero.jumpSpeed = 125;
     perkHero.ultimateCharge = 100;
-    ForcePlayerPerkHero(EventPlayer(), perkHero);
+    ForcePlayerPerkHero(ep, perkHero);
     Wait(0.5, WaitBehavior.AbortWhenFalse);
 
     // use ult
-    PressButton(EventPlayer(), Button.Ultimate);
+    PressButton(ep, Button.Ultimate);
 }
 
 rule: "Perk/Player/Annihilator/deactivate"
@@ -5131,10 +5146,10 @@ if(
     perkState  == PerkState.Non
 ){
     // reset param
-    StopCamera(EventPlayer());
+    StopCamera(ep);
     perk[Perk.perkEffectStatus] = 0;
     // reset perk hero
-    StopForcingPerkHero(EventPlayer());
+    StopForcingPerkHero(ep);
     // reset type
     perkType = PerkType.Non;
 }
@@ -5159,8 +5174,8 @@ if(
     perkState  == PerkState.Using &&
     IsUsingUltimate()
 ){
-    SetDamageDealt(EventPlayer(), 400);
-    SetMoveSpeed(EventPlayer(), 400);
+    SetDamageDealt(ep, 400);
+    SetMoveSpeed(ep, 400);
 
     perk[Perk.perkTargets] = 
         SortedArray(
@@ -5168,7 +5183,7 @@ if(
                 AllPlayers(Team.Team2), 
                 (
                     IsAlive(ArrayElement()) &&
-                    IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock)
+                    IsInLineOfSight(ep, ArrayElement(), BarrierLOS.NoBarriersBlock)
                 )
             ),
             Health(ArrayElement())
@@ -5179,7 +5194,7 @@ if(
     perkPosition = EyePosition();
     if(perk[Perk.perkTargets] != 0){
         // set camera
-        StartCamera(EventPlayer(), perkPosition, EyePosition(), 10);
+        StartCamera(ep, perkPosition, EyePosition(), 10);
     }
 
     perk[Perk.perkEffectStatus] = 0;
@@ -5201,7 +5216,7 @@ if(
                 AllPlayers(Team.Team2), 
                 (
                     IsAlive(ArrayElement()) &&
-                    IsInLineOfSight(EventPlayer(), ArrayElement(), BarrierLOS.NoBarriersBlock)
+                    IsInLineOfSight(ep, ArrayElement(), BarrierLOS.NoBarriersBlock)
                 )
             ),
             Health(ArrayElement())
@@ -5223,20 +5238,20 @@ if(
                     AllPlayers(Team.Team2), 
                     (
                         IsAlive(ArrayElement()) &&
-                        DistanceBetween(EventPlayer(), ArrayElement()) <= 10
+                        DistanceBetween(ep, ArrayElement()) <= 10
                     )
                 )
             );
     }
     if(perk[Perk.perkTargets] != 0){
         // chase target
-        ApplyImpulse(EventPlayer(),
-            VectorTowards(EventPlayer(), perk[Perk.perkTargets] + Up() + RandomPosition(1, 1, 1)),
+        ApplyImpulse(ep,
+            VectorTowards(ep, perk[Perk.perkTargets] + Up() + RandomPosition(1, 1, 1)),
             MaxValue(), Relative.ToWorld, ContraryMotion.Cancel);
         // play movement pulse
         PlayEffect(
             AllPlayers(), PlayEffect.BadPickupEffect,
-            Color.Red, EventPlayer(), 1.0);
+            Color.Red, ep, 1.0);
 
         // camera too far to player
         if(DistanceBetween(perkPosition, EyePosition()) > 15){
@@ -5254,7 +5269,7 @@ if(
             perkPosition = (perkPosition + EyePosition()) / 2;
         }
         // update camera
-        StartCamera(EventPlayer(), perkPosition, EyePosition(), 10);
+        StartCamera(ep, perkPosition, EyePosition(), 10);
     }
 
     WaitUpdateVeryShortCycle();
@@ -5271,13 +5286,13 @@ if(
 ){
     // finish damage
     Damage(
-        PlayersWithinRadius(PositionOf(EventPlayer()), 10, Team.Team2, RadiusLOS.Off ),
-        EventPlayer(), MaxValue()
+        PlayersWithinRadius(PositionOf(ep), 10, Team.Team2, RadiusLOS.Off ),
+        ep, MaxValue()
     );
 
-    SetDamageDealt(EventPlayer(), 200);
-    SetMoveSpeed(EventPlayer(), 150);
-    StopCamera(EventPlayer());
+    SetDamageDealt(ep, 200);
+    SetMoveSpeed(ep, 150);
+    StopCamera(ep);
     Wait(4, WaitBehavior.AbortWhenFalse);
 
     perk[Perk.perkEffectStatus] = 0;
@@ -5294,16 +5309,16 @@ if(
     Wait(0.5, WaitBehavior.AbortWhenFalse);
     if(
         DistanceBetween(
-            EventPlayer(),
-            NearestWalkablePosition(EventPlayer())
+            ep,
+            NearestWalkablePosition(ep)
         ) >= 5
     ){
         // return to safe ground
-        Teleport(EventPlayer(), NearestWalkablePosition(EventPlayer()));
+        Teleport(ep, NearestWalkablePosition(ep));
         // play movement pulse
         PlayEffect(
             AllPlayers(), PlayEffect.BadPickupEffect,
-            Color.Red, EventPlayer(), 1.0);
+            Color.Red, ep, 1.0);
     }
     LoopIfConditionIsTrue();
 }
@@ -5318,7 +5333,7 @@ if(
     UltimateChargePercent() < 100
 ){
     WaitUpdateMediumCycle();
-    SetUltimateCharge(EventPlayer(), (UltimateChargePercent() + 4));
+    SetUltimateCharge(ep, (UltimateChargePercent() + 4));
     LoopIfConditionIsTrue();
 }
 

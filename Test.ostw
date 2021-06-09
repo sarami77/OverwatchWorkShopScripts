@@ -24,10 +24,10 @@ if(
     StartScalingBarriers(EventPlayer(), 1);
     SetUltimateCharge(EventPlayer(), 0);
 
-//    SetMoveSpeed(others, 1000);
+    // SetMoveSpeed(others, 1000);
     SetMaxHealth(AllPlayers(Team.Team2), 10000);
     SetRespawnMaxTime(AllPlayers(Team.Team2), 5);
-    StartScalingPlayer(AllPlayers(Team.Team2), 3);
+    StartScalingPlayer(AllPlayers(Team.Team2), 1);
 
     // SetStatus(AllPlayers(Team.Team2), null, Status.Rooted, 99999);
     // ForcePlayerHero(EventPlayer(), Hero.Widowmaker);
@@ -62,8 +62,6 @@ define canRidingRange : 6.0;
 
 
 // Test Code -----------------------------------------------
-
-
 
 // TAG Behemoth ----------
 rule: "Perk/Player/Behemoth/activate"
@@ -343,29 +341,48 @@ if(
 define splashDamageRangeBehemothBullet: 2.0;
 
 rule: "Perk/Player/Behemoth/splashDamage"
-Event.OnDamageDealt
+Event.OngoingPlayer
 Team.Team1
 if(
     perkType == PerkType.Behemoth &&
-    perkState  == PerkState.Using
+    perkState  == PerkState.Using &&
+    (
+        IsFiringPrimary() ||
+        IsFiringSecondary() ||
+        IsUsingUltimate()
+    )
 ){
-    // get target
-    perk[Perk.perkTargets] = 
-        PlayersWithinRadius(
-            PositionOf(Victim()),
-            splashDamageRangeBehemothBullet,
-            Team.Team2, RadiusLOS.Off);
-    // splash damage
-    Damage(perk[Perk.perkTargets], ep, 80);
-    // play blast
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.BadExplosion,
-        Color.Orange, Victim(),
-        splashDamageRangeBehemothBullet);
-    // cut chain execute
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
+    if(!IsUsingUltimate())
+        Wait(0.05, WaitBehavior.IgnoreCondition);
 
-    
+    // perk[Perk.perkTargets] = PlayersInViewAngle(ep, Team.Team2,
+    //     IsUsingUltimate() ? 20 : 10,
+    // );
+
+    define splashRange! = IsUsingUltimate() ? 3 : 1.5;
+    define pelletCount! = IsUsingUltimate() ? 8 : 4;
+    aimPosition = AimingPosition();
+    for(pLoopIndex = 0; pLoopIndex < pelletCount; pLoopIndex++){   
+        landPosition = RandomPosition(splashRange, splashRange, splashRange);
+        // splash damage
+        Damage(
+            PlayersWithinRadius(
+                aimPosition + landPosition,
+                splashDamageRangeBehemothBullet,
+                Team.Team2, RadiusLOS.Off),
+            ep, 50);
+        // play blast
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.BadExplosion,
+            Color.Orange, aimPosition + landPosition,
+            splashDamageRangeBehemothBullet);
+        Wait(RandomReal(0, 0.05), WaitBehavior.IgnoreCondition);
+    }
+
+    if(IsUsingUltimate()){
+        WaitContinuousBlastCycle();
+        LoopIfConditionIsTrue();
+    }
 }
 
 
