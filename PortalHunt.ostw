@@ -3,7 +3,6 @@
 // [Share Code]
 // YY1N2
 // [ToDo]
-// add optimaze hit scan by close range of Beam Sniaper
 // add Perk Disarmament
 // add Perk Drone Guard Dog
 // add Perk Assassination
@@ -43,41 +42,55 @@ disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopS
 
 // TAG System ----------
 define WaitUntilServerNotOverLoad(): WaitUntil(!isServerOverLoading, 3);
-
-globalvar define watchingOverLoad! = true;
 define isServerOverLoading: 255 <= ServerLoad();
-globalvar define currentSlowLevel!;
-define slowLevel: [100, 90, 80, 60, 40];
 
-rule: "System/ServerOverLoadMeasures/reduceOverLoad"
+define slowLevel: [100, 90, 80, 70, 50];
+globalvar define targetSlowLevel!;
+globalvar define currentSlowLevel!;
+globalvar define watchingOverLoad!;
+
+rule: "System/ServerOverLoadMeasures/increaseSlowLevel"
 Event.OngoingGlobal
 if(
-    watchingOverLoad &&
     initCompleted &&    
-    portalState != PortalState.End
+    portalState != PortalState.End &&
+    watchingOverLoad &&
+    isServerOverLoading &&
+    targetSlowLevel < (CountOf(slowLevel) - 1)
 ){
     // If the server is overloaded,
-    //  apply slow motion every second to reduce the load to
-    //  avoid shutting down due to server overload.
-    define targetSlowLevel!;
-
-    // is overload
-    if(isServerOverLoading){
-        // can increase slow level
-        if(targetSlowLevel < (CountOf(slowLevel) - 1))
-            // increase slow level
-            targetSlowLevel ++;
-    }
-    else{
-        // can decrease slow level
-        if(targetSlowLevel > 0)
-            // decrease slow level
-            targetSlowLevel --;
-    }
-    // apply slow level
-    ApplySlowLevel(targetSlowLevel);
-    
+    //  apply slow motion every second
+    //  to reduce the load to avoid shutting down due to server overload.
     Wait(1, WaitBehavior.AbortWhenFalse);
+    // can increase slow level
+    if(targetSlowLevel < (CountOf(slowLevel) - 1)){
+        // increase slow level
+        targetSlowLevel ++;
+        // apply slow level
+        ApplySlowLevel(targetSlowLevel);
+    }
+    LoopIfConditionIsTrue();
+}
+
+rule: "System/ServerOverLoadMeasures/decreaseSlowLevel"
+Event.OngoingGlobal
+if(
+    initCompleted &&    
+    portalState != PortalState.End &&
+    watchingOverLoad &&
+    !isServerOverLoading &&
+    targetSlowLevel > 0
+){
+    // If the server is not overloaded,
+    //  reset slow motion every second
+    // can decrease slow level
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    if(targetSlowLevel > 0){
+        // decrease slow level
+        targetSlowLevel --;
+        // apply slow level
+        ApplySlowLevel(targetSlowLevel);
+    }
     LoopIfConditionIsTrue();
 }
 
@@ -91,7 +104,7 @@ if(
     watchingOverLoad = false;
     // apply slow level
     ApplySlowLevel(4);
-    Wait(1, WaitBehavior.IgnoreCondition);
+    Wait(1.5, WaitBehavior.IgnoreCondition);
     // reset slow level
     ApplySlowLevel(0);
     watchingOverLoad = true;
@@ -129,7 +142,7 @@ Event.OngoingGlobal
     // Set imported function property
     Regeneration_enableTeam = Team.Team1;
     Regeneration_needBalanceTeam1 = true;
-    Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 2, 0, 100, 1);
+    Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 3, 0, 100, 1);
     Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 25, 0, 1000, 2);
 
     Revive_enableTeam = Team.Team1;
@@ -180,6 +193,9 @@ Event.OngoingGlobal
     // show objective message and elapsed time
     enableElapsedTimer = true;
     elapsedTime = 0;
+
+    // Start watch over load
+    watchingOverLoad = true;
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
@@ -381,7 +397,8 @@ if(
     // When a player enters a portal, set progress hud and show message
     WaitConditionConfirmed();
     // kick progress
-    closingCount = RoundToInteger(portalSize, Rounding.Nearest);
+    closingCount = 5;
+    closingCount += RoundToInteger(portalSize, Rounding.Nearest);
     closingCount += roundNo * 2;
     closingProgress = 0;
     ChaseVariableOverTime(closingProgress, DefaultPercentage(), closingCount, TimeChaseReevaluation.DestinationAndDuration);
@@ -734,13 +751,12 @@ if(
             basePlayer +
             // add random direction
             DirectionFromAngles(
-                RandomReal(0, 360),
-                RandomReal(90, -90)
+                RandomReal(0, 360), RandomReal(45, -45),
             ) * 
             // add random distance
-            RandomReal(50, 200);
+            RandomReal(50, 150);
         
-        // get candidate postion of portal 
+        // convert to walkble position
         candidatePosition = NearestWalkablePosition(randomPositon);
         // move candidate postion in the direction of player for avoiding map edge
         candidatePosition += DirectionTowards(candidatePosition, basePlayer) * RandomReal(1, 5);
@@ -851,7 +867,7 @@ if(
 }
 
 // TAG Portal/InvalidDetect/NoContact ----------
-define limitTime: 120;
+define limitTime: 100;
 globalvar define noContactTime;
 
 rule: "Portal/InvalidDetect/NoContactTime/resetTime"
@@ -1171,18 +1187,18 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
 }
 
 void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
-    if(
-        IsInLineOfSight(    // Has line
-            closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock) &&
-        RandomInteger(1, 100) <= 90     // random
-    ){
-        // unify teleportPosition
-        define one = RandomValueInArray(AllPlayers(Team.Team2));
-        if(teleportPosition != one.teleportPosition){
-            AllPlayers(Team.Team2).teleportPosition = one.teleportPosition;
-        }
-    }
-    else{
+    // if(
+    //     IsInLineOfSight(    // Has line
+    //         closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock) &&
+    //     RandomInteger(1, 100) <= 90     // random
+    // ){
+    //     // unify teleportPosition
+    //     define one = RandomValueInArray(AllPlayers(Team.Team2));
+    //     if(teleportPosition != one.teleportPosition){
+    //         AllPlayers(Team.Team2).teleportPosition = one.teleportPosition;
+    //     }
+    // }
+    // else{
         // set teleportPosition to player around
         for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
             WaitUntilServerNotOverLoad();
@@ -1191,7 +1207,7 @@ void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
                 BlockedPositon(
                     closestPlayerToPortal,
                     DirectionFromAngles(
-                        RandomReal(0, 360), RandomReal(30, -30),
+                        RandomReal(0, 360), RandomReal(45, -45),
                     ), RandomReal(5, 50)
                 );
             // avoid map wall edge
@@ -1211,7 +1227,7 @@ void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
                 break;
             }
         }
-    }
+    // }
 }
 
 
@@ -1575,6 +1591,20 @@ void ShowDebugHud()"ShowDebugHud"{
             null,
             Location.Left, -1,
             Color.White, enemyColor, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
+    
+        CreateHudText(HostPlayer(),
+            null,
+            <"<0> RcvDmg <1> DltDmg <2> SpwItv <3> ChgUlt <4>", "Giant Boss Status",
+                confirmReceiveDamage,
+                botOfEnemyType(EnemyType.GiantBoss).confirmDealDamage,
+                botOfEnemyType(EnemyType.GiantBoss).confirmSpawnInterval,
+                botOfEnemyType(EnemyType.GiantBoss).eachChargeUltInterval
+            >,
+            null,
+            Location.Left, -1,
+            Color.White, Color.Red, Color.White,
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 

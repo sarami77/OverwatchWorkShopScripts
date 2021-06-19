@@ -3,7 +3,7 @@ import "PerkCore.ostw";
 define parallelAnimationNum: 2;
 
 // TAG System ----------
-define isServerOverLoad: (currentSlowLevel >= 2);
+define isServerOverLoad: (targetSlowLevel >= 2);
 
 rule: "Perk/System/ServerOverLoadMeasures"
 Event.OngoingGlobal
@@ -770,7 +770,6 @@ if(
     inShelter
 ){
     SetStatus(ep, null, Status.PhasedOut, MaxValue());
-    SetInvisible(ep, InvisibleTo.Enemies);
 }
 
 rule: "Perk/Player/PersonalShelter/disableSafe"
@@ -780,7 +779,6 @@ if(
     !inShelter
 ){
     ClearStatus(ep, Status.PhasedOut);
-    SetInvisible(ep, InvisibleTo.None);
 }
 
 rule: "Perk/Player/PersonalShelter/failsafeReset"
@@ -2717,7 +2715,7 @@ void ExplodeMissile(define position)"ExplodeMissile"{
             position, missileDamageRange,
             Team.Team2, RadiusLOS.Off);
     // apply blast impulse
-    ApplyBlastImpulse(perk[Perk.perkTargets], position, missileDamageRange);
+    ApplyBlastImpulse(perk[Perk.perkTargets], position, missileDamageRange / 2);
     // damage
     Damage(perk[Perk.perkTargets], ep, 300);
     // play blast sound
@@ -4682,26 +4680,29 @@ if(
 }
 
 define canRidingRange : 6.0;
-define nearCanRideTitan:
-    FilteredArray(
-        AllPlayers(Team.Team1),
-        (
-            ArrayElement() != ep &&
-            ArrayElement().perkType == PerkType.Titan &&
-            ArrayElement().perkState  == PerkState.Using &&
-            ArrayElement().perk[Perk.rider] == 0 &&
-            ArrayElement().perk[Perk.perkEffectStatus]  == 1 &&
-            IsAlive(ArrayElement()) &&
-            DistanceBetween(ep, ArrayElement()) <= canRidingRange
-        )
-    );
+
 define canRideTitan:
     IsAlive() &&
     !isRidingTitan &&
     CountOf(nearCanRideTitan) > 0;
 
+define nearCanRideTitan:
+    FilteredArray(
+        AllPlayers(Team.Team1),
+        (
+            DistanceBetween(ep, ArrayElement()) <= canRidingRange &&
+            ArrayElement() != ep &&
+            ArrayElement().perk[Perk.rider] == 0 &&
+            ArrayElement().perk[Perk.perkEffectStatus]  == 1 &&
+            ArrayElement().perkState  == PerkState.Using &&
+            ArrayElement().perkType == PerkType.Titan
+        )
+    );
+
 define isRidingTitan:
     perk[Perk.ridingTarget] != 0 &&
+    perk[Perk.ridingTarget].perk[Perk.rider] == ep &&
+    perk[Perk.ridingTarget].perkState == PerkState.Using &&
     perk[Perk.ridingTarget].perkType == PerkType.Titan;
 
 rule: "Perk/Player/Titan/showOperationGetOn"
@@ -4929,26 +4930,29 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define nearCanRideBehemoth:
-    FilteredArray(
-        AllPlayers(Team.Team1),
-        (
-            ArrayElement() != EventPlayer() &&
-            ArrayElement().perkType == PerkType.Behemoth &&
-            ArrayElement().perkState  == PerkState.Using &&
-            ArrayElement().perk[Perk.rider] == 0 &&
-            ArrayElement().perk[Perk.perkEffectStatus]  == 1 &&
-            IsAlive(ArrayElement()) &&
-            DistanceBetween(EventPlayer(), ArrayElement()) <= canRidingRange
-        )
-    );
 define canRideBehemoth:
     IsAlive() &&
     !isRidingBehemoth &&
     CountOf(nearCanRideBehemoth) > 0;
 
+define nearCanRideBehemoth:
+    FilteredArray(
+        AllPlayers(Team.Team1),
+        (
+            DistanceBetween(ep, ArrayElement()) <= canRidingRange &&
+            ArrayElement() != ep &&
+            ArrayElement().perk[Perk.rider] == 0 &&
+            ArrayElement().perk[Perk.perkEffectStatus]  == 1 &&
+            ArrayElement().perkState  == PerkState.Using &&
+            ArrayElement().perkType == PerkType.Behemoth
+        )
+    );
+
+
 define isRidingBehemoth: 
     perk[Perk.ridingTarget] != 0 &&
+    perk[Perk.ridingTarget].perk[Perk.rider] == ep &&
+    perk[Perk.ridingTarget].perkState == PerkState.Using &&
     perk[Perk.ridingTarget].perkType == PerkType.Behemoth;
 
 rule: "Perk/Player/Behemoth/showOperationGetOn"
@@ -5045,7 +5049,6 @@ if(
     perk[Perk.ridingTarget].perkType == PerkType.Behemoth &&
     perk[Perk.ridingTarget].perkState  == PerkState.Using &&
     perk[Perk.ridingTarget].perk[Perk.perkTimeLimit]  > 0
-
 ){
     SmallMessage(EventPlayer(), "Added 10 seconds of Behemoth's activity time.");
     perk[Perk.ridingTarget].perk[Perk.perkTimeLimit]  += 10;
@@ -5057,7 +5060,6 @@ Team.Team1
 if(
     perkType == PerkType.Behemoth &&
     perkState  == PerkState.Using &&
-
     IsUsingAbility2()
 ){
     // heal
