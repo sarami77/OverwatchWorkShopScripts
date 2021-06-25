@@ -1204,13 +1204,15 @@ void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
         WaitUntilServerNotOverLoad();
         
         teleportPosition =
-            BlockedPositon(
-                closestPlayerToPortal,
-                DirectionFromAngles(
-                    RandomReal(0, 360), RandomReal(45, -45),
-                ), RandomReal(5, 50)
-            );
-        // avoid map surface edge
+            // BelowPosition(
+                BlockedPositon(
+                    closestPlayerToPortal,
+                    DirectionFromAngles(
+                        RandomReal(0, 360), RandomReal(45, -45),
+                    ), RandomReal(5, 50)
+                );
+            // );
+        // move teleportPosition for avoid map surface edge
         teleportPosition += (DirectionTowards(teleportPosition, closestPlayerToPortal) * 1);
         if(
             DistanceBetween(    // Not too close to player
@@ -1269,8 +1271,13 @@ if(
     // Teleport Bot to spawn room when portal disable
     // wait show dead effect when portal closing
     Wait(deadEffectTime, WaitBehavior.AbortWhenFalse);   
+
+    // show pre teleport effect
+    PlayTeleportEffect(true);
     // Teleport to spawn room
     Respawn(AllPlayers(Team.Team2));
+    // show teleport effect
+    PlayTeleportEffect(false);
     // set root
     SetStatus(ep, null, Status.Rooted, MaxValue());
 }
@@ -1282,6 +1289,9 @@ if(
     HasSpawned() &&
     portalEnable
 ){
+    AbortIf(!IsAlive());
+    WaitConditionConfirmed();
+
     // clear root
     ClearStatus(ep, Status.Rooted);
     // set teleport position
@@ -1299,11 +1309,11 @@ Event.OngoingPlayer
 Team.Team2
 if(
     portalEnable &&
-    IsAlive() &&
     portalState == PortalState.Suspended
 ){
-    // Teleport bot to player front
+    AbortIf(!IsAlive());
     WaitConditionConfirmed();
+
     // set teleport position to player around
     SetTeleportPositionToPlayerAround();
     // show pre teleport effect
@@ -1356,11 +1366,11 @@ Event.OngoingPlayer
 Team.Team2
 if(
     portalEnable &&
-    IsAlive() &&
     !IsInLineOfSight(ep,
         closestPlayerToMe,
         BarrierLOS.NoBarriersBlock)
 ){
+    AbortIf(!IsAlive());
     // Teleport bot to player front
     Wait(6, WaitBehavior.AbortWhenFalse);
 
@@ -1464,7 +1474,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // If don't enough players, adjust Bot dealt damage rate to make the game fair
     // And the round progresses, the Bot deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Initial Deal Damage", 30, 0, 1000, 1);
+    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Initial Deal Damage", 25, 0, 1000, 1);
     confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round Progress", 1.5, 0, 1000, 2);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
