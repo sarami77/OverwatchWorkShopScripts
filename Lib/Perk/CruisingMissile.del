@@ -1,0 +1,216 @@
+import "../PerkCore.del";
+
+// TAG CruisingMissile ----------
+define crusingMissileDamageRange: 20;
+rule: "Perk/Player/CruisingMissile/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.CruisingMissile &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 7;
+    // set status
+    perk[Perk.perkTargets] = 0;
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    // show text
+    // landing zone text
+    perk[Perk.perkEffectAndText] = [];
+    CreateInWorldText(
+        AllPlayers(), <"<0> <1> <2>\n\rLanding at <3> second. Brace for impact!", ep, HeroIconString(HeroOf()), "Cruising Missile", perk[Perk.perkTimeLimit] >,
+        landPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    // CreateInWorldText(
+    //     AllPlayers(), <"Landing at <0> second. Brace for impact!", perk[Perk.perkTimeLimit] >,
+    //     landPosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+    //     Color.White, Spectators.DefaultVisibility);
+    perk[Perk.perkEffectAndText] [1] = LastTextID();
+    // set effect
+    // missile body
+    CreateEffect(AllPlayers(), Effect.Orb, Color.Red,
+        perkPosition, 10, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [2] = LastCreatedEntity();
+    // missile flare
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.White,
+        perkPosition, 20, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [3] = LastCreatedEntity();
+    // missle sound
+    CreateEffect(AllPlayers(), Effect.BadAuraSound, Color.White,
+        perkPosition, MaxLength(), EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [4] = LastCreatedEntity();
+    // landing zone blast range
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
+        landPosition, crusingMissileDamageRange, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [5] = LastCreatedEntity();
+    // landing zone position
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
+        landPosition, 0.2, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [6] = LastCreatedEntity();  
+    // landing zone warning icon
+    CreateIcon(AllPlayers(), landPosition + (Up() * 2), Icon.Warning,
+        IconRev.VisibleToAndPosition, Color.Yellow, true);
+    perk[Perk.perkEffectAndText] [7] = LastCreatedEntity();
+    // set hud
+    CreatePerkEffectHud(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered ? "locked landing point." : "guiding landing point.");
+    perk[Perk.perkEffectAndText] [8] = LastTextID();
+    CreatePerkEffectHud(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered ? <"Hold melee button <0> to guide landing point.", ButtonGuide(Button.Melee)> : <"Hold melee button <0> to lock landing point.", ButtonGuide(Button.Melee)>);
+    perk[Perk.perkEffectAndText] [9] = LastTextID();  
+}
+
+rule: "Perk/Player/CruisingMissile/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.CruisingMissile &&
+    perkState  == PerkState.Non
+){
+    // reset text
+    DestroyInWorldText(perk[Perk.perkEffectAndText] [0]);
+    DestroyInWorldText(perk[Perk.perkEffectAndText] [1]);
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [2]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [3]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [4]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [5]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [6]);
+    StopChasingVariable(perkPosition);
+    StopChasingVariable(landPosition);
+    // reset icon
+    DestroyIcon(perk[Perk.perkEffectAndText] [7]);
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [8]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [9]);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/CruisingMissile/toggleLockPoint"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.CruisingMissile &&
+    perkState  == PerkState.Using &&
+    IsButtonHeld(ep, Button.Melee)
+){
+    WaitLongPressConfirm();
+    if(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered){
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    }
+    else{
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
+    }
+    // play change sound
+    PlayEffect(
+        ep, PlayEffect.DebuffImpactSound,
+        Color.White, ep, MaxValue());
+}
+
+rule: "Perk/Player/CruisingMissile/playTrajectory"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.CruisingMissile &&
+    perkState  == PerkState.Using
+){
+    // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Orange, perkPosition, 3.0);
+
+    WaitUpdateVeryShortCycle();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/CruisingMissile/launchMissle"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.CruisingMissile &&
+    perkState  == PerkState.Using
+){
+    // set missiles at random horizontal positions over 500m
+    perkPosition = ep +
+        Vector(0, 500, 0) + RandomPosition(250, 0, 250);
+    // set missile land position to aiming position
+    landPosition = AimingPosition();
+    // start missile move
+    if(!isServerOverLoading){
+        UpdateEveryFrame(perkPosition);
+        ChaseVariableOverTime(
+            perkPosition, landPosition, perk[Perk.perkTimeLimit] ,
+            TimeChaseReevaluation.DestinationAndDuration);
+    }
+}
+
+rule: "Perk/Player/CruisingMissile/aimLandPoint"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.CruisingMissile &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready
+){
+    // chase missile land position to aiming position
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    aimPosition = AimingPosition();
+    UpdateEveryFrame(landPosition);
+    ChaseVariableAtRate(
+        landPosition, aimPosition,
+        DistanceBetween(landPosition, aimPosition) * 3.0,
+        RateChaseReevaluation.DestinationAndRate);
+        
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/CruisingMissile/hideBlastRange"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.CruisingMissile &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkTimeLimit]  <= 1
+){
+    DestroyEffect(perk[Perk.perkEffectAndText] [5]);
+}
+
+rule: "Perk/Player/CruisingMissile/landedToPoint"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.CruisingMissile &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkTimeLimit]  <= 0
+){
+    StopChasingVariable(perkPosition);
+    StopChasingVariable(landPosition);
+
+    // apply knockout
+    SetStatus(
+        PlayersWithinRadius(
+            landPosition, crusingMissileDamageRange,
+            Team.Team1, RadiusLOS.Off
+        ), null, Status.KnockedDown, 3);
+    // get target
+    perk[Perk.perkTargets] = 
+        PlayersWithinRadius(
+            landPosition, crusingMissileDamageRange,
+            Team.Team2, RadiusLOS.Off);
+    // apply blast impulse
+    ApplyBlastImpulse(perk[Perk.perkTargets], landPosition, crusingMissileDamageRange);
+    // damage
+    Damage(perk[Perk.perkTargets], ep, MaxValue());
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White, landPosition, MaxLength());
+    // play blast effect
+    PlayContinuousBlast(
+        Color.Orange,
+        landPosition,
+        crusingMissileDamageRange,
+        7);
+
+    perkState = PerkState.Non;
+}

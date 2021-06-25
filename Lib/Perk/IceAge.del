@@ -1,0 +1,54 @@
+import "../PerkCore.del";
+
+// TAG IceAge ----------
+rule: "Perk/Player/IceAge/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.IceAge &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 240;
+}
+
+rule: "Perk/Player/IceAge/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.IceAge &&
+    perkState  == PerkState.Non
+){
+    // reset type
+    perkType = PerkType.Non;
+}
+
+define IceAgeRange: 12;
+
+rule: "Perk/Player/IceAge/explosion"
+Event.OnFinalBlow
+Team.Team1
+if(
+    perkType == PerkType.IceAge &&
+    perkState  == PerkState.Using
+){
+    if(Victim() != ep){
+        WaitPlayEffect();
+        // splash freeze
+        SetStatus(
+            PlayersWithinRadius(
+                PositionOf(Victim()), IceAgeRange, Team.Team2, RadiusLOS.Off
+            ), ep, Status.Frozen, 1.5);
+        // play blast
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodExplosion,
+            Color.Aqua, Victim(), IceAgeRange);
+        PlayEffect(
+            AllPlayers(), PlayEffect.RingExplosion,
+            Color.Aqua, Victim(), IceAgeRange);
+        // play blast sound
+        PlayEffect(
+            AllPlayers(), PlayEffect.BuffImpactSound,
+            Color.White, Victim(), 100);
+    }
+}

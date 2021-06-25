@@ -7,33 +7,30 @@
 // add Perk Drone Guard Dog
 // add Perk Assassination
 
-import "Lib/DamageText.ostw";
-import "Lib/Regeneration.ostw";
-import "Lib/Revive.ostw";
-import "Lib/Perk.ostw";
-import "Lib/Bot.ostw";
-import "Lib/Debug.ostw";
-import "Lib/ElapsedTimer.ostw";
-// import "Lib/InvisibleImmortalForDebug.ostw";
+import "Lib/Debug.del";
+import "Lib/Utility.del";
+import "Lib/ElapsedTimer.del";
+import "Lib/DamageText.del";
+import "Lib/Regeneration.del";
+import "Lib/Revive.del";
+import "Lib/PerkCore.del";
+import "Lib/Bot.del";
 
 // TAG duumy define ----------
 // globalvar define Revive_enableTeam;
 // globalvar define Revive_timeLimit;
 // globalvar define reviveTimeoutCount;
-
 // globalvar define Regeneration_enableTeam;
 // globalvar define Regeneration_needBalanceTeam1;
 // globalvar define Regeneration_waitRegenTimeTeam1;
 // globalvar define Regeneration_regenerationRateTeam1;
 // globalvar define playerRegenerationRateTeam1;
-
 // globalvar define DamageText_enableTeam;
-
 // void DestroyAllBot(){}
 // void CreateAllBotByAsset(){}
 
 // TAG Signature and infomation ----------
-disabled rule: "PORTAL HUNT -HORDE PVE [ver 3.0] Share code [YY1N2]"-1{}
+disabled rule: "PORTAL HUNT -HORDE PVE [ver 4.0] Share code [YY1N2]"-1{}
 disabled rule: "You allowed copy or modify code."-1{}
 disabled rule: "This script was generated from source code by [Overwatch-Script-To-Workshop]"-1{}
 disabled rule: "Check detail with https://github.com/ItsDeltin/Overwatch-Script-To-Workshop"-1{}
@@ -42,9 +39,8 @@ disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopS
 
 // TAG System ----------
 define WaitUntilServerNotOverLoad(): WaitUntil(!isServerOverLoading, 3);
-define isServerOverLoading: 255 <= ServerLoad();
 
-define slowLevel: [100, 90, 80, 70, 50];
+define slowLevel: [100, 90, 80, 70, 50];    // 0～4
 globalvar define targetSlowLevel!;
 globalvar define currentSlowLevel!;
 globalvar define watchingOverLoad!;
@@ -101,9 +97,16 @@ if(
     initCompleted &&
     portalState != PortalState.End
 ){
-    watchingOverLoad = false;
     // apply slow level
     ApplySlowLevel(4);
+    watchingOverLoad = false;
+}
+
+rule: "System/ServerOverLoadMeasures/restartOverLoadWatching"
+Event.OngoingGlobal
+if(
+    !watchingOverLoad
+){
     Wait(1.5, WaitBehavior.IgnoreCondition);
     // reset slow level
     ApplySlowLevel(0);
@@ -117,6 +120,18 @@ void ApplySlowLevel(define setSlowLevel!)"ApplySlowLevel"{
         currentSlowLevel = setSlowLevel;
         SetSlowMotion(slowLevel[setSlowLevel]);
     }
+}
+
+rule: "Perk/System/ServerOverLoadMeasures/StopChasingVariable"
+Event.OngoingGlobal
+if(
+    isServerOverLoading
+){
+    Wait(2, WaitBehavior.AbortWhenFalse);
+    StopChasingVariable(AllPlayers(Team.Team1).perkPosition);
+    StopChasingVariable(AllPlayers(Team.Team1).perkPosition2);
+    StopChasingVariable(AllPlayers(Team.Team1).landPosition);
+    StopChasingVariable(AllPlayers(Team.Team1).landZonePosition);
 }
 
 // TAG Game ----------
@@ -171,7 +186,7 @@ Event.OngoingGlobal
 
     // show version and share code
     CreateHudText(AllPlayers(Team.Team1),
-        null, "PORTAL HUNT -HORDE PVE [ver 3.0] Share code [YY1N2]", null,
+        null, "PORTAL HUNT -HORDE PVE [ver 4.0] Share code [YY1N2]", null,
         Location.Left, -3,
         Color.White, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);

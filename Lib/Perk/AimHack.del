@@ -1,0 +1,146 @@
+import "../PerkCore.del";
+
+rule: "Perk/Player/AimHack/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.AimHack &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 240;
+    // set status
+    perk[Perk.perkTargets] = 0;
+    autoAimingTarget = 0;
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered ?
+        "Aim hack Enable." : "Aim hack Disable.");
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    CreatePerkEffectHud(<"Hold melee button <0> to toggle aim hack.", ButtonGuide(Button.Melee)>);
+    perk[Perk.perkEffectAndText] [1] = LastTextID();
+}
+
+rule: "Perk/Player/AimHack/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.AimHack &&
+    perkState  == PerkState.Non
+){
+    // reset status
+    StopFacing();
+    perk[Perk.perkTargets] = 0;
+    autoAimingTarget = 0;
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Disabled;
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [1]);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/AimHack/toggleAimHack"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.AimHack &&
+    perkState  == PerkState.Using &&
+    IsButtonHeld(ep, Button.Melee)
+){
+    WaitLongPressConfirm();
+    if(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered){
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    }
+    else{
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
+    }
+    // play change sound
+    PlayEffect(
+        ep, PlayEffect.DebuffImpactSound,
+        Color.White, ep, MaxValue());
+}
+
+rule: "Perk/Player/AimHack/startAutoAim"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.AimHack &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
+){
+    WaitUpdateShortCycle();
+    AutoAim();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/AimHack/stopAutoAim"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.AimHack &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready
+){
+    WaitConditionConfirmed();
+    StopFacing(ep);
+    autoAimingTarget = 0;
+    perk[Perk.perkTargets] = 0;
+}
+
+rule: "Perk/Player/AimHack/setTargetByDangerTarget"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.AimHack &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    Health() <= MaxHealth() / 2
+){
+    perk[Perk.perkTargets] = ClosestPlayerTo(ep, Team.Team2);
+    if(IsInLineOfSight(ep, perk[Perk.perkTargets])){
+        autoAimingTarget = perk[Perk.perkTargets];
+    }
+}
+
+void AutoAim()"AutoAim"{
+    if(
+        autoAimingTarget == 0 ||    // has not target
+        IsDead(autoAimingTarget) || // target dead
+        !IsInLineOfSight(           // target hidden
+            ep,
+            autoAimingTarget,
+            BarrierLOS.NoBarriersBlock
+        )
+    ){
+        // get near target in sight
+        perk[Perk.perkTargets] = FirstOf(
+            SortedArray(
+                FilteredArray(
+                    PlayersInViewAngle(ep, Team.Team2, 90),
+                    (
+                        IsAlive(ArrayElement()) &&
+                        IsInLineOfSight(ep, ArrayElement(), BarrierLOS.NoBarriersBlock) &&
+                        !HasStatus(ArrayElement(), Status.Asleep)
+                    )
+                ),
+                DistanceBetween(ep, ArrayElement())
+            )
+        );
+        // has new target
+        if(
+            perk[Perk.perkTargets] != 0
+        ){
+            // start auto aim
+            autoAimingTarget = perk[Perk.perkTargets];
+            StartAutoAiming();
+        }
+        // has not target
+        else{
+            // stop auto aim
+            autoAimingTarget = 0;
+            StopFacing(ep);
+        }
+    }
+}

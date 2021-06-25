@@ -1,0 +1,291 @@
+import "../PerkCore.del";
+
+define splashDamageRangePlasmaCanon: 1.0;
+define gravityBombReloadTime: 8;
+define gravityBombReloadTimeWhenUlt: 1;
+define gravityBombDamageRange: 7;
+
+rule: "Perk/Player/Juggernaut/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 180;
+    // set param
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud(
+        perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready ?
+            <"Press secondary fire button <0> to shot gravity bomb.", ButtonGuide(Button.SecondaryFire)> :
+            perk[Perk.perkEffectStatus]  == PerkEffectStatus.Reloading ?
+                <"gravity bomb in recharging until <0> seconds.", perk[Perk.perkEffectCoolTime]> :
+                "gravity bomb Fired!"
+        );
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    // set perk hero
+    PerkHero perkHero = new PerkHero();
+    perkHero.hero = Hero.Orisa;
+    perkHero.statusUnkillable = true;
+    perkHero.maxHealth = 300;
+    perkHero.healingReceived = 5.0;
+    perkHero.damageDealt = 150;
+    perkHero.gravity = 300;
+    perkHero.moveSpeed = 75;
+    ForcePlayerPerkHero(ep, perkHero);
+    // set status
+    StartScalingPlayer(ep, 1.5, false);
+    StartModifyingHeroVoiceLines(ep, 0.8, false);
+
+    // use secondary
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    PressButton(ep, Button.SecondaryFire);
+}
+
+rule: "Perk/Player/Juggernaut/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Non
+){
+    // reset status
+    StopScalingPlayer(ep);
+    StopModifyingHeroVoiceLines(ep);
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    StopChasingVariable(perkPosition);
+    StopChasingVariable(perkPosition2);
+    // reset perk hero
+    StopForcingPerkHero(ep);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/Juggernaut/brokenPerk //by helth 1"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using &&
+    Health() <= 1
+){
+    WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
+    perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/Juggernaut/setFiringSlow"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using &&
+    IsFiringPrimary()
+)
+{
+    SetMoveSpeed(ep, 25);
+}
+
+rule: "Perk/Player/Juggernaut/resetFiringSlow"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using &&
+    !IsFiringPrimary()
+)
+{
+    SetMoveSpeed(ep, 75);
+}
+
+rule: "Perk/Player/Juggernaut/splashDamage"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using &&
+    IsFiringPrimary()
+)
+{
+    // get aimPosition  
+    aimPosition = AimingPosition();
+    landPosition = RandomPosition(0.5, 0.5, 0.5);
+    // splash damage
+    Damage(
+        PlayersWithinRadius(
+            aimPosition + landPosition,
+            splashDamageRangePlasmaCanon,
+            Team.Team2, RadiusLOS.Off),
+        ep, 40);
+    // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Green, aimPosition + landPosition,
+        splashDamageRangePlasmaCanon);
+    
+    WaitContinuousBlastCycle();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/Juggernaut/shotGravityBomb"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
+    IsFiringSecondary()
+){
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Disabled;
+    aimPosition2 = AimingPositionIgnorePlayer();
+    perkPosition2 = EyePosition();
+    // hide aura
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    // show aura
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.LimeGreen,
+        perkPosition2, 1, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [1] = LastCreatedEntity();
+    // follow the original ability effect
+    UpdateEveryFrame(perkPosition2);
+    ChaseVariableAtRate(perkPosition2, aimPosition2,
+        26, RateChaseReevaluation.DestinationAndRate);
+
+    // wait can trigger
+    Wait(0.2, WaitBehavior.IgnoreCondition);    
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
+}
+
+
+rule: "Perk/Player/Juggernaut/triggerGravityBomb"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    IsButtonHeld(ep, Button.SecondaryFire)
+){
+    ExplodeGravityBomb();
+}
+
+rule: "Perk/Player/Juggernaut/landedGravityBomb"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    perkPosition2 == aimPosition2
+){
+    ExplodeGravityBomb();
+}
+
+rule: "Perk/Player/Juggernaut/timeoutGravityBomb"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
+){
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    ExplodeGravityBomb();
+}
+
+void ExplodeGravityBomb()"ExplodeGravityBomb"{
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.SecondTriggered;
+    // stop aura
+    StopChasingVariable(perkPosition2);
+    // hide aura
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    // wait builtin ability start cooldown
+    Wait(0.7, WaitBehavior.IgnoreCondition);
+    // set builtin ability reload time
+    if(!IsUsingUltimate()){
+        // start reload
+        perk[Perk.perkEffectCoolTime] = gravityBombReloadTime;
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
+        SetAbilityCooldown(ep, Button.SecondaryFire, gravityBombReloadTime);
+    }
+    else{
+        // shorten reload when ult
+        perk[Perk.perkEffectCoolTime] = gravityBombReloadTimeWhenUlt;
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
+        SetAbilityCooldown(ep, Button.SecondaryFire, gravityBombReloadTimeWhenUlt);
+    }
+    // wait enemy pull by builtin ability 
+    Wait(0.2, WaitBehavior.IgnoreCondition);
+    // get target
+    perk[Perk.perkTargets] = 
+        PlayersWithinRadius(
+            perkPosition2,
+            gravityBombDamageRange,
+            Team.Team2, RadiusLOS.Off);
+    // apply blast impulse
+    ApplyBlastImpulse(perk[Perk.perkTargets], perkPosition2,
+        gravityBombDamageRange);
+    // damage
+    Damage(perk[Perk.perkTargets], ep, 600);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White, perkPosition2, MaxLength());
+    // play blast effect
+    PlayContinuousBlast(
+        Color.LimeGreen,
+        perkPosition2,
+        gravityBombDamageRange,
+        5);
+}
+
+rule: "Perk/Player/Juggernaut/countDownCoolTimeGravityBomb"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Reloading &&
+    perk[Perk.perkEffectCoolTime] > 0
+){
+    // count down perk cooldown time
+    WaitUpdateMediumCycle();
+    perk[Perk.perkEffectCoolTime] -= 1;
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/Juggernaut/coolDownCompleteGravityBomb"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Reloading &&
+    perk[Perk.perkEffectCoolTime] <= 0
+){
+    // play ready sound
+    PlayEffect(
+        ep, PlayEffect.BuffImpactSound,
+        Color.White, ep, 100);
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+}
+
+rule: "Perk/Player/Juggernaut/skipReloadGravityBomb"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Juggernaut &&
+    perkState  == PerkState.Using &&
+    IsUsingUltimate()
+){
+    if(gravityBombReloadTimeWhenUlt < AbilityCooldown(ep, Button.SecondaryFire)){
+        // start reload
+        perk[Perk.perkEffectCoolTime] = gravityBombReloadTimeWhenUlt;
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
+        SetAbilityCooldown(ep, Button.SecondaryFire, gravityBombReloadTimeWhenUlt);
+    }
+}

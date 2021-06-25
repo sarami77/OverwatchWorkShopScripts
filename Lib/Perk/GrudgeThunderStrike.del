@@ -1,0 +1,167 @@
+import "../PerkCore.del";
+
+define thunderStrikeLandingRange: 1;
+define thunderStrikeDamageRange: 3;
+define thunderStrikeChargeRate: 7.0;
+define thunderStrikeConsumePower: 100;
+
+rule: "Perk/Player/GrudgeThunderStrike/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 300;
+    // set status
+    perkPosition = 0;
+    landPosition = 0;
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud(<"Thunder strike power <0>", perk[Perk.thunderStrikePower]>);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    CreatePerkEffectHud(<"Hold melee button <0> to shot thunder strike.", ButtonGuide(Button.Melee)>);
+    perk[Perk.perkEffectAndText] [1] = LastTextID();
+}
+
+rule: "Perk/Player/GrudgeThunderStrike/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState  == PerkState.Non
+){
+    // reset text
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [1]);
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [2]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [3]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [4]);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/GrudgeThunderStrike/chargePowerByTakenDamage"
+Event.OnDamageTaken
+Team.Team1
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState  == PerkState.Using &&
+    Attacker() != ep &&
+    EventDamage() > 0
+){
+    perk[Perk.thunderStrikePower] += RoundToInteger(EventDamage() * thunderStrikeChargeRate);
+}
+
+rule: "Perk/Player/GrudgeThunderStrike/shot"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
+    IsButtonHeld(ep, Button.Melee)
+){
+    WaitLongPressConfirm();
+    AbortIf(perk[Perk.thunderStrikePower] <= 0);
+    
+    // create Trajectory of Thunder
+    CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
+        landPosition, landPosition2,
+        Color.SkyBlue, EffectRev.VisibleToPositionRadiusAndColor);
+    perk[Perk.perkEffectAndText] [4] = LastCreatedEntity(); 
+
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
+}
+
+disabled rule: "Perk/Player/GrudgeThunderStrike/cancelShot"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    IsButtonHeld(ep, Button.Melee)
+){
+    WaitLongPressConfirm();
+    DestroyEffect(perk[Perk.perkEffectAndText] [4]);
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+}
+
+rule: "Perk/Player/GrudgeThunderStrike/cancelShotByEmpty"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    perk[Perk.thunderStrikePower] <= 0
+){
+    DestroyEffect(perk[Perk.perkEffectAndText] [4]);
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+}
+
+rule: "Perk/Player/GrudgeThunderStrike/landedToPoint"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeThunderStrike &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    perk[Perk.thunderStrikePower] > 0
+){
+    // set land position
+    landPosition = 
+        AimingPosition() + 
+        RandomPosition(
+            thunderStrikeLandingRange,
+            0,
+            thunderStrikeLandingRange
+        );
+    
+    landPosition2 =
+        landPosition +
+        (Up() * 50) +
+        RandomPosition(
+            thunderStrikeLandingRange * 5,
+            0,
+            thunderStrikeLandingRange * 5
+        );
+
+    // splash damage
+    Damage(
+        PlayersWithinRadius(
+            landPosition, thunderStrikeDamageRange,
+            Team.Team2, RadiusLOS.Off),
+        ep, thunderStrikeConsumePower);
+    // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.SkyBlue,
+        landPosition,
+        1);
+    // play ring
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosion,
+        Color.SkyBlue,
+        landPosition,
+        thunderStrikeDamageRange);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White,
+        landPosition,
+        100);
+
+    // consume power
+    perk[Perk.thunderStrikePower] =
+        perk[Perk.thunderStrikePower] < thunderStrikeConsumePower ?
+        0:
+        perk[Perk.thunderStrikePower] - thunderStrikeConsumePower;
+
+    WaitContinuousBlastCycle();
+    LoopIfConditionIsTrue();
+}

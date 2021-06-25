@@ -1,0 +1,142 @@
+import "../PerkCore.del";
+
+define battleFlagRange : 15;
+
+rule: "Perk/Player/BattleFlag/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BattleFlag &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 360;
+    // set effect
+    perk[Perk.perkEffectAndText] = [];
+    CreateEffect(AllPlayers(Team.Team1), Effect.Ring, Color.Blue,
+        ep, battleFlagRange, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [0] = LastCreatedEntity();
+    // show icon
+    CreateIcon(AllPlayers(), PositionOf() + (Up() * 2), Icon.Flag,
+        IconRev.VisibleToAndPosition, Color.Blue, false);
+    perk[Perk.perkEffectAndText] [1] = LastCreatedEntity();
+}
+
+rule: "Perk/Player/BattleFlag/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BattleFlag &&
+    perkState  == PerkState.Non
+){
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [0]);
+    // reset icon
+    DestroyIcon(perk[Perk.perkEffectAndText] [1]);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+define nearBattleFlag:
+    FilteredArray(
+        AllPlayers(Team.Team1),
+        (
+            ArrayElement().perkType == PerkType.BattleFlag &&
+            ArrayElement().perkState  == PerkState.Using &&
+            DistanceBetween(ep, ArrayElement()) <= battleFlagRange
+        )
+    );
+
+rule: "Perk/Player/BattleFlag/chargingUlt"
+Event.OngoingPlayer
+Team.Team1
+if(
+    CountOf(nearBattleFlag) > 0
+){
+    WaitUpdateMediumCycle();
+    SetUltimateCharge(ep, UltimateChargePercent() + 2);
+    LoopIfConditionIsTrue();
+}
+
+define raisedBattleFlag:
+    CountOf(
+        FilteredArray(
+            AllPlayers(Team.Team1),
+            (
+                ArrayElement().perkType == PerkType.BattleFlag &&
+                ArrayElement().perkState  == PerkState.Using &&
+                ArrayElement() != ep
+            )
+        )
+    ) > 0;
+
+rule: "Perk/Player/BattleFlag/showOperationTeleport"
+Event.OngoingPlayer
+Team.Team1
+if(
+    (
+        IsInSpawnRoom() &&
+        raisedBattleFlag
+    )
+){
+    WaitChangeState();
+    // set hud
+    CreatePerkEffectHud(<"Hold jump button <0> to teleport to battle flag.", ButtonGuide(Button.Jump)>);
+    perk[Perk.perkEffectAndText] [100] = LastTextID();
+    CreatePerkEffectHud(<"Our battle flag is raised on battle line.">);
+    perk[Perk.perkEffectAndText] [101] = LastTextID();
+    // show message
+    SmallMessage(ep, <"Our battle flag is raised on battle line.">);
+    SmallMessage(ep, <"Hold jump button <0> to teleport to battle flag.", ButtonGuide(Button.Jump)>);
+    // play ready sound
+    PlayEffect(
+        ep, PlayEffect.BuffImpactSound,
+        Color.White, ep, 100);
+}
+
+rule: "Perk/Player/BattleFlag/hideOperationTeleport"
+Event.OngoingPlayer
+Team.Team1
+if(
+    !(
+        IsInSpawnRoom() &&
+        raisedBattleFlag
+    )
+){
+    WaitChangeState();
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [100]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [101]);
+}
+
+rule: "Perk/Player/BattleFlag/teleportToBattleFlag"
+Event.OngoingPlayer
+Team.Team1
+if(
+    (
+        IsInSpawnRoom() &&
+        raisedBattleFlag
+    ) &&
+    IsButtonHeld(ep, Button.Jump)
+){
+    WaitLongPressConfirm();
+    perk[Perk.perkTargets] = 
+        RandomValueInArray(
+            FilteredArray(
+                AllPlayers(Team.Team1),
+                (
+                    ArrayElement().perkType == PerkType.BattleFlag &&
+                    ArrayElement().perkState  == PerkState.Using
+                )
+            )
+        );
+    // teleport to battle flag
+    Teleport(ep, perk[Perk.perkTargets]);
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodPickupEffect,
+        Color.Blue, perk[Perk.perkTargets], 1);
+    PlayEffect(
+        AllPlayers(), PlayEffect.BuffImpactSound,
+        Color.White, perk[Perk.perkTargets], MaxLength());
+    SmallMessage(perk[Perk.perkTargets], <"<0> <1> deployed from your battle flag.", ep, HeroIconString(HeroOf())>);
+}

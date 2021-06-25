@@ -1,0 +1,60 @@
+import "../PerkCore.del";
+
+rule: "Perk/Player/Adrenaline/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Adrenaline &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 300;
+    // set param
+    perk[Perk.perkEffectStatus] = 100;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud(<"Move speed <0>%", perk[Perk.perkEffectStatus] >);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+}
+
+rule: "Perk/Player/Adrenaline/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Adrenaline &&
+    perkState  == PerkState.Non
+){
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    // reset status
+    SetMoveSpeed(ep, 100);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/Adrenaline/updateMoveSpeed"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Adrenaline &&
+    perkState  == PerkState.Using &&    
+    Health() < MaxHealth()
+){
+    perk[Perk.perkEffectStatus] = RoundToInteger((1 - NormalizedHealth()) * 150);
+    perk[Perk.perkEffectStatus]  += 100;
+    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/Adrenaline/resetMoveSpeedByFullHealth"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Adrenaline &&
+    perkState  == PerkState.Using &&
+    Health() == MaxHealth()
+){
+    perk[Perk.perkEffectStatus] = 100;
+    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
+}

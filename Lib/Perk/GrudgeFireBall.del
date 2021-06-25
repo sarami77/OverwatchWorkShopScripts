@@ -1,0 +1,197 @@
+import "../PerkCore.del";
+
+define fireBallMinSpeed: 10;
+define fireBallMaxSpeed: 60;
+define fireBallMinCollisionRange: 2.0;
+define fireBallChargeRate: 3.0;
+
+rule: "Perk/Player/GrudgeFireBall/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 300;
+    // set status
+    perkPosition = 0;
+    landPosition = 0;
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud(<"Fire ball power <0>", perk[Perk.fireBallPower]>);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    CreatePerkEffectHud(<"Hold melee button <0> to shot fire ball.", ButtonGuide(Button.Melee)>);
+    perk[Perk.perkEffectAndText] [1] = LastTextID();
+}
+
+rule: "Perk/Player/GrudgeFireBall/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState  == PerkState.Non
+){
+    // reset text
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [1]);
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [2]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [3]);
+    StopChasingVariable(perkPosition);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/GrudgeFireBall/chargePowerByTakenDamage"
+Event.OnDamageTaken
+Team.Team1
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState  == PerkState.Using &&
+    Attacker() != ep &&
+    EventDamage() > 0
+){
+    perk[Perk.fireBallPower] += RoundToInteger(EventDamage() * fireBallChargeRate);
+}
+
+rule: "Perk/Player/GrudgeFireBall/shot"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
+    IsButtonHeld(ep, Button.Melee)
+){
+    WaitLongPressConfirm();
+    AbortIf(perk[Perk.fireBallPower] <= 0);
+
+    perkPosition = EyePosition() + 
+        (FacingDirectionOf(ep) * perk[Perk.fireBallSize] / 2);
+    landPosition = AimingPositionIgnorePlayer();
+    // set fireball param
+    perk[Perk.fireBallSpeed] = fireBallMaxSpeed - (perk[Perk.fireBallPower] / fireBallMaxSpeed);
+    perk[Perk.fireBallSpeed] = Max(fireBallMinSpeed, perk[Perk.fireBallSpeed]);
+    perk[Perk.fireBallSpeed] = Min(fireBallMaxSpeed, perk[Perk.fireBallSpeed]);
+    perk[Perk.fireBallSize] = perk[Perk.fireBallPower] * 0.004;
+    perk[Perk.fireBallBlastRange] = perk[Perk.fireBallPower] * 0.02;
+    perk[Perk.fireBallTriggerDelay] = perk[Perk.fireBallPower] * 0.0002;
+    // start movement
+    UpdateEveryFrame(perkPosition);
+    ChaseVariableAtRate(
+        perkPosition, landPosition, perk[Perk.fireBallSpeed],
+        RateChaseReevaluation.DestinationAndRate);
+    // show ball
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
+        perkPosition, perk[Perk.fireBallSize], EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [2] = LastCreatedEntity();
+    // show aura
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Orange,
+        perkPosition, perk[Perk.fireBallSize] * 1.5, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [3] = LastCreatedEntity();
+    // play shot fire
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Orange, perkPosition + (FacingDirectionOf() * 1), perk[Perk.fireBallSize]);
+
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
+}
+
+rule: "Perk/Player/GrudgeFireBall/playTrajectory"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
+){
+    // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Yellow, perkPosition, perk[Perk.fireBallSize] * 1.5);
+
+    WaitUpdateVeryShortCycle();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/GrudgeFireBall/landedToPoint"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
+){
+    Wait(
+        DistanceBetween(perkPosition, landPosition) / perk[Perk.fireBallSpeed],
+        WaitBehavior.AbortWhenFalse);
+    ExplodeFireBall();
+}
+
+rule: "Perk/Player/GrudgeFireBall/hitToPlayer"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    IsAlive(ClosestPlayerTo(perkPosition, Team.Team2)) &&
+    DistanceBetween(
+        perkPosition,
+        ClosestPlayerTo(perkPosition, Team.Team2))
+            <= 
+        Max(fireBallMinCollisionRange, perk[Perk.fireBallSize])
+){
+    Wait(perk[Perk.fireBallTriggerDelay], WaitBehavior.IgnoreCondition);
+    ExplodeFireBall();
+}
+
+rule: "Perk/Player/GrudgeFireBall/timeOut"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.GrudgeFireBall &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
+){
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    ExplodeFireBall();
+}
+
+void ExplodeFireBall()"ExplodeFireBall"{
+    AbortIf(perk[Perk.perkEffectStatus]  != PerkEffectStatus.Triggered);
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.SecondTriggered;
+
+    // stop movement
+    StopChasingVariable(perkPosition);
+    // hide ball
+    DestroyEffect(perk[Perk.perkEffectAndText] [2]);
+    // hide aura
+    DestroyEffect(perk[Perk.perkEffectAndText] [3]);
+    // get target
+    perk[Perk.perkTargets] = 
+        PlayersWithinRadius(
+            perkPosition, Max(fireBallMinCollisionRange, perk[Perk.fireBallBlastRange]),
+            Team.Team2, RadiusLOS.Off);
+    // apply blast impulse
+    ApplyBlastImpulse(perk[Perk.perkTargets], perkPosition, perk[Perk.fireBallBlastRange]);
+    // damage
+    Damage(perk[Perk.perkTargets], ep, perk[Perk.fireBallPower]);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White, perkPosition, perk[Perk.fireBallBlastRange] * 50);
+    // play blast effect
+    PlayContinuousBlast(
+        Color.Orange,
+        perkPosition,
+        perk[Perk.fireBallBlastRange],
+        Min(7, perk[Perk.fireBallSize]));
+
+    // reset charge
+    perk[Perk.fireBallPower] = 0;
+
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+}

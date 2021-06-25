@@ -1,0 +1,97 @@
+import "../PerkCore.del";
+
+define saviorStunRange: 10;
+
+rule: "Perk/Player/Savior/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Savior &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 300;
+    // set param
+    perk[Perk.perkTargets] = [];
+}
+
+rule: "Perk/Player/Savior/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Savior &&
+    perkState  == PerkState.Non
+){
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/Savior/stunEnemy"
+Event.OnDamageDealt
+Team.Team1
+if(
+    perkType == PerkType.Savior &&
+    perkState  == PerkState.Using
+){
+    if(Victim() != ep){
+        if(!HasStatus(Victim(), Status.Stunned)){
+            perk[Perk.perkTargets] = FilteredArray(
+                AllPlayers(Team.Team1),
+                (
+                    ArrayElement() != ep &&
+                    Health(ArrayElement()) <= MaxHealth(ArrayElement()) / 2 &&
+                    saviorStunRange >= DistanceBetween(Victim(), ArrayElement())
+                )
+            );
+            if(perk[Perk.perkTargets] != []){
+                // set stun
+                SetStatus(Victim(), ep, Status.Stunned, 2.0);
+                // play blast
+                PlayEffect(
+                    AllPlayers(), PlayEffect.GoodExplosion,
+                    Color.Yellow, Victim(), 1.0);
+            }
+        }
+    }
+}
+
+define saviorReviveRange: 2.5;
+
+rule: "Perk/Player/Savior/instantyRevive"
+Event.OngoingPlayer
+Team.Team1
+if(
+    IsDead() &&
+    IsOnGround()&&
+    CountOf(
+        FilteredArray(
+            AllPlayers(TeamOf()), (
+                IsAlive(ArrayElement()) &&
+                HasSpawned(ArrayElement()) &&
+                ArrayElement().perkType == PerkType.Savior &&
+                ArrayElement().perkState  == PerkState.Using &&
+                DistanceBetween(ep, ArrayElement()) <= saviorReviveRange
+            )
+        )
+    ) > 0
+){
+    define reviver = ClosestPlayerTo(ep, Team.Team1);
+
+    // revive effect and sound
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+        Color.Yellow, ep, 1);
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.RingExplosion,
+        Color.Yellow, ep, 8);
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.BuffExplosionSound,
+        Color.White, ep, MaxLength());
+
+    Resurrect(ep);
+
+    SmallMessage(reviver,
+        <"<0> <1> <2>.", "revived", ep, HeroIconString(HeroOf(ep))>);
+    SmallMessage(ep,
+        <"<0> <1> <2>.", reviver, HeroIconString(HeroOf(reviver)), "revivied you">);
+}

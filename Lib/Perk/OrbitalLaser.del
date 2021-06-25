@@ -1,0 +1,156 @@
+import "../PerkCore.del";
+
+define lazerDamageRange: 2.0;
+
+rule: "Perk/Player/OrbitalLaser/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.OrbitalLaser &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 60;
+    // set status
+    perk[Perk.perkTargets] = 0;
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    // show text
+    // landing zone text
+    perk[Perk.perkEffectAndText] = [];
+    CreateInWorldText(
+        AllPlayers(), <"<0> <1> <2>\n\rIrradiating until <3> seconds.", ep, HeroIconString(HeroOf()), "Orbital Laser", perk[Perk.perkTimeLimit] >,
+        landPosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    // lazer body
+    CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
+        perkPosition, landPosition,
+        Color.Red, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [2] = LastCreatedEntity();
+    // lazer aura
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
+        landPosition, 5, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [3] = LastCreatedEntity();
+    // lazer sound
+    CreateEffect(AllPlayers(), Effect.EnergySound, Color.White,
+        landPosition, MaxLength(), EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [4] = LastCreatedEntity();
+    // above lazer aura
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Red,
+        PositionOf(ep) + Vector(0, 1000, 0), 30, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [5] = LastCreatedEntity();
+    // lazer shell
+    CreateEffect(AllPlayers(), Effect.LightShaft, Color.Red,
+        landPosition, 0.3, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [6] = LastCreatedEntity();  
+    // set hud
+    CreatePerkEffectHud(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered ? "locked irradiation point." : "guiding irradiation point.");
+    perk[Perk.perkEffectAndText] [8] = LastTextID();
+    CreatePerkEffectHud(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered ? <"Hold melee button <0> to guide irradiation point.", ButtonGuide(Button.Melee)> : <"Hold melee button <0> to lock irradiation point.", ButtonGuide(Button.Melee)>);
+    perk[Perk.perkEffectAndText] [9] = LastTextID();  
+}
+
+rule: "Perk/Player/OrbitalLaser/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.OrbitalLaser &&
+    perkState  == PerkState.Non
+){
+    // reset text
+    DestroyInWorldText(perk[Perk.perkEffectAndText] [0]);
+    // reset effect
+    // DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [2]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [3]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [4]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [5]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [6]);
+    StopChasingVariable(perkPosition);
+    StopChasingVariable(landPosition);
+    // reset icon
+    DestroyIcon(perk[Perk.perkEffectAndText] [7]);
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [8]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [9]);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/OrbitalLaser/toggleLockPoint"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.OrbitalLaser &&
+    perkState  == PerkState.Using &&
+    IsButtonHeld(ep, Button.Melee)
+){
+    WaitLongPressConfirm();
+    if(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered){
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    }
+    else{
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
+    }
+    // play change sound
+    PlayEffect(
+        ep, PlayEffect.DebuffImpactSound,
+        Color.White, ep, MaxValue());
+}
+
+rule: "Perk/Player/OrbitalLaser/launchLazer"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.OrbitalLaser &&
+    perkState  == PerkState.Using
+){
+    // set lazer at above positions over 500m
+    perkPosition = AimingPosition() +
+        Vector(0, 1000, 0);
+    // set lazer land position to aiming position
+    landPosition = BelowPosition(AimingPosition());
+}
+
+rule: "Perk/Player/OrbitalLaser/aimLandPoint"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.OrbitalLaser &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready
+){
+    // chase lazer land position to aiming position
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    aimPosition = BelowPosition(AimingPosition());
+    UpdateEveryFrame(landPosition);
+    ChaseVariableAtRate(
+        landPosition, aimPosition,
+        DistanceBetween(landPosition, aimPosition) * 3.0,
+        RateChaseReevaluation.DestinationAndRate);
+
+    perkPosition = aimPosition + Vector(0, 500, 0);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/OrbitalLaser/landedToPoint"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.OrbitalLaser &&
+    perkState  == PerkState.Using
+){
+    // damage
+    Damage(
+        PlayersWithinRadius(
+            landPosition, lazerDamageRange,
+            Team.Team2, RadiusLOS.Off
+        ), ep, 100);
+    // play blast effect
+    PlayEffect(
+        AllPlayers(),
+        PlayEffect.BadExplosion,
+        Color.Red, landPosition, lazerDamageRange);
+    WaitContinuousBlastCycle();
+    LoopIfConditionIsTrue();
+}

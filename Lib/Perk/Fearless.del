@@ -1,0 +1,77 @@
+import "../PerkCore.del";
+
+define fearlessRange : 12;
+
+rule: "Perk/Player/Fearless/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Fearless &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 300;
+    // set param
+    perk[Perk.perkEffectStatus] = 100;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud(<"Damage dealt & healing received <0>%", perk[Perk.perkEffectStatus] >);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    // set effect
+    CreateEffect(AllPlayers(), Effect.Ring, Color.SkyBlue,
+        ep, fearlessRange, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [1] = LastCreatedEntity();
+}
+
+rule: "Perk/Player/Fearless/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Fearless &&
+    perkState  == PerkState.Non
+){
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    // reset status
+    SetDamageDealt(ep, perk[Perk.perkEffectStatus] );
+    SetHealingReceived(ep, perk[Perk.perkEffectStatus] );
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/Fearless/updateDealDamage"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Fearless &&
+    perkState  == PerkState.Using
+){
+    // get enemy count of naer
+    define nearEnemyCount = CountOf(
+        FilteredArray(
+            PlayersWithinRadius(
+                PositionOf(ep), fearlessRange, Team.Team2, RadiusLOS.Off
+            ), IsAlive(ArrayElement())
+        )
+    );
+
+    // change status value
+    if(nearEnemyCount > 0)
+        perk[Perk.perkEffectStatus]  += (nearEnemyCount * 3);
+    
+    else
+        perk[Perk.perkEffectStatus]  -= 10;
+    
+    // round status value
+    if(300 < perk[Perk.perkEffectStatus] )
+        perk[Perk.perkEffectStatus] = 300;
+    else if(100 > perk[Perk.perkEffectStatus] )
+        perk[Perk.perkEffectStatus] = 100;
+    
+    SetDamageDealt(ep, perk[Perk.perkEffectStatus] );
+    SetHealingReceived(ep, perk[Perk.perkEffectStatus] );
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue();
+}

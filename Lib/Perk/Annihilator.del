@@ -1,0 +1,228 @@
+import "../PerkCore.del";
+
+rule: "Perk/Player/Annihilator/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Annihilator &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 150;
+    // set param
+    perk[Perk.perkEffectStatus] = 0;
+    // set perk hero
+    PerkHero perkHero = new PerkHero();
+    perkHero.hero = Hero.Reaper;
+    perkHero.statusUnkillable = true;
+    perkHero.maxHealth = 150;
+    perkHero.damageDealt = 150;
+    perkHero.gravity = 75;
+    perkHero.moveSpeed = 150;
+    perkHero.jumpSpeed = 125;
+    perkHero.ultimateCharge = 100;
+    ForcePlayerPerkHero(ep, perkHero);
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+
+    // use ult
+    PressButton(ep, Button.Ultimate);
+}
+
+rule: "Perk/Player/Annihilator/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Annihilator &&
+    perkState  == PerkState.Non
+){
+    // reset param
+    StopCamera(ep);
+    perk[Perk.perkEffectStatus] = 0;
+    // reset perk hero
+    StopForcingPerkHero(ep);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/Annihilator/brokenPerk //by helth 1"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Annihilator &&
+    perkState  == PerkState.Using &&
+    Health() <= 1
+){
+    WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
+    perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/Annihilator/startAnnihilate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Annihilator &&
+    perkState  == PerkState.Using &&
+    IsUsingUltimate()
+){
+    SetDamageDealt(ep, 400);
+    SetMoveSpeed(ep, 400);
+
+    perk[Perk.perkTargets] = 
+        SortedArray(
+            FilteredArray(
+                AllPlayers(Team.Team2), 
+                (
+                    IsAlive(ArrayElement()) &&
+                    IsInLineOfSight(ep, ArrayElement(), BarrierLOS.NoBarriersBlock)
+                )
+            ),
+            Health(ArrayElement())
+        );
+    // get target with insight and lowest health
+    perk[Perk.perkTargets] = FirstOf(perk[Perk.perkTargets]);
+
+    perkPosition = EyePosition();
+    if(perk[Perk.perkTargets] != 0){
+        // set camera
+        StartCamera(ep, perkPosition, EyePosition(), 10);
+    }
+
+    perk[Perk.perkEffectStatus] = 0;
+}
+
+rule: "Perk/Player/Annihilator/chaseNextTarget"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Annihilator &&
+    perkState  == PerkState.Using &&
+    IsUsingUltimate()
+){
+    perk[Perk.perkEffectStatus]  ++;
+
+    perk[Perk.perkTargets] = 
+        SortedArray(
+            FilteredArray(
+                AllPlayers(Team.Team2), 
+                (
+                    IsAlive(ArrayElement()) &&
+                    IsInLineOfSight(ep, ArrayElement(), BarrierLOS.NoBarriersBlock)
+                )
+            ),
+            Health(ArrayElement())
+        );
+    if(perk[Perk.perkEffectStatus]  <= 22){
+        // get target with insight and lowest health for kill more
+        perk[Perk.perkTargets] = FirstOf(perk[Perk.perkTargets]);
+    }
+    else{
+        // get target with insight and highst health for deal finish damage
+        perk[Perk.perkTargets] = LastOf(perk[Perk.perkTargets]);
+    }
+
+    if(perk[Perk.perkTargets] == 0){
+        // get target with near random
+        perk[Perk.perkTargets] = RandomValueInArray(perk[Perk.perkTargets]);
+            RandomValueInArray(
+                FilteredArray(
+                    AllPlayers(Team.Team2), 
+                    (
+                        IsAlive(ArrayElement()) &&
+                        DistanceBetween(ep, ArrayElement()) <= 10
+                    )
+                )
+            );
+    }
+    if(perk[Perk.perkTargets] != 0){
+        // chase target
+        ApplyImpulse(ep,
+            VectorTowards(ep, perk[Perk.perkTargets] + Up() + RandomPosition(1, 1, 1)),
+            MaxValue(), Relative.ToWorld, ContraryMotion.Cancel);
+        // play movement pulse
+        PlayEffect(
+            AllPlayers(), PlayEffect.BadPickupEffect,
+            Color.Red, ep, 1.0);
+
+        // camera too far to player
+        if(DistanceBetween(perkPosition, EyePosition()) > 15){
+            // camera set to middle point
+            perkPosition = (perkPosition + EyePosition()) / 2;
+        }
+        // camera too close to player
+        if(DistanceBetween(perkPosition, EyePosition()) < 5){
+            // camera move to backword
+            perkPosition = perkPosition + (VectorTowards(perk[Perk.perkTargets], perkPosition) * 2.0);
+        }
+        // camera blocked by wall
+        while(!IsInLineOfSight(perkPosition, EyePosition(), BarrierLOS.NoBarriersBlock)){
+            // camera set to middle point
+            perkPosition = (perkPosition + EyePosition()) / 2;
+        }
+        // update camera
+        StartCamera(ep, perkPosition, EyePosition(), 10);
+    }
+
+    WaitUpdateVeryShortCycle();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/Annihilator/finishAnnihilate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Annihilator &&
+    perkState  == PerkState.Using &&
+    !IsUsingUltimate()
+){
+    // finish damage
+    Damage(
+        PlayersWithinRadius(PositionOf(ep), 10, Team.Team2, RadiusLOS.Off ),
+        ep, MaxValue()
+    );
+
+    SetDamageDealt(ep, 200);
+    SetMoveSpeed(ep, 150);
+    StopCamera(ep);
+    Wait(4, WaitBehavior.AbortWhenFalse);
+
+    perk[Perk.perkEffectStatus] = 0;
+}
+
+rule: "Perk/Player/Annihilator/returnGround"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Annihilator &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  > 0
+){
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    if(
+        DistanceBetween(
+            ep,
+            NearestWalkablePosition(ep)
+        ) >= 5
+    ){
+        // return to safe ground
+        Teleport(ep, NearestWalkablePosition(ep));
+        // play movement pulse
+        PlayEffect(
+            AllPlayers(), PlayEffect.BadPickupEffect,
+            Color.Red, ep, 1.0);
+    }
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/Annihilator/chargingUlt"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Annihilator &&
+    perkState  == PerkState.Using &&
+    !IsUsingUltimate() &&
+    UltimateChargePercent() < 100
+){
+    WaitUpdateMediumCycle();
+    SetUltimateCharge(ep, (UltimateChargePercent() + 4));
+    LoopIfConditionIsTrue();
+}

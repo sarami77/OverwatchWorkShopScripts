@@ -1,0 +1,199 @@
+import "../PerkCore.del";
+
+// TAG ArtilleryRequest ----------
+define artilleryLandingRange: 20;
+define artilleryDamageRange: 7;
+define artilleryAttackTime: 10;
+define artilleryAttackCount: 30;
+
+rule: "Perk/Player/ArtilleryRequest/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.ArtilleryRequest &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 14;
+    // set status
+    perkPosition = 0;
+    perkPosition2 = 0;
+    landPosition = -1;
+    landPosition2 = -1;  
+    perk[Perk.perkEffectCount] = 0; 
+    // show text
+    // landing zone text
+    perk[Perk.perkEffectAndText] = [];
+    CreateInWorldText(
+        AllPlayers(), <"<0> <1> <2>\n\rBarrage incoming. Stand by...", ep, HeroIconString(HeroOf()), "Artillery Request">,
+        landZonePosition + PositionOffset(), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    // CreateInWorldText(
+    //     AllPlayers(), <"Barrage incoming. Stand by...">,
+    //     landZonePosition, 1.2, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+    //     Color.White, Spectators.DefaultVisibility);
+    perk[Perk.perkEffectAndText] [1] = LastTextID();
+    // set effect
+    // shell body1
+    CreateEffect(AllPlayers(), Effect.Orb, Color.White,
+        perkPosition, 1, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [2] = LastCreatedEntity();
+    // shell body2
+    CreateEffect(AllPlayers(), Effect.Orb, Color.White,
+        perkPosition2, 1, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [3] = LastCreatedEntity();
+    // landing zone blast range
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
+        landZonePosition, artilleryLandingRange, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [4] = LastCreatedEntity();
+    // landing zone position
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
+        landZonePosition, 0.2, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [5] = LastCreatedEntity(); 
+}
+rule: "Perk/Player/ArtilleryRequest/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.ArtilleryRequest &&
+    perkState  == PerkState.Non
+){
+    // reset text
+    DestroyInWorldText(perk[Perk.perkEffectAndText] [0]);
+    DestroyInWorldText(perk[Perk.perkEffectAndText] [1]);
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [2]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [3]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [4]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [5]);
+    StopChasingVariable(perkPosition);
+    StopChasingVariable(perkPosition2);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/ArtilleryRequest/setLandingZone"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.ArtilleryRequest &&
+    perkState  == PerkState.Using
+){
+    perkPosition = InvalidPosition();
+    perkPosition2 = InvalidPosition();
+
+    // set shell land position to aiming position
+    landZonePosition = BelowPosition(AimingPosition());
+    Wait(3, WaitBehavior.AbortWhenFalse);
+
+    DestroyEffect(perk[Perk.perkEffectAndText] [4]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [5]);
+
+    perk[Perk.firstAnimationDelay] = true;
+    perk[Perk.perkEffectCount] = artilleryAttackCount;
+}
+
+define artilleryAttackSpeeed:
+    (artilleryAttackTime / artilleryAttackCount) * parallelAnimationNum;
+
+rule: "Perk/Player/ArtilleryRequest/launchShell"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.ArtilleryRequest &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectCount] > 0
+){
+    // set shell at random
+    perkPosition = landZonePosition +
+        Vector(0, 100, 0) + RandomPosition(10, 0, 10);
+    // start shell move
+    landPosition = 
+        landZonePosition + 
+        RandomPosition(
+            artilleryLandingRange / 1.5,
+            0,
+            artilleryLandingRange / 1.5
+        );
+    
+    if(!isServerOverLoading){
+        UpdateEveryFrame(perkPosition);
+        ChaseVariableOverTime(
+            perkPosition, landPosition, artilleryAttackSpeeed,
+            TimeChaseReevaluation.DestinationAndDuration);
+    }
+
+    Wait(artilleryAttackSpeeed, WaitBehavior.AbortWhenFalse);
+    StopChasingVariable(perkPosition);
+    // hide shell
+    perkPosition = InvalidPosition();
+    // on landed play blast
+    async ExplodeArtillery(landPosition);
+    perk[Perk.perkEffectCount] -- ;
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/ArtilleryRequest/launchShell2"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.ArtilleryRequest &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectCount] > 0
+){
+    if(perk[Perk.firstAnimationDelay]){
+        perk[Perk.firstAnimationDelay] = false;
+        Wait(artilleryAttackSpeeed / 2, WaitBehavior.AbortWhenFalse);
+    }
+
+    // set shell at random
+    perkPosition2 = landZonePosition +
+        Vector(0, 100, 0) + RandomPosition(10, 0, 10);
+    // start shell move
+    landPosition2 = 
+        landZonePosition + 
+        RandomPosition(
+            artilleryLandingRange / 1.5,
+            0,
+            artilleryLandingRange / 1.5
+        );
+
+    if(!isServerOverLoading){
+        UpdateEveryFrame(perkPosition2);
+        ChaseVariableOverTime(
+            perkPosition2, landPosition2, artilleryAttackSpeeed,
+            TimeChaseReevaluation.DestinationAndDuration);
+    }
+
+    Wait(artilleryAttackSpeeed, WaitBehavior.AbortWhenFalse);
+    StopChasingVariable(perkPosition2);
+    // hide shell
+    perkPosition2 = InvalidPosition();
+    // on landed play blast
+    async ExplodeArtillery(landPosition2);
+    perk[Perk.perkEffectCount] -- ;
+    LoopIfConditionIsTrue();
+}
+
+void ExplodeArtillery(define position)"ExplodeArtilleryShell"{
+    // get target
+    perk[Perk.perkTargets] = 
+        PlayersWithinRadius(
+            position, artilleryDamageRange,
+            Team.Team2, RadiusLOS.Off);
+    // apply blast impulse
+    ApplyBlastImpulse(perk[Perk.perkTargets], position, artilleryDamageRange);
+    // damage
+    Damage(perk[Perk.perkTargets], ep, 300);
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White, position, 300);
+    // play blast effect
+    PlayContinuousBlast(
+        Color.Yellow,
+        position,
+        artilleryDamageRange,
+        2);
+}

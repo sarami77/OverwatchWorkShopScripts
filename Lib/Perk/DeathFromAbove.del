@@ -1,0 +1,277 @@
+import "../PerkCore.del";
+
+rule: "Perk/Player/DeathFromAbove/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 180;
+    // set param
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud(
+        IsUsingUltimate() ?
+            <"Current weapon is <0>.", "150mm HE cannon"> :
+            <"Press ability1 button <1> to change weapon. Current weapon is <0>.",
+                IsInAlternateForm() ?
+                "5mm minigun" :
+                "20mm auto cannon" ,
+            ButtonGuide(Button.Ability1)>
+    );
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    CreatePerkEffectHud(<"Press secondary fire button <0> to afterburner.", ButtonGuide(Button.SecondaryFire)>);
+    perk[Perk.perkEffectAndText] [1] = LastTextID();
+    CreatePerkEffectHud(<"Hold jump button <0> to flying mode.", ButtonGuide(Button.Jump)>);
+    perk[Perk.perkEffectAndText] [2] = LastTextID();
+    CreatePerkEffectHud(<"Hold crouch button <0> to walking mode.", ButtonGuide(Button.Crouch)>);
+    perk[Perk.perkEffectAndText] [3] = LastTextID();
+    // set perk hero
+    PerkHero perkHero = new PerkHero();
+    perkHero.hero = Hero.Bastion;
+    perkHero.statusUnkillable = true;
+    perkHero.secondaryFireEnabled = false;
+    perkHero.maxHealth = 300;
+    perkHero.healingReceived = 5.0;
+    perkHero.gravity = 5;
+    ForcePlayerPerkHero(ep, perkHero);
+    // set status
+    StartScalingPlayer(ep, 1.5, false);
+    StartModifyingHeroVoiceLines(ep, 0.8, false);
+
+    // fly and change mode
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    StartHoldingButton(ep, Button.Jump);
+    Wait(0.5, WaitBehavior.IgnoreCondition);
+    StopHoldingButton(ep, Button.Jump);
+    PressButton(ep, Button.Ability1);
+}
+
+rule: "Perk/Player/DeathFromAbove/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Non
+){
+    // reset status
+    ClearStatus(ep, Status.Rooted);
+    StopScalingPlayer(ep);
+    StopModifyingHeroVoiceLines(ep);
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [1]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [2]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [3]);
+    // reset perk hero
+    StopForcingPerkHero(ep);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/DeathFromAbove/brokenPerk //by helth 1"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Using &&
+    Health() <= 1
+){
+    WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
+    perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/DeathFromAbove/changeFlyingMode"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
+    IsButtonHeld(ep, Button.Jump)
+){
+    WaitLongPressConfirm();
+    SetStatus(ep, null, Status.Rooted, MaxValue());
+    SetGravity(ep, 5);
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
+}
+
+rule: "Perk/Player/DeathFromAbove/changeToLandingMode"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    IsButtonHeld(ep, Button.Crouch)
+){
+    WaitLongPressConfirm();
+    ClearStatus(ep, Status.Rooted);
+    SetGravity(ep, 100);
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+}
+
+define keepHeight: 20;
+
+rule: "Perk/Player/DeathFromAbove/flying"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
+){
+    define distanceFromSurface = DistanceBetween(ep, NearestWalkablePosition(ep));
+    
+    // if near surface
+    if(
+        distanceFromSurface < keepHeight
+    ){
+        // float    
+        ApplyImpulse(ep, Up(),
+            (keepHeight - distanceFromSurface) * 0.04,
+            Relative.ToPlayer, ContraryMotion.Incorporate);
+    }
+
+    // if far surface
+    if(
+        distanceFromSurface > keepHeight
+    ){
+        // dive    
+        ApplyImpulse(ep, Down(),
+            (distanceFromSurface - keepHeight) * 0.04,
+            Relative.ToPlayer, ContraryMotion.Incorporate);
+    }
+    
+    // if press SF button
+    if(IsButtonHeld(ep, Button.SecondaryFire)){
+        // move forword
+        ApplyImpulse(ep, Forward(), 1.5,
+            Relative.ToPlayer, ContraryMotion.Incorporate);
+    }
+    else{
+        ApplyImpulse(ep, Forward(), 0.05,
+            Relative.ToPlayer, ContraryMotion.Incorporate);
+    }
+    WaitApplyImpulseCycle();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/DeathFromAbove/playAfterBurner"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    IsButtonHeld(ep, Button.SecondaryFire)
+){
+    // play Afterburner
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodExplosion,
+        Color.Orange, PositionOf(ep), 0.5);
+    WaitUpdateShortCycle();
+    LoopIfConditionIsTrue();
+}
+
+define splashDamageRangeMinigun: 1.0;
+
+rule: "Perk/Player/DeathFromAbove/splashDamageMinigun"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Using &&
+    !IsUsingUltimate() &&
+    IsInAlternateForm() &&
+    IsFiringPrimary()
+){
+    // get aimPosition
+    aimPosition = AimingPosition();
+    landPosition = RandomPosition(0.625, 0.625, 0.625);
+    // splash damage
+    Damage(
+        PlayersWithinRadius(
+            aimPosition + landPosition, splashDamageRangeMinigun,
+            Team.Team2, RadiusLOS.Off),
+        ep, 80);
+    // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Yellow,
+        aimPosition + landPosition,
+        splashDamageRangeMinigun);
+    WaitContinuousBlastCycle();
+
+    LoopIfConditionIsTrue();
+}
+
+define splashDamageRangeAutoCanon: 2.0;
+
+rule: "Perk/Player/DeathFromAbove/splashDamageAutoCanon"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Using &&
+    !IsUsingUltimate() &&
+    !IsInAlternateForm() &&
+    IsFiringPrimary()
+){
+    // get aimPosition
+    aimPosition = AimingPosition();
+    landPosition = RandomPosition(1.25, 1.25, 1.25);
+    // splash damage
+    Damage(
+        PlayersWithinRadius(
+            aimPosition + landPosition, splashDamageRangeAutoCanon,
+            Team.Team2, RadiusLOS.Off),
+        ep, 120);
+    // play blast
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.GoodExplosion,
+        Color.Orange, aimPosition + landPosition,
+        splashDamageRangeAutoCanon);
+    Wait(0.15, WaitBehavior.IgnoreCondition);
+    
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/DeathFromAbove/chargingUlt"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Using &&
+    !IsUsingUltimate() &&
+    UltimateChargePercent() < 100
+){
+    WaitUpdateMediumCycle();
+    SetUltimateCharge(ep, (UltimateChargePercent() + 3));
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/DeathFromAbove/setTankModeDamageBuff"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Using &&
+    IsUsingUltimate()
+){
+    SetDamageDealt(ep, 200);
+}
+
+rule: "Perk/Player/DeathFromAbove/resetTankModeDamageBuff"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DeathFromAbove &&
+    perkState  == PerkState.Using &&
+    !IsUsingUltimate()
+){
+    SetDamageDealt(ep, 100);
+}

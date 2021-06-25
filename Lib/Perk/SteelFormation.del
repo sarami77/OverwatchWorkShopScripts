@@ -1,0 +1,85 @@
+import "../PerkCore.del";
+
+define steelRange : 8;
+
+rule: "Perk/Player/SteelFormation/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.SteelFormation &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 180;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud(<"Formation include <0> players.", perk[Perk.perkEffectStatus] >);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    // set effect
+    CreateEffect(AllPlayers(), Effect.Ring, Color.Orange,
+        ep, steelRange, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [1] = LastCreatedEntity();
+}
+
+rule: "Perk/Player/SteelFormation/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.SteelFormation &&
+    perkState  == PerkState.Non
+){
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+define nearSteel:
+    CountOf(
+        FilteredArray(
+            AllPlayers(Team.Team1),
+            (
+                ArrayElement().perkType == PerkType.SteelFormation &&
+                ArrayElement().perkState  == PerkState.Using &&
+                DistanceBetween(ep, ArrayElement()) <= steelRange
+            )
+        )
+    ) > 0;
+
+rule: "Perk/Player/SteelFormation/updateIncludePlayers"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.SteelFormation &&
+    perkState  == PerkState.Using
+){
+    perk[Perk.perkEffectStatus] = CountOf(
+        FilteredArray(
+            PlayersWithinRadius(
+                PositionOf(ep), steelRange, Team.Team1, RadiusLOS.Off
+            ), IsAlive(ArrayElement())
+        )
+    );
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/SteelFormation/enableSteel"
+Event.OngoingPlayer
+Team.Team1
+if(
+    nearSteel
+){
+    SetDamageReceived(ep, 50);
+}
+
+rule: "Perk/Player/SteelFormation/disableSteel"
+Event.OngoingPlayer
+Team.Team1
+if(
+    !nearSteel
+){
+    SetDamageReceived(ep, 100);
+}

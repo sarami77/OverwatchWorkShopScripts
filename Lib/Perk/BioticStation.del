@@ -1,0 +1,91 @@
+import "../PerkCore.del";
+
+// TAG BioticStation ----------
+define healRange : 6;
+define nearStation:
+    CountOf(
+        FilteredArray(
+            AllPlayers(Team.Team1),
+            (
+                ArrayElement().perkType == PerkType.BioticStation &&
+                ArrayElement().perkState  == PerkState.Using &&
+                DistanceBetween(ep, ArrayElement().perkPosition) <= healRange
+            )
+        )
+    ) > 0;
+
+rule: "Perk/Player/BioticStation/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BioticStation &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 30;
+    // set param
+    perkPosition = BelowPosition(PositionOf());
+    // show text
+    perk[Perk.perkEffectAndText] = [];
+    CreateInWorldText(
+        AllPlayers(), <"<0> <1> <2>", ep, HeroIconString(HeroOf()), "Biotic Station">,
+        perkPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    // set effect
+    CreateEffect(AllPlayers(), Effect.Ring, Color.Yellow,
+        perkPosition, healRange, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [1] = LastCreatedEntity();
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Yellow,
+        perkPosition, healRange, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [2] = LastCreatedEntity();
+    CreateEffect(AllPlayers(), Effect.LightShaft, Color.Yellow,
+        perkPosition, 0.25, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [3] = LastCreatedEntity();   
+}
+
+rule: "Perk/Player/BioticStation/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BioticStation &&
+    perkState  == PerkState.Non
+){
+    // reset text
+    DestroyInWorldText(perk[Perk.perkEffectAndText] [0]);
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [2]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [3]);
+    // reset param
+    perkPosition = 0;
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/BioticStation/playWave"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BioticStation &&
+    perkState  == PerkState.Using
+){
+    // play ring
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosion,
+        Color.Yellow, perkPosition, healRange * 2);
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/BioticStation/heal"
+Event.OngoingPlayer
+Team.Team1
+if(
+    nearStation
+){
+    // heal
+    Heal(ep, ep, 25);
+    WaitUpdateShortCycle();
+    LoopIfConditionIsTrue();
+}

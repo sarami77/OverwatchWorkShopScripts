@@ -1,0 +1,98 @@
+import "../PerkCore.del";
+
+rule: "Perk/Player/MachDelivery/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.MachDelivery &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 240;
+    // set param
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    // set perk hero
+    PerkHero perkHero = new PerkHero();
+    perkHero.hero = Hero.Tracer;
+    perkHero.statusUnkillable = true;
+    perkHero.gravity = 75;
+    perkHero.moveSpeed = 150;
+    perkHero.jumpSpeed = 125;
+    perkHero.ultimateCharge = 100;
+    ForcePlayerPerkHero(ep, perkHero);
+}
+
+rule: "Perk/Player/MachDelivery/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.MachDelivery &&
+    perkState  == PerkState.Non
+){
+    // reset perk hero
+    StopForcingPerkHero(ep);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/MachDelivery/brokenPerk //by helth 1"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.MachDelivery &&
+    perkState  == PerkState.Using &&
+    Health() <= 1
+){
+    WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
+    perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/MachDelivery/startBombDelifering"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.MachDelivery &&
+    perkState  == PerkState.Using &&
+    IsUsingUltimate()
+){
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
+    Wait(2.5, WaitBehavior.RestartWhenTrue);    // wait release delifering
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+}
+
+rule: "Perk/Player/MachDelivery/rechargeByBombCriticalDamage"
+Event.OnDamageDealt
+Team.Team1
+if(
+    perkType == PerkType.MachDelivery &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    EventDamage() >= 300
+){
+    SetUltimateCharge(ep, 100);
+}
+
+rule: "Perk/Player/MachDelivery/rechargeByBombKill"
+Event.OnFinalBlow
+Team.Team1
+if(
+    perkType == PerkType.MachDelivery &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
+){
+    SetUltimateCharge(ep, 100);
+}
+
+rule: "Perk/Player/MachDelivery/chargingUlt"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.MachDelivery &&
+    perkState  == PerkState.Using &&
+    !IsUsingUltimate() &&
+    UltimateChargePercent() < 100
+){
+    WaitUpdateMediumCycle();
+    SetUltimateCharge(ep, (UltimateChargePercent() + 6));
+    LoopIfConditionIsTrue();
+}

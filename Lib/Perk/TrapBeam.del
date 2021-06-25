@@ -1,0 +1,101 @@
+import "../PerkCore.del";
+
+define patrolCycle: 0.25;
+
+rule: "Perk/Player/TrapBeam/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.TrapBeam &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 180;
+    // show text
+    CreateInWorldText(
+        AllPlayers(), <"<0> <1> <2>", ep, HeroIconString(HeroOf()), "Trap Beam">,
+        perkPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    // set effect
+    CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
+        perkPosition, aimPosition,
+        Color.Yellow, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [1] = LastCreatedEntity();
+    CreateEffect(AllPlayers(), Effect.GoodAura, Color.Yellow,
+        perkPosition2, 0.25, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [2] = LastCreatedEntity();
+    // set param
+    StopChasingVariable(perkPosition2);
+}
+
+rule: "Perk/Player/TrapBeam/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.TrapBeam &&
+    perkState  == PerkState.Non
+){
+    // reset text
+    DestroyInWorldText(perk[Perk.perkEffectAndText] [0]);
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [2]);
+    // reset param
+    StopChasingVariable(perkPosition2);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/TrapBeam/deploy"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.TrapBeam &&
+    perkState  == PerkState.Using
+){
+    perkPosition = PositionOf() + PositionOffset();
+    aimPosition = AimingPositionIgnorePlayer();
+}
+
+rule: "Perk/Player/TrapBeam/moveDetector"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.TrapBeam &&
+    perkState  == PerkState.Using
+){
+    perkPosition2 = perkPosition;
+    UpdateEveryFrame(perkPosition2);
+    ChaseVariableOverTime(perkPosition2, aimPosition,
+        patrolCycle, TimeChaseReevaluation.DestinationAndDuration);
+    Wait(patrolCycle, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/TrapBeam/stunByTouched"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.TrapBeam &&
+    perkState  == PerkState.Using &&
+    // Since the position of the player is judged by the feet,
+    //  an offset is added and the collision judgment is shifted to the body.
+    DistanceBetween(
+        PositionOf(ClosestPlayerTo(perkPosition2, Team.Team2)) + PositionOffset(),
+        perkPosition2)
+    <= 1.25
+){
+    perk[Perk.perkTargets] = ClosestPlayerTo(perkPosition2, Team.Team2);
+    if(
+        IsAlive(perk[Perk.perkTargets]) &&
+        !HasStatus(perk[Perk.perkTargets], Status.Stunned)
+    ){
+        // set stun
+        SetStatus(perk[Perk.perkTargets], ep, Status.Stunned, 2.0);
+        // play blast
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodExplosion,
+            Color.Yellow, perk[Perk.perkTargets], 1.0);
+    }
+}

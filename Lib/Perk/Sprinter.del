@@ -1,0 +1,80 @@
+import "../PerkCore.del";
+
+rule: "Perk/Player/Sprinter/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Sprinter &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 300;
+    // set param
+    perk[Perk.keepMovingSecond] = 0;
+    perk[Perk.perkEffectStatus] = 100;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud(<"Move speed <0>%", perk[Perk.perkEffectStatus] >);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+}
+
+rule: "Perk/Player/Sprinter/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Sprinter &&
+    perkState  == PerkState.Non
+){
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    // reset status
+    SetMoveSpeed(ep, 100);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/Sprinter/updateMoveSpeed"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Sprinter &&
+    perkState  == PerkState.Using &&
+    IsMoving()
+){
+    if(perk[Perk.keepMovingSecond] < 10)
+        perk[Perk.keepMovingSecond] += 1;
+    perk[Perk.perkEffectStatus] = RoundToInteger((perk[Perk.keepMovingSecond] / 10) * 150);
+    perk[Perk.perkEffectStatus]  += 100;
+    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/Sprinter/resetMoveSpeedByStop"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Sprinter &&
+    perkState  == PerkState.Using &&
+    !IsMoving()
+){
+    WaitConditionConfirmed();
+
+    perk[Perk.keepMovingSecond] = 0;
+    perk[Perk.perkEffectStatus] = 100;
+    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
+}
+
+rule: "Perk/Player/Sprinter/resetMoveSpeedByDamage"
+Event.OnDamageTaken
+Team.Team1
+if(
+    perkType == PerkType.Sprinter &&
+    perkState  == PerkState.Using &&
+    1 <= EventDamage()
+){
+    perk[Perk.keepMovingSecond] = 0;
+    perk[Perk.perkEffectStatus] = 100;
+    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
+}
+

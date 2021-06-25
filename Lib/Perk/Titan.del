@@ -1,0 +1,252 @@
+import "../PerkCore.del";
+
+// TAG Titan ----------
+rule: "Perk/Player/Titan/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Titan &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 120;
+    // set param
+    perk[Perk.perkEffectStatus] = 0;
+    perk[Perk.rider] = 0;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud(
+        perk[Perk.rider] != 0 ?
+            <"<0> <1> riding on your back.", perk[Perk.rider], HeroIconString(HeroOf(perk[Perk.rider]))> :
+            "Teammate can ride your back.");
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    CreatePerkEffectHud(<"Hold crouch button <0> to get smaller.", ButtonGuide(Button.Crouch)>);
+    perk[Perk.perkEffectAndText] [1] = LastTextID();
+    // set perk hero
+    PerkHero perkHero = new PerkHero();
+    perkHero.hero = Hero.Reinhardt;
+    perkHero.statusUnkillable = true;
+    perkHero.maxHealth = 200;
+    perkHero.healingReceived = 10.0;
+    perkHero.damageDealt = 300;
+    perkHero.ultimateCharge = 100;
+    ForcePlayerPerkHero(ep, perkHero);
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+
+    // set pool health
+    AddHealthPoolToPlayer(ep, HealthType.Armor, 1500, true, false);
+    perk[Perk.healthPoolID] = LastCreatedHealthPool();
+
+    // start grow big
+    PressButton(ep, Button.Crouch);
+}
+
+rule: "Perk/Player/Titan/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Titan &&
+    perkState  == PerkState.Non
+){
+    // set param
+    perk[Perk.perkEffectStatus] = 0;
+    DetachPlayers(perk[Perk.rider]);
+    Teleport(perk[Perk.rider], ep);
+    perk[Perk.rider].perk[Perk.ridingTarget] = 0;
+    perk[Perk.rider] = 0;
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [1]);
+    // reset perk hero
+    StopForcingPerkHero(ep);
+    // reset status
+    RemoveHealthPoolFromPlayer(perk[Perk.healthPoolID]);
+    StopScalingPlayer(ep);
+    StopModifyingHeroVoiceLines(ep);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/Titan/brokenPerk //by helth 1"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Titan &&
+    perkState  == PerkState.Using &&
+    Health() <= 1
+){
+    WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
+    perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/Titan/growBig"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Titan &&
+    perkState  == PerkState.Using &&
+    !(IsCrouching() || IsButtonHeld(ep, Button.Crouch))
+){
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodPickupEffect,
+        Color.White, ep, 1);
+
+    if(!( 0 <= perk[Perk.perkEffectStatus]  && perk[Perk.perkEffectStatus]  <= 1)) perk[Perk.perkEffectStatus] = 0;
+    while(perk[Perk.perkEffectStatus]  < 1){
+        StartScalingPlayer(ep, 1 + (perk[Perk.perkEffectStatus]  * 1.25), false);
+        perk[Perk.perkEffectStatus]  += 0.1;
+        WaitUpdateVeryShortCycle();
+    }
+    StartModifyingHeroVoiceLines(ep, 0.8, false);
+}
+
+rule: "Perk/Player/Titan/getSmall"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Titan &&
+    perkState  == PerkState.Using &&
+    (IsCrouching() || IsButtonHeld(ep, Button.Crouch))
+){
+    DetachPlayers(perk[Perk.rider]);
+    Teleport(perk[Perk.rider], ep);
+    perk[Perk.rider].perk[Perk.ridingTarget] = 0;
+    perk[Perk.rider] = 0;
+
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodPickupEffect,
+        Color.White, ep, 1);
+
+    if(!( 0 <= perk[Perk.perkEffectStatus]  && perk[Perk.perkEffectStatus]  <= 1)) perk[Perk.perkEffectStatus] = 1;
+    while(perk[Perk.perkEffectStatus]  > 0){
+        StartScalingPlayer(ep, 1 + (perk[Perk.perkEffectStatus]  * 1.25), false);
+        perk[Perk.perkEffectStatus]  -= 0.1;
+        WaitUpdateVeryShortCycle();
+    }
+    StartModifyingHeroVoiceLines(ep, 1.0, false);
+}
+
+rule: "Perk/Player/Titan/chargingUlt"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.Titan &&
+    perkState  == PerkState.Using &&
+    !IsUsingUltimate() &&
+    UltimateChargePercent() < 100
+){
+    WaitUpdateMediumCycle();
+    SetUltimateCharge(ep, (UltimateChargePercent() + 3));
+    LoopIfConditionIsTrue();
+}
+
+define canRideTitan:
+    IsAlive() &&
+    !isRidingTitan &&
+    CountOf(nearCanRideTitan) > 0;
+
+define nearCanRideTitan:
+    FilteredArray(
+        AllPlayers(Team.Team1),
+        (
+            DistanceBetween(ep, ArrayElement()) <= canRidingRange &&
+            ArrayElement() != ep &&
+            ArrayElement().perk[Perk.rider] == 0 &&
+            ArrayElement().perk[Perk.perkEffectStatus]  == 1 &&
+            ArrayElement().perkState  == PerkState.Using &&
+            ArrayElement().perkType == PerkType.Titan
+        )
+    );
+
+define isRidingTitan:
+    perk[Perk.ridingTarget] != 0 &&
+    perk[Perk.ridingTarget].perk[Perk.rider] == ep &&
+    perk[Perk.ridingTarget].perkState == PerkState.Using &&
+    perk[Perk.ridingTarget].perkType == PerkType.Titan;
+
+rule: "Perk/Player/Titan/showOperationGetOn"
+Event.OngoingPlayer
+Team.Team1
+if(
+    canRideTitan
+){
+    // set hud
+    CreatePerkEffectHud(<"Can add titan's activity time by kill enemy when riding titan.">);
+    perk[Perk.perkEffectAndText] [200] = LastTextID();
+    CreatePerkEffectHud(<"Hold jump button <0> to get on titan.", ButtonGuide(Button.Jump)>);
+    perk[Perk.perkEffectAndText] [201] = LastTextID();
+}
+
+rule: "Perk/Player/Titan/hideOperationGetOn"
+Event.OngoingPlayer
+Team.Team1
+if(
+    !canRideTitan
+){
+    DestroyHudText(perk[Perk.perkEffectAndText] [200]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [201]);
+}
+
+rule: "Perk/Player/Titan/showOperationGetOff"
+Event.OngoingPlayer
+Team.Team1
+if(
+    isRidingTitan
+){
+    // set hud
+    CreatePerkEffectHud(<"Hold crouch button <0> to get off titan.", ButtonGuide(Button.Crouch)>);
+    perk[Perk.perkEffectAndText] [202] = LastTextID();
+}
+
+rule: "Perk/Player/Titan/hideOperationGetOff"
+Event.OngoingPlayer
+Team.Team1
+if(
+    !isRidingTitan
+){
+    DestroyHudText(perk[Perk.perkEffectAndText] [202]);
+}
+
+rule: "Perk/Player/Titan/getOn"
+Event.OngoingPlayer
+Team.Team1
+if(
+    canRideTitan &&
+    IsButtonHeld(ep, Button.Jump)
+){
+    WaitLongPressConfirm();
+    perk[Perk.ridingTarget] = FirstOf(nearCanRideTitan);
+    AttachPlayers(ep, perk[Perk.ridingTarget], Up() * 3.75);
+    perk[Perk.ridingTarget].perk[Perk.rider] = ep;
+}
+
+rule: "Perk/Player/Titan/getOff"
+Event.OngoingPlayer
+Team.Team1
+if(
+    isRidingTitan &&
+    (
+        IsButtonHeld(ep, Button.Crouch) ||
+        IsDead(ep)
+    )
+){
+    if(IsButtonHeld(ep, Button.Crouch))
+        WaitLongPressConfirm();
+    DetachPlayers(perk[Perk.ridingTarget].perk[Perk.rider]);
+    Teleport(ep, perk[Perk.ridingTarget] + PositionOffset());
+    perk[Perk.ridingTarget].perk[Perk.rider] = 0;
+    perk[Perk.ridingTarget] = 0;
+}
+
+rule: "Perk/Player/Titan/addActivityTime"
+Event.OnFinalBlow
+Team.Team1
+if(
+    perk[Perk.ridingTarget].perkType == PerkType.Titan &&
+    perk[Perk.ridingTarget].perkState  == PerkState.Using &&
+    perk[Perk.ridingTarget].perk[Perk.perkTimeLimit]  > 0
+
+){
+    SmallMessage(ep, "Added 10 seconds of titan's activity time.");
+    perk[Perk.ridingTarget].perk[Perk.perkTimeLimit]  += 10;
+}

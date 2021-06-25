@@ -1,0 +1,194 @@
+import "../PerkCore.del";
+
+rule: "Perk/Player/BeamSniper/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BeamSniper &&
+    perkState  == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 300;
+    // set param
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
+    // set hud
+    perk[Perk.perkEffectAndText] = [];
+    CreatePerkEffectHud("Can shoot enemy through wall when blinking blue.");
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    // set perk hero
+    PerkHero perkHero = new PerkHero();
+    perkHero.hero = Hero.Widowmaker;
+    perkHero.statusUnkillable = true;
+    perkHero.damageDealt = 200;
+    perkHero.ultimateCharge = 100;
+    ForcePlayerPerkHero(ep, perkHero);
+
+    // use ult
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    PressButton(ep, Button.Ultimate);
+}
+
+rule: "Perk/Player/BeamSniper/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BeamSniper &&
+    perkState  == PerkState.Non
+){
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [2]);
+    // reset hud
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    // reset perk hero
+    StopForcingPerkHero(ep);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/BeamSniper/brokenPerk //by helth 1"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BeamSniper &&
+    perkState  == PerkState.Using &&
+    Health() <= 1
+){
+    WaitConditionConfirmed();// If the hero changes, the health is determined to be 0. Avoid waiting by adding waits.
+    perkState = PerkState.Non;
+}
+
+rule: "Perk/Player/BeamSniper/chargingUlt"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BeamSniper &&
+    perkState  == PerkState.Using &&
+    !IsUsingUltimate() &&
+    UltimateChargePercent() < 100
+){
+    WaitUpdateMediumCycle();
+    SetUltimateCharge(ep, (UltimateChargePercent() + 6));
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/BeamSniper/startCharge"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BeamSniper &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Reloading &&
+    IsButtonHeld(ep, Button.SecondaryFire) &&
+    IsFiringSecondary() &&
+    !IsFiringPrimary()
+){
+    Wait(1.3, WaitBehavior.AbortWhenFalse);
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+}
+
+rule: "Perk/Player/BeamSniper/cancelCharge"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BeamSniper &&
+    perkState  == PerkState.Using &&
+    !IsButtonHeld(ep, Button.SecondaryFire)
+){
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
+}
+
+rule: "Perk/Player/BeamSniper/markTarget"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BeamSniper &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready
+){
+    perk[Perk.perkTargets] = FilteredArray(
+        PlayersInViewAngle(ep, Team.Team2, 1.25),
+        IsAlive(ArrayElement()));
+    if(perk[Perk.perkTargets] != []){
+        PlayEffect(
+            ep, PlayEffect.GoodPickupEffect,
+            Color.Aqua, perk[Perk.perkTargets], 1.0);
+        PlayEffect(
+            ep, PlayEffect.GoodExplosion,
+            Color.Aqua, AimingPosition(), 0.01);
+    }
+
+    // Since the impact point will shift due to the recoil when shooting, get the position before shooting
+    aimPosition = AimingPosition();     
+
+    WaitUpdateVeryShortCycle();
+    LoopIfConditionIsTrue();
+}
+
+define beamSniperDamageRange: 3;
+
+rule: "Perk/Player/BeamSniper/shotSniperBeam"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.BeamSniper &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
+    IsButtonHeld(ep, Button.SecondaryFire) &&
+    IsButtonHeld(ep, Button.PrimaryFire)
+){
+    AbortIf(perk[Perk.perkEffectStatus]  == PerkEffectStatus.Reloading);
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
+
+    // give hit damage to enemy near penetration ballistic
+    if(perk[Perk.perkTargets] != []){
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodExplosion,
+            Color.Aqua, perk[Perk.perkTargets], beamSniperDamageRange);
+        Damage(perk[Perk.perkTargets], ep, 400);
+    }
+    // give splash damage to enemy near landed position
+    perk[Perk.perkTargets] = FilteredArray(
+        PlayersWithinRadius(aimPosition, beamSniperDamageRange, Team.Team2, RadiusLOS.Off),
+        IsAlive(ArrayElement()));
+    if(perk[Perk.perkTargets] != []){
+        Damage(perk[Perk.perkTargets], ep, 100);
+    }
+
+    // set offset for gun sight
+    perkPosition = EyePosition() - PositionOffset(); 
+
+    // set landing position for penetration
+    landPosition = EyePosition() +
+        (FacingDirectionOf() * MaxLength());
+
+    // play shot sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.Aqua, ep, 100);
+    // play shot fire
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Aqua, perkPosition + (FacingDirectionOf() * 1), 1.0);
+    // play landed position blast
+    PlayContinuousBlast(
+        Color.Aqua,
+        aimPosition,
+        beamSniperDamageRange,
+        3);
+
+    // show ballistics for aiming
+    CreateBeamEffect(AllPlayers(),
+        BeamType.BadBeam, perkPosition, aimPosition,
+        Color.Aqua, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [1] = LastCreatedEntity();
+    // show ballistic for penetration
+    CreateBeamEffect(AllPlayers(),
+        BeamType.BadBeam, aimPosition, landPosition,
+        Color.Aqua, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [2] = LastCreatedEntity();
+
+    WaitPlayEffect();
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [2]);
+}
