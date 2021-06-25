@@ -4361,7 +4361,7 @@ if(
 ){
     // reset status
     ClearStatus(ep, Status.Rooted);
-    ClearStatus(ep, Status.PhasedOut);
+    ClearStatus(ep, Status.Invincible);
     StopFacing();
     if(perk[Perk.isInAir]){
         Teleport(ep, PositionOf() + Vector(0, -60, 0));
@@ -4417,7 +4417,7 @@ if(
     perkPosition = PositionOf();
     // set status
     SetStatus(ep, null, Status.Rooted, MaxValue());
-    SetStatus(ep, null, Status.PhasedOut, MaxValue());
+    SetStatus(ep, null, Status.Invincible, MaxValue());
     SetGravity(ep, 0);
     SetDamageDealt(ep, 700);
     // show enemy outline
@@ -4478,7 +4478,7 @@ if(
     // reset status
     SetProjectileSpeed(ep, DefaultPercentage());
     ClearStatus(ep, Status.Rooted);
-    ClearStatus(ep, Status.PhasedOut);
+    ClearStatus(ep, Status.Invincible);
     SetGravity(ep, DefaultPercentage());
     SetDamageDealt(ep, 150);
     // hide enemy outline
@@ -5082,27 +5082,33 @@ if(
         IsUsingUltimate()
     )
 ){
-    if(!IsUsingUltimate())
-        Wait(0.05, WaitBehavior.IgnoreCondition);
+    aimPosition = AimingPositionWithLimit(100);
+    define distance! = DistanceBetween(EyePosition(), aimPosition) * 0.1;
+    define splashRange! = IsUsingUltimate() ? distance * 3 : distance;
+    define pelletCount! = IsUsingUltimate() ? 20 : 10;
+    define damage! = IsUsingUltimate() ? 50 : 75;
 
-    define splashRange! = IsUsingUltimate() ? 3 : 1.5;
-    define pelletCount! = IsUsingUltimate() ? 8 : 4;
-    aimPosition = AimingPosition();
+    if(!IsUsingUltimate())
+        Wait(distance * 0.08, WaitBehavior.IgnoreCondition);
+
     for(pLoopIndex = 0; pLoopIndex < pelletCount; pLoopIndex++){   
-        landPosition = RandomPosition(splashRange, splashRange, splashRange);
+        landPosition = RandomPosition(
+            splashRange,
+            IsUsingUltimate() ? splashRange / 4 : splashRange,
+            splashRange);
         // splash damage
         Damage(
             PlayersWithinRadius(
                 aimPosition + landPosition,
                 splashDamageRangeBehemothBullet,
                 Team.Team2, RadiusLOS.Off),
-            ep, 50);
+            ep, damage);
         // play blast
         PlayEffect(
             AllPlayers(Team.All), PlayEffect.BadExplosion,
             Color.Orange, aimPosition + landPosition,
             splashDamageRangeBehemothBullet);
-        Wait(RandomReal(0, 0.05), WaitBehavior.IgnoreCondition);
+        Wait(RandomReal(0, 0.016), WaitBehavior.IgnoreCondition);
     }
 
     if(IsUsingUltimate()){

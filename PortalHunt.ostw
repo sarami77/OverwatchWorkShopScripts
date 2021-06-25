@@ -200,10 +200,12 @@ Event.OngoingGlobal
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
 
+    // failsade action
     while(true){
         // repeat action for joined player
         // set objective message
         SetObjectiveDescription(AllPlayers(Team.Team1), "find portal and attack!", HudTextRev.None);
+//      ApplySlowLevel(0);
         Wait(10, WaitBehavior.AbortWhenFalse);
     } 
 }
@@ -235,6 +237,8 @@ if(
         )
     )
 ){
+    // reset prevPortalPosition
+    prevPortalPosition = PositionOf(FirstOf(AllPlayers(Team.Team1)));
     // start portal creation
     portalState = PortalState.Calculating;
 }
@@ -978,7 +982,7 @@ if(
     // change bot asset by random
     if(
         0 >= NumberOfPlayers(Team.Team2) ||
-        RandomInteger(1, 100) <= 70
+        ProbabilityTrue(70)
     ){
         // destroy all bot
         DestroyAllBot();
@@ -1186,69 +1190,73 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     }
 }
 
-void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
-    // if(
-    //     IsInLineOfSight(    // Has line
-    //         closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock) &&
-    //     RandomInteger(1, 100) <= 90     // random
-    // ){
-    //     // unify teleportPosition
-    //     define one = RandomValueInArray(AllPlayers(Team.Team2));
-    //     if(teleportPosition != one.teleportPosition){
-    //         AllPlayers(Team.Team2).teleportPosition = one.teleportPosition;
-    //     }
-    // }
-    // else{
-        // set teleportPosition to player around
-        for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-            WaitUntilServerNotOverLoad();
-            
-            teleportPosition =
-                BlockedPositon(
-                    closestPlayerToPortal,
-                    DirectionFromAngles(
-                        RandomReal(0, 360), RandomReal(45, -45),
-                    ), RandomReal(5, 50)
-                );
-            // avoid map wall edge
-            teleportPosition += (DirectionTowards(teleportPosition, closestPlayerToPortal) * 0.5);
-            if(
-                DistanceBetween(    // Not too close to player
-                    closestPlayerToTelPos, teleportPosition)
-                >= 5
-                    &&
-                IsInLineOfSight(    // Has line
-                    closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
-                    &&
-                IsBlockedBetween(   // Has ground
-                    teleportPosition, ShiftedPosition(teleportPosition, Down(), 6))
-
-            ){
-                break;
-            }
-        }
-    // }
+void UnifyTeleportPosition()"UnifyTeleportPosition"{
+    // unify teleportPosition
+    define one! = RandomValueInArray(AllPlayers(Team.Team2));
+    if(teleportPosition != one.teleportPosition){
+        AllPlayers(Team.Team2).teleportPosition = teleportPosition;
+    }
 }
 
+void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
+    // set teleportPosition to player around
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        WaitUntilServerNotOverLoad();
+        
+        teleportPosition =
+            BlockedPositon(
+                closestPlayerToPortal,
+                DirectionFromAngles(
+                    RandomReal(0, 360), RandomReal(45, -45),
+                ), RandomReal(5, 50)
+            );
+        // avoid map surface edge
+        teleportPosition += (DirectionTowards(teleportPosition, closestPlayerToPortal) * 1);
+        if(
+            DistanceBetween(    // Not too close to player
+                closestPlayerToTelPos, teleportPosition)
+            >= 5
+                &&
+            IsInLineOfSight(    // Has line
+                closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
+                &&
+            IsBlockedBetween(   // Has ground
+                teleportPosition, ShiftedPosition(teleportPosition, Down(), 6))
+
+        ){
+            break;
+        }
+    }
+}
 
 void PlayTeleportEffect(define isBefore)"PlayTeleportEffect"{
-    // Play blast effect when Bot teleport
-    if(enemyType == EnemyType.Minion){
-        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, 2);
+    // if before teleport
+    if(isBefore){
+        // play teleport shadow
+        PlayEffect(AllPlayers(Team.All), PlayEffect.BadPickupEffect, enemyColor, ep, 1);
+        // play teleport shadow
+        PlayEffect(AllPlayers(Team.All), PlayEffect.BadPickupEffect, enemyColor, teleportPosition, 1);
+        // wait for show teleport shadow of before
+        Wait(0.4, WaitBehavior.IgnoreCondition);
     }
-    else if(enemyType == EnemyType.Elite){
-        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, 3);
+    else{
+        define effectSize;
+        // set effect size by enemyType
+        if(enemyType == EnemyType.Minion){
+            effectSize = 2;
+        }
+        else if(enemyType == EnemyType.Elite){
+            effectSize = 3;
+        }
+        else if(enemyType == EnemyType.Boss){
+            effectSize = 5;
+        }
+        else if(enemyType == EnemyType.GiantBoss){
+            effectSize = 7;
+        }
+        // play teleport blast
+        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, effectSize);
     }
-    else if(enemyType == EnemyType.Boss){
-        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, 5);
-    }
-    else if(enemyType == EnemyType.GiantBoss){
-        PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, 7);
-    }
-    
-    // show effect at root position
-    if(isBefore)
-        WaitPlayEffect();
 }
 
 rule: "Bot/Teleport/teleportByPortalDisabled"
@@ -1286,29 +1294,6 @@ if(
     PlayTeleportEffect(false);
 }
 
-rule: "Bot/Teleport/teleportByRespawn"
-Event.OngoingPlayer
-Team.Team2
-if(
-    portalEnable &&
-    IsInSpawnRoom()
-){
-    if(
-        portalState == PortalState.Suspended
-    ){
-        // set teleport position to camper around
-        SetTeleportPositionToPlayerAround();
-    }
-    else{
-        // set teleport position player front
-        SetTeleportPositionToPlayerFront();   
-    }
-    // Teleport
-    Teleport(ep, teleportPosition);
-    // show teleport effect
-    PlayTeleportEffect(false);
-}
-
 rule: "Bot/Teleport/teleportByPlayerEntered"
 Event.OngoingPlayer
 Team.Team2
@@ -1319,17 +1304,51 @@ if(
 ){
     // Teleport bot to player front
     WaitConditionConfirmed();
-    // has half over health
-    if(NormalizedHealth(ep) >= 0.5){
-        // set teleport position to player around
-        SetTeleportPositionToPlayerAround();
-        // show pre teleport effect
-        PlayTeleportEffect(true);
-        // Teleport
-        Teleport(ep, teleportPosition);
-        // show teleport effect
-        PlayTeleportEffect(false);
+    // set teleport position to player around
+    SetTeleportPositionToPlayerAround();
+    // show pre teleport effect
+    PlayTeleportEffect(true);
+    // Teleport
+    Teleport(ep, teleportPosition);
+    // show teleport effect
+    PlayTeleportEffect(false);
+}
+
+rule: "Bot/Teleport/teleportByRespawn"
+Event.OngoingPlayer
+Team.Team2
+if(
+    portalEnable &&
+    IsInSpawnRoom()
+){
+    if(
+        // always teleport around the player during portal attacks
+        portalState == PortalState.Suspended ||
+        // probability to teleport around players even if they are not in a portal attack
+        ProbabilityTrue(30)
+    ){
+        if(
+            // has line to player from teleport position
+            IsInLineOfSight(teleportPosition, closestPlayerToTelPos) &&
+            // probability of using a unified teleport position
+            ProbabilityTrue(70)
+        ){
+            // unify teleport position of all bot
+            UnifyTeleportPosition();
+        }
+        else{
+            // change unified teleport position to player around
+            SetTeleportPositionToPlayerAround();                        
+        }
     }
+    else{
+        // set teleport position player front
+        SetTeleportPositionToPlayerFront();   
+    }
+    // Teleport
+    Teleport(ep, teleportPosition);
+    // show teleport effect
+    PlayTeleportEffect(false);
 }
 
 rule: "Bot/Teleport/teleportByPlayerNotFound"
@@ -1346,11 +1365,24 @@ if(
     Wait(6, WaitBehavior.AbortWhenFalse);
 
     if(
-        RandomInteger(1, 100) <= 30 ||
-        portalState == PortalState.Suspended
+        // always teleport around the player during portal attacks
+        portalState == PortalState.Suspended ||
+        // probability to teleport around players even if they are not in a portal attack
+        ProbabilityTrue(30)
     ){
-        // set teleport position player around
-        SetTeleportPositionToPlayerAround();
+        if(
+            // has line to player from teleport position
+            IsInLineOfSight(teleportPosition, closestPlayerToTelPos) &&
+            // probability of using a unified teleport position
+            ProbabilityTrue(80)
+        ){
+            // unify teleport position of all bot
+            UnifyTeleportPosition();
+        }
+        else{
+            // change unified teleport position to player around
+            SetTeleportPositionToPlayerAround();                        
+        }
     }
     else{
         // set teleport position player front
