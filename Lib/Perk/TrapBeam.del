@@ -1,6 +1,7 @@
-import "../PerkCore.del";
+import "PerkCore.del";
 
 define patrolCycle: 0.25;
+define trapBeamReloadTime: 30;
 
 rule: "Perk/Player/TrapBeam/activate"
 Event.OngoingPlayer
@@ -17,16 +18,28 @@ if(
         perkPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
+    // set hud
+    CreatePerkEffectHud(
+        perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready ?
+            <"Hold melee button <0> to deplpy Trap Beam.", ButtonGuide(Button.Melee)> :
+            <"Trap Beam in preparation until <0> seconds.", perk[Perk.perkEffectCoolTime]>
+        );
+    perk[Perk.perkEffectAndText] [1] = LastTextID();
     // set effect
     CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
         perkPosition, aimPosition,
         Color.Yellow, EffectRev.VisibleToPositionAndRadius);
-    perk[Perk.perkEffectAndText] [1] = LastCreatedEntity();
+    perk[Perk.perkEffectAndText] [2] = LastCreatedEntity();
     CreateEffect(AllPlayers(), Effect.GoodAura, Color.Yellow,
         perkPosition2, 0.25, EffectRev.VisibleToPositionAndRadius);
-    perk[Perk.perkEffectAndText] [2] = LastCreatedEntity();
+    perk[Perk.perkEffectAndText] [3] = LastCreatedEntity();
     // set param
     StopChasingVariable(perkPosition2);
+
+    // first use
+    StartHoldingButton(ep, Button.Melee);
+    Wait(0.5, WaitBehavior.IgnoreCondition);
+    StopHoldingButton(ep, Button.Melee);
 }
 
 rule: "Perk/Player/TrapBeam/deactivate"
@@ -38,24 +51,84 @@ if(
 ){
     // reset text
     DestroyInWorldText(perk[Perk.perkEffectAndText] [0]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [1]);
     // reset effect
-    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
     DestroyEffect(perk[Perk.perkEffectAndText] [2]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [3]);
     // reset param
     StopChasingVariable(perkPosition2);
     // reset type
     perkType = PerkType.Non;
 }
 
-rule: "Perk/Player/TrapBeam/deploy"
+rule: "Perk/Player/TrapBeam/remindTrapBeam"
 Event.OngoingPlayer
 Team.Team1
 if(
     perkType == PerkType.TrapBeam &&
-    perkState  == PerkState.Using
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready
 ){
+    // remind use perk.
+    Wait(30, WaitBehavior.AbortWhenFalse);
+    SmallMessage(ep, <"Forgotten Trap Beam?"> );
+    SmallMessage(ep, <"Hold melee button <0> to deploy Trap Beam.", ButtonGuide(Button.Melee)> );
+    LoopIfConditionIsTrue();
+}
+
+rule: "Perk/Player/TrapBeam/deployTrapBeam"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.TrapBeam &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Ready &&
+    IsButtonHeld(ep, Button.Melee)
+){
+    WaitLongPressConfirm();
+    // set position
     perkPosition = PositionOf() + PositionOffset();
     aimPosition = AimingPositionIgnorePlayer();
+    // play deploy effect
+    PlayEffect(
+        ep, PlayEffect.GoodExplosion,
+        Color.Yellow, perkPosition, 3);
+    PlayEffect(
+        ep, PlayEffect.GoodExplosion,
+        Color.Yellow, aimPosition, 3);
+    // play deploy sound
+    PlayEffect(
+        ep, PlayEffect.DebuffImpactSound,
+        Color.White, ep, MaxValue());
+    // start reload
+    perk[Perk.perkEffectCoolTime] = trapBeamReloadTime;
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
+}
+
+rule: "Perk/Player/TrapBeam/reloadingTrapBeam"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.TrapBeam &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus] == PerkEffectStatus.Reloading
+){
+    WaitUpdateMediumCycle();
+    // countdown
+    perk[Perk.perkEffectCoolTime] -= 1;
+    // if not zero
+    if(perk[Perk.perkEffectCoolTime] > 0){
+        LoopIfConditionIsTrue();
+    }
+    // if zero
+    else{
+        // play ready sound
+        PlayEffect(
+            ep, PlayEffect.BuffImpactSound,
+            Color.White, ep, 100);
+        // set to ready
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    }
 }
 
 rule: "Perk/Player/TrapBeam/moveDetector"

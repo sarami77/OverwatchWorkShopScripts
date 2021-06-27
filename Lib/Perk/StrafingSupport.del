@@ -1,11 +1,11 @@
-import "../PerkCore.del";
+import "PerkCore.del";
 
 define strafReqLandingRange: 5;
 define strafReqDamageRange: 3;
 define strafReqAttackTime: 2.0;
 define strafReqAttackDistance: 50;
 define strafReqAttackInterval: 0.03;
-define strafReloadTime: 12;
+define strafReloadTime: 15;
 
 rule: "Perk/Player/StrafingSupport/activate"
 Event.OngoingPlayer
@@ -236,35 +236,30 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Perk/Player/StrafingSupport/countDownCoolTime"
+rule: "Perk/Player/StrafingSupport/reloadingStrafingSupport"
 Event.OngoingPlayer
 Team.Team1
 if(
     perkType == PerkType.StrafingSupport &&
     perkState  == PerkState.Using &&
-    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Reloading &&
-    perk[Perk.perkEffectCoolTime] > 0
+    perk[Perk.perkEffectStatus] == PerkEffectStatus.Reloading
 ){
-    // count down perk cooldown time
     WaitUpdateMediumCycle();
+    // countdown
     perk[Perk.perkEffectCoolTime] -= 1;
-    LoopIfConditionIsTrue();
-}
-
-rule: "Perk/Player/StrafingSupport/coolDownComplete"
-Event.OngoingPlayer
-Team.Team1
-if(
-    perkType == PerkType.StrafingSupport &&
-    perkState  == PerkState.Using &&
-    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Reloading &&
-    perk[Perk.perkEffectCoolTime] <= 0
-){
-    // play ready sound
-    PlayEffect(
-        ep, PlayEffect.BuffImpactSound,
-        Color.White, ep, 100);
-    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    // if not zero
+    if(perk[Perk.perkEffectCoolTime] > 0){
+        LoopIfConditionIsTrue();
+    }
+    // if zero
+    else{
+        // play ready sound
+        PlayEffect(
+            ep, PlayEffect.BuffImpactSound,
+            Color.White, ep, 100);
+        // set to ready
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    }
 }
 
 rule: "Perk/Player/StrafingSupport/playAircraft"

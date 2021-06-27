@@ -1,9 +1,9 @@
-import "../PerkCore.del";
+import "PerkCore.del";
 
 define missileDamageRange: 4;
 define missileAttackTime: 5;
 define missileAttackCount: 10;
-define missleReloadTime: 10;
+define missleReloadTime: 15;
 
 rule: "Perk/Player/MissileBarrage/activate"
 Event.OngoingPlayer
@@ -308,33 +308,28 @@ if(
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
 }
 
-rule: "Perk/Player/MissileBarrage/countDownCoolTime"
+rule: "Perk/Player/MissileBarrage/reloadingMissileBarrage"
 Event.OngoingPlayer
 Team.Team1
 if(
     perkType == PerkType.MissileBarrage &&
     perkState  == PerkState.Using &&
-    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Reloading &&
-    perk[Perk.perkEffectCoolTime] > 0
+    perk[Perk.perkEffectStatus] == PerkEffectStatus.Reloading
 ){
-    // count down perk cooldown time
     WaitUpdateMediumCycle();
+    // countdown
     perk[Perk.perkEffectCoolTime] -= 1;
-    LoopIfConditionIsTrue();
-}
-
-rule: "Perk/Player/MissileBarrage/coolDownComplete"
-Event.OngoingPlayer
-Team.Team1
-if(
-    perkType == PerkType.MissileBarrage &&
-    perkState  == PerkState.Using &&
-    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Reloading &&
-    perk[Perk.perkEffectCoolTime] <= 0
-){
-    // play ready sound
-    PlayEffect(
-        ep, PlayEffect.BuffImpactSound,
-        Color.White, ep, 100);
-    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    // if not zero
+    if(perk[Perk.perkEffectCoolTime] > 0){
+        LoopIfConditionIsTrue();
+    }
+    // if zero
+    else{
+        // play ready sound
+        PlayEffect(
+            ep, PlayEffect.BuffImpactSound,
+            Color.White, ep, 100);
+        // set to ready
+        perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    }
 }
