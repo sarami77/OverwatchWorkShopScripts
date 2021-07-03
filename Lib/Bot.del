@@ -10,18 +10,6 @@ enum BotAsset{
     count
 }
 
-globalvar define botSlot;
-
-disabled rule: "Bot/Spawn/CreateAllBotByBotAsset"
-Event.OngoingPlayer
-if(
-    ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact)
-){
-    WaitLongPressConfirm();
-    CreateAllBotByAsset();
-}
-
 // TAG EnemyType ----------
 playervar define enemyType;
 enum EnemyType{
@@ -38,107 +26,11 @@ define RandomTankHero: RandomValueInArray(AllTankHeroes());
 define RandomDamageHero: RandomValueInArray(AllDamageHeroes());
 define RandomSupportHero: RandomValueInArray(AllSupportHeroes());
 
-void CreateAllBotByAsset()"CreateAllBotByAsset"{
-    if(0 < NumberOfPlayers(Team.Team2)){
-        DestroyAllBot();
-    }
+globalvar define botSlot;
+
+void CreateAllBotByAsset(define assetList)"CreateAllBotByAsset"{
+    DestroyAllBot();
     Wait(1, WaitBehavior.IgnoreCondition);
-    define sameHero = RandomHero;
-    // define asset list
-    define assetList =
-    [
-        // basic tank boss
-        [
-            [EnemyType.Boss,        RandomTankHero,     1],
-            [EnemyType.Elite,       RandomDamageHero,   1],
-            [EnemyType.Elite,       RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomSupportHero,  3]
-        ],
-        // basic damage boss
-        [
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Minion,      RandomSupportHero,  3]
-        ],
-        // five minion
-        [
-            [EnemyType.Boss,        RandomTankHero,     1],
-            [EnemyType.Minion,      RandomDamageHero,   5]
-        ],
-        // four elite
-        [
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Elite,       RandomDamageHero,   1],
-            [EnemyType.Elite,       RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomSupportHero,  1],
-            [EnemyType.Minion,      RandomSupportHero,  1]
-        ],
-        // double boss
-        [
-            [EnemyType.Boss,        RandomTankHero,     1],
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomHero, 		2],
-            [EnemyType.Minion,      RandomHero, 		2]
-        ],
-        // giant boss
-        [
-            [EnemyType.GiantBoss,   RandomHero,         1]
-        ],
-		
-        // melees
-        [
-            [EnemyType.Boss,        Hero.Reinhardt,     1],
-            [EnemyType.Elite,       Hero.Doomfist,      2],
-            [EnemyType.Minion,      Hero.Brigitte,      3]
-        ],
-        // flankers
-        [
-            [EnemyType.Boss,        Hero.Reinhardt,     1],
-            [EnemyType.Elite,       Hero.Doomfist,      1],
-            [EnemyType.Elite,       Hero.Genji,         1],
-            [EnemyType.Minion,      Hero.Tracer,        3]
-        ],
-        // long range
-        [
-            [EnemyType.Boss,        Hero.Orisa, 		1],
-            [EnemyType.Elite,       Hero.Bastion, 		1],
-            [EnemyType.Elite,       Hero.Widowmaker, 	2],
-            [EnemyType.Minion,      Hero.Soldier76, 	2]
-        ],
-        // airforce
-        [
-            [EnemyType.Elite,       Hero.Echo, 			2],
-            [EnemyType.Elite,       Hero.Pharah, 		2],
-            [EnemyType.Minion,      RandomHero, 		2]
-        ],
-        // snipers
-        [
-            [EnemyType.Boss,        Hero.Hanzo,			1],
-            [EnemyType.Elite,       Hero.Widowmaker,	2],
-            [EnemyType.Elite,       Hero.Ashe, 			2],
-            [EnemyType.Elite,       Hero.Ana, 			1]
-        ],
-        // fortress
-        [
-            [EnemyType.Boss,        Hero.Orisa, 		1],
-            [EnemyType.Elite,       Hero.Bastion, 		2],
-            [EnemyType.Minion,      RandomHero, 		3]
-        ],
-        // turrets
-        [
-            [EnemyType.Boss,        Hero.Bastion, 		1],
-            [EnemyType.Elite,       Hero.Symmetra, 		2],
-            [EnemyType.Minion,      Hero.Torbjorn, 		3]
-        ],
-        // some hero
-        [
-            [EnemyType.Boss,        sameHero, 		    1],
-            [EnemyType.Elite,       sameHero, 		    2],
-            [EnemyType.Minion,      sameHero, 		    3]
-        ]
-    ];
     // create bot by asset
     define asset = ValueInArray(assetList, RandomInteger(0, CountOf(assetList) - 1));
     for(define idx = 0; idx < CountOf(asset); idx++){
@@ -148,8 +40,8 @@ void CreateAllBotByAsset()"CreateAllBotByAsset"{
                 asset[idx][BotAsset.hero],
                 Team.Team2,
                 botSlot,
-                SpawnPoints(Team.Team2)[0],
-                Forward()
+                InvalidPosition(),
+                RandomDirection()
             );
             Wait(1, WaitBehavior.IgnoreCondition);
             WaitUntil(!isServerOverLoading, 3);          
@@ -164,6 +56,8 @@ void CreateAllBotByAsset()"CreateAllBotByAsset"{
     }
 }
 
+
+
 void DestroyAllBot()"DestroyAllBot"{
     if(0 < NumberOfPlayers(Team.Team2)){
         for(define idx = 0; idx < 24; idx ++){
@@ -173,6 +67,41 @@ void DestroyAllBot()"DestroyAllBot"{
                 Team.Team2, idx);
         }
         botSlot = 0;
+    }
+}
+
+
+void DebugCreateBot(define heroList, define num)"DebugCreateAllBot"{
+    if(0 < NumberOfPlayers(Team.All)){
+        for(define idx = 0; idx < 24; idx ++){
+            define spawnBot = PlayersInSlot(idx, Team.Team2);
+            spawnBot.enemyType = EnemyType.None;
+            DestroyDummyBot(
+                Team.Team1, idx);
+        }
+        for(define idx = 0; idx < 24; idx ++){
+            define spawnBot = PlayersInSlot(idx, Team.Team2);
+            spawnBot.enemyType = EnemyType.None;
+            DestroyDummyBot(
+                Team.Team2, idx);
+        }
+        botSlot = 0;
+    }
+    Wait(1, WaitBehavior.IgnoreCondition);
+
+    // create bot by asset
+    for(define idx = 0; idx < num; idx++){
+        // create bot
+        CreateDummyBot(
+            RandomValueInArray(heroList),
+            idx % 2 == 1 ? Team.Team1 : Team.Team2,
+            botSlot,
+            InvalidPosition(),
+            RandomDirection()
+        );
+        Wait(0.5, WaitBehavior.IgnoreCondition);
+        // next slot
+        botSlot ++;
     }
 }
 
@@ -263,7 +192,7 @@ if(
         botInfo[BotInfo.combatRange] = CombatRange.Far;
         botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.Repeat;
         botInfo[BotInfo.primaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.primaryFireButtonWaitMax] = 0;
+        botInfo[BotInfo.primaryFireButtonWaitMax] = 10;
         botInfo[BotInfo.primaryFireButtonHoldMin] = 5;
         botInfo[BotInfo.primaryFireButtonHoldMax] = 10;
         botInfo[BotInfo.secondaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
@@ -309,7 +238,7 @@ if(
 
         case Hero.Genji:
         botInfo[BotInfo.heroName] = "Genji";
-        botInfo[BotInfo.combatRange] = CombatRange.Close;
+        botInfo[BotInfo.combatRange] = CombatRange.Melee;
         break;
 
         case Hero.Hanzo:
@@ -420,14 +349,14 @@ if(
         botInfo[BotInfo.heroName] = "Widowmaker";
         botInfo[BotInfo.combatRange] = CombatRange.Far;
         botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
-        botInfo[BotInfo.primaryFireButtonWaitMin] = 1.5;
-        botInfo[BotInfo.primaryFireButtonWaitMax] = 2;
+        botInfo[BotInfo.primaryFireButtonWaitMin] = 1;
+        botInfo[BotInfo.primaryFireButtonWaitMax] = 3;
         botInfo[BotInfo.primaryFireButtonHoldMin] = 0;
         botInfo[BotInfo.primaryFireButtonHoldMax] = 0;
 
         botInfo[BotInfo.secondaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
         botInfo[BotInfo.secondaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.secondaryFireButtonWaitMax] = 0;
+        botInfo[BotInfo.secondaryFireButtonWaitMax] = 5;
         botInfo[BotInfo.secondaryFireButtonHoldMin] = 10;
         botInfo[BotInfo.secondaryFireButtonHoldMax] = 10;
 
@@ -444,16 +373,12 @@ if(
         botInfo[BotInfo.heroName] = "WreckingBall";
         botInfo[BotInfo.combatRange] = CombatRange.Middle;
         botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
-        botInfo[BotInfo.primaryFireButtonWaitMin] = 0;
+        botInfo[BotInfo.primaryFireButtonWaitMin] = 5;
         botInfo[BotInfo.primaryFireButtonWaitMax] = 5;
         botInfo[BotInfo.primaryFireButtonHoldMin] = 5;
         botInfo[BotInfo.primaryFireButtonHoldMax] = 15;
 
         botInfo[BotInfo.secondaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
-        botInfo[BotInfo.secondaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.secondaryFireButtonWaitMax] = 5;
-        botInfo[BotInfo.secondaryFireButtonHoldMin] = 5;
-        botInfo[BotInfo.secondaryFireButtonHoldMax] = 15;
         break;
 
         case Hero.Zarya:
