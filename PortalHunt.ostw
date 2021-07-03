@@ -769,6 +769,7 @@ if(
         candidatePosition += DirectionTowards(candidatePosition, basePlayer) * RandomReal(1, 5);
         // convert to walkble position
         candidatePosition = NearestWalkablePosition(candidatePosition);
+
         if(
             // close candidate postion than random positon
             (
@@ -820,7 +821,7 @@ if(
 }
 
 // TAG Portal/InvalidDetect/EnvironmentDeathCount ----------
-define limitCount: 6;
+define limitCount: 3;
 globalvar define environmentDeathCount = 0;
 
 rule: "Portal/InvalidDetect/EnvironmentDeathCount/resetCount"
@@ -848,7 +849,7 @@ if(
     portalEnable &&
     0 < environmentDeathCount
 ){
-    WaitUpdateMediumCycle();
+    Wait(2, WaitBehavior.AbortWhenFalse);
     environmentDeathCount --;
     LoopIfConditionIsTrue();
 }
@@ -861,17 +862,6 @@ if(
 ){
     dbgMsg("reset Portal By Environment Death Count");
     portalState = PortalState.Calculating;
-}
-
-// TAG Portal/InvalidDetect/PlayerSpawnRoomKill ----------
-rule: "Portal/InvalidDetect/PlayerSpawnRoomKill/changeSpawnRoom"
-Event.OnDeath
-Team.Team2
-if(
-    portalEnable &&
-    IsInSpawnRoom(Attacker())
-){
-    ForceSpawnRoom(Team.Team1, RandomInteger(0, 2));
 }
 
 // TAG Portal/InvalidDetect/NoContact ----------
@@ -1267,8 +1257,8 @@ if(
     // wait show dead effect when portal closing
     Wait(deadEffectTime, WaitBehavior.AbortWhenFalse);   
 
-    // show pre teleport effect
-    PlayTeleportEffect(true);
+    // reset teleport position
+    teleportPosition = InvalidPosition();
     // Teleport to spawn room
     Respawn(AllPlayers(Team.Team2));
     // show teleport effect
@@ -1284,7 +1274,6 @@ if(
     HasSpawned() &&
     portalEnable
 ){
-    AbortIf(!IsAlive());
     WaitConditionConfirmed();
 
     // clear root
