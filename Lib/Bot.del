@@ -109,7 +109,7 @@ void DebugCreateBot(define heroList, define num)"DebugCreateAllBot"{
 // TAG Bot/SetBotInfo ----------
 playervar define botInfo = [];
 enum BotInfo{
-    state,
+    actionState,
     statusText,
     target,
     targetPos,
@@ -492,7 +492,7 @@ rule: "Bot/ButtonControl/isRepeating"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Combat &&
+    botInfo[BotInfo.actionState] == State.Combat &&
     botInfo[BotInfo.isRepeating]
 ){
     Wait(RandomReal(botInfo[BotInfo.repeatDuringMin], botInfo[BotInfo.repeatDuringMax]), WaitBehavior.AbortWhenFalse);
@@ -503,7 +503,7 @@ rule: "Bot/ButtonControl/PrimaryFire/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Combat
+    botInfo[BotInfo.actionState] == State.Combat
 ){
     StartButtonControl(
         [
@@ -521,7 +521,7 @@ rule: "Bot/ButtonControl/SeconaryFire/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Combat
+    botInfo[BotInfo.actionState] == State.Combat
 ){
     StartButtonControl(
         [
@@ -539,7 +539,7 @@ rule: "Bot/ButtonControl/Ability1/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Combat
+    botInfo[BotInfo.actionState] == State.Combat
 ){
     StartButtonControl(
         [
@@ -557,7 +557,7 @@ rule: "Bot/ButtonControl/Ability2/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Combat
+    botInfo[BotInfo.actionState] == State.Combat
 ){
     StartButtonControl(
         [
@@ -575,7 +575,7 @@ rule: "Bot/ButtonControl/Ultimate/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Combat &&
+    botInfo[BotInfo.actionState] == State.Combat &&
     UltimateChargePercent() >= 100
 ){
     StartButtonControl(
@@ -594,7 +594,7 @@ rule: "Bot/ButtonControl/Jump/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Combat
+    botInfo[BotInfo.actionState] == State.Combat
 ){
     StartButtonControl(
         [
@@ -612,7 +612,7 @@ rule: "Bot/ButtonControl/Crouch/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Combat
+    botInfo[BotInfo.actionState] == State.Combat
 ){
     StartButtonControl(
         [
@@ -630,7 +630,7 @@ rule: "Bot/ButtonControl/Reload/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Combat
+    botInfo[BotInfo.actionState] == State.Combat
 ){
     StartButtonControl(
         [
@@ -648,7 +648,7 @@ rule: "Bot/ButtonControl/WeaponSwitch/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Combat
+    botInfo[BotInfo.actionState] == State.Combat
 ){
     while(true){
         Wait(RandomReal(0, 30), WaitBehavior.AbortWhenFalse);
@@ -660,7 +660,7 @@ rule: "Bot/ButtonControl/StopButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] != State.Combat
+    botInfo[BotInfo.actionState] != State.Combat
 ){
     StopHoldingButton(ep, Button.PrimaryFire);
     StopHoldingButton(ep, Button.SecondaryFire);
@@ -672,7 +672,7 @@ if(
 }
 
 
-// TAG Bot/StateControl ----------
+// TAG Bot/ActionStateControl ----------
 define basicUpdateRate: isServerOverLoading ? 3 : 1.5;
 
 define AttackTarget():
@@ -707,7 +707,7 @@ define HealTarget():
         )
     );
 
-rule: "Bot/State/StateControl"
+rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
@@ -760,23 +760,23 @@ if(
         IsDead()
     ){
         // non by dead
-        botInfo[BotInfo.state] = State.Non; 
+        botInfo[BotInfo.actionState] = State.Non; 
     }
     else
     { 
         if(botInfo[BotInfo.target] != 0){
             // combat by contact player
-            botInfo[BotInfo.state] = State.Combat; 
+            botInfo[BotInfo.actionState] = State.Combat; 
         }
         else
         {
             if(botInfo[BotInfo.targetPos] != 0){
                 // searching by target lost
-                botInfo[BotInfo.state] = State.Searching;
+                botInfo[BotInfo.actionState] = State.Searching;
             }
             else{
                 // non by target not found
-                botInfo[BotInfo.state] = State.Non;
+                botInfo[BotInfo.actionState] = State.Non;
             }       
         }
     }
@@ -848,12 +848,12 @@ void checkStackAndBreak()"checkStackAndBreak"{
     }
 }
 
-// TAG Bot/State/Non ----------
-rule: "Bot/State/Non"
+// TAG Bot/ActionState/Non ----------
+rule: "Bot/ActionState/Non"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Non
+    botInfo[BotInfo.actionState] == State.Non
 ){
     botInfo[BotInfo.statusText] = <"Non">;
     botInfo[BotInfo.target] = 0;
@@ -863,12 +863,12 @@ if(
 }
 
 
-// TAG Bot/State/Searching ----------
-rule: "Bot/State/Searching"
+// TAG Bot/ActionState/Searching ----------
+rule: "Bot/ActionState/Searching"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Searching
+    botInfo[BotInfo.actionState] == State.Searching
 ){
     botInfo[BotInfo.statusText] = <"Searching">;
     // reload
@@ -917,7 +917,7 @@ if(
 
             botInfo[BotInfo.statusText] = <"Searching/Canceled">;
             Wait(1, WaitBehavior.AbortWhenFalse);
-            botInfo[BotInfo.state] = State.Non;
+            botInfo[BotInfo.actionState] = State.Non;
         }
 
         // set move direction
@@ -930,25 +930,25 @@ if(
     }
 }
 
-rule: "Bot/State/Searching/timeout"
+rule: "Bot/ActionState/Searching/timeout"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Searching
+    botInfo[BotInfo.actionState] == State.Searching
 ){
     Wait(8, WaitBehavior.AbortWhenFalse);
 
     botInfo[BotInfo.statusText] = <"Searching/Timeout">;
     Wait(1, WaitBehavior.IgnoreCondition);
-    botInfo[BotInfo.state] = State.Non;
+    botInfo[BotInfo.actionState] = State.Non;
 }
 
-// TAG Bot/State/Combat ----------
-rule: "Bot/State/Combat"
+// TAG Bot/ActionState/Combat ----------
+rule: "Bot/ActionState/Combat"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    botInfo[BotInfo.state] == State.Combat
+    botInfo[BotInfo.actionState] == State.Combat
 ){
     botInfo[BotInfo.statusText] = <"Combat">;
 
@@ -1040,7 +1040,7 @@ if(
     }
 }
 
-rule: "Bot/Bot/State/Combat/sideStepSecond"
+rule: "Bot/Bot/ActionState/Combat/sideStepSecond"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
@@ -1088,15 +1088,15 @@ if(
         Color.White, Spectators.DefaultVisibility);
     // show targetPos path
     CreateBeamEffect(
-            ep.botInfo[BotInfo.state] == State.Combat ||
-            ep.botInfo[BotInfo.state] == State.Searching ?
+            ep.botInfo[BotInfo.actionState] == State.Combat ||
+            ep.botInfo[BotInfo.actionState] == State.Searching ?
                 HostPlayer() : null,
         BeamType.GoodBeam,
         EyePosition(),
-            botInfo[BotInfo.state] == State.Combat ?
+            botInfo[BotInfo.actionState] == State.Combat ?
                 botInfo[BotInfo.target] :
                 botInfo[BotInfo.targetPos],
-            botInfo[BotInfo.state] == State.Combat ?
+            botInfo[BotInfo.actionState] == State.Combat ?
                 TeamOf(botInfo[BotInfo.target]) != TeamOf() ?
                     Color.Red :
                     Color.Blue :
@@ -1104,7 +1104,7 @@ if(
         EffectRev.VisibleToPositionRadiusAndColor);
     // show targetPos
     CreateEffect(
-        ep.botInfo[BotInfo.state] == State.Searching ? HostPlayer() : null,
+        ep.botInfo[BotInfo.actionState] == State.Searching ? HostPlayer() : null,
         Effect.Ring, Color.Red,
         botInfo[BotInfo.targetPos], targetPosRange, EffectRev.VisibleToPositionAndRadius);
 }
