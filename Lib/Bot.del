@@ -40,10 +40,10 @@ void CreateAllBotByAsset(define assetList)"CreateAllBotByAsset"{
                 asset[idx][BotAsset.hero],
                 Team.Team2,
                 botSlot,
-                InvalidPosition(),
+                SpawnPoints(Team.Team2)[0],
                 RandomDirection()
             );
-            Wait(1, WaitBehavior.IgnoreCondition);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
             WaitUntil(!isServerOverLoading, 3);          
 
             // set Bot type as enemy type
@@ -55,8 +55,6 @@ void CreateAllBotByAsset(define assetList)"CreateAllBotByAsset"{
         }
     }
 }
-
-
 
 void DestroyAllBot()"DestroyAllBot"{
     if(0 < NumberOfPlayers(Team.Team2)){
@@ -87,19 +85,22 @@ void DebugCreateBot(define heroList, define num)"DebugCreateAllBot"{
         }
         botSlot = 0;
     }
-    Wait(1, WaitBehavior.IgnoreCondition);
+    Wait(0.1, WaitBehavior.IgnoreCondition);
 
     // create bot by asset
     for(define idx = 0; idx < num; idx++){
-        // create bot
-        CreateDummyBot(
-            RandomValueInArray(heroList),
-            idx % 2 == 1 ? Team.Team1 : Team.Team2,
-            botSlot,
-            InvalidPosition(),
-            RandomDirection()
-        );
-        Wait(0.5, WaitBehavior.IgnoreCondition);
+        define team = idx % 2 == 1 ? Team.Team1 : Team.Team2;
+        while(!HasSpawned(PlayersInSlot(botSlot, team))){
+            // create bot
+            CreateDummyBot(
+                RandomValueInArray(heroList),
+                team,
+                botSlot,
+                SpawnPoints(team)[0],
+                RandomDirection()
+            );
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+        }
         // next slot
         botSlot ++;
     }
@@ -121,26 +122,27 @@ enum BotInfo{
     combatRangeMin,
     combatRangeMax,
     primaryFireButtonBehaivor,
-    primaryFireButtonWaitMin,
-    primaryFireButtonWaitMax,
+    primaryFireButtonReleaseMin,
+    primaryFireButtonReleaseMax,
     primaryFireButtonHoldMin,
     primaryFireButtonHoldMax,
     secondaryFireButtonBehaivor,
-    secondaryFireButtonWaitMin,
-    secondaryFireButtonWaitMax,
+    secondaryFireButtonReleaseMin,
+    secondaryFireButtonReleaseMax,
     secondaryFireButtonHoldMin,
     secondaryFireButtonHoldMax,
-    ability1ButtonWaitMin,
-    ability1ButtonWaitMax,
+    ability1ButtonReleaseMin,
+    ability1ButtonReleaseMax,
     ability1ButtonHoldMin,
     ability1ButtonHoldMax,
-    ability2ButtonWaitMin,
-    ability2ButtonWaitMax,
+    ability2ButtonReleaseMin,
+    ability2ButtonReleaseMax,
     ability2ButtonHoldMin,
     ability2ButtonHoldMax,
     isRepeating,
     repeatDuringMin,
-    repeatDuringMax
+    repeatDuringMax,
+    watchFriendProbability
 }
 
 define targetPosRange: 6;
@@ -152,37 +154,39 @@ if(
     HasSpawned()
 ){
         botInfo[BotInfo.heroName] = "Default";
+        botInfo[BotInfo.watchFriendProbability] = 0;
+
         botInfo[BotInfo.combatRange] = CombatRange.Middle;
+
         botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.HoldOnly;
-        botInfo[BotInfo.primaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.primaryFireButtonWaitMax] = 5;
+        botInfo[BotInfo.primaryFireButtonReleaseMin] = 0;
+        botInfo[BotInfo.primaryFireButtonReleaseMax] = 5;
         botInfo[BotInfo.primaryFireButtonHoldMin] = 0;
         botInfo[BotInfo.primaryFireButtonHoldMax] = 5;
 
         botInfo[BotInfo.secondaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
-        botInfo[BotInfo.secondaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.secondaryFireButtonWaitMax] = 5;
+        botInfo[BotInfo.secondaryFireButtonReleaseMin] = 0;
+        botInfo[BotInfo.secondaryFireButtonReleaseMax] = 5;
         botInfo[BotInfo.secondaryFireButtonHoldMin] = 0;
         botInfo[BotInfo.secondaryFireButtonHoldMax] = 5;
 
-        botInfo[BotInfo.ability1ButtonWaitMin] = 0;
-        botInfo[BotInfo.ability1ButtonWaitMax] = 5;
+        botInfo[BotInfo.ability1ButtonReleaseMin] = 0;
+        botInfo[BotInfo.ability1ButtonReleaseMax] = 5;
         botInfo[BotInfo.ability1ButtonHoldMin] = 0;
-        botInfo[BotInfo.ability1ButtonHoldMax] = 1;
+        botInfo[BotInfo.ability1ButtonHoldMax] = 5;
 
-        botInfo[BotInfo.ability2ButtonWaitMin] = 0;
-        botInfo[BotInfo.ability2ButtonWaitMax] = 5;
+        botInfo[BotInfo.ability2ButtonReleaseMin] = 0;
+        botInfo[BotInfo.ability2ButtonReleaseMax] = 5;
         botInfo[BotInfo.ability2ButtonHoldMin] = 0;
-        botInfo[BotInfo.ability2ButtonHoldMax] = 1;
+        botInfo[BotInfo.ability2ButtonHoldMax] = 5;
+
 
     switch(HeroOf()){
         case Hero.Ana:
         botInfo[BotInfo.heroName] = "Ana";
+        botInfo[BotInfo.watchFriendProbability] = 100;
         botInfo[BotInfo.combatRange] = CombatRange.Far;
-        botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.HoldOnly;
         botInfo[BotInfo.secondaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
-        botInfo[BotInfo.secondaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.secondaryFireButtonWaitMax] = 10;
         botInfo[BotInfo.secondaryFireButtonHoldMin] = 10;
         botInfo[BotInfo.secondaryFireButtonHoldMax] = 10;
         break;
@@ -191,31 +195,28 @@ if(
         botInfo[BotInfo.heroName] = "Ashe";
         botInfo[BotInfo.combatRange] = CombatRange.Far;
         botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.Repeat;
-        botInfo[BotInfo.primaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.primaryFireButtonWaitMax] = 10;
-        botInfo[BotInfo.primaryFireButtonHoldMin] = 5;
-        botInfo[BotInfo.primaryFireButtonHoldMax] = 10;
         botInfo[BotInfo.secondaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
-        botInfo[BotInfo.secondaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.secondaryFireButtonWaitMax] = 10;
         botInfo[BotInfo.secondaryFireButtonHoldMin] = 10;
         botInfo[BotInfo.secondaryFireButtonHoldMax] = 10;
         break;
 
         case Hero.Baptiste:
         botInfo[BotInfo.heroName] = "Baptiste";
+        botInfo[BotInfo.watchFriendProbability] = 75;
         botInfo[BotInfo.combatRange] = CombatRange.Middle;
+        botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
         break;
 
         case Hero.Bastion:
         botInfo[BotInfo.heroName] = "Bastion";
         botInfo[BotInfo.combatRange] = CombatRange.Far;
-        botInfo[BotInfo.secondaryFireButtonWaitMin] = 5;
-        botInfo[BotInfo.secondaryFireButtonWaitMax] = 10;
+        botInfo[BotInfo.secondaryFireButtonReleaseMin] = 5;
+        botInfo[BotInfo.secondaryFireButtonReleaseMax] = 10;
         break;
 
         case Hero.Brigitte:
         botInfo[BotInfo.heroName] = "Brigitte";
+        botInfo[BotInfo.watchFriendProbability] = 50;
         botInfo[BotInfo.combatRange] = CombatRange.Melee;
         break;
 
@@ -245,8 +246,8 @@ if(
         botInfo[BotInfo.heroName] = "Hanzo";
         botInfo[BotInfo.combatRange] = CombatRange.Far;
         botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
-        botInfo[BotInfo.primaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.primaryFireButtonWaitMax] = 0;
+        botInfo[BotInfo.primaryFireButtonReleaseMin] = 0;
+        botInfo[BotInfo.primaryFireButtonReleaseMax] = 0;
         botInfo[BotInfo.primaryFireButtonHoldMin] = 1.5;
         botInfo[BotInfo.primaryFireButtonHoldMax] = 2;
         botInfo[BotInfo.secondaryFireButtonBehaivor] = ButtonBehaivor.Non;
@@ -259,6 +260,7 @@ if(
 
         case Hero.Lucio:
         botInfo[BotInfo.heroName] = "Lucio";
+        botInfo[BotInfo.watchFriendProbability] = 50;
         botInfo[BotInfo.combatRange] = CombatRange.Middle;
         break;
 
@@ -275,14 +277,18 @@ if(
 
         case Hero.Mercy:
         botInfo[BotInfo.heroName] = "Mercy";
+        botInfo[BotInfo.watchFriendProbability] = 100;
         botInfo[BotInfo.combatRange] = CombatRange.Far;
         break;
 
         case Hero.Moira:
         botInfo[BotInfo.heroName] = "Moira";
-        botInfo[BotInfo.combatRange] = CombatRange.Middle;
+        botInfo[BotInfo.watchFriendProbability] = 75;
+        botInfo[BotInfo.combatRange] = CombatRange.Close;
         botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
         botInfo[BotInfo.secondaryFireButtonBehaivor] = ButtonBehaivor.HoldOnly;
+        botInfo[BotInfo.primaryFireButtonHoldMin] = 3;
+        botInfo[BotInfo.primaryFireButtonHoldMax] = 6;
         break;
 
         case Hero.Orisa:
@@ -313,8 +319,8 @@ if(
         case Hero.Sigma:
         botInfo[BotInfo.heroName] = "Sigma";
         botInfo[BotInfo.combatRange] = CombatRange.Middle;
-        botInfo[BotInfo.secondaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.secondaryFireButtonWaitMax] = 10;
+        botInfo[BotInfo.secondaryFireButtonReleaseMin] = 0;
+        botInfo[BotInfo.secondaryFireButtonReleaseMax] = 10;
         botInfo[BotInfo.secondaryFireButtonHoldMin] = 0;
         botInfo[BotInfo.secondaryFireButtonHoldMax] = 1;
         break;
@@ -349,19 +355,19 @@ if(
         botInfo[BotInfo.heroName] = "Widowmaker";
         botInfo[BotInfo.combatRange] = CombatRange.Far;
         botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
-        botInfo[BotInfo.primaryFireButtonWaitMin] = 1;
-        botInfo[BotInfo.primaryFireButtonWaitMax] = 3;
+        botInfo[BotInfo.primaryFireButtonReleaseMin] = 1;
+        botInfo[BotInfo.primaryFireButtonReleaseMax] = 1.5;
         botInfo[BotInfo.primaryFireButtonHoldMin] = 0;
-        botInfo[BotInfo.primaryFireButtonHoldMax] = 0;
+        botInfo[BotInfo.primaryFireButtonHoldMax] = 2;
 
         botInfo[BotInfo.secondaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
-        botInfo[BotInfo.secondaryFireButtonWaitMin] = 0;
-        botInfo[BotInfo.secondaryFireButtonWaitMax] = 5;
+        botInfo[BotInfo.secondaryFireButtonReleaseMin] = 0;
+        botInfo[BotInfo.secondaryFireButtonReleaseMax] = 5;
         botInfo[BotInfo.secondaryFireButtonHoldMin] = 10;
         botInfo[BotInfo.secondaryFireButtonHoldMax] = 10;
 
-        botInfo[BotInfo.ability1ButtonWaitMin] = 10;
-        botInfo[BotInfo.ability1ButtonWaitMax] = 15;
+        botInfo[BotInfo.ability1ButtonReleaseMin] = 10;
+        botInfo[BotInfo.ability1ButtonReleaseMax] = 15;
         break;
 
         case Hero.Winston:
@@ -389,10 +395,12 @@ if(
 
         case Hero.Zenyatta:
         botInfo[BotInfo.heroName] = "Zenyatta";
+        botInfo[BotInfo.watchFriendProbability] = 25;
         botInfo[BotInfo.combatRange] = CombatRange.Far;
         botInfo[BotInfo.primaryFireButtonBehaivor] = ButtonBehaivor.HoldAndRelease;
         break;
     }
+
 
     // set combat range
     switch(botInfo[BotInfo.combatRange]){
@@ -435,8 +443,6 @@ enum ButtonBehaivor{
     HoldAndRelease,
     Repeat
 }
-
-// TAG Bot/ObjectDetector ----------
 
 // TAG Bot/ButtonControl ----------
 enum ButtonControl{
@@ -503,8 +509,8 @@ if(
         [
             Button.PrimaryFire,
             botInfo[BotInfo.primaryFireButtonBehaivor],
-            botInfo[BotInfo.primaryFireButtonWaitMin],
-            botInfo[BotInfo.primaryFireButtonWaitMax],
+            botInfo[BotInfo.primaryFireButtonReleaseMin],
+            botInfo[BotInfo.primaryFireButtonReleaseMax],
             botInfo[BotInfo.primaryFireButtonHoldMin],
             botInfo[BotInfo.primaryFireButtonHoldMax]
         ]
@@ -521,8 +527,8 @@ if(
         [
             Button.SecondaryFire,
             botInfo[BotInfo.secondaryFireButtonBehaivor],
-            botInfo[BotInfo.secondaryFireButtonWaitMin],
-            botInfo[BotInfo.secondaryFireButtonWaitMax],
+            botInfo[BotInfo.secondaryFireButtonReleaseMin],
+            botInfo[BotInfo.secondaryFireButtonReleaseMax],
             botInfo[BotInfo.secondaryFireButtonHoldMin],
             botInfo[BotInfo.secondaryFireButtonHoldMax]
         ]
@@ -539,8 +545,8 @@ if(
         [
             Button.Ability1,
             ButtonBehaivor.HoldAndRelease,
-            botInfo[BotInfo.ability1ButtonWaitMin],
-            botInfo[BotInfo.ability1ButtonWaitMax],
+            botInfo[BotInfo.ability1ButtonReleaseMin],
+            botInfo[BotInfo.ability1ButtonReleaseMax],
             botInfo[BotInfo.ability1ButtonHoldMin],
             botInfo[BotInfo.ability1ButtonHoldMax]
         ]
@@ -557,8 +563,8 @@ if(
         [
             Button.Ability2,
             ButtonBehaivor.HoldAndRelease,
-            botInfo[BotInfo.ability2ButtonWaitMin],
-            botInfo[BotInfo.ability2ButtonWaitMax],
+            botInfo[BotInfo.ability2ButtonReleaseMin],
+            botInfo[BotInfo.ability2ButtonReleaseMax],
             botInfo[BotInfo.ability2ButtonHoldMin],
             botInfo[BotInfo.ability2ButtonHoldMax]
         ]
@@ -669,14 +675,36 @@ if(
 // TAG Bot/StateControl ----------
 define basicUpdateRate: isServerOverLoading ? 3 : 1.5;
 
-define isContactPlayer: 
-    botInfo[BotInfo.target] != 0 &&
-    IsAlive(botInfo[BotInfo.target]) &&
-    IsInLineOfSight(EyePosition(ep), botInfo[BotInfo.target]) &&
-    !(
-        HeroOf(botInfo[BotInfo.target]) == Hero.Sombra &&
-        IsUsingAbility1(botInfo[BotInfo.target]) &&
-        DistanceBetween(ep, botInfo[BotInfo.target]) >= 2
+define AttackTarget():
+    FirstOf(
+        SortedArray(
+            FilteredArray(
+                AllPlayers(OppositeTeamOf(TeamOf())),
+                (
+                    HasSpawned(ae) &&
+                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
+                    IsAlive(ae)
+                )
+            ),
+            DistanceBetween(ep, ae)
+        )
+    );
+
+define HealTarget():
+    FirstOf(
+        SortedArray(
+            FilteredArray(
+                AllPlayers(TeamOf()),
+                (
+                    ae != ep &&
+                    HasSpawned(ae) &&
+                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
+                    IsAlive(ae) &&
+                    NormalizedHealth(ae) <= 0.9
+                )
+            ),
+            DistanceBetween(ep, ae)
+        )
     );
 
 rule: "Bot/State/StateControl"
@@ -685,31 +713,44 @@ if(
     IsDummyBot() &&
     HasSpawned()
 ){
-    // get target
+    define target;
+
+    // check target
     if(
-        botInfo[BotInfo.target] == 0 ||                     // no target
-        !IsInLineOfSight(ep, botInfo[BotInfo.target]) ||    // targhet lost
-        IsDead(botInfo[BotInfo.target]) ||                  // target dead
-        ProbabilityTrue(20)                                 // 20% Probability
+        ProbabilityTrue(25) ||                                  // Probability
+        botInfo[BotInfo.target] == 0 ||                         // no target
+        !IsInLineOfSight(ep, botInfo[BotInfo.target]) ||        // targhet lost
+        IsDead(botInfo[BotInfo.target]) ||                      // target dead
+        (   
+            TeamOf(botInfo[BotInfo.target]) == TeamOf(ep) &&    // heal target almost full health
+            NormalizedHealth(botInfo[BotInfo.target]) >= 0.9
+        )       
     ){
         // set target
-        define target = FirstOf(
-            SortedArray(
-                FilteredArray(
-                    AllPlayers(OppositeTeamOf(TeamOf())),
-                    (
-                        IsAlive(ae) &&
-                        IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
-                    )
-                ),
-                DistanceBetween(ep, ae)
-            )
-        );
+        if(
+            ProbabilityTrue(botInfo[BotInfo.watchFriendProbability])    // each support hero Probability
+        ){
+            // set heal target
+            target = HealTarget();
+            // no heal target
+            if(target == 0){
+                // set attack target
+                target = AttackTarget();
+            }
+        }
+        else{
+            // set attack target
+            target = AttackTarget();
+        }
+
+        // has target
         if(target != 0){
+            // set target
             botInfo[BotInfo.target] = target;
             botInfo[BotInfo.targetPos] = PositionOf(target);
         }
         else{
+            // reset target, keep targetPos
             botInfo[BotInfo.target] = 0;
         }
     }
@@ -723,7 +764,7 @@ if(
     }
     else
     { 
-        if(isContactPlayer){
+        if(botInfo[BotInfo.target] != 0){
             // combat by contact player
             botInfo[BotInfo.state] = State.Combat; 
         }
@@ -774,7 +815,8 @@ playervar define prevPosition;
 void checkStackAndBreak()"checkStackAndBreak"{
     if(
         prevPosition != 0 &&
-        IsMoving() &&
+        botInfo[BotInfo.sideStepDir] != 0 &&
+        botInfo[BotInfo.moveDir] != 0 &&
         DistanceBetween(PositionOf(), prevPosition) < stackRange
     ){
         botInfo[BotInfo.statusText] = <"Combat/BreakStack">;
@@ -817,7 +859,7 @@ if(
     botInfo[BotInfo.target] = 0;
     botInfo[BotInfo.targetPos] = 0;
     StopMove();
-    StopFacing(ep);
+    StopFacing();
 }
 
 
@@ -834,7 +876,19 @@ if(
 
     // set initial status
     botInfo[BotInfo.watchUpdateRate] = basicUpdateRate;
-    StopFacing(ep); 
+
+    // convert targetpPos to rechable position
+    botInfo[BotInfo.targetPos] = BelowPosition(botInfo[BotInfo.targetPos]);
+
+    // set face direction to target lost posotion
+    StartFacing(
+        ep,
+        DirectionTowards(
+            EyePosition(),
+            botInfo[BotInfo.targetPos]),
+        300,
+        Relative.ToWorld, FacingRev.DirectionAndTurnRate
+    );
 
     if(botInfo[BotInfo.sideStepDir] == 0){
         //botInfo[BotInfo.sideStepDir] = RandomValueInArray([Right(),Left()]);
@@ -847,10 +901,6 @@ if(
     
     // action loop
     while(true){
-        // set face direction
-        botInfo[BotInfo.targetPos] = BelowPosition(botInfo[BotInfo.targetPos]);
-        SetFacing(ep, DirectionTowards(ep, botInfo[BotInfo.targetPos]), Relative.ToWorld);
-
         // set move directiion
         if(!IsBelowAbyss(ForwardSensor())){
             botInfo[BotInfo.moveDir] = Forward();
@@ -861,7 +911,7 @@ if(
             botInfo[BotInfo.statusText] = <"Searching/Keep_Distance">;
         }
 
-        // arrivaled target lost position
+        // reached target lost position
         if(DistanceBetween(botInfo[BotInfo.targetPos], ep) <= targetPosRange){
             Wait(1, WaitBehavior.AbortWhenFalse);
 
@@ -886,10 +936,10 @@ if(
     IsDummyBot() &&
     botInfo[BotInfo.state] == State.Searching
 ){
-    Wait(10, WaitBehavior.AbortWhenFalse);
+    Wait(8, WaitBehavior.AbortWhenFalse);
 
     botInfo[BotInfo.statusText] = <"Searching/Timeout">;
-    Wait(1, WaitBehavior.AbortWhenFalse);
+    Wait(1, WaitBehavior.IgnoreCondition);
     botInfo[BotInfo.state] = State.Non;
 }
 
@@ -919,41 +969,46 @@ if(
     
     // action loop
     while(true){
-        // update target pos
-        define tempTargetPos = PositionOf(botInfo[BotInfo.target]);
-        if(tempTargetPos != 0)
-            botInfo[BotInfo.targetPos] = tempTargetPos;
-
         // set move direction
         define distToTarget = DistanceBetween(ep, botInfo[BotInfo.target]);
-        if(
-            distToTarget > botInfo[BotInfo.combatRangeMax]
-        ){
-            if(!IsBelowAbyss(ForwardSensor())){
+        // target is enemy
+        // if(TeamOf(botInfo[BotInfo.target]) != TeamOf()){
+            // target is far
+            if(
+                distToTarget > botInfo[BotInfo.combatRangeMax] &&
+                !IsBelowAbyss(ForwardSensor())
+            ){
                 botInfo[BotInfo.moveDir] = Forward();
                 botInfo[BotInfo.statusText] = <"Combat/Forward">;
             }
-            else{
-                botInfo[BotInfo.moveDir] = 0;
-                botInfo[BotInfo.statusText] = <"Combat/Keep_Distance_By_Abyss">;
-            }
-        }
-        else if(
-            distToTarget < botInfo[BotInfo.combatRangeMin]
-        ){
-            if(!IsBelowAbyss(BackwardSensor())){
+            // target is close
+            else if(
+                distToTarget < botInfo[BotInfo.combatRangeMin] &&
+                !IsBelowAbyss(BackwardSensor())
+            ){
                 botInfo[BotInfo.moveDir] = Backward();
                 botInfo[BotInfo.statusText] = <"Combat/Backward">;
             }
             else{
                 botInfo[BotInfo.moveDir] = 0;
-                botInfo[BotInfo.statusText] = <"Combat/Keep_Distance_By_Abyss">;
+                botInfo[BotInfo.statusText] = <"Combat/Keep_Distance">;
             }
-        }
-        else{
-            botInfo[BotInfo.moveDir] = 0;
-            botInfo[BotInfo.statusText] = <"Combat/Keep_Distance">;
-        }
+        // }
+        // // target is friend
+        // else{
+        //     // target is far
+        //     if(
+        //         distToTarget > 10 &&
+        //         !IsBelowAbyss(ForwardSensor())
+        //     ){
+        //         botInfo[BotInfo.moveDir] = Forward();
+        //         botInfo[BotInfo.statusText] = <"Combat/Forward">;
+        //     }
+        //     else{
+        //         botInfo[BotInfo.moveDir] = 0;
+        //         botInfo[BotInfo.statusText] = <"Combat/Keep_Distance">;
+        //     }
+        // }
 
         // set sidestep direction
         if(
@@ -1033,14 +1088,23 @@ if(
         Color.White, Spectators.DefaultVisibility);
     // show targetPos path
     CreateBeamEffect(
-        ep.botInfo[BotInfo.state] == State.Combat || ep.botInfo[BotInfo.state] == State.Searching ? HostPlayer() : null,
+            ep.botInfo[BotInfo.state] == State.Combat ||
+            ep.botInfo[BotInfo.state] == State.Searching ?
+                HostPlayer() : null,
         BeamType.GoodBeam,
-        EyePosition(), botInfo[BotInfo.targetPos],
-        Color.Red,
+        EyePosition(),
+            botInfo[BotInfo.state] == State.Combat ?
+                botInfo[BotInfo.target] :
+                botInfo[BotInfo.targetPos],
+            botInfo[BotInfo.state] == State.Combat ?
+                TeamOf(botInfo[BotInfo.target]) != TeamOf() ?
+                    Color.Red :
+                    Color.Blue :
+                Color.White,
         EffectRev.VisibleToPositionRadiusAndColor);
     // show targetPos
     CreateEffect(
-        ep.botInfo[BotInfo.state] == State.Combat || ep.botInfo[BotInfo.state] == State.Searching ? HostPlayer() : null,
+        ep.botInfo[BotInfo.state] == State.Searching ? HostPlayer() : null,
         Effect.Ring, Color.Red,
         botInfo[BotInfo.targetPos], targetPosRange, EffectRev.VisibleToPositionAndRadius);
 }

@@ -423,24 +423,28 @@ if(
         closingProgressHudEntity = LastTextID();
     }
     // get closest surviver to portal center
-    define closestPlayerFromPortal = 
+    define portalClosingPlayer = 
         FirstOf(
             SortedArray(
                 FilteredArray(
-                    AllPlayers(Team.Team1), IsAlive(ae)
+                    AllPlayers(Team.Team1),
+                    (
+                        IsAlive(ae) &&
+                        !IsInSpawnRoom(ae)
+                    )
                 ),
                 DistanceBetween(portalPosition, ae)
             )
         );
     // show big message
     BigMessage(
-        closestPlayerFromPortal,
+        portalClosingPlayer,
         <"You are closing portal... Stay inside and Survive!">);
     BigMessage(
-        FilteredArray(AllPlayers(Team.Team1), (closestPlayerFromPortal != ae)),
+        FilteredArray(AllPlayers(Team.Team1), (portalClosingPlayer != ae)),
         <"<0> <1> <2>",
-            closestPlayerFromPortal,
-            HeroIconString(HeroOf(closestPlayerFromPortal)),
+            portalClosingPlayer,
+            HeroIconString(HeroOf(portalClosingPlayer)),
             "closing portal... Cover one!">);
     // Wait closingCount
     Wait(closingCount, WaitBehavior.AbortWhenFalse);
@@ -762,7 +766,7 @@ if(
             ) * 
             // add random distance
             RandomReal(50, 150);
-        
+
         // convert to walkble position
         candidatePosition = NearestWalkablePosition(randomPositon);
         // move candidate postion in the direction of player for avoiding map edge
@@ -823,7 +827,7 @@ if(
 }
 
 // TAG Portal/InvalidDetect/EnvironmentDeathCount ----------
-define environmentDeathLimit: 6;
+define environmentDeathLimit: 0 < NumberOfPlayers(Team.Team2) ? NumberOfPlayers(Team.Team2) : 1;
 globalvar define environmentDeathCount = 0;
 
 rule: "Portal/InvalidDetect/EnvironmentDeathCount/resetCount"
@@ -852,7 +856,7 @@ if(
     portalEnable &&
     0 < environmentDeathCount
 ){
-    Wait(3, WaitBehavior.AbortWhenFalse);
+    Wait(2, WaitBehavior.AbortWhenFalse);
     environmentDeathCount --;
     LoopIfConditionIsTrue();
 }
@@ -990,7 +994,7 @@ define assetList:
         // five minion
         [
             [EnemyType.Boss,        RandomTankHero,     1],
-            [EnemyType.Minion,      RandomDamageHero,   5]
+            [EnemyType.Minion,      RandomSupportHero,  5]
         ],
         // four elite
         [
@@ -1005,8 +1009,8 @@ define assetList:
         [
             [EnemyType.Boss,        RandomTankHero,     1],
             [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomHero, 		2],
-            [EnemyType.Minion,      RandomHero, 		2]
+            [EnemyType.Elite,       RandomSupportHero, 	2],
+            [EnemyType.Minion,      RandomSupportHero, 	2]
         ],
         // giant boss
         [
@@ -1017,7 +1021,8 @@ define assetList:
         [
             [EnemyType.Boss,        Hero.Reinhardt,     1],
             [EnemyType.Elite,       Hero.Doomfist,      2],
-            [EnemyType.Minion,      Hero.Brigitte,      3]
+            [EnemyType.Elite,       Hero.Mercy,         1],
+            [EnemyType.Minion,      Hero.Brigitte,      2]
         ],
         // flankers
         [
@@ -1030,31 +1035,31 @@ define assetList:
         [
             [EnemyType.Boss,        Hero.Orisa, 		1],
             [EnemyType.Elite,       Hero.Bastion, 		1],
-            [EnemyType.Elite,       Hero.Widowmaker, 	2],
+            [EnemyType.Elite,       Hero.Ana, 	        2],
             [EnemyType.Minion,      Hero.Soldier76, 	2]
         ],
         // airforce
         [
             [EnemyType.Elite,       Hero.Echo, 			2],
             [EnemyType.Elite,       Hero.Pharah, 		2],
-            [EnemyType.Minion,      RandomHero, 		2]
+            [EnemyType.Minion,      Hero.Mercy, 		2]
         ],
         // snipers
         [
             [EnemyType.Boss,        Hero.Hanzo,			1],
-            [EnemyType.Elite,       Hero.Widowmaker,	2],
+            [EnemyType.Boss,        Hero.Widowmaker,	1],
             [EnemyType.Elite,       Hero.Ashe, 			2],
-            [EnemyType.Elite,       Hero.Ana, 			1]
+            [EnemyType.Elite,       Hero.Ana, 			2]
         ],
         // fortress
         [
             [EnemyType.Boss,        Hero.Orisa, 		1],
             [EnemyType.Elite,       Hero.Bastion, 		2],
-            [EnemyType.Minion,      RandomHero, 		3]
+            [EnemyType.Minion,      Hero.Zenyatta,      3]
         ],
         // turrets
         [
-            [EnemyType.Boss,        Hero.Bastion, 		1],
+            [EnemyType.Boss,        Hero.Mercy, 		1],
             [EnemyType.Elite,       Hero.Symmetra, 		2],
             [EnemyType.Minion,      Hero.Torbjorn, 		3]
         ]
@@ -1063,7 +1068,7 @@ define assetList:
 rule: "Portal/CreateBot/reloadBotAsset"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Set
+    portalEnable
 ){
     // change bot asset by random
     if(
@@ -1082,12 +1087,6 @@ playervar define eachDealtDamageScale;
 playervar define eachMaxSpawnInterval;
 playervar define eachChargeUltInterval;
 
-void SetMaxHealthWithRecover(define player, define maxHelth)"SetMaxHealthWithRecover"{
-    SetMaxHealth(player, maxHelth);
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
-    Heal(player, null, MaxValue());
-}
-
 rule: "Bot/EnemyType/setEnemyType"
 Event.OngoingPlayer
 Team.Team2
@@ -1097,9 +1096,9 @@ if(
     if(enemyType == EnemyType.Minion){ 
         StartScalingPlayer(ep, 0.75, false);
         StartModifyingHeroVoiceLines(ep, 1.25, false);
-        SetMaxHealthWithRecover(ep, 50);
+        SetMaxHealth(ep, 50);
         SetHealingReceived(ep, 50);
-        SetHealingDealt(ep, 50);
+        SetHealingDealt(ep, 25);
         eachDealtDamageScale = 0.5;
         eachChargeUltInterval = 80;
         eachMaxSpawnInterval = 3;
@@ -1107,9 +1106,9 @@ if(
     else if(enemyType == EnemyType.Elite){
         StartScalingPlayer(ep, 1.0, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
-        SetMaxHealthWithRecover(ep, 200);
-        SetHealingReceived(ep, 100);
-        SetHealingDealt(ep, 100);
+        SetMaxHealth(ep, 300);
+        SetHealingReceived(ep, 300);
+        SetHealingDealt(ep, 50);
         eachDealtDamageScale = 1.0;
         eachChargeUltInterval = 20;
         eachMaxSpawnInterval = 10;
@@ -1117,9 +1116,9 @@ if(
     else if(enemyType == EnemyType.Boss){
         StartScalingPlayer(ep, 1.5, false);
         StartModifyingHeroVoiceLines(ep, 0.75, false);
-        SetMaxHealthWithRecover(ep, 1000);
-        SetHealingReceived(ep, 200);
-        SetHealingDealt(ep, 200);
+        SetMaxHealth(ep, 1000);
+        SetHealingReceived(ep, 500);
+        SetHealingDealt(ep, 100);
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
         eachMaxSpawnInterval = 30;
@@ -1127,18 +1126,24 @@ if(
     else if(enemyType == EnemyType.GiantBoss){
         StartScalingPlayer(ep, 2.5, false);
         StartModifyingHeroVoiceLines(ep, 0.25, false);
-        SetMaxHealthWithRecover(ep, 1000);
-        SetHealingReceived(ep, 300);
-        SetHealingDealt(ep, 300);
+        SetMaxHealth(ep, 1000);
+        SetHealingReceived(ep, 500);
+        SetHealingDealt(ep, 100);
         eachDealtDamageScale = 4.0;
         eachChargeUltInterval = 10;
         eachMaxSpawnInterval = 15;
         // set pool health
         AddHealthPoolToPlayer(ep, HealthType.Armor, 2000, true, false);
-    }    
+    }
 
     UpdateEachDealtDamage();
     UpdateEachSpawnInterval();
+
+    // heal to max health
+    while(Health() < MaxHealth()){
+        Heal(ep, null, MaxValue());
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+    }
 }
 
 // TAG Bot/Effect ----------
@@ -1347,7 +1352,7 @@ if(
 ){
     // Teleport Bot to spawn room when portal disable
     // wait show dead effect when portal closing
-    Wait(deadEffectTime, WaitBehavior.AbortWhenFalse);   
+    Wait(deadEffectTime + RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
 
     // reset teleport position
     teleportPosition = InvalidPosition();
@@ -1366,7 +1371,8 @@ if(
     HasSpawned() &&
     portalEnable
 ){
-    WaitConditionConfirmed();
+    Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
+    AbortIf(IsDead());
 
     // clear root
     ClearStatus(ep, Status.Rooted);
@@ -1387,8 +1393,9 @@ if(
     portalEnable &&
     portalState == PortalState.Suspended
 ){
-    AbortIf(!IsAlive());
-    WaitConditionConfirmed();
+    Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
+    AbortIf(IsDead());
+    AbortIf(DistanceBetween(ep, closestPlayerToPortal) <= 10);
 
     // set teleport position to player around
     SetTeleportPositionToPlayerAround();
@@ -1407,6 +1414,9 @@ if(
     portalEnable &&
     IsInSpawnRoom()
 ){
+    Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
+    AbortIf(IsDead());
+    
     if(
         // always teleport around the player during portal attacks
         portalState == PortalState.Suspended ||
@@ -1446,10 +1456,10 @@ if(
         closestPlayerToMe,
         BarrierLOS.NoBarriersBlock)
 ){
-    AbortIf(!IsAlive());
-    // Teleport bot to player front
-    Wait(6, WaitBehavior.AbortWhenFalse);
+    Wait(8 + RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
+    AbortIf(IsDead());    
 
+    // Teleport bot to player front
     if(
         // always teleport around the player during portal attacks
         portalState == PortalState.Suspended ||

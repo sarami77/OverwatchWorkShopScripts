@@ -1,0 +1,158 @@
+import "Lib/Bot.del";
+import "Lib/Regeneration.del";
+
+// TAG Bot/CreateBot ----------
+disabled rule: "SetDebugSetting"
+Event.OngoingGlobal
+{
+    SetMaxHealth(AllPlayers(), 500);
+    // SetDamageDealt(AllPlayers(), 1000);
+    // SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
+    Wait(5, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+rule: "InitialSetting"
+Event.OngoingGlobal
+{
+    Regeneration_enableTeam = Team.All;
+    Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 3, 0, 100, 1);
+    Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 50, 0, 1000, 2);
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load", ServerLoad()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+
+    CreateIcon(HostPlayer(), teleportPos, Icon.ArrowDown,
+            IconRev.VisibleToAndPosition, Color.White, true);
+
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.White, teleportPos,
+        combatAreaRange, EffectRev.VisibleToPositionRadiusAndColor);
+}
+
+rule: "ReloadBotList"
+Event.OngoingGlobal
+{
+    DebugCreateBot(AllHeroes(), 24);
+    // DebugCreateBot(AllSupportHeroes(), 24);
+    Wait(180, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+rule: "ReloadTeleportPosition"
+Event.OngoingGlobal
+{
+    SetTeleportPositionAtRandom(selectionAreaRange);
+    Wait(60, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+define combatAreaRange: 60;
+define selectionAreaRange: 200;
+globalvar define teleportPos;
+globalvar define teleportPosEntitys;
+
+disabled rule: "FastRespawnForBot"
+Event.OnDeath
+if(
+    IsDummyBot()
+){
+    Wait(1);
+    Respawn(ep);
+}
+
+
+rule: "TeleortByRespawn"
+Event.OngoingPlayer
+if(
+    IsInSpawnRoom()
+){
+    TeleportToTeleportPosition(combatAreaRange);
+}
+
+rule: "PullCenterByOutBound"
+Event.OngoingPlayer
+if(
+    DistanceBetween(ep, teleportPos) > combatAreaRange
+){
+    if(DistanceBetween(ep, teleportPos) > combatAreaRange + 3){
+        Wait(RandomReal(0, 1));
+        TeleportToTeleportPosition(combatAreaRange);
+    }
+    else{
+        ApplyImpulse(ep, VectorTowards(ep, teleportPos),
+            DistanceBetween(ep, teleportPos) * 0.7,
+            Relative.ToWorld, ContraryMotion.Cancel);
+    }
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+rule: "TeleortByEnemyNotFound"
+Event.OngoingPlayer
+if(
+    !IsInLineOfSight(ep, ClosestPlayerTo(ep, OppositeTeamOf(TeamOf())))
+){
+    if(IsDummyBot())
+        Wait(5, WaitBehavior.AbortWhenFalse);
+    else
+        Wait(10, WaitBehavior.AbortWhenFalse);
+    TeleportToTeleportPosition(combatAreaRange);
+    LoopIfConditionIsTrue();
+}
+
+rule: "ShiftTeleportPositionBySucide"
+Event.OnDeath
+if(
+    Attacker() == ep &&
+    ProbabilityTrue(50)
+){
+    SetTeleportPositionAtRandom(selectionAreaRange / 3);
+    ForceSpawnRoom(Team.Team1, RandomInteger(0, 2));
+    ForceSpawnRoom(Team.Team2, RandomInteger(0, 2));
+}
+
+void SetTeleportPositionAtRandom(define range)"SetTeleportPositionAtRandom"{
+    teleportPos = NearestWalkablePosition(
+        teleportPos +
+        RandomPosition(range, range, range));
+}
+
+void TeleportToTeleportPosition(define range)"TeleportToTeleportPosition"{
+    define pos;
+    while(
+        pos == 0 ||
+        (
+            10 > DistanceBetween(pos,
+                ClosestPlayerTo(pos,
+                    OppositeTeamOf(TeamOf())))
+        )
+    ){
+        pos = NearestWalkablePosition(
+            teleportPos +
+            RandomPosition(range, range, range)); 
+        Wait(0.1, WaitBehavior.AbortWhenFalse);  
+    }
+    Teleport(ep, pos);
+    PlayEffect(
+        EventPlayer(), PlayEffect.DebuffImpactSound,
+        Color.White, ep, MaxLength());
+    SetStatus(ep, null, Status.Rooted, 1.5);
+    SetStatus(ep, null, Status.Invincible, 3);
+}
+
+rule: "Debug/resetTeleportPos"
+Event.OngoingPlayer
+Team.All
+if(
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    !IsButtonHeld(ep, Button.Reload) &&
+    IsButtonHeld(ep, Button.Crouch)
+){
+    SetTeleportPositionAtRandom(selectionAreaRange);
+}
