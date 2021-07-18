@@ -28,69 +28,47 @@ define RandomSupportHero: RandomValueInArray(AllSupportHeroes());
 
 globalvar define botSlot;
 
-void CreateAllBotByAsset(define assetList)"CreateAllBotByAsset"{
-    DestroyAllBot();
-    Wait(1, WaitBehavior.IgnoreCondition);
+void CreateEnemyBotsByAssetList(define assetList)"CreateEnemyBotsByAssetList"{
+    DestroyBots();
+
     // create bot by asset
     define asset = ValueInArray(assetList, RandomInteger(0, CountOf(assetList) - 1));
-    for(define idx = 0; idx < CountOf(asset); idx++){
-        for(define botCount = 0; botCount < asset[idx][BotAsset.count]; botCount++){
-            // create bot
-            CreateDummyBot(
-                asset[idx][BotAsset.hero],
-                Team.Team2,
-                botSlot,
-                SpawnPoints(Team.Team2)[0],
-                RandomDirection()
-            );
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-            WaitUntil(!isServerOverLoading, 3);          
-
+    for(define assetIdx = 0; assetIdx < CountOf(asset); assetIdx++){
+        for(define botCount = 0; botCount < asset[assetIdx][BotAsset.count]; botCount++){
+            // asign team
+            define team = Team.Team2;
+            // try until spawn entity
+            // while(!HasSpawned(PlayersInSlot(botSlot, team))){
+                // create bot
+                CreateDummyBot(
+                    asset[assetIdx][BotAsset.hero],
+                    team,
+                    botSlot,
+                    SpawnPoints(team)[0],
+                    RandomDirection()
+                );
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+                WaitUntil(!isServerOverLoading, 3);
+            // }
             // set Bot type as enemy type
-            define spawnBot = PlayersInSlot(botSlot, Team.Team2);
-            spawnBot.enemyType = asset[idx][BotAsset.EnemyType];
-            Respawn(spawnBot);
+            define spawnBot = PlayersInSlot(botSlot, team);
+            spawnBot.enemyType = asset[assetIdx][BotAsset.EnemyType];
+
             // next slot
             botSlot ++;
         }
     }
 }
 
-void DestroyAllBot()"DestroyAllBot"{
-    if(0 < NumberOfPlayers(Team.Team2)){
-        for(define idx = 0; idx < 24; idx ++){
-            define spawnBot = PlayersInSlot(idx, Team.Team2);
-            spawnBot.enemyType = EnemyType.None;
-            DestroyDummyBot(
-                Team.Team2, idx);
-        }
-        botSlot = 0;
-    }
-}
-
-
-void DebugCreateBot(define heroList, define num)"DebugCreateAllBot"{
-    if(0 < NumberOfPlayers(Team.All)){
-        for(define idx = 0; idx < 24; idx ++){
-            define spawnBot = PlayersInSlot(idx, Team.Team2);
-            spawnBot.enemyType = EnemyType.None;
-            DestroyDummyBot(
-                Team.Team1, idx);
-        }
-        for(define idx = 0; idx < 24; idx ++){
-            define spawnBot = PlayersInSlot(idx, Team.Team2);
-            spawnBot.enemyType = EnemyType.None;
-            DestroyDummyBot(
-                Team.Team2, idx);
-        }
-        botSlot = 0;
-    }
-    Wait(0.1, WaitBehavior.IgnoreCondition);
+void CreateBothBotsByInput(define heroList, define num)"CreateBothBotsByInput"{
+    DestroyBots();
 
     // create bot by asset
-    for(define idx = 0; idx < num; idx++){
-        define team = idx % 2 == 1 ? Team.Team1 : Team.Team2;
-        while(!HasSpawned(PlayersInSlot(botSlot, team))){
+    for(define slotIdx = 0; slotIdx < num; slotIdx++){
+        // asign team
+        define team = (slotIdx % 2 == 0) ? Team.Team1 : Team.Team2;
+        // try until spawn entity
+        // while(!HasSpawned(PlayersInSlot(botSlot, team))){
             // create bot
             CreateDummyBot(
                 RandomValueInArray(heroList),
@@ -100,20 +78,41 @@ void DebugCreateBot(define heroList, define num)"DebugCreateAllBot"{
                 RandomDirection()
             );
             Wait(0.1, WaitBehavior.IgnoreCondition);
+            WaitUntil(!isServerOverLoading, 3);
+        // }   
+        
+        if(team == Team.Team2){
+            // next slot
+            botSlot ++;
         }
-        // next slot
-        botSlot ++;
     }
+}
+
+void DestroyBots()"DestroyBots"{
+    define teams = [Team.Team1, Team.Team2];
+    for(define tesmsIdx = 0; tesmsIdx < CountOf(teams); tesmsIdx ++){
+        // asign team
+        define team = teams[tesmsIdx];
+        for(define slotIdx = 0; slotIdx < 24; slotIdx ++){
+            // try until despawn entity
+            // while(HasSpawned(PlayersInSlot(slotIdx, team))){
+                DestroyDummyBot(
+                    team, slotIdx);
+                Wait(0.01, WaitBehavior.IgnoreCondition);
+            // }
+        }
+    }
+    botSlot = 0;
 }
 
 // TAG Bot/SetBotInfo ----------
 
 playervar define heroName!;
 
-playervar define supportFriendProbability!;
-playervar define supportAbilityButtons!;
+playervar define supportProbability!;
+playervar define supportButtons!;
 
-playervar define attackAbilityButtons!;
+playervar define attackButtons!;
 
 playervar define primaryFireButtonBehaivor!;
 playervar define primaryFireButtonReleaseMin!;
@@ -148,9 +147,9 @@ if(
     HasSpawned()
 ){
         heroName = "Default";
-        supportFriendProbability = 0;
-        supportAbilityButtons = [];
-        attackAbilityButtons = [
+        supportProbability = 0;
+        supportButtons = [];
+        attackButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
             Button.Ability1,
@@ -170,12 +169,12 @@ if(
         secondaryFireButtonHoldMin = 0;
         secondaryFireButtonHoldMax = 5;
 
-        ability1ButtonReleaseMin = 0;
+        ability1ButtonReleaseMin = 3;
         ability1ButtonReleaseMax = 5;
         ability1ButtonHoldMin = 0;
         ability1ButtonHoldMax = 5;
 
-        ability2ButtonReleaseMin = 0;
+        ability2ButtonReleaseMin = 3;
         ability2ButtonReleaseMax = 5;
         ability2ButtonHoldMin = 0;
         ability2ButtonHoldMax = 5;
@@ -183,13 +182,13 @@ if(
     switch(HeroOf()){
         case Hero.Ana:
         heroName = "Ana";
-        supportFriendProbability = 100;
-        supportAbilityButtons = [
+        supportProbability = 100;
+        supportButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
             Button.Ability2
         ];
-        attackAbilityButtons = [
+        attackButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
             Button.Ability1,
@@ -212,14 +211,15 @@ if(
 
         case Hero.Baptiste:
         heroName = "Baptiste";
-        supportFriendProbability = 100;
-        supportAbilityButtons = [
+        supportProbability = 100;
+        supportButtons = [
             Button.SecondaryFire,
             Button.Ability1,
             Button.Ability2
         ];
-        attackAbilityButtons = [
-            Button.PrimaryFire
+        attackButtons = [
+            Button.PrimaryFire,
+            Button.Ability1
         ];
         AttackRange = AttackRange.Middle;
         break;
@@ -233,11 +233,11 @@ if(
 
         case Hero.Brigitte:
         heroName = "Brigitte";
-        supportFriendProbability = 50;
-        supportAbilityButtons = [
+        supportProbability = 50;
+        supportButtons = [
             Button.Ability2
         ];
-        attackAbilityButtons = [
+        attackButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
             Button.Ability1
@@ -285,12 +285,12 @@ if(
 
         case Hero.Lucio:
         heroName = "Lucio";
-        supportFriendProbability = 50;
-        supportAbilityButtons = [
+        supportProbability = 50;
+        supportButtons = [
             Button.Ability1,
             Button.Ability2
         ];
-        attackAbilityButtons = [
+        attackButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
             Button.Ability1,
@@ -312,36 +312,39 @@ if(
 
         case Hero.Mercy:
         heroName = "Mercy";
-        supportFriendProbability = 100;
-        supportAbilityButtons = [
+        supportProbability = 100;
+        supportButtons = [
             Button.PrimaryFire,
+            Button.SecondaryFire,
             Button.Ability1,
             Button.Ability2
         ];
-        attackAbilityButtons = [
-            Button.PrimaryFire
+        attackButtons = [
+            Button.PrimaryFire,
+            Button.SecondaryFire,
+            Button.Ability1,
+            Button.Ability2
         ];
         AttackRange = AttackRange.Far;
+        primaryFireButtonHoldMax = 15;
         break;
 
         case Hero.Moira:
         heroName = "Moira";
-        supportFriendProbability = 100;
-        supportAbilityButtons = [
+        supportProbability = 75;
+        supportButtons = [
             Button.PrimaryFire,
             Button.Ability1,
             Button.Ability2
         ];
-        attackAbilityButtons = [
+        attackButtons = [
             Button.SecondaryFire,
             Button.Ability1,
             Button.Ability2
         ];
         AttackRange = AttackRange.Close;
         primaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
-        secondaryFireButtonBehaivor = ButtonBehaivor.HoldOnly;
-        primaryFireButtonHoldMin = 3;
-        primaryFireButtonHoldMax = 6;
+        secondaryFireButtonBehaivor = ButtonBehaivor.HoldAndRelease;
         break;
 
         case Hero.Orisa:
@@ -448,11 +451,11 @@ if(
 
         case Hero.Zenyatta:
         heroName = "Zenyatta";
-        supportFriendProbability = 50;
-        supportAbilityButtons = [
+        supportProbability = 50;
+        supportButtons = [
             Button.Ability2
         ];
-        attackAbilityButtons = [
+        attackButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
             Button.Ability1
@@ -521,64 +524,48 @@ playervar define isRepeating!;
 playervar define repeatMin!;
 playervar define repeatMax!;
 
-void StartButtonControl(define bc){
+void StartButtonControl(define bc!){
     AbortIf(noShooting);
 
-    define startButton = false;
-
+    define startButton! = false;
+    define fireAndAbilityButtons! = [Button.PrimaryFire, Button.SecondaryFire, Button.Ability1, Button.Ability2];
     // if fire or ability button
     if(
-        IsTrueForAny(
-            [
-                Button.PrimaryFire,
-                Button.SecondaryFire,
-                Button.Ability1,
-                Button.Ability2
-            ],
-            ae == bc[ButtonControl.button]
-        )
+        isMatchButton(bc[ButtonControl.button], fireAndAbilityButtons)
     ){
         // if match attack buttons
         if(
             actionState == ActionState.Attack &&
-            isMatchButton(bc[ButtonControl.button], attackAbilityButtons)
+            isMatchButton(bc[ButtonControl.button], attackButtons)
         ){
             startButton = true;
         }
-        // if match attack buttons
+        // if match Support buttons
         else if(
             actionState == ActionState.Support &&
-            !isMatchButton(bc[ButtonControl.button], supportAbilityButtons)
+            isMatchButton(bc[ButtonControl.button], supportButtons)
         ){
             startButton = true;
         }
     }
-
-        // debug
-        if(
-            NumberOfSlots(Team.Team1) == 0 &&
-            bc[ButtonControl.button] == Button.PrimaryFire
-        ){
-            if(!startButton)
-                dbgMsg(<"Stop Button <0>", ButtonGuide(bc[ButtonControl.button])>);
-            else
-                dbgMsg(<"Start Button <0>", ButtonGuide(bc[ButtonControl.button])>);
-        }
+    else{
+        startButton = true;
+    }
 
     // is not start button
     if(!startButton){
         // stop button
         StopHoldingButton(ep, bc[ButtonControl.button]);
     }
-    else{       
+    else{
         // start button
         if(bc[ButtonControl.buttonOperation] == ButtonBehaivor.HoldOnly){
-            while(true){
+            // while(true){
                 StartHoldingButton(ep, bc[ButtonControl.button]);
-                Wait(RandomReal(bc[ButtonControl.holdMin], bc[ButtonControl.holdMax]), WaitBehavior.AbortWhenFalse);
+                // Wait(RandomReal(bc[ButtonControl.holdMin], bc[ButtonControl.holdMax]), WaitBehavior.AbortWhenFalse);
 
-                StopHoldingButton(ep, bc[ButtonControl.button]);
-            }
+                // StopHoldingButton(ep, bc[ButtonControl.button]);
+            // }
         }
         else if(bc[ButtonControl.buttonOperation] == ButtonBehaivor.HoldAndRelease){
             while(true){
@@ -616,7 +603,7 @@ if(
     isRepeating = false;
 }
 
-Boolean isMatchButton(define matchButton, define butttons)"isMatchButton"{
+Boolean isMatchButton(define matchButton!, define butttons!){
     return IsTrueForAny(butttons, ae == matchButton);
 }
 
@@ -793,7 +780,10 @@ rule: "Bot/ButtonControl/WeaponSwitch/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    actionState == ActionState.Attack
+    (
+        actionState == ActionState.Attack ||
+        actionState == ActionState.Support
+    )
 ){
     while(true){
         Wait(RandomReal(0, 30), WaitBehavior.AbortWhenFalse);
@@ -817,6 +807,10 @@ if(
     StopHoldingButton(ep, Button.Ultimate);
     StopHoldingButton(ep, Button.Jump);
     StopHoldingButton(ep, Button.Crouch);
+    StopHoldingButton(ep, Button.Reload);
+
+    // reload
+    PressButton(ep, Button.Reload);
 }
 
 
@@ -841,11 +835,11 @@ define AttackTarget():
                     IsAlive(ae)
                 )
             ),
-            DistanceBetween(ep, ae)
+            DistanceBetween(ae, ep)
         )
     );
 
-define HealTarget():
+define SupportTarget():
     FirstOf(
         SortedArray(
             FilteredArray(
@@ -855,15 +849,17 @@ define HealTarget():
                     HasSpawned(ae) &&
                     IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
                     IsAlive(ae) &&
-                    NormalizedHealth(ae) <= 0.9
+                    NormalizedHealth(ae) <= needHealRate
                 )
             ),
-            DistanceBetween(ep, ae)
+            DistanceBetween(ae, ep)
         )
     );
 
+define needHealRate: 0.9;
+
 define watchUpdateRate:
-    isServerOverLoading ? 2 : 1;
+    isServerOverLoading ? 3 : 1.5;
 
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
@@ -879,15 +875,15 @@ if(
         IsDead(target) ||                      // target dead
         (   
             TeamOf(target) == TeamOf(ep) &&    // heal target almost full health
-            NormalizedHealth(target) >= 0.9
+            NormalizedHealth(target) > needHealRate
         )       
     ){
         // set target
         if(
-            ProbabilityTrue(supportFriendProbability)    // each support hero Probability
+            ProbabilityTrue(supportProbability)    // each support hero Probability
         ){
             // set heal target
-            target = HealTarget();
+            target = SupportTarget();
             // no heal target
             if(target == 0){
                 // set attack target
@@ -899,48 +895,60 @@ if(
             target = AttackTarget();
         }
 
-        // has target
+        // set targetPos
         if(target != 0){
             // set target
             targetPos = PositionOf(target);
         }
+        else{
+            targetPos = 0;
+        }
     }
 
-    // change state
-    prevActionState = actionState;
-
+    // get next state
+    define nextActionState;
     if(
         IsDead()
     ){
         // non by dead
-        actionState = ActionState.Non; 
+        nextActionState = ActionState.Non; 
     }
     else
     { 
         if(target != 0){
             if(TeamOf() != TeamOf(target)){
-                // Attack by contact player
-                actionState = ActionState.Attack; 
+                // Attack to targer
+                nextActionState = ActionState.Attack; 
             }
             else{
-                // Support by contact player
-                actionState = ActionState.Support; 
+                // Support to targer
+                nextActionState = ActionState.Support; 
             }
         }
         else
         {
             if(targetPos != 0){
-                // Search by target lost
-                actionState = ActionState.Search;
+                // Search to lost target 
+                nextActionState = ActionState.Search;
             }
             else{
                 // non by target not found
-                actionState = ActionState.Non;
+                nextActionState = ActionState.Non;
             }       
         }
     }
 
-    // save 
+    // if state changed
+    if(nextActionState != actionState){
+        if(nextActionState != ActionState.Non){
+            // set Non state for restart button control
+            actionState = ActionState.Non;
+            WaitChangeState();
+        }
+        // set next state
+        actionState = nextActionState;
+    }
+
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
@@ -1024,8 +1032,6 @@ if(
     actionState == ActionState.Search
 ){
     statusText = <"Searching">;
-    // reload
-    PressButton(ep, Button.Reload);
 
     // set initial status
 
@@ -1088,7 +1094,7 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Search
 ){
-    Wait(8, WaitBehavior.AbortWhenFalse);
+    Wait(5, WaitBehavior.AbortWhenFalse);
 
     statusText = <"Searching/Timeout">;
     Wait(1, WaitBehavior.IgnoreCondition);
@@ -1266,7 +1272,10 @@ if(
         botSlot = 0;
 }
 
-rule: "Debug/ShowDebugInfo"
+define debugInfoDisplayeTo:
+    [HostPlayer(), ep];
+
+disabled rule: "Debug/ShowDebugInfo"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
@@ -1274,16 +1283,37 @@ if(
 ){  
     // show status text
     CreateInWorldText(
-        HostPlayer(), statusText,
+        debugInfoDisplayeTo,
+        statusText,
         ep + (Up() * 1), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
-    // show targetPos path
-    CreateBeamEffect(
-            actionState == ActionState.Attack ||
-            actionState == ActionState.Support ||
+    // show actionState ring
+    CreateEffect(
+        ep.actionState != ActionState.Non ? debugInfoDisplayeTo : null,
+        Effect.Ring,
             actionState == ActionState.Search ?
-                HostPlayer() : null,
-        BeamType.GoodBeam,
+                Color.White:
+                actionState == ActionState.Attack ?
+                    Color.Red :
+                    Color.Blue,
+        ep, 1, EffectRev.VisibleToPositionRadiusAndColor);
+    // show target path beam
+    CreateBeamEffect(
+        (
+            (
+                (
+                    actionState == ActionState.Attack ||
+                    actionState == ActionState.Support
+                ) &&
+                target != 0
+            ) ||                
+            (
+                actionState == ActionState.Search &&
+                targetPos != 0
+            )
+        )
+        ? debugInfoDisplayeTo : null,
+        BeamType.BadBeam,
         EyePosition(),
             actionState == ActionState.Attack ||
             actionState == ActionState.Support ?
@@ -1295,9 +1325,9 @@ if(
                     Color.Red :
                     Color.Blue,
         EffectRev.VisibleToPositionRadiusAndColor);
-    // show targetPos
+    // show targetPos ring
     CreateEffect(
-        ep.actionState == ActionState.Search ? HostPlayer() : null,
+        ep.actionState == ActionState.Search ? debugInfoDisplayeTo : null,
         Effect.Ring, Color.White,
-        targetPos, targetPosRange, EffectRev.VisibleToPositionAndRadius);
+        targetPos, targetPosRange, EffectRev.VisibleToPositionRadiusAndColor);
 }

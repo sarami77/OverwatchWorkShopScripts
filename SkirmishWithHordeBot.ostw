@@ -6,8 +6,8 @@ disabled rule: "SetDebugSetting"
 Event.OngoingGlobal
 {
     SetMaxHealth(AllPlayers(), 500);
-    // SetDamageDealt(AllPlayers(), 1000);
-    // SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
+    //SetDamageDealt(AllPlayers(), 1000);
+    //SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
     Wait(5, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
@@ -15,6 +15,8 @@ Event.OngoingGlobal
 rule: "InitialSetting"
 Event.OngoingGlobal
 {
+    //DisableInspectorRecording();
+
     Regeneration_enableTeam = Team.All;
     Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 3, 0, 100, 1);
     Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 50, 0, 1000, 2);
@@ -32,14 +34,21 @@ Event.OngoingGlobal
 
     CreateEffect(AllPlayers(), Effect.Sphere, Color.White, teleportPos,
         combatAreaRange, EffectRev.VisibleToPositionRadiusAndColor);
+
+    ForceSpawnRoom(Team.Team1, 0);
+    ForceSpawnRoom(Team.Team2, 0);
+    Wait(0.1);
+    StopForcingSpawnRoom(Team.Team1);
+    StopForcingSpawnRoom(Team.Team2);
 }
 
 rule: "ReloadBotList"
 Event.OngoingGlobal
 {
-    DebugCreateBot(AllHeroes(), 24);
-    // DebugCreateBot(AllSupportHeroes(), 24);
-    Wait(180, WaitBehavior.AbortWhenFalse);
+    CreateBothBotsByInput(AllHeroes(), 24);
+    //CreateBothBotsByInput(AllSupportHeroes(), 24);
+    //CreateBothBotsByInput([Hero.Baptiste], 24);
+    Wait(150, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -47,14 +56,13 @@ rule: "ReloadTeleportPosition"
 Event.OngoingGlobal
 {
     SetTeleportPositionAtRandom(selectionAreaRange);
-    Wait(60, WaitBehavior.AbortWhenFalse);
+    Wait(120, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
 define combatAreaRange: 60;
 define selectionAreaRange: 200;
 globalvar define teleportPos;
-globalvar define teleportPosEntitys;
 
 disabled rule: "FastRespawnForBot"
 Event.OnDeath
@@ -65,7 +73,6 @@ if(
     Respawn(ep);
 }
 
-
 rule: "TeleortByRespawn"
 Event.OngoingPlayer
 if(
@@ -74,14 +81,20 @@ if(
     TeleportToTeleportPosition(combatAreaRange);
 }
 
+globalvar define teleportLocked;
+
 rule: "PullCenterByOutBound"
 Event.OngoingPlayer
 if(
     DistanceBetween(ep, teleportPos) > combatAreaRange
 ){
     if(DistanceBetween(ep, teleportPos) > combatAreaRange + 3){
-        Wait(RandomReal(0, 1));
-        TeleportToTeleportPosition(combatAreaRange);
+        if(!teleportLocked){
+            teleportLocked = true;
+            TeleportToTeleportPosition(combatAreaRange);
+            Wait(0.1);
+            teleportLocked = false;
+        }
     }
     else{
         ApplyImpulse(ep, VectorTowards(ep, teleportPos),
@@ -109,7 +122,7 @@ rule: "ShiftTeleportPositionBySucide"
 Event.OnDeath
 if(
     Attacker() == ep &&
-    ProbabilityTrue(50)
+    ProbabilityTrue(25)
 ){
     SetTeleportPositionAtRandom(selectionAreaRange / 3);
     ForceSpawnRoom(Team.Team1, RandomInteger(0, 2));
@@ -151,8 +164,8 @@ Team.All
 if(
     HostPlayer() == ep &&
     IsButtonHeld(ep, Button.Interact) &&
-    !IsButtonHeld(ep, Button.Reload) &&
-    IsButtonHeld(ep, Button.Crouch)
+    IsButtonHeld(ep, Button.Jump)
 ){
+    WaitLongPressConfirm();
     SetTeleportPositionAtRandom(selectionAreaRange);
 }
