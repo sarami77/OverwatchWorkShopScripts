@@ -15,7 +15,8 @@ enum EnemyType{
     Minion,
     Elite,
     Boss,
-    GiantBoss
+    GiantBoss,
+    ZeroGravity
 }
 
 // TAG BotAsset ----------
@@ -35,19 +36,16 @@ void CreateEnemyBotsByAssetList(define assetList)"CreateEnemyBotsByAssetList"{
         for(define botCount = 0; botCount < asset[assetIdx][BotAsset.count]; botCount++){
             // asign team
             define team = Team.Team2;
-            // try until spawn entity
-            // while(!HasSpawned(PlayersInSlot(botSlot, team))){
-                // create bot
-                CreateDummyBot(
-                    asset[assetIdx][BotAsset.hero],
-                    team,
-                    botSlot,
-                    SpawnPoints(team)[0],
-                    RandomDirection()
-                );
-                Wait(0.1, WaitBehavior.IgnoreCondition);
+            // create bot
+            CreateDummyBot(
+                asset[assetIdx][BotAsset.hero],
+                team,
+                botSlot,
+                SpawnPoints(team)[0],
+                RandomDirection()
+            );
+            Wait(0.1, WaitBehavior.IgnoreCondition);
                 WaitUntil(!isServerOverLoading, 3);
-            // }
             // set Bot type as enemy type
             define spawnBot = PlayersInSlot(botSlot, team);
             spawnBot.enemyType = asset[assetIdx][BotAsset.EnemyType];
@@ -789,7 +787,7 @@ if(
     )
 ){
     while(true){
-        Wait(RandomReal(5 * 2, 5 * 3), WaitBehavior.AbortWhenFalse);
+        Wait(RandomReal(5 * 2, 5 * 4), WaitBehavior.AbortWhenFalse);
         SetWeapon(ep, RandomInteger(0, 1));
     }
 }
@@ -827,7 +825,7 @@ playervar define moveDir!;
 playervar define sideStepDir!;
 playervar define sideStepSecond!;
 
-define AttackTarget():
+define FindAttackTarget():
     FirstOf(
         SortedArray(
             FilteredArray(
@@ -842,7 +840,7 @@ define AttackTarget():
         )
     );
 
-define SupportTarget():
+define FindSupportTarget():
     FirstOf(
         SortedArray(
             FilteredArray(
@@ -862,7 +860,7 @@ define SupportTarget():
 define needHealRate: 0.9;
 
 define watchUpdateRate:
-    isServerOverLoading ? 2 : 1;
+    isServerOverLoading ? 3 : 1.5;
 
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
@@ -870,14 +868,32 @@ if(
     IsDummyBot() &&
     HasSpawned()
 ){
-    // check target
+    define targetSighted =
+        (target != 0) &&
+        IsAlive(target) &&
+        IsInLineOfSight(ep, target);
+
+    // get curent target position
+    // target Sighted
     if(
-        ProbabilityTrue(25) ||                 // Probability
-        target == 0 ||                         // no target
-        !IsInLineOfSight(ep, target) ||        // targhet lost
-        IsDead(target) ||                      // target dead
-        (   
-            TeamOf(target) == TeamOf(ep) &&    // heal target almost full health
+        targetSighted
+    ){
+        // get targetPos
+        targetPos = PositionOf(target);
+    }
+    // target dead
+    else if(!IsAlive(target)){
+        // clear targetPos
+        targetPos = 0;
+    }
+    // else
+
+    // get new target
+    if(
+        !targetSighted ||       // target not Sighted
+        ProbabilityTrue(25) ||  // Probability
+        (                        
+            actionState == ActionState.Support &&   // support target almost full health
             NormalizedHealth(target) > needHealRate
         )       
     ){
@@ -885,26 +901,17 @@ if(
         if(
             ProbabilityTrue(supportProbability)    // each support hero Probability
         ){
-            // set heal target
-            target = SupportTarget();
-            // no heal target
+            // find support target
+            target = FindSupportTarget();
+            // not found heal target
             if(target == 0){
-                // set attack target
-                target = AttackTarget();
+                // find attack target
+                target = FindAttackTarget();
             }
         }
         else{
-            // set attack target
-            target = AttackTarget();
-        }
-
-        // set targetPos
-        if(target != 0){
-            // set target
-            targetPos = PositionOf(target);
-        }
-        else{
-            targetPos = 0;
+            // find attack target
+            target = FindAttackTarget();
         }
     }
 
@@ -912,38 +919,39 @@ if(
     define nextActionState;
     // self is dead
     if(IsDead()){
-        // non by dead
+        // Non state by dead
         nextActionState = ActionState.Non; 
     }
     else
     { 
-        // has target and target alive 
-        if(target != 0 && IsAlive(target)){
+        // has target
+        if(target != 0){
             // target is enemy
             if(TeamOf() != TeamOf(target)){
-                // Attack to targer
+                // Attack state by enemy target
                 nextActionState = ActionState.Attack; 
             }
             else{
-                // Support to targer
+                // Support state by friend target
                 nextActionState = ActionState.Support; 
             }
         }
-        // has not target and target alive 
-        else if(targetPos != 0 && IsAlive(target)){
-            // Search to lost target 
+        // has not target 
+        else if(targetPos != 0){
+            // Search state by target lost target 
             nextActionState = ActionState.Search;
         }
         else{
-            // non by target not found
+            // Non state by target not found
             nextActionState = ActionState.Non;
         }       
     }
 
     // if state changed
     if(nextActionState != actionState){
+        // next is not Non state
         if(nextActionState != ActionState.Non){
-            // set Non state for restart button control
+            // temporary set Non state for restart button control
             actionState = ActionState.Non;
             WaitChangeState();
         }
@@ -1066,13 +1074,14 @@ if(
     
     // action loop
     while(actionState == ActionState.Search){
+        dbgPlyEft(ep);
+
         // set move directiion
         if(!IsBelowAbyss(ForwardSensor())){
             moveDir = Forward();
         }
         else{
             moveDir = 0;
-            dbgPlyEft(ep);
         }
 
         // reached target lost position
@@ -1140,7 +1149,6 @@ if(
         define detectAbyss = 0;
         if(IsBelowAbyss(BackwardSensor())){
             detectAbyss = Backward();
-            dbgPlyEft(ep);
         }
         else if(IsBelowAbyss(ForwardSensor())){
             detectAbyss = Forward();
@@ -1238,7 +1246,6 @@ if(
         define detectAbyss = 0;
         if(IsBelowAbyss(BackwardSensor())){
             detectAbyss = Backward();
-            dbgPlyEft(ep);
         }
         else if(IsBelowAbyss(ForwardSensor())){
             detectAbyss = Forward();

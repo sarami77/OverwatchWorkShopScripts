@@ -164,11 +164,6 @@ Event.OngoingGlobal
     // set objective message
     SetObjectiveDescription(AllPlayers(Team.Team1), "Find portal and attack it!", HudTextRev.None);
 
-    // Calculate the approximate center position of the map from the spawn room position.
-    // Therefore, change the spawn room and then spawn the entity.
-    ForceSpawnRoom(Team.Team1, 2);
-    Respawn(AllPlayers(Team.All));
-
     // Set initial team lifes
     initialTeamLifes = WorkshopSettingInteger("Player Settings", "Initial Team Lifes", 6, 0, 1000, 0);
 
@@ -208,7 +203,6 @@ Event.OngoingGlobal
         // repeat action for joined player
         // set objective message
         SetObjectiveDescription(AllPlayers(Team.Team1), "find portal and attack!", HudTextRev.None);
-//      ApplySlowLevel(0);
         Wait(10, WaitBehavior.AbortWhenFalse);
     } 
 }
@@ -770,7 +764,7 @@ if(
         // convert to walkble position
         candidatePosition = NearestWalkablePosition(randomPositon);
         // move candidate postion in the direction of player for avoiding map edge
-        candidatePosition += DirectionTowards(candidatePosition, basePlayer) * RandomReal(1, 10);
+        candidatePosition += DirectionTowards(candidatePosition, basePlayer) * RandomReal(1, 5);
         // convert to walkble position
         candidatePosition = NearestWalkablePosition(candidatePosition);
 
@@ -844,10 +838,20 @@ Event.OnDeath
 Team.Team2
 if(
     portalEnable &&
-    ep == Attacker()
+    (
+        ep == Attacker() ||         // sucide
+        IsInSpawnRoom(Attacker())   // killer in res room
+    )
 ){
+    // change room for avoid kill in res room
     ForceSpawnRoom(Team.Team1, RandomInteger(0, 2));
-    environmentDeathCount += 1;
+    ForceSpawnRoom(Team.Team2, RandomInteger(0, 2));
+    // sucide
+    if(ep == Attacker())
+        environmentDeathCount += 1;
+    // killer in res room
+    else if(IsInSpawnRoom(Attacker()))
+        environmentDeathCount += 3;
 }
 
 rule: "Portal/InvalidDetect/EnvironmentDeathCount/reduceCount"
@@ -977,6 +981,7 @@ if(
 // TAG Bot/CreateBot ----------
 define assetList:
     [
+        
         // basic tank boss
         [
             [EnemyType.Boss,        RandomTankHero,     1],
@@ -1063,6 +1068,13 @@ define assetList:
             [EnemyType.Elite,       Hero.Symmetra, 		2],
             [EnemyType.Minion,      Hero.Torbjorn, 		3]
         ]
+        /*
+        [
+            [EnemyType.Boss,        Hero.Mercy, 		1],
+            [EnemyType.ZeroGravity, Hero.Bastion, 		2],
+            [EnemyType.ZeroGravity, Hero.Soldier76, 	3]
+        ]
+        */
     ];
 
 rule: "Portal/CreateBot/reloadBotAsset"
@@ -1135,6 +1147,20 @@ if(
         // set pool health
         AddHealthPoolToPlayer(ep, HealthType.Armor, 2000, true, false);
     }
+    else{
+        StartScalingPlayer(ep, 1.0, false);
+        StartModifyingHeroVoiceLines(ep, 1.0, false);
+        SetMaxHealth(ep, 300);
+        SetHealingReceived(ep, 300);
+        SetHealingDealt(ep, 50);
+        eachDealtDamageScale = 1.0;
+        eachChargeUltInterval = 20;
+        eachMaxSpawnInterval = 10;
+
+        if(enemyType == EnemyType.ZeroGravity){
+            SetGravity(ep, 1);
+        }
+    }
 
     UpdateEachDealtDamage();
     UpdateEachSpawnInterval();
@@ -1158,44 +1184,57 @@ if(
 ){
     botAppearanceEntitys = [];
     if(enemyType == EnemyType.Minion){
-        CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
-            ep, 1.0, EffectRev.VisibleToPositionAndRadius);
-        botAppearanceEntitys[0] = LastCreatedEntity();
-        CreateInWorldText(
-            AllPlayers(Team.All), "Minion", 
-            ep, 1.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
-            Color.White, Spectators.DefaultVisibility);
-        botAppearanceEntitys[1] = LastTextID();
+        botAppearanceEntitys[0] = 
+            CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
+                ep, 1.0, EffectRev.VisibleToPositionAndRadius);
+        botAppearanceEntitys[1] = 
+            CreateInWorldText(
+                AllPlayers(Team.All), "Minion", 
+                ep, 1.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+                Color.White, Spectators.DefaultVisibility);
     }
     else if(enemyType == EnemyType.Elite){
-        CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
-            ep, 2.0, EffectRev.VisibleToPositionAndRadius);
-        botAppearanceEntitys[0] = LastCreatedEntity();
-        CreateInWorldText(
-            AllPlayers(Team.All), "Elite", 
-            ep, 1.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
-            Color.Yellow, Spectators.DefaultVisibility);
-        botAppearanceEntitys[1] = LastTextID();
+        botAppearanceEntitys[0] = 
+            CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
+                ep, 2.0, EffectRev.VisibleToPositionAndRadius);
+        botAppearanceEntitys[1] = 
+            CreateInWorldText(
+                AllPlayers(Team.All), "Elite", 
+                ep, 1.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+                Color.Yellow, Spectators.DefaultVisibility);
     }
     else if(enemyType == EnemyType.Boss){
-        CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
-            ep, 4.0, EffectRev.VisibleToPositionAndRadius);
-        botAppearanceEntitys[0] = LastCreatedEntity();
-        CreateInWorldText(
-            AllPlayers(Team.All), "Boss", 
-            ep, 2.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
-            Color.Red, Spectators.DefaultVisibility);
-        botAppearanceEntitys[1] = LastTextID();
+        botAppearanceEntitys[0] = 
+            CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
+                ep, 4.0, EffectRev.VisibleToPositionAndRadius);
+        botAppearanceEntitys[1] = 
+            CreateInWorldText(
+                AllPlayers(Team.All), "Boss", 
+                ep, 2.0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+                Color.Red, Spectators.DefaultVisibility);
     }
- if(enemyType == EnemyType.GiantBoss){
-        CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
-            ep, 8.0, EffectRev.VisibleToPositionAndRadius);
-        botAppearanceEntitys[0] = LastCreatedEntity();
-        CreateInWorldText(
-            AllPlayers(Team.All), "Giant Boss", 
-            ep, 2.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
-            Color.Red, Spectators.DefaultVisibility);
-        botAppearanceEntitys[1] = LastTextID();
+    else if(enemyType == EnemyType.GiantBoss){
+        botAppearanceEntitys[0] = 
+            CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
+                ep, 8.0, EffectRev.VisibleToPositionAndRadius);
+        botAppearanceEntitys[1] = 
+            CreateInWorldText(
+                AllPlayers(Team.All), "Giant Boss", 
+                ep, 2.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+                Color.Purple, Spectators.DefaultVisibility);
+    }
+    else{
+        botAppearanceEntitys[0] = 
+            CreateEffect(AllPlayers(Team.All), Effect.Cloud, enemyColor,
+                ep, 2.0, EffectRev.VisibleToPositionAndRadius);
+
+        if(enemyType == EnemyType.ZeroGravity){
+            botAppearanceEntitys[1] = 
+                CreateInWorldText(
+                    AllPlayers(Team.All), "Zero Gravity", 
+                    ep, 1.5, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+                    Color.Yellow, Spectators.DefaultVisibility);
+        }
     }
 }
 
@@ -1230,6 +1269,9 @@ if(
     }
     else if(enemyType == EnemyType.GiantBoss){
         PlayContinuousBlast(Color.Red, PositionOf(), 7, 5);
+    }
+    else{
+        PlayContinuousBlast(Color.Red, PositionOf(), 3, 2);
     }
 }
 
@@ -1337,6 +1379,9 @@ void PlayTeleportEffect(define isBefore)"PlayTeleportEffect"{
         }
         else if(enemyType == EnemyType.GiantBoss){
             effectSize = 7;
+        }
+        else{
+            effectSize = 3;
         }
         // play teleport blast
         PlayEffect(AllPlayers(Team.All), PlayEffect.BadExplosion, enemyColor, ep, effectSize);
@@ -1461,27 +1506,27 @@ if(
 
     // Teleport bot to player front
     if(
-        // always teleport around the player during portal attacks
+        // during portal attacks
         portalState == PortalState.Suspended ||
-        // probability to teleport around players even if they are not in a portal attack
-        ProbabilityTrue(30)
+        // probability
+        ProbabilityTrue(25)
     ){
         if(
             // has line to player from teleport position
             IsInLineOfSight(teleportPosition, closestPlayerToTelPos) &&
-            // probability of using a unified teleport position
-            ProbabilityTrue(80)
+            // probability
+            ProbabilityTrue(75)
         ){
             // unify teleport position of all bot
             UnifyTeleportPosition();
         }
         else{
-            // change unified teleport position to player around
+            // set teleport position to player around
             SetTeleportPositionToPlayerAround();                        
         }
     }
     else{
-        // set teleport position player front
+        // set teleport position to player front
         SetTeleportPositionToPlayerFront();   
     }
     // show pre teleport effect
@@ -1560,7 +1605,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // If don't enough players, adjust Bot dealt damage rate to make the game fair
     // And the round progresses, the Bot deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Initial Deal Damage", 25, 0, 1000, 1);
+    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Initial Deal Damage", 20, 0, 1000, 1);
     confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round Progress", 1.5, 0, 1000, 2);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
