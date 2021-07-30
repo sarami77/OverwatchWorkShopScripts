@@ -4,7 +4,7 @@
 // YY1N2
 // [ToDo]
 // add Perk Disarmament
-// add Perk Drone Guard Dog
+// add Perk Drone Friend Dog
 // add Perk Assassination
 
 import "Lib/Debug.del";
@@ -418,7 +418,7 @@ if(
         closingProgressHudEntity = LastTextID();
     }
     // get closest surviver to portal center
-    define portalClosingPlayer = 
+    define portalClosingPlayer! = 
         FirstOf(
             SortedArray(
                 FilteredArray(
@@ -821,7 +821,7 @@ if(
 }
 
 // TAG Portal/InvalidDetect/EnvironmentDeathCount ----------
-define environmentDeathLimit: 0 < NumberOfPlayers(Team.Team2) ? NumberOfPlayers(Team.Team2) : 1;
+define environmentDeathLimit: NumberOfPlayers(Team.Team2) + 1;
 globalvar define environmentDeathCount!;
 
 rule: "Portal/InvalidDetect/EnvironmentDeathCount/resetCount"
@@ -978,7 +978,7 @@ if(
     portalState = PortalState.Growing;
 }
 
-// TAG Bot/CreateBot ----------
+// TAG EnemBot/CreateBot ----------
 define assetList:
     [
         
@@ -1054,7 +1054,7 @@ define assetList:
             [EnemyType.Boss,        Hero.Hanzo,			1],
             [EnemyType.Boss,        Hero.Widowmaker,	1],
             [EnemyType.Elite,       Hero.Ashe, 			2],
-            [EnemyType.Elite,       Hero.Ana, 			2]
+            [EnemyType.Minion,       Hero.Ana, 			2]
         ],
         // fortress
         [
@@ -1064,7 +1064,7 @@ define assetList:
         ],
         // turrets
         [
-            [EnemyType.Boss,        Hero.Mercy, 		1],
+            [EnemyType.Boss,        Hero.Bastion, 		1],
             [EnemyType.Elite,       Hero.Symmetra, 		2],
             [EnemyType.Minion,      Hero.Torbjorn, 		3]
         ]
@@ -1077,7 +1077,7 @@ define assetList:
         */
     ];
 
-rule: "Portal/CreateBot/reloadBotAsset"
+rule: "Portal/CreateEnemBot/reloadBotAsset"
 Event.OngoingGlobal
 if(
     portalEnable
@@ -1087,14 +1087,12 @@ if(
         0 >= NumberOfPlayers(Team.Team2) ||
         ProbabilityTrue(70)
     ){
-        // destroy all bot
-        DestroyBots();
         // create all bot
         CreateEnemyBotsByAssetList(assetList);   
     }
 }
 
-// TAG Bot/EnemyType ----------
+// TAG EnemBot/EnemyType ----------
 playervar define eachDealtDamageScale!;
 playervar define eachMaxSpawnInterval!;
 playervar define eachChargeUltInterval!;
@@ -1102,7 +1100,7 @@ playervar define eachEffectTextSize!;
 playervar define eachNameText!;
 playervar define eachNameColor!;
 
-rule: "Bot/EnemyType/setEnemyType"
+rule: "EnemBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1194,10 +1192,10 @@ if(
     }
 }
 
-// TAG Bot/Effect ----------
+// TAG EnemBot/Effect ----------
 playervar define botAppearanceEntitys!;
 
-rule: "Bot/Effect/showBotAppearance"
+rule: "EnemBot/Effect/showBotAppearance"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1217,7 +1215,7 @@ if(
             eachNameColor, Spectators.DefaultVisibility);
 }
 
-rule: "Bot/Effect/hideBotAppearance"
+rule: "EnemBot/Effect/hideBotAppearance"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1233,12 +1231,15 @@ if(
         eachEffectTextSize * 1.5, eachEffectTextSize);
 }
 
-// TAG Bot/Teleport ----------
+// TAG EnemBot/Teleport ----------
 define teleportAreaSize: 6;
+define minDistanceToPlayerWhenTeleport: 6;
 define closestPlayerToTelPos: ClosestPlayerTo(teleportPosition, Team.Team1);
+define closestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, Team.Team1);
 define closestPlayerToPortal: ClosestPlayerTo(portalPosition, Team.Team1);
 define closestPlayerToMe: ClosestPlayerTo(ep, Team.Team1);
 playervar define teleportPosition!;
+globalvar define commonTeleportPosition!;
 
 void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     // set teleport position by blind spot from player
@@ -1260,7 +1261,7 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
         if(
             DistanceBetween(    // Not too close to player
                 closestPlayerToTelPos, teleportPosition)
-            >= 5
+            >= minDistanceToPlayerWhenTeleport
                 &&
             IsInLineOfSight(    // Has line
                 closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
@@ -1269,14 +1270,6 @@ void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
         }
         Wait(0.1, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
-    }
-}
-
-void UnifyTeleportPosition()"UnifyTeleportPosition"{
-    // unify teleportPosition
-    define one! = RandomValueInArray(AllPlayers(Team.Team2));
-    if(teleportPosition != one.teleportPosition){
-        AllPlayers(Team.Team2).teleportPosition = teleportPosition;
     }
 }
 
@@ -1297,7 +1290,7 @@ void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
         if(
             DistanceBetween(    // Not too close to player
                 closestPlayerToTelPos, teleportPosition)
-            >= 5
+            >= minDistanceToPlayerWhenTeleport
                 &&
             IsInLineOfSight(    // Has line
                 closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
@@ -1310,6 +1303,26 @@ void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
         }
         Wait(0.1, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
+    }
+    teleportPosition -= PositionOffset();
+}
+
+void SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPosition"{
+    if(
+        commonTeleportPosition ==  0 ||
+        ProbabilityTrue(10) ||
+        !IsInLineOfSight(commonTeleportPosition, closestPlayerToComTelPos) ||   
+        DistanceBetween(commonTeleportPosition, closestPlayerToComTelPos) < minDistanceToPlayerWhenTeleport
+    ){
+        // new select common position
+        // set teleport position to player around
+        SetTeleportPositionToPlayerAround();
+        // save teleport position as common position
+        commonTeleportPosition = teleportPosition;
+    }
+    else{
+        // set teleport position from common position
+        teleportPosition = commonTeleportPosition;
     }
 }
 
@@ -1339,7 +1352,7 @@ void TeleportWithEffect()"DoTeleportWithEffect"{
     PlayTeleportEffect(false);
 }
 
-rule: "Bot/Teleport/teleportByPortalDisabled"
+rule: "EnemBot/Teleport/teleportByPortalDisabled"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1362,7 +1375,7 @@ if(
     SetStatus(ep, null, Status.Rooted, MaxValue());
 }
 
-rule: "Bot/Teleport/teleportByPortalEnabled"
+rule: "EnemBot/Teleport/teleportByPortalEnabled"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1379,7 +1392,7 @@ if(
     TeleportWithEffect();
 }
 
-rule: "Bot/Teleport/teleportByPlayerEntered"
+rule: "EnemBot/Teleport/teleportByPlayerEntered"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1395,7 +1408,7 @@ if(
     TeleportWithEffect();
 }
 
-rule: "Bot/Teleport/teleportByRespawn"
+rule: "EnemBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1405,34 +1418,32 @@ if(
     AbortIf(IsDead());
     
     if(
-        // always teleport around the player during portal attacks
+        // during portal attacks
         portalState == PortalState.Suspended ||
-        // probability to teleport around players even if they are not in a portal attack
-        ProbabilityTrue(30)
+        // probability
+        ProbabilityTrue(15)
     ){
         if(
-            // has line to player from teleport position
-            IsInLineOfSight(teleportPosition, closestPlayerToTelPos) &&
-            // probability of using a unified teleport position
+            // probability
             ProbabilityTrue(70)
         ){
-            // unify teleport position of all bot
-            UnifyTeleportPosition();
+            // set teleport position to common position
+            SetTeleportPositionToCommonPosition();
         }
         else{
-            // change unified teleport position to player around
+            // set teleport position to player around
             SetTeleportPositionToPlayerAround();                        
         }
     }
     else{
-        // set teleport position player front
+        // set teleport position to player front
         SetTeleportPositionToPlayerFront();   
     }
     // teleport
     TeleportWithEffect();
 }
 
-rule: "Bot/Teleport/teleportByPlayerNotFound"
+rule: "EnemBot/Teleport/teleportByPlayerNotFound"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1449,16 +1460,14 @@ if(
         // during portal attacks
         portalState == PortalState.Suspended ||
         // probability
-        ProbabilityTrue(20)
+        ProbabilityTrue(15)
     ){
         if(
-            // has line to player from teleport position
-            IsInLineOfSight(teleportPosition, closestPlayerToTelPos) &&
             // probability
-            ProbabilityTrue(60)
+            ProbabilityTrue(70)
         ){
-            // unify teleport position of all bot
-            UnifyTeleportPosition();
+            // set teleport position to common position
+            SetTeleportPositionToCommonPosition();
         }
         else{
             // set teleport position to player around
@@ -1475,8 +1484,8 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG Bot/Ultimate ----------
-rule: "Bot/Ultimate/chargeUlt"
+// TAG EnemBot/chargeUltimate ----------
+rule: "EnemBot/chargeUltimate"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1489,8 +1498,8 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG Bot/SpawnInterval ----------
-define deadEffectTime: 1.5;
+// TAG EnemBot/SpawnInterval ----------
+define deadEffectTime: 2;
 playervar define confirmSpawnInterval!;
 
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
@@ -1501,7 +1510,7 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     SetRespawnMaxTime(ep, confirmSpawnInterval + deadEffectTime); 
 }
 
-rule: "Bot/SpawnInterval/update"
+rule: "EnemBot/SpawnInterval/update"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1512,7 +1521,7 @@ if(
     LoopIf(portalSize < maxPortalSize);
 }
 
-// TAG Bot/ReceivedDamage ----------
+// TAG EnemBot/ReceivedDamage ----------
 globalvar define confirmReceiveDamage!;
 
 void UpdateEachReceivedDamage()"UpdateEachReceivedDamage"{
@@ -1524,7 +1533,7 @@ void UpdateEachReceivedDamage()"UpdateEachReceivedDamage"{
     SetDamageReceived(AllPlayers(Team.Team2), confirmReceiveDamage);
 }
 
-rule: "Bot/ReceivedDamage/updateByBalance //for game balance, increase by missing players count"
+rule: "EnemBot/ReceivedDamage/updateByBalance //for game balance, increase by missing players count"
 Event.OngoingGlobal
 if(
     initCompleted
@@ -1534,7 +1543,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG Bot/DealtDamage ----------
+// TAG EnemBot/DealtDamage ----------
 playervar define confirmDealDamage!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
@@ -1549,7 +1558,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     SetDamageDealt(ep, confirmDealDamage);
 }
 
-rule: "Bot/DealtDamage/update"
+rule: "EnemBot/DealtDamage/update"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1561,14 +1570,131 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Bot/SpawnInterval/respawnBySucide"
+rule: "EnemBot/SpawnInterval/respawnBySucide"
 Event.OnDeath
 Team.Team2
 if(
     Attacker() == ep
 ){
-    Wait(1, WaitBehavior.AbortWhenFalse);
+    Wait(deadEffectTime, WaitBehavior.AbortWhenFalse);
     Respawn();
+}
+
+// TAG FriendBot ----------
+define enableFriendBot: true;
+playervar define leader;
+define HumanList:
+    FilteredArray(
+        AllPlayers(Team.Team1),
+        (
+            !IsDummyBot(ae) &&
+            HasSpawned(ae)
+        )
+    );
+
+define FriendBotList:
+    FilteredArray(
+        AllPlayers(Team.Team1),
+        (
+            IsDummyBot(ae) &&
+            HasSpawned(ae)
+        )
+    );
+
+Number AddFriendBotBot(define team, define hero)"AddFriendBotBot"{
+    AbortIf(CountOf(HumanList) >= 6);
+
+    define slot = GetEmptySlot(team);
+    if(slot != -1){
+        define human = RandomValueInArray(
+            HumanList
+        );
+
+        // create bot
+        CreateDummyBot(
+            hero, team, slot,
+            human + RandomPosition(1, 0, 1),
+            RandomDirection()
+        );
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        WaitUntil(!isServerOverLoading, 3);
+
+        define bot! = PlayersInSlot(slot, team);
+        // choice leader from human
+        bot.leader = human;
+        // apply Leader's name
+        StartForcingDummyBotName(bot, <"<0>'s Guard <1>", human, CountOf(FriendBotList)>);
+    }
+    return slot;
+}
+
+rule: "FriendBot/reloadFriendBotTeam"
+Event.OngoingGlobal
+if(
+    enableFriendBot &&
+    initCompleted &&
+    CountOf(HumanList) > 0 &&
+    portalEnable
+){
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    // change bot asset by random
+    if(
+        CountOf(FriendBotList) <= 0 ||
+        ProbabilityTrue(50)        
+    ){
+        dbgMsg("reload FriendBot Team");
+        DestroyBots(Team.Team1);
+        define FriendBotHeroList = [
+            RandomSupportHero,
+            RandomSupportHero,
+            RandomTankHero,
+            RandomTankHero,
+            RandomDamageHero,
+            RandomDamageHero
+        ];
+        for(define idx! = 0; idx < 6; idx++){
+            AddFriendBotBot(Team.Team1, FriendBotHeroList[idx]);
+        }
+    }
+}
+
+
+rule: "FriendBot/clearFriendBotTeam"
+Event.OngoingGlobal
+if(
+    enableFriendBot &&
+    initCompleted &&
+    CountOf(HumanList) <= 0
+){
+    DestroyBots(Team.Team1);
+}
+
+rule: "FriendBot/returnToLeader"
+Event.OngoingPlayer
+Team.Team1
+if(
+    enableFriendBot &&
+    IsDummyBot() &&
+    !IsInLineOfSight(ep, leader)
+){
+    Wait(5, WaitBehavior.AbortWhenFalse);   
+    Wait(SlotOf(ep) * 0.2, WaitBehavior.AbortWhenFalse);
+    Teleport(
+        ep, NearestWalkablePosition(leader + RandomPosition(1, 0, 1))
+    );
+    LoopIfConditionIsTrue();
+}
+
+rule: "FriendBot/fastRespawn"
+Event.OngoingPlayer
+Team.Team1
+if(
+    enableFriendBot &&
+    IsDummyBot() &&
+    !IsAlive()
+){
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
+    Respawn(ep);
 }
 
 // TAG Debug ----------
@@ -1631,7 +1757,6 @@ globalvar define debugHudEntitys!;
 
 // show debug icon and hud
 void ShowDebugHud()"ShowDebugHud"{
-
     if(
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
@@ -1908,3 +2033,4 @@ if(
     WaitLongPressConfirm();
     portalSize = maxPortalSize;
 }
+

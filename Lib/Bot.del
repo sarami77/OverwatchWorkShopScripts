@@ -28,7 +28,7 @@ define RandomSupportHero: RandomValueInArray(AllSupportHeroes());
 globalvar define botSlot;
 
 void CreateEnemyBotsByAssetList(define assetList)"CreateEnemyBotsByAssetList"{
-    DestroyBots();
+    DestroyBots(Team.Team2);
 
     // create bot by asset
     define asset = ValueInArray(assetList, RandomInteger(0, CountOf(assetList) - 1));
@@ -57,7 +57,8 @@ void CreateEnemyBotsByAssetList(define assetList)"CreateEnemyBotsByAssetList"{
 }
 
 void CreateBothBotsByInput(define heroList, define num)"CreateBothBotsByInput"{
-    DestroyBots();
+    DestroyBots(Team.Team1);
+    DestroyBots(Team.Team2);
 
     // create bot by asset
     for(define slotIdx = 0; slotIdx < num; slotIdx++){
@@ -84,19 +85,14 @@ void CreateBothBotsByInput(define heroList, define num)"CreateBothBotsByInput"{
     }
 }
 
-void DestroyBots()"DestroyBots"{
-    define teams = [Team.Team1, Team.Team2];
-    for(define tesmsIdx = 0; tesmsIdx < CountOf(teams); tesmsIdx ++){
-        // asign team
-        define team = teams[tesmsIdx];
-        for(define slotIdx = 0; slotIdx < 24; slotIdx ++){
-            // try until despawn entity
-            // while(HasSpawned(PlayersInSlot(slotIdx, team))){
-                DestroyDummyBot(
-                    team, slotIdx);
-                Wait(0.01, WaitBehavior.IgnoreCondition);
-            // }
-        }
+void DestroyBots(define team!)"DestroyBots"{
+    for(define slotIdx = 0; slotIdx < 6; slotIdx ++){
+        // try until despawn entity
+        // while(HasSpawned(PlayersInSlot(slotIdx, team))){
+            DestroyDummyBot(
+                team, slotIdx);
+            Wait(0.01, WaitBehavior.IgnoreCondition);
+        // }
     }
     botSlot = 0;
 }
@@ -157,13 +153,13 @@ if(
         primaryFireButtonReleaseMin = 0;
         primaryFireButtonReleaseMax = 3;
         primaryFireButtonPressMin = 0;
-        primaryFireButtonPressMax = 5;
+        primaryFireButtonPressMax = 10;
 
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonReleaseMin = 0;
         secondaryFireButtonReleaseMax = 3;
         secondaryFireButtonPressMin = 0;
-        secondaryFireButtonPressMax = 5;
+        secondaryFireButtonPressMax = 10;
 
         ability1ButtonReleaseMin = 0;
         ability1ButtonReleaseMax = 3;
@@ -301,6 +297,7 @@ if(
         case Hero.Mccree:
         heroName = "Mccree";
         AttackRange = AttackRange.Close;
+        secondaryFireButtonReleaseMax = 10;
         break;
 
         case Hero.Mei:
@@ -389,6 +386,9 @@ if(
         case Hero.Sombra:
         heroName = "Sombra";
         AttackRange = AttackRange.Close;
+        secondaryFireButtonPressMin = 1.5;
+        ability1ButtonReleaseMin = 5;
+        ability1ButtonReleaseMax = 10;
         break;
 
         case Hero.Symmetra:
@@ -609,14 +609,16 @@ Boolean isMatchButton(define matchButton!, define butttons!){
     return IsTrueForAny(butttons, ae == matchButton);
 }
 
+// TAG Bot/ButtonControl/PrimaryFire ----------
+define enableButtonControlState:
+    actionState == ActionState.Attack ||
+    actionState == ActionState.Support;
+
 rule: "Bot/ButtonControl/PrimaryFire/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    (
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    )
+    enableButtonControlState
 ){
     StartButtonControl(
         [
@@ -630,14 +632,12 @@ if(
     );
 }
 
+// TAG Bot/ButtonControl/SeconaryFire ----------
 rule: "Bot/ButtonControl/SeconaryFire/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    (
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    )
+    enableButtonControlState
 ){
     StartButtonControl(
         [
@@ -651,14 +651,12 @@ if(
     );
 }
 
+// TAG Bot/ButtonControl/Ability1 ----------
 rule: "Bot/ButtonControl/Ability1/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    (
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    )
+    enableButtonControlState
 ){
     StartButtonControl(
         [
@@ -672,14 +670,12 @@ if(
     );
 }
 
+// TAG Bot/ButtonControl/Ability2 ----------
 rule: "Bot/ButtonControl/Ability2/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    (
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    )
+    enableButtonControlState
 ){
     StartButtonControl(
         [
@@ -693,14 +689,12 @@ if(
     );
 }
 
+// TAG Bot/ButtonControl/Ultimate ----------
 rule: "Bot/ButtonControl/Ultimate/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    (
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    ) &&
+    enableButtonControlState &&
     UltimateChargePercent() >= 100
 ){
     StartButtonControl(
@@ -715,14 +709,12 @@ if(
     );
 }
 
+// TAG Bot/ButtonControl/Jump ----------
 rule: "Bot/ButtonControl/Jump/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    (
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    )
+    enableButtonControlState
 ){
     StartButtonControl(
         [
@@ -736,14 +728,12 @@ if(
     );
 }
 
+// TAG Bot/ButtonControl/Crouch ----------
 rule: "Bot/ButtonControl/Crouch/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    (
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    )
+    enableButtonControlState
 ){
     StartButtonControl(
         [
@@ -752,19 +742,17 @@ if(
             5,
             10,
             0,
-            1
+            2
         ]
     );
 }
 
+// TAG Bot/ButtonControl/Reload ----------
 rule: "Bot/ButtonControl/Reload/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    (
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    )
+    enableButtonControlState
 ){
     StartButtonControl(
         [
@@ -778,29 +766,12 @@ if(
     );
 }
 
-rule: "Bot/ButtonControl/WeaponSwitch/StartButtonControl"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    (
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    )
-){
-    while(true){
-        Wait(RandomReal(5 * 2, 5 * 4), WaitBehavior.AbortWhenFalse);
-        SetWeapon(ep, RandomInteger(0, 1));
-    }
-}
-
+// TAG Bot/ButtonControl/StopButtonControl ----------
 rule: "Bot/ButtonControl/StopButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    !(
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    )
+    !enableButtonControlState
 ){
     StopHoldingButton(ep, Button.PrimaryFire);
     StopHoldingButton(ep, Button.SecondaryFire);
@@ -941,7 +912,7 @@ if(
                 nextActionState = ActionState.Support; 
             }
         }
-        // // has not target 
+        // has not target 
         // else if(targetPos != 0){
         //     // Search state by target lost target 
         //     nextActionState = ActionState.Search;
@@ -1034,7 +1005,11 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Non
 ){
-    statusText = <"Non <0>", target>;
+    statusText = <"Non">;
+
+    // hero unique action
+    HeroUniqueAction();
+
     moveDir = 0;
     sideStepDir = 0;
     target = 0;
@@ -1051,12 +1026,15 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Search
 ){
-    statusText = <"Searching <0>", target>;
+    statusText = <"Searching">;
+
+    // hero unique action
+    HeroUniqueAction();
 
     // set initial status
-    moveDir = 0;
-    sideStepDir = 0;
-    StopMove();
+    moveDir = Forward();
+    sideStepDir = -sideStepDir;
+    StartMove();
     targetPos = BelowPosition(targetPos);   // convert targetpPos to rechable position
 
     // set face direction to target lost posotion
@@ -1068,37 +1046,15 @@ if(
         300,
         Relative.ToWorld, FacingRev.DirectionAndTurnRate
     );
-
-    if(sideStepDir == 0){
-        //sideStepDir = RandomValueInArray([Right(),Left()]);
-        sideStepDir = 0;
-    }
-    else{
-        // set reverse side step for find player
-        sideStepDir = -sideStepDir;
-    }
     
     // action loop
     while(actionState == ActionState.Search){
-        dbgPlyEft(ep);
-
-        // set move directiion
-        if(!IsBelowAbyss(ForwardSensor())){
-            moveDir = Forward();
-        }
-        else{
-            moveDir = 0;
-        }
-
         // reached target lost position
         if(DistanceBetween(targetPos, ep) <= targetPosRange){
             Wait(1, WaitBehavior.AbortWhenFalse);
             actionState = ActionState.Non;
         }
-
-        // set move direction
-        StartMove();
-
+        
         // check stack
         checkStackAndBreak();
 
@@ -1127,18 +1083,18 @@ define aimTarget:
         // (Down() * 0.3 * aimDiffusivity) +
         // RandomPosition(aimDiffusivity, aimDiffusivity, aimDiffusivity);
 
+
+
 rule: "Bot/ActionState/Attack"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
     actionState == ActionState.Attack
 ){
-    statusText = <"Attack <0>", target>;
+    statusText = <"Attack">;
 
-    // set initial status
-    moveDir = 0;
-    sideStepDir = 0;
-    StopMove();
+    // hero unique action
+    HeroUniqueAction();
 
     // set face direction
     StartFacing(
@@ -1230,12 +1186,10 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Support
 ){
-    statusText = <"Support <0>", target>;
+    statusText = <"Support">;
 
-    // set initial status
-    moveDir = 0;
-    sideStepDir = 0;
-    StopMove();
+    // hero unique action
+    HeroUniqueAction();
 
     // set face direction
     StartFacing(
@@ -1287,7 +1241,22 @@ if(
     }
 }
 
-// Debug -----------------------------------------------
+// TAG Bot/HeroUniqueAction ----------
+define MercyStaff: 1;
+define MercyPistol: 2;
+
+void HeroUniqueAction(){
+    if(HeroOf() == Hero.Mercy){
+        if(actionState == ActionState.Attack){
+            SetWeapon(ep, MercyPistol);
+        }
+        else{
+            SetWeapon(ep, MercyStaff);
+        }
+    }
+}
+
+// TAG Debug ----------
 define maxBotNum: 6;
 disabled rule: "Debug/SpawnOneBot"
 Event.OngoingPlayer
@@ -1368,4 +1337,10 @@ if(
         ep.actionState == ActionState.Search ? debugInfoDisplayeTo : null,
         Effect.Ring, Color.White,
         targetPos, targetPosRange, EffectRev.VisibleToPositionRadiusAndColor);
+    while(true){
+        if(IsBelowAbyss(BackwardSensor())){
+            dbgPlyEft(ep);
+        }
+        Wait(1);
+    }
 }
