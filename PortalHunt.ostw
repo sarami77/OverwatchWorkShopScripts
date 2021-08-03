@@ -107,7 +107,7 @@ Event.OngoingGlobal
 if(
     !watchingOverLoad
 ){
-    Wait(2.5, WaitBehavior.IgnoreCondition);
+    Wait(3.0, WaitBehavior.IgnoreCondition);
     // reset slow level
     ApplySlowLevel(0);
     watchingOverLoad = true;
@@ -132,15 +132,6 @@ Event.OngoingGlobal
 {
     // Stop records to reduce server load
     DisableInspectorRecording();
-
-    // for perfomance debug
-    // CreateHudText(HostPlayer(),
-    //     null,
-    //     <"<0> <1>", "current Slow Level", currentSlowLevel>,
-    //     null,
-    //     Location.Left, -1,
-    //     Color.White, Color.Orange, Color.White,
-    //     HudTextRev.VisibleToAndString, Spectators.VisibleNever);
 
     // Set imported function property
     Regeneration_enableTeam = Team.Team1;
@@ -313,6 +304,7 @@ if(
 
 globalvar define initialTeamLifes!;
 globalvar define teamLifes!;
+define maxTeamLifes: 12;
 
 rule: "Player/TeamLifes/showTeamLifesHUD"
 Event.OngoingGlobal
@@ -321,7 +313,10 @@ if(
 ){
     // show HUD of team lifes
     CreateHudText(AllPlayers(),
-        <"<0> <1>", "Team lifes", teamLifes>, null, null,
+        teamLifes < maxTeamLifes ? 
+            <"Team lifes <0>", teamLifes> :
+            <"Team lifes <0> (Max Stock)", teamLifes>,
+        null, null,
         Location.Top, 3,
         Color.Team1, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
@@ -336,10 +331,9 @@ if(
     teamLifes -= reviveTimeoutCount;
     WaitChangeState();  // wait for show big message by newest value
     if(teamLifes > 0){
-        if(teamLifes > 0){
-            BigMessage(AllPlayers(),
-                <"<0> <1> <2>", "Our remaining team lifes is", teamLifes, "...">);
-        }
+        BigMessage(AllPlayers(),
+            <"<0> <1> <2>", "Our remaining team lifes is", teamLifes, "...">);
+
         PlayEffect(
             AllPlayers(), PlayEffect.DebuffImpactSound,
             Color.White, portalPosition, MaxLength());
@@ -491,15 +485,18 @@ if(
     portalState = PortalState.Closed;
     WaitNextPhase();
 
-    // show got life sound message
-    BigMessage(AllPlayers(), "We got new team lifes!");
-    // play got life sound
-    PlayEffect(
-        AllPlayers(), PlayEffect.BuffImpactSound,
-        Color.White, portalPosition, MaxLength()
-    );
-    // got life sound
-    teamLifes += 1;
+    // if lower than max
+    if(teamLifes < maxTeamLifes){
+        // play got life sound
+        PlayEffect(
+            AllPlayers(), PlayEffect.BuffImpactSound,
+            Color.White, portalPosition, MaxLength()
+        );
+        // show got life sound message
+        BigMessage(AllPlayers(), "We got new team lifes!");
+        // add life
+        teamLifes += 1;
+    }
     WaitNextPhase();
 
     PlayRandomVoiceLine(AllPlayers(Team.Team1));
@@ -624,7 +621,7 @@ if(
     // show message
     BigMessage(AllPlayers(), "Detected more portal... find and attack!");
     // Hide icon to let the player search the portal
-    Wait(6, WaitBehavior.AbortWhenFalse);
+    Wait(10, WaitBehavior.AbortWhenFalse);
     DestroyIcon(portalEntitys[0]);
 }
 
@@ -645,7 +642,6 @@ if(
         BigMessage(AllPlayers(), "Growed portals spawn more enemys and get tough...");
     }
     // Hide icon to let the player search the portal
-    Wait(1, WaitBehavior.AbortWhenFalse);
     DestroyIcon(portalEntitys[0]);
 }
 
@@ -657,7 +653,7 @@ if(
     // Hide icon to let the player search the portal
     DestroyIcon(portalEntitys[0]);
     // Stop growing portal
-    Wait(2, WaitBehavior.AbortWhenFalse);
+    Wait(1, WaitBehavior.AbortWhenFalse);
     StopChasingVariable(portalSize);
 }
 
@@ -1365,14 +1361,15 @@ if(
 
     // reset teleport position
     teleportPosition = InvalidPosition();
+    // set root
+    SetStatus(ep, null, Status.Rooted, MaxValue());
     // show pre teleport effect
     PlayTeleportEffect(true);
     // Teleport to spawn room
     Respawn(AllPlayers(Team.Team2));
     // show teleport effect
     PlayTeleportEffect(false);
-    // set root
-    SetStatus(ep, null, Status.Rooted, MaxValue());
+
 }
 
 rule: "EnemBot/Teleport/teleportByPortalEnabled"
@@ -1421,7 +1418,7 @@ if(
         // during portal attacks
         portalState == PortalState.Suspended ||
         // probability
-        ProbabilityTrue(15)
+        ProbabilityTrue(12)
     ){
         if(
             // probability
@@ -1499,7 +1496,7 @@ if(
 }
 
 // TAG EnemBot/SpawnInterval ----------
-define deadEffectTime: 2;
+define deadEffectTime: 3;
 playervar define confirmSpawnInterval!;
 
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
@@ -1581,6 +1578,7 @@ if(
 }
 
 // TAG FriendBot ----------
+/*
 define enableFriendBot: true;
 playervar define leader;
 define HumanList:
@@ -1628,36 +1626,30 @@ Number AddFriendBotBot(define team, define hero)"AddFriendBotBot"{
     return slot;
 }
 
-rule: "FriendBot/reloadFriendBotTeam"
+rule: "FriendBot/fillFriendBotTeam"
 Event.OngoingGlobal
 if(
     enableFriendBot &&
     initCompleted &&
     CountOf(HumanList) > 0 &&
-    portalEnable
+    NumberOfPlayers(Team.Team1) < 6
 ){
-    Wait(1, WaitBehavior.AbortWhenFalse);
-    // change bot asset by random
-    if(
-        CountOf(FriendBotList) <= 0 ||
-        ProbabilityTrue(50)        
-    ){
-        dbgMsg("reload FriendBot Team");
-        DestroyBots(Team.Team1);
-        define FriendBotHeroList = [
-            RandomSupportHero,
-            RandomSupportHero,
-            RandomTankHero,
-            RandomTankHero,
-            RandomDamageHero,
-            RandomDamageHero
-        ];
-        for(define idx! = 0; idx < 6; idx++){
-            AddFriendBotBot(Team.Team1, FriendBotHeroList[idx]);
-        }
+    dbgMsg("fill FriendBot Team");
+    define FriendBotHeroList = [
+        RandomSupportHero,
+        RandomSupportHero,
+        RandomTankHero,
+        RandomTankHero,
+        RandomDamageHero,
+        RandomDamageHero
+    ];
+    for(define idx! = 0; idx < 6; idx++){
+        AddFriendBotBot(Team.Team1, FriendBotHeroList[idx]);
     }
+    
+    Wait(60, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
 }
-
 
 rule: "FriendBot/clearFriendBotTeam"
 Event.OngoingGlobal
@@ -1667,6 +1659,24 @@ if(
     CountOf(HumanList) <= 0
 ){
     DestroyBots(Team.Team1);
+}
+
+rule: "FriendBot/rebindLeader"
+Event.OnPlayerLeave
+Team.Team1
+if(
+    enableFriendBot &&
+    !IsDummyBot()
+){
+    define bots! = FilteredArray(
+        AllPlayers(Team.Team1), ae.leader == ep);
+    dbgHudTxt(CountOf(bots));
+
+    for(pLoopIndex = 0; pLoopIndex < CountOf(bots); pLoopIndex ++){
+        define newLeader! = RandomValueInArray(AllPlayers(Team.Team1));
+        dbgHudTxt(newLeader);
+        bots[pLoopIndex].leader = newLeader;
+    }
 }
 
 rule: "FriendBot/returnToLeader"
@@ -1696,6 +1706,7 @@ if(
     Wait(0.1, WaitBehavior.AbortWhenFalse);
     Respawn(ep);
 }
+*/
 
 // TAG Debug ----------
 globalvar define debugMode!;
