@@ -13,22 +13,28 @@ if(
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
     // set hud
     perk[Perk.perkEffectAndText] = [];
-    CreatePerkEffectHud(
-        IsUsingUltimate() ?
-            <"Current weapon is <0>.", "120mm HE cannon"> :
-            <"Press ability1 button <1> to change weapon. Current weapon is <0>.",
-                IsInAlternateForm() ?
-                "5mm minigun" :
-                "10mm auto cannon" ,
-            ButtonGuide(Button.Ability1)>
-    );
-    perk[Perk.perkEffectAndText] [0] = LastTextID();
-    CreatePerkEffectHud(<"Press secondary fire button <0> to afterburner.", ButtonGuide(Button.SecondaryFire)>);
+    // CreatePerkEffectHud(
+    //     IsUsingUltimate() ?
+    //         <"Current weapon is <0>.", "120mm HE cannon"> :
+    //         <"Press ability1 button <1> to change weapon. Current weapon is <0>.",
+    //             IsInAlternateForm() ?
+    //             "5mm minigun" :
+    //             "10mm auto cannon" ,
+    //         ButtonGuide(Button.Ability1)>
+    // );
+    // perk[Perk.perkEffectAndText] [0] = LastTextID();
+    CreatePerkEffectHud( 
+        perk[Perk.perkEffectStatus] == PerkEffectStatus.Triggered ? 
+            <"Hold secondary fire button <0> to accelerate in facing direction.", ButtonGuide(Button.SecondaryFire)> : 
+            ""
+        );
     perk[Perk.perkEffectAndText] [1] = LastTextID();
-    CreatePerkEffectHud(<"Hold jump button <0> to flying mode.", ButtonGuide(Button.Jump)>);
+    CreatePerkEffectHud( 
+        perk[Perk.perkEffectStatus] == PerkEffectStatus.Triggered ? 
+            <"Hold crouch button <0> to walking mode.", ButtonGuide(Button.Crouch)> : 
+            <"Hold jump button <0> to flying mode.", ButtonGuide(Button.Jump)>
+        );
     perk[Perk.perkEffectAndText] [2] = LastTextID();
-    CreatePerkEffectHud(<"Hold crouch button <0> to walking mode.", ButtonGuide(Button.Crouch)>);
-    perk[Perk.perkEffectAndText] [3] = LastTextID();
     // set perk hero
     PerkHero perkHero = new PerkHero();
     perkHero.hero = Hero.Bastion;
@@ -62,10 +68,9 @@ if(
     StopScalingPlayer(ep);
     StopModifyingHeroVoiceLines(ep);
     // reset hud
-    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    // DestroyHudText(perk[Perk.perkEffectAndText] [0]);
     DestroyHudText(perk[Perk.perkEffectAndText] [1]);
     DestroyHudText(perk[Perk.perkEffectAndText] [2]);
-    DestroyHudText(perk[Perk.perkEffectAndText] [3]);
     // reset perk hero
     StopForcingPerkHero(ep);
     // reset type
@@ -124,43 +129,52 @@ if(
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
 ){
-    define distanceFromSurface = DistanceBetween(ep, NearestWalkablePosition(ep));
     
-    // if near surface
-    if(
-        distanceFromSurface < keepHeight
-    ){
-        // float    
-        ApplyImpulse(ep, Up(),
-            (keepHeight - distanceFromSurface) * 0.04,
-            Relative.ToPlayer, ContraryMotion.Incorporate);
-    }
-
-    // if far surface
-    if(
-        distanceFromSurface > keepHeight
-    ){
-        // dive    
-        ApplyImpulse(ep, Down(),
-            (distanceFromSurface - keepHeight) * 0.04,
-            Relative.ToPlayer, ContraryMotion.Incorporate);
-    }
+    define isAcc = IsButtonHeld(ep, Button.SecondaryFire);
     
-    // if press SF button
+    // if press accelerate button
     if(IsButtonHeld(ep, Button.SecondaryFire)){
-        // move forword
-        ApplyImpulse(ep, Forward(), 1.5,
-            Relative.ToPlayer, ContraryMotion.Incorporate);
+        // move facing direction
+        
+        ApplyImpulse(ep, 
+            VectorScaledY(
+                FacingDirectionOf(),
+                0 > YOf(FacingDirectionOf()) ? 0.1 : 1  // if downward, scale down
+            ), 1,
+            Relative.ToWorld, ContraryMotion.Incorporate);
     }
     else{
-        ApplyImpulse(ep, Forward(), 0.05,
+        // check front surface altitude
+        define distanceFromSurface = DistanceBetween(ep, NearestWalkablePosition(ep));
+        // near surface
+        if(
+            distanceFromSurface < keepHeight
+        ){
+            // move to up
+            ApplyImpulse(ep, Up(),
+                (keepHeight - distanceFromSurface) * 0.05,
+                Relative.ToPlayer, ContraryMotion.Incorporate);
+        }
+        // far surface
+        else if(
+            distanceFromSurface > keepHeight + 1
+        ){
+            // move to down
+            ApplyImpulse(ep, Down(),
+                0.01,
+                Relative.ToPlayer, ContraryMotion.Cancel);
+        }        
+        // move to fotward    
+        ApplyImpulse(ep, Forward(),
+            0.1,
             Relative.ToPlayer, ContraryMotion.Incorporate);
+        
     }
     WaitApplyImpulseCycle();
     LoopIfConditionIsTrue();
 }
 
-rule: "Perk/Player/DeathFromAbove/playAfterBurner"
+rule: "Perk/Player/DeathFromAbove/playAccelerate"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -169,7 +183,7 @@ if(
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
     IsButtonHeld(ep, Button.SecondaryFire)
 ){
-    // play Afterburner
+    // play Accelerate
     PlayEffect(
         AllPlayers(), PlayEffect.GoodExplosion,
         Color.Orange, PositionOf(ep), 0.5);
@@ -262,7 +276,7 @@ if(
     perkState  == PerkState.Using &&
     IsUsingUltimate()
 ){
-    SetDamageDealt(ep, 200);
+    SetDamageDealt(ep, 250);
 }
 
 rule: "Perk/Player/DeathFromAbove/resetTankModeDamageBuff"
