@@ -1,6 +1,7 @@
 import "PerkCore.del";
 
 define superLandingRange: 8;
+define triggerCongition: 6 <= DistanceBetween(ep, BelowPosition(ep));
 
 rule: "Perk/Player/SuperLanding/activate"
 Event.OngoingPlayer
@@ -13,6 +14,7 @@ if(
     perk[Perk.perkTimeLimit] = 300;
     // set param
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
+    perkPosition = 0;
     // set hud
     perk[Perk.perkEffectAndText] = [];
     CreatePerkEffectHud(<"Hold crouch button <0> in air to landing attack.", ButtonGuide(Button.Crouch)>);
@@ -21,6 +23,12 @@ if(
     perk[Perk.perkEffectAndText] [1] = LastTextID();
     CreatePerkEffectHud(<"Hold jump button <0> to high jump.", ButtonGuide(Button.Jump)>);
     perk[Perk.perkEffectAndText] [2] = LastTextID();
+    // set effect
+    CreateEffect(
+        triggerCongition ? ep : null, Effect.Ring, Color.White,
+        BelowPosition(ep), superLandingRange, EffectRev.VisibleToPositionAndRadius);
+    perk[Perk.perkEffectAndText] [3] = LastCreatedEntity();
+
 }
 
 rule: "Perk/Player/SuperLanding/deactivate"
@@ -30,13 +38,20 @@ if(
     perkType == PerkType.SuperLanding &&
     perkState  == PerkState.Non
 ){
+    // reset param
+    StopCamera(ep);
+    perkPosition = 0;
     // reset hud
     DestroyHudText(perk[Perk.perkEffectAndText][0]);
     DestroyHudText(perk[Perk.perkEffectAndText][1]);
     DestroyHudText(perk[Perk.perkEffectAndText][2]);
+    DestroyEffect(perk[Perk.perkEffectAndText][3]);
     // reset status
+    StopCamera(ep);
+    SetMoveSpeed(ep, DefaultPercentage());
+    SetAimSpeed(ep, DefaultPercentage());
+    AllowButton(ep, Button.Jump);
     StopHoldingButton(ep, Button.Crouch);
-    SetMoveSpeed(ep, 100);
     // reset type
     perkType = PerkType.Non;
 }
@@ -63,12 +78,17 @@ if(
     perkType == PerkType.SuperLanding &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
-    IsButtonHeld(ep, Button.Jump)
+    IsButtonHeld(ep, Button.Jump) &&
+    !IsButtonHeld(ep, Button.Crouch)
 ){
     Wait(1, WaitBehavior.AbortWhenFalse);
     for(define hovringCount = 0; hovringCount < 50; hovringCount++){
         ApplyImpulse(ep, (Up() * 0.1), 1,
             Relative.ToPlayer, ContraryMotion.Cancel);
+        // play blast
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodExplosion,
+            Color.White, ep, 0.5);
         WaitApplyImpulseCycle();
     }
 }
@@ -81,10 +101,20 @@ if(
     perkState  == PerkState.Using &&
     IsButtonHeld(ep, Button.Crouch)
 ){
-    AbortIf(5 > DistanceBetween(ep, BelowPosition(ep)));
     WaitLongPressConfirm();
+    AbortIf(!triggerCongition);
+    perkPosition = 
+        EyePosition() - 
+        (Normalize(VectorWithOutY(FacingDirectionOf())) * 8);
     ApplyImpulse(ep, Down(), MaxValue(),
         Relative.ToPlayer, ContraryMotion.Cancel);
+
+    StartCamera(ep, perkPosition, BelowPosition(ep), MaxValue());
+    SetMoveSpeed(ep, 0);
+    SetAimSpeed(ep, 0);
+    DisallowButton(ep, Button.Jump);
+    StartHoldingButton(ep, Button.Crouch);
+
     perk[Perk.perkEffectStatus] = PerkEffectStatus.SecondTriggered;
 }
 
@@ -97,9 +127,6 @@ if(
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.SecondTriggered &&
     IsOnGround()
 ){
-    StartHoldingButton(ep, Button.Crouch);
-    SetMoveSpeed(ep, 0);
-
     // get target
     perk[Perk.perkTargets] = PlayersWithinRadius(
         PositionOf(), superLandingRange, Team.Team2, RadiusLOS.Off);
@@ -118,7 +145,15 @@ if(
         superLandingRange,
         2);
 
-    perk[Perk.perkEffectStatus] = PerkEffectStatus.Reloading;
+    Wait(1.0, WaitBehavior.IgnoreCondition);
+
+    StopCamera(ep);
+    SetMoveSpeed(ep, DefaultPercentage());
+    SetAimSpeed(ep, DefaultPercentage());
+    AllowButton(ep, Button.Jump);
+    StopHoldingButton(ep, Button.Crouch);
+
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
 }
 
 rule: "Perk/Player/SuperLanding/resetUsedFlagOnHighJump"
@@ -130,20 +165,5 @@ if(
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
     IsOnGround()
 ){
-    perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
-}
-
-rule: "Perk/Player/SuperLanding/resetUsedFlagOnDescent"
-Event.OngoingPlayer
-Team.Team1
-if(
-    perkType == PerkType.SuperLanding &&
-    perkState  == PerkState.Using &&
-    perk[Perk.perkEffectStatus]  == PerkEffectStatus.SecondTriggered &&
-    IsOnGround()
-){
-    Wait(1.0, WaitBehavior.IgnoreCondition);
-    StopHoldingButton(ep, Button.Crouch);
-    SetMoveSpeed(ep, 100);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
 }

@@ -40,17 +40,22 @@ disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopS
 // TAG System ----------
 define WaitUntilServerFree(): WaitUntil(!isServerOverLoading, 5);
 
-define slowLevel: [100, 90, 80, 70, 50];    // 0～4
+define slowLevel: [100, 95, 90, 75, 50];    // 0～4
 globalvar define targetSlowLevel!;
 globalvar define currentSlowLevel!;
-globalvar define watchingOverLoad!;
+globalvar define slowControlHandler!;
+enum SlowControlHandler{
+    None,
+    ServerOverLoadMeasures,
+    PlayerJoin,
+    GameEnd
+}
 
 rule: "System/ServerOverLoadMeasures/increaseSlowLevel"
 Event.OngoingGlobal
 if(
     initCompleted &&    
-    portalState != PortalState.End &&
-    watchingOverLoad &&
+    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
     isServerOverLoading &&
     targetSlowLevel < (CountOf(slowLevel) - 1)
 ){
@@ -72,8 +77,7 @@ rule: "System/ServerOverLoadMeasures/decreaseSlowLevel"
 Event.OngoingGlobal
 if(
     initCompleted &&    
-    portalState != PortalState.End &&
-    watchingOverLoad &&
+    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
     !isServerOverLoading &&
     targetSlowLevel > 0
 ){
@@ -95,22 +99,22 @@ Event.OnPlayerJoin
 Team.Team1
 if(
     initCompleted &&
-    portalState != PortalState.End
+    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures
 ){
     // apply slow level
     ApplySlowLevel(3);
-    watchingOverLoad = false;
+    slowControlHandler = SlowControlHandler.PlayerJoin;
 }
 
 rule: "System/ServerOverLoadMeasures/restartOverLoadWatching"
 Event.OngoingGlobal
 if(
-    !watchingOverLoad
+    slowControlHandler == SlowControlHandler.PlayerJoin
 ){
     Wait(3.0, WaitBehavior.IgnoreCondition);
     // reset slow level
     ApplySlowLevel(0);
-    watchingOverLoad = true;
+    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 }
 
 void ApplySlowLevel(define setSlowLevel!)"ApplySlowLevel"{
@@ -133,27 +137,27 @@ Event.OngoingGlobal
     // Stop records to reduce server load
     DisableInspectorRecording();
 
+    // If run it right after loading the server, some scripts fail, so wait 3 seconds
+    Wait(3, WaitBehavior.AbortWhenFalse);
+
     // Set imported function property
+    // Regeneration
     Regeneration_enableTeam = Team.Team1;
     Regeneration_needBalanceTeam1 = true;
     Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 3, 0, 100, 1);
     Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 25, 0, 1000, 2);
-
+    // Revive
     Revive_enableTeam = Team.Team1;
     Revive_timeLimit = WorkshopSettingReal("Player Settings", "Revive Time Limit", 10, 0, 100, 3);
-    
+    // DamageText
     DamageText_enableTeam = Team.Team2;
-
-    // If run it right after loading the server, some scripts fail, so wait 3 seconds
-    Wait(3, WaitBehavior.AbortWhenFalse);
+    // ElapsedTimer
+    ElapsedTimer_enable = true;
 
     // Cancel unnecessary default settings
     PauseMatchTime();
     DisableScoring();
     DisableCompletion();
-
-    // set objective message
-    SetObjectiveDescription(AllPlayers(Team.Team1), "Find portal and attack it!", HudTextRev.None);
 
     // Set initial team lifes
     initialTeamLifes = WorkshopSettingInteger("Player Settings", "Initial Team Lifes", 6, 0, 1000, 0);
@@ -179,12 +183,8 @@ Event.OngoingGlobal
         enemyColor, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
 
-    // show objective message and elapsed time
-    enableElapsedTimer = true;
-    elapsedTime = 0;
-
     // Start watch over load
-    watchingOverLoad = true;
+    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
@@ -209,6 +209,8 @@ if(
     roundNo = 0;
     // reset elapsed time
     elapsedTime = 0;
+    // reset portal
+    portalState = PortalState.Init;
 }
 
 rule: "Game/startGame"
@@ -225,6 +227,8 @@ if(
         )
     )
 ){
+    // reset elapsed time
+    elapsedTime = 0;
     // reset prevPortalPosition
     prevPortalPosition = PositionOf(FirstOf(AllPlayers(Team.Team1)));
     // start portal creation
@@ -254,7 +258,7 @@ if(
     initCompleted
 ){
     // Change the spawn room regularly to keep the game fluid
-    Wait(300, WaitBehavior.AbortWhenFalse); // change spawn room
+    Wait(60 * 5, WaitBehavior.AbortWhenFalse); // change spawn room
     ForceSpawnRoom(Team.Team2, RandomInteger(0, 2));
     ForceSpawnRoom(Team.Team1, RandomInteger(0, 2));
     LoopIfConditionIsTrue();
@@ -341,15 +345,18 @@ if(
     reviveTimeoutCount = 0;
 }
 
-rule: "Player/TeamLifes/finishGame //by team lifes out"
+rule: "Player/TeamLifes/finishGame"
 Event.OngoingGlobal
 if(
     initCompleted &&
     teamLifes <= 0
 ){
     WaitConditionConfirmed();
-    // When the team lifes out, the game ends
+    // play game end portal effect
     portalState = PortalState.End;
+    // set slow handler
+    slowControlHandler = SlowControlHandler.GameEnd;
+
     BigMessage(AllPlayers(), "Our team lifes is out...");
     SetSlowMotion(10);
     Wait(1, WaitBehavior.AbortWhenFalse);   // show slow
@@ -364,7 +371,7 @@ if(
     DeclareTeamVictory(Team.Team1);
 }
 
-rule: "Player/TeamLifes/protectTeamLifesFromSucide"
+rule: "Player/TeamLifes/protectTeamLifeConsumeBySucide"
 Event.OnDeath
 Team.Team1
 if(
@@ -382,10 +389,10 @@ globalvar define closingProgressHudEntity!;
 globalvar define playerNumInsidePortal!;
 
 define enableClosingProgress:
-    portalState == PortalState.Suspended &&
+    portalState == PortalState.UnderAttack &&
     teamLifes > 0;
 
-rule: "Player/ClosePortal/startClosing //on enter any player"
+rule: "Player/ClosePortal/startClosing"
 Event.OngoingGlobal
 if(
     enableClosingProgress
@@ -411,29 +418,16 @@ if(
             Spectators.DefaultVisibility );
         closingProgressHudEntity = LastTextID();
     }
-    // get closest surviver to portal center
-    define portalClosingPlayer! = 
-        FirstOf(
-            SortedArray(
-                FilteredArray(
-                    AllPlayers(Team.Team1),
-                    (
-                        IsAlive(ae) &&
-                        !IsInSpawnRoom(ae)
-                    )
-                ),
-                DistanceBetween(portalPosition, ae)
-            )
-        );
+    define closestPlayerPortal! = ClosestPlayerToPortal();
     // show big message
     BigMessage(
-        portalClosingPlayer,
+        closestPlayerPortal,
         <"You are closing portal... Stay inside and Survive!">);
     BigMessage(
-        FilteredArray(AllPlayers(Team.Team1), (portalClosingPlayer != ae)),
+        FilteredArray(AllPlayers(Team.Team1), (closestPlayerPortal != ae)),
         <"<0> <1> <2>",
-            portalClosingPlayer,
-            HeroIconString(HeroOf(portalClosingPlayer)),
+            closestPlayerPortal,
+            HeroIconString(HeroOf(closestPlayerPortal)),
             "closing portal... Cover one!">);
     // Wait closingCount
     Wait(closingCount, WaitBehavior.AbortWhenFalse);
@@ -542,12 +536,11 @@ if(
 globalvar define portalState!;
 enum PortalState{
     Init,
-    Idle,
     Calculating,
     Checking,
     Set,
     Growing,
-    Suspended,
+    UnderAttack,
     Closing,
     Closed,
     End
@@ -562,9 +555,9 @@ define portalEnable:
     portalState == PortalState.Checking ||
     portalState == PortalState.Set ||
     portalState == PortalState.Growing ||
-    portalState == PortalState.Suspended;
+    portalState == PortalState.UnderAttack;
 
-rule: "Portal/State/Calculating //invisible, init param"
+rule: "Portal/State/Calculating"
 Event.OngoingGlobal
 if(
     portalState == PortalState.Calculating
@@ -583,6 +576,8 @@ if(
     DestroyEffect(portalEntitys[4]);
 }
 
+define showPortalIconOutRange: 50;
+
 rule: "Portal/State/Set  // waiting for found by players"
 Event.OngoingGlobal
 if(
@@ -594,35 +589,35 @@ if(
     closingCount = 0;
     // show icon
     portalEntitys = [];
-    CreateIcon(AllPlayers(), portalPosition, Icon.Spiral,
+    portalEntitys[0] = CreateIcon(
+        FilteredArray(
+            AllPlayers(Team.Team1),
+            (
+                !ae.isInsidePortal &&
+                DistanceBetween(ae, portalPosition) > showPortalIconOutRange
+            )
+        ),
+        portalPosition, Icon.Spiral,
         IconRev.VisibleToAndPosition, enemyColor, true);
-    portalEntitys[0] = LastCreatedEntity();
     // set effect
     // sphere
-    CreateEffect(AllPlayers(), Effect.Sphere, enemyColor,
+    portalEntitys[1] = CreateEffect(AllPlayers(), Effect.Sphere, enemyColor,
         portalPosition, portalSize, EffectRev.VisibleToPositionAndRadius);
-    portalEntitys[1] = LastCreatedEntity();
     // cloud
-    CreateEffect(AllPlayers(), Effect.Cloud, enemyColor,
+    portalEntitys[2] = CreateEffect(AllPlayers(), Effect.Cloud, enemyColor,
         portalPosition, portalSize * 1.5, EffectRev.VisibleToPositionAndRadius);
-    portalEntitys[2] = LastCreatedEntity();
     // aura
     // Since visibility will be poor, display only in the center of the field of view
-    CreateEffect(
+    portalEntitys[3] = CreateEffect(
         FilteredArray(
             AllPlayers(),
             DistanceBetween(ae, portalPosition) > portalSize / 2), Effect.BadAura, enemyColor,
         portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionAndRadius);
-    portalEntitys[3] = LastCreatedEntity();
     // sound
-    CreateEffect(AllPlayers(), Effect.EnergySound, enemyColor,
+    portalEntitys[4] = CreateEffect(AllPlayers(), Effect.EnergySound, enemyColor,
         portalPosition, portalSize / 2, EffectRev.VisibleToPositionAndRadius);
-    portalEntitys[4] = LastCreatedEntity();
     // show message
     BigMessage(AllPlayers(), "Detected more portal... find and attack!");
-    // Hide icon to let the player search the portal
-    Wait(10, WaitBehavior.AbortWhenFalse);
-    DestroyIcon(portalEntitys[0]);
 }
 
 rule: "Portal/State/Growing"
@@ -641,17 +636,13 @@ if(
         WaitBigMessageHide();
         BigMessage(AllPlayers(), "Growed portals spawn more enemys and get tough...");
     }
-    // Hide icon to let the player search the portal
-    DestroyIcon(portalEntitys[0]);
 }
 
 rule: "Portal/State/Suspended"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Suspended
+    portalState == PortalState.UnderAttack
 ){
-    // Hide icon to let the player search the portal
-    DestroyIcon(portalEntitys[0]);
     // Stop growing portal
     Wait(1, WaitBehavior.AbortWhenFalse);
     StopChasingVariable(portalSize);
@@ -662,6 +653,8 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Closing
 ){
+    // Hide icon
+    DestroyIcon(portalEntitys[0]);
     // apply blast impulse
     ApplyBlastImpulse(AllPlayers(Team.Team2), portalPosition, portalSize);
     // play portal closing effect and kill enemrys
@@ -754,7 +747,7 @@ if(
                 RandomReal(0, 360), RandomReal(30, -30),
             ) * 
             // add random distance
-            RandomReal(40, 160);
+            RandomReal(25, 150);
 
         // convert to walkble position
         candidatePosition = NearestWalkablePosition(randomPositon);
@@ -900,7 +893,7 @@ rule: "Portal/InvalidDetect/NoContactTime/detectContact"
 Event.OngoingGlobal
 if(
     portalEnable &&
-    portalState == PortalState.Suspended
+    portalState == PortalState.UnderAttack
 ){
     Wait(1, WaitBehavior.AbortWhenFalse);
     noContactTime = -1;
@@ -927,7 +920,7 @@ if(
 ){
     if(
         IsInLineOfSight(portalPosition,
-            closestPlayerToPortal,
+            ClosestPlayerToPortal(),
             BarrierLOS.NoBarriersBlock)
     ){
         WaitConditionConfirmed();
@@ -958,13 +951,13 @@ if(
 ){
     // Suspend portal growing by player enter to portal
     WaitConditionConfirmed();
-    portalState = PortalState.Suspended;
+    portalState = PortalState.UnderAttack;
 }
 
 rule: "Portal/Growing/resumeGrowingByPlayerExited"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Suspended &&
+    portalState == PortalState.UnderAttack &&
     !IsTrueForAny(
         AllPlayers(Team.Team1), ae.isInsidePortal
     )
@@ -1015,9 +1008,14 @@ define assetList:
         ],
         // giant boss
         [
-            [EnemyType.GiantBoss,   RandomHero,         1]
+            [EnemyType.GiantBoss,   RandomTankHero,     1]
         ],
-		
+        [
+            [EnemyType.GiantBoss,   RandomDamageHero,   1]
+        ],		
+        [
+            [EnemyType.GiantBoss,   RandomSupportHero,  1]
+        ],		
         // melees
         [
             [EnemyType.Boss,        Hero.Reinhardt,     1],
@@ -1050,7 +1048,7 @@ define assetList:
             [EnemyType.Boss,        Hero.Hanzo,			1],
             [EnemyType.Boss,        Hero.Widowmaker,	1],
             [EnemyType.Elite,       Hero.Ashe, 			2],
-            [EnemyType.Minion,       Hero.Ana, 			2]
+            [EnemyType.Minion,      Hero.Ana, 			2]
         ],
         // fortress
         [
@@ -1206,66 +1204,91 @@ if(
 // TAG EnemBot/Teleport ----------
 define teleportAreaSize: 6;
 define minDistanceToPlayerWhenTeleport: 6;
-define closestPlayerToTelPos: ClosestPlayerTo(teleportPosition, Team.Team1);
-define closestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, Team.Team1);
-define closestPlayerToPortal: ClosestPlayerTo(portalPosition, Team.Team1);
-define closestPlayerToMe: ClosestPlayerTo(ep, Team.Team1);
+define ClosestPlayerToTelPos: ClosestPlayerTo(teleportPosition, Team.Team1);
+define ClosestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, Team.Team1);
+define ClosestPlayerToMe: ClosestPlayerTo(ep, Team.Team1);
+Player ClosestPlayerToPortal()"ClosestPlayerToPortal"{
+    return FirstOf(
+        SortedArray(
+            FilteredArray(
+                AllPlayers(Team.Team1),
+                (
+                    IsAlive(ae) &&
+                    !IsInSpawnRoom(ae)
+                )
+            ),
+            DistanceBetween(ae, portalPosition)
+        )
+    );
+}
 playervar define teleportPosition!;
 globalvar define commonTeleportPosition!;
 
-void SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
+Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     // set teleport position by blind spot from player
     // find place that will be a blind spot up to 10 times
+    define teleportToTarget! = ClosestPlayerToPortal();
+    if(teleportToTarget == null){
+        return false;
+    }
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         teleportPosition =
             NearestWalkablePosition(
-                PositionOf(closestPlayerToPortal)
+                PositionOf(teleportToTarget)
                     + 
                 (
-                    DirectionTowards(closestPlayerToPortal, portalPosition)
+                    DirectionTowards(teleportToTarget, portalPosition)
                         *
-                    DistanceBetween(closestPlayerToPortal, portalPosition, ) * 0.5
+                    DistanceBetween(teleportToTarget, portalPosition) * 0.5
                 )
                     +
                 RandomPosition(teleportAreaSize, teleportAreaSize, teleportAreaSize)
             );
 
+        define telPosNearTarget! = ClosestPlayerToTelPos;
         if(
             DistanceBetween(    // Not too close to player
-                closestPlayerToTelPos, teleportPosition)
+                telPosNearTarget, teleportPosition)
             >= minDistanceToPlayerWhenTeleport
                 &&
             IsInLineOfSight(    // Has line
-                closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
+                telPosNearTarget, teleportPosition, BarrierLOS.NoBarriersBlock)
         ){
             break;
         }
         Wait(0.1, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
+    return true;
 }
 
-void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
+Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
     // set teleportPosition to player around
+    define teleportToTarget! = ClosestPlayerToPortal();
+    if(teleportToTarget == null){
+        return false;
+    }
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         teleportPosition =
             // BelowPosition(
                 BlockedPositon(
-                    closestPlayerToPortal,
+                    teleportToTarget,
                     DirectionFromAngles(
                         RandomReal(0, 360), RandomReal(30, -30),
                     ), RandomReal(5, 50)
                 );
             // );
         // move teleportPosition for avoid map surface edge
-        teleportPosition += (DirectionTowards(teleportPosition, closestPlayerToPortal) * 1);
+        teleportPosition += (DirectionTowards(teleportPosition, teleportToTarget) * 1);
+        
+        define telPosNearTarget! = ClosestPlayerToTelPos;
         if(
             DistanceBetween(    // Not too close to player
-                closestPlayerToTelPos, teleportPosition)
+                telPosNearTarget, teleportPosition)
             >= minDistanceToPlayerWhenTeleport
                 &&
             IsInLineOfSight(    // Has line
-                closestPlayerToTelPos, teleportPosition, BarrierLOS.NoBarriersBlock)
+                telPosNearTarget, teleportPosition, BarrierLOS.NoBarriersBlock)
                 &&
             IsBlockedBetween(   // Has ground
                 teleportPosition, ShiftedPosition(teleportPosition, Down(), 6))
@@ -1277,25 +1300,36 @@ void SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
         WaitUntilServerFree();
     }
     teleportPosition -= PositionOffset();
+    return true;
 }
 
-void SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPosition"{
+Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPosition"{
+    define telPosNearTarget! = ClosestPlayerToComTelPos;
+    if(telPosNearTarget == null){
+        return false;
+    }
     if(
         commonTeleportPosition ==  0 ||
         ProbabilityTrue(10) ||
-        !IsInLineOfSight(commonTeleportPosition, closestPlayerToComTelPos) ||   
-        DistanceBetween(commonTeleportPosition, closestPlayerToComTelPos) < minDistanceToPlayerWhenTeleport
+        !IsInLineOfSight(commonTeleportPosition, telPosNearTarget) ||   
+        DistanceBetween(commonTeleportPosition, telPosNearTarget) < minDistanceToPlayerWhenTeleport
     ){
         // new select common position
         // set teleport position to player around
-        SetTeleportPositionToPlayerAround();
-        // save teleport position as common position
-        commonTeleportPosition = teleportPosition;
+        if(SetTeleportPositionToPlayerAround()){
+            // save teleport position as common position
+            commonTeleportPosition = teleportPosition;
+        }
+        else{
+            // set teleport position from common position
+            teleportPosition = commonTeleportPosition;
+        }
     }
     else{
         // set teleport position from common position
         teleportPosition = commonTeleportPosition;
     }
+    return true;
 }
 
 void PlayTeleportEffect(define isBefore)"PlayTeleportEffect"{
@@ -1360,9 +1394,10 @@ if(
     // clear root
     ClearStatus(ep, Status.Rooted);
     // set teleport position
-    SetTeleportPositionToPlayerFront();
-    // teleport
-    TeleportWithEffect();
+    if(SetTeleportPositionToPlayerFront()){
+        // teleport
+        TeleportWithEffect();
+    }
 }
 
 rule: "EnemBot/Teleport/teleportByPlayerEntered"
@@ -1370,15 +1405,16 @@ Event.OngoingPlayer
 Team.Team2
 if(
     portalEnable &&
-    portalState == PortalState.Suspended
+    portalState == PortalState.UnderAttack
 ){
     AbortIf(IsDead());
-    AbortIf(DistanceBetween(ep, closestPlayerToPortal) <= 10);
+    AbortIf(DistanceBetween(ep, ClosestPlayerToPortal()) <= 10);
 
     // set teleport position to player around
-    SetTeleportPositionToPlayerAround();
-    // teleport
-    TeleportWithEffect();
+    if(SetTeleportPositionToPlayerAround()){
+        // teleport
+        TeleportWithEffect();
+    }
 }
 
 rule: "EnemBot/Teleport/teleportByRespawn"
@@ -1392,7 +1428,7 @@ if(
     
     if(
         // during portal attacks
-        portalState == PortalState.Suspended ||
+        portalState == PortalState.UnderAttack ||
         // probability
         ProbabilityTrue(12)
     ){
@@ -1401,19 +1437,26 @@ if(
             ProbabilityTrue(70)
         ){
             // set teleport position to common position
-            SetTeleportPositionToCommonPosition();
+            if(SetTeleportPositionToCommonPosition()){
+                // teleport
+                TeleportWithEffect();
+            }
         }
         else{
             // set teleport position to player around
-            SetTeleportPositionToPlayerAround();                        
+            if(SetTeleportPositionToPlayerAround()){
+                // teleport
+                TeleportWithEffect();
+            }       
         }
     }
     else{
         // set teleport position to player front
-        SetTeleportPositionToPlayerFront();   
+        if(SetTeleportPositionToPlayerFront()){
+            // teleport
+            TeleportWithEffect();
+        }
     }
-    // teleport
-    TeleportWithEffect();
 }
 
 rule: "EnemBot/Teleport/teleportByPlayerNotFound"
@@ -1422,7 +1465,7 @@ Team.Team2
 if(
     portalEnable &&
     !IsInLineOfSight(ep,
-        closestPlayerToMe,
+        ClosestPlayerToMe,
         BarrierLOS.NoBarriersBlock)
 ){
     Wait(3, WaitBehavior.AbortWhenFalse);
@@ -1431,7 +1474,7 @@ if(
     // Teleport bot to player front
     if(
         // during portal attacks
-        portalState == PortalState.Suspended ||
+        portalState == PortalState.UnderAttack ||
         // probability
         ProbabilityTrue(15)
     ){
@@ -1440,20 +1483,27 @@ if(
             ProbabilityTrue(70)
         ){
             // set teleport position to common position
-            SetTeleportPositionToCommonPosition();
+            if(SetTeleportPositionToCommonPosition()){
+                // teleport
+                TeleportWithEffect();
+            }
         }
         else{
             // set teleport position to player around
-            SetTeleportPositionToPlayerAround();                        
+            if(SetTeleportPositionToPlayerAround()){
+                // teleport
+                TeleportWithEffect();
+            }                         
         }
     }
     else{
         // set teleport position to player front
-        SetTeleportPositionToPlayerFront();   
+        if(SetTeleportPositionToPlayerFront()){
+            // teleport
+            TeleportWithEffect();
+        }
     }
-    // teleport
-    TeleportWithEffect();
-    
+
     LoopIfConditionIsTrue();
 }
 
@@ -1978,12 +2028,12 @@ if(
 ){
     // Recalculate portal
     WaitLongPressConfirm();
-    portalState = PortalState.Idle;
+    portalState = PortalState.Init;
     WaitChangeState();  // Wait for the changed status to be processed first
     portalState = PortalState.Calculating;
     
     ApplySlowLevel(0);
-    watchingOverLoad = true;
+    slowControlHandler = true;
 }
 
 globalvar define debugAimingPosition!;
@@ -1999,7 +2049,7 @@ if(
 ){
     // Set portal position to aim center
     WaitLongPressConfirm();
-    portalState = PortalState.Idle;
+    portalState = PortalState.Init;
     debugAimingPosition = AimingPosition();
     WaitChangeState();  // Wait for the changed status to be processed first
     portalState = PortalState.Calculating;
