@@ -943,9 +943,10 @@ rule: "Bot/ActionState/GotoAttackStateOnDamageTaken"
 Event.OnDamageTaken
 if(
     IsDummyBot() &&
+    Attacker() != ep &&
     actionState == ActionState.Non
 ){
-    // find attack target
+    // set attack target
     target = Attacker();
     // set next state
     actionState = ActionState.Attack; 
@@ -1095,7 +1096,27 @@ define aimTarget:
         // (Down() * 0.3 * aimDiffusivity) +
         // RandomPosition(aimDiffusivity, aimDiffusivity, aimDiffusivity);
 
+define targetDirForward:
+    BlockedPositon(
+        EyePosition(), 
+        ExcludeY(
+            DirectionTowards(
+                ep,
+                aimTarget
+            )
+        ),
+    senserLength);
 
+define targetDirBackward:
+    BlockedPositon(
+        EyePosition(), 
+        ExcludeY(
+            -DirectionTowards(
+                ep,
+                aimTarget
+            )
+        ),
+    senserLength);
 
 rule: "Bot/ActionState/Attack"
 Event.OngoingPlayer
@@ -1121,11 +1142,11 @@ if(
     // action loop
     while(actionState == ActionState.Attack){
         // check abyss
-        define detectAbyss = 0;
-        if(IsBelowAbyss(BackwardSensor())){
+        define detectAbyss! = 0;
+        if(IsBelowAbyss(targetDirBackward)){
             detectAbyss = Backward();
         }
-        else if(IsBelowAbyss(ForwardSensor())){
+        else if(IsBelowAbyss(targetDirForward)){
             detectAbyss = Forward();
         }
 
@@ -1216,11 +1237,11 @@ if(
     // action loop
     while(actionState == ActionState.Support){
         // check abyss
-        define detectAbyss = 0;
-        if(IsBelowAbyss(BackwardSensor())){
+        define detectAbyss! = 0;
+        if(IsBelowAbyss(targetDirBackward)){
             detectAbyss = Backward();
         }
-        else if(IsBelowAbyss(ForwardSensor())){
+        else if(IsBelowAbyss(targetDirForward)){
             detectAbyss = Forward();
         }
 
@@ -1350,7 +1371,7 @@ if(
         Effect.Ring, Color.White,
         targetPos, targetPosRange, EffectRev.VisibleToPositionRadiusAndColor);
     while(true){
-        if(IsBelowAbyss(BackwardSensor())){
+        if(IsBelowAbyss(targetDirBackward)){
             dbgPlyEft(ep);
         }
         Wait(1);
