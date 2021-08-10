@@ -1,6 +1,6 @@
 import "PerkCore.del";
 
-define fireBallMinSpeed: 5;
+define fireBallMinSpeed: 10;
 define fireBallMaxSpeed: 50;
 define fireBallMinCollisionRange: 2.0;
 define fireBallChargeRate: 3.0;
@@ -73,15 +73,16 @@ if(
         ep, PlayEffect.DebuffImpactSound,
         Color.White, ep, MaxValue());
 
-    perkPosition = EyePosition();
-    landPosition = AimingPositionIgnorePlayer();
     // set fireball param
-    perk[Perk.fireBallSpeed] = fireBallMaxSpeed - (perk[Perk.fireBallPower] / fireBallMaxSpeed);
+    perk[Perk.fireBallSpeed] = fireBallMaxSpeed - (perk[Perk.fireBallPower] * 0.045);
     perk[Perk.fireBallSpeed] = Max(fireBallMinSpeed, perk[Perk.fireBallSpeed]);
-    perk[Perk.fireBallSpeed] = Min(fireBallMaxSpeed, perk[Perk.fireBallSpeed]);
     perk[Perk.fireBallSize] = perk[Perk.fireBallPower] * 0.004;
     perk[Perk.fireBallBlastRange] = perk[Perk.fireBallPower] * 0.02;
-    perk[Perk.fireBallTriggerDelay] = perk[Perk.fireBallPower] * 0.0002;
+    perk[Perk.fireBallTriggerDelay] = perk[Perk.fireBallPower] * 0.001;
+
+    landPosition = AimingPositionIgnorePlayer();    
+    perkPosition = EyePosition() + FacingDirectionOf(ep) * perk[Perk.fireBallSize];
+
     // start movement
     UpdateEveryFrame(perkPosition);
     ChaseVariableAtRate(
@@ -131,6 +132,7 @@ if(
     Wait(
         DistanceBetween(perkPosition, landPosition) / perk[Perk.fireBallSpeed],
         WaitBehavior.AbortWhenFalse);
+    Wait(perk[Perk.fireBallTriggerDelay], WaitBehavior.IgnoreCondition);
     ExplodeFireBall();
 }
 
@@ -148,7 +150,7 @@ if(
             <= 
         Max(fireBallMinCollisionRange, perk[Perk.fireBallSize])
 ){
-    Wait(perk[Perk.fireBallTriggerDelay], WaitBehavior.IgnoreCondition);
+    Wait(perk[Perk.fireBallTriggerDelay] / 2, WaitBehavior.IgnoreCondition);
     ExplodeFireBall();
 }
 
@@ -160,7 +162,7 @@ if(
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
 ){
-    Wait(3, WaitBehavior.AbortWhenFalse);
+    Wait(5, WaitBehavior.AbortWhenFalse);
     ExplodeFireBall();
 }
 
