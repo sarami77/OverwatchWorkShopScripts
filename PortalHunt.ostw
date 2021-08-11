@@ -205,7 +205,7 @@ if(
 ){
     // reset team lifes
     teamLifes = initialTeamLifes;
-    // reset round no
+    // reset round no 
     roundNo = 0;
     // reset elapsed time
     elapsedTime = 0;
@@ -252,15 +252,15 @@ if(
     portalState = PortalState.Init;
 }
 
-rule: "Game/SpawnRoom/changeByTimer //to make the game fluid"
+rule: "Game/SpawnRoom/changeByTimer"
 Event.OngoingGlobal
 if(
     initCompleted
 ){
     // Change the spawn room regularly to keep the game fluid
-    ForceSpawnRoom(Team.Team1, RandomValueInArray([0, 1]));
+    ForceSpawnRoom(Team.Team1, RandomValueInArray([0]));
     ForceSpawnRoom(Team.Team2, RandomValueInArray([0, 1, 2]));
-    Wait(60 * 5, WaitBehavior.AbortWhenFalse); // change spawn room    
+    Wait(60 * 3, WaitBehavior.AbortWhenFalse); // change spawn room    
     LoopIfConditionIsTrue();
 }
 
@@ -272,7 +272,7 @@ Event.OngoingGlobal
 if(
     portalEnable
 ){
-    define players = AllPlayers(Team.Team1);
+    define players! = AllPlayers(Team.Team1);
     // Set flag when player entered to portal
     // This flag is used for functions related to portal
     for(gLoopIndex = 0; gLoopIndex < CountOf(players); gLoopIndex++){
@@ -800,14 +800,31 @@ if(
     portalState == PortalState.Checking
 ){
     // wait
-    Wait(2, WaitBehavior.AbortWhenFalse);
+    Wait(1, WaitBehavior.AbortWhenFalse);
     // confirm portal position
     prevPortalPosition = portalPosition;
     portalState = PortalState.Set;
     // fail safe
-    Wait(6, WaitBehavior.AbortWhenFalse);
+    Wait(5, WaitBehavior.AbortWhenFalse);
     dbgMsg("failsafe triggered of positionChecking");
     LoopIfConditionIsTrue();
+}
+
+// TAG Portal/InvalidDetect/InsideRespawnRoom ----------
+rule: "Portal/InvalidDetect/InsideRespawnRoom/resetPortal"
+Event.OngoingGlobal
+if(
+    portalEnable &&
+    IsTrueForAny(
+        SpawnPoints(Team.Team1),
+        (
+            IsInLineOfSight(ae + Up(), portalPosition)
+        )
+    )
+){
+    WaitConditionConfirmed();
+    dbgMsg("reset Portal By Inside Respawn Room");
+    portalState = PortalState.Calculating;
 }
 
 // TAG Portal/InvalidDetect/EnvironmentDeathCount ----------
@@ -860,6 +877,7 @@ if(
     portalEnable &&
     environmentDeathLimit <= environmentDeathCount
 ){
+    WaitConditionConfirmed();
     dbgMsg("reset Portal By Environment Death Count");
     portalState = PortalState.Calculating;
 }
@@ -892,8 +910,7 @@ if(
 rule: "Portal/InvalidDetect/NoContactTime/detectContact"
 Event.OngoingGlobal
 if(
-    portalEnable &&
-    portalState == PortalState.UnderAttack
+    portalEnable
 ){
     Wait(1, WaitBehavior.AbortWhenFalse);
     noContactTime = -1;
@@ -905,6 +922,7 @@ if(
     portalEnable &&
     limitTime <= noContactTime
 ){
+    WaitConditionConfirmed();
     dbgMsg("reset Portal By No Contact");
     portalState = PortalState.Calculating;
 }
@@ -1169,7 +1187,7 @@ define assetList:
         ]
     ];
 
-globalvar define someHero;
+globalvar define someHero!;
 
 rule: "Portal/CreateEnemBot/reloadBotAsset"
 Event.OngoingGlobal
@@ -1507,23 +1525,6 @@ if(
     }
 }
 
-rule: "EnemBot/Teleport/teleportByPlayerEntered"
-Event.OngoingPlayer
-Team.Team2
-if(
-    portalEnable &&
-    portalState == PortalState.UnderAttack
-){
-    AbortIf(IsDead());
-    AbortIf(DistanceBetween(ep, ClosestPlayerToPortal()) <= 10);
-
-    // set teleport position to player around
-    if(SetTeleportPositionToPlayerAround()){
-        // teleport
-        TeleportWithEffect();
-    }
-}
-
 rule: "EnemBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
 Team.Team2
@@ -1566,13 +1567,32 @@ if(
     }
 }
 
+rule: "EnemBot/Teleport/teleportByPlayerEntered"
+Event.OngoingPlayer
+Team.Team2
+if(
+    (NormalizedHealth() > 0.5) &&
+    portalEnable &&
+    portalState == PortalState.UnderAttack
+){
+    AbortIf(IsDead());
+    AbortIf(DistanceBetween(ep, ClosestPlayerToPortal()) <= 10);
+
+    // set teleport position to player around
+    if(SetTeleportPositionToPlayerAround()){
+        // teleport
+        TeleportWithEffect();
+    }
+}
+
 rule: "EnemBot/Teleport/teleportByPlayerNotFound"
 Event.OngoingPlayer
 Team.Team2
 if(
+    (NormalizedHealth() > 0.5) &&
     portalEnable &&
     !IsInLineOfSight(ep,
-        ClosestPlayerToMe,
+        ClosestPlayerToPortal(),
         BarrierLOS.NoBarriersBlock)
 ){
     Wait(3, WaitBehavior.AbortWhenFalse);

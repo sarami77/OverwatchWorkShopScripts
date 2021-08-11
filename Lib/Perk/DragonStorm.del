@@ -10,6 +10,7 @@ if(
     // set time limit
     perk[Perk.perkTimeLimit] = 120;
     // set param
+    perkPosition = 0;
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
     // set hud
     perk[Perk.perkEffectAndText] = [];
@@ -44,11 +45,10 @@ if(
     // reset status
     ClearStatus(ep, Status.Rooted);
     ClearStatus(ep, Status.Invincible);
+    StopForcingPlayerPosition(ep);
+    if(perkPosition != 0)
+        Teleport(ep, perkPosition);
     StopFacing();
-    if(perk[Perk.isInAir]){
-        Teleport(ep, PositionOf() + Vector(0, -60, 0));
-    }
-    perk[Perk.isInAir] = false;
     // hide enemy outline
     StopForcingPlayerOutlines(
         AllPlayers(Team.Team2),
@@ -75,6 +75,8 @@ if(
     perkState = PerkState.Non;
 }
 
+define teleportPosition: Vector(0, 60, 0);
+
 define maxOfDragon: 9;
 rule: "Perk/Player/DragonStorm/startDragonStorm"
 Event.OngoingPlayer
@@ -94,9 +96,8 @@ if(
         25, Relative.ToWorld, ContraryMotion.Cancel);
     Wait(0.5, WaitBehavior.IgnoreCondition);
     // set position
-    Teleport(ep, PositionOf() + Vector(0, 60, 0));
-    perk[Perk.isInAir] = true;
     perkPosition = PositionOf();
+    StartForcingPlayerPosition(ep, teleportPosition, false);
     // set status
     SetStatus(ep, null, Status.Rooted, MaxValue());
     SetStatus(ep, null, Status.Invincible, MaxValue());
@@ -111,17 +112,19 @@ if(
         OutlineType.Always
     );  
     // face enemy
-    perk[Perk.perkTargets] = ClosestPlayerTo(ep, Team.Team2);
-    // start auto aim
-    autoAimingTarget = perk[Perk.perkTargets];
-    StartAutoAiming();
+    StartFacing(
+        ep,
+        DirectionTowards(
+            EyePosition(),
+            ClosestPlayerTo(ep, Team.Team2)),
+        MaxValue(), Relative.ToWorld, FacingRev.DirectionAndTurnRate
+    );
     Wait(0.1, WaitBehavior.IgnoreCondition);
     StopFacing();
-
     // wait aim
     Wait(0.5, WaitBehavior.IgnoreCondition);
 
-    perk[Perk.deployDragonNum] = 0;
+    perk[Perk.perkEffectCount] = 0;
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
 }
 
@@ -132,13 +135,13 @@ if(
     perkType == PerkType.DragonStorm &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
-    perk[Perk.deployDragonNum] < maxOfDragon &&
+    perk[Perk.perkEffectCount] < maxOfDragon &&
     !IsUsingUltimate()
 ){
     SetUltimateCharge(ep, 100);
-    SetProjectileSpeed(ep, 5 + perk[Perk.deployDragonNum]);
+    SetProjectileSpeed(ep, 5 + perk[Perk.perkEffectCount]);
     PressButton(ep, Button.Ultimate);
-    perk[Perk.deployDragonNum] ++;
+    perk[Perk.perkEffectCount] ++;
 }
 
 rule: "Perk/Player/DragonStorm/finishDragonStorm"
@@ -148,15 +151,16 @@ if(
     perkType == PerkType.DragonStorm &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
-    perk[Perk.deployDragonNum] >= maxOfDragon
+    perk[Perk.perkEffectCount] >= maxOfDragon
 ){
     Wait(1.0, WaitBehavior.AbortWhenFalse);
     SetProjectileSpeed(ep, DefaultPercentage());
     // wait deploy dragon
     Wait(4.0, WaitBehavior.AbortWhenFalse);
     // reset position
-    Teleport(ep, PositionOf() - Vector(0, 60, 0));
-    perk[Perk.isInAir] = false;
+    StopForcingPlayerPosition(ep);
+    Teleport(ep, perkPosition);
+    perkPosition = 0;
     // reset status
     SetProjectileSpeed(ep, DefaultPercentage());
     ClearStatus(ep, Status.Rooted);
@@ -169,30 +173,17 @@ if(
         ep
     );
     // face enemy
-    perk[Perk.perkTargets] = ClosestPlayerTo(ep, Team.Team2);
-    // start auto aim
-    autoAimingTarget = perk[Perk.perkTargets];
-    StartAutoAiming();
-    Wait(0.1, WaitBehavior.IgnoreCondition);
+    StartFacing(
+        ep,
+        DirectionTowards(
+            EyePosition(),
+            ClosestPlayerTo(ep, Team.Team2)),
+        MaxValue(), Relative.ToWorld, FacingRev.DirectionAndTurnRate
+    );
+    Wait(0.5, WaitBehavior.IgnoreCondition);
     StopFacing();
 
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
-}
-
-rule: "Perk/Player/DragonStorm/keepPosition"
-Event.OngoingPlayer
-Team.Team1
-if(
-    perkType == PerkType.DragonStorm &&
-    perkState  == PerkState.Using &&
-    perk[Perk.isInAir] &&
-    DistanceBetween(ep, perkPosition) >= 0.01
-){
-    ApplyImpulse(ep, VectorTowards(ep, perkPosition),
-        DistanceBetween(ep, perkPosition),
-        Relative.ToWorld, ContraryMotion.Cancel);
-    WaitApplyImpulseCycle();
-    LoopIfConditionIsTrue();
 }
 
 rule: "Perk/Player/DragonStorm/addActivityTime"
