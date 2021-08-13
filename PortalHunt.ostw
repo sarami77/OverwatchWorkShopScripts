@@ -380,7 +380,6 @@ if(
     DistanceBetween(ep,
         ClosestPlayerTo(ep, Team.Team2)) > 15
 ){
-    Wait(1, WaitBehavior.AbortWhenFalse);
     Respawn();
 }
 
@@ -1074,6 +1073,25 @@ define assetList:
         [
             [EnemyType.GiantBoss,   RandomSupportHero,  1]
         ],
+        // close range
+        [
+            [EnemyType.Boss,        Hero.Reaper,        1],
+            [EnemyType.Elite,       Hero.Roadhog,       2],
+            [EnemyType.Elite,       Hero.Doomfist,      1],
+            [EnemyType.Minion,      Hero.Mei,           2]
+        ],
+        [
+            [EnemyType.Boss,        Hero.Mei,           1],
+            [EnemyType.Elite,       Hero.Doomfist,      2],
+            [EnemyType.Elite,       Hero.Roadhog,       1],
+            [EnemyType.Minion,      Hero.Reaper,        2]
+        ],
+        [
+            [EnemyType.Boss,        Hero.Reaper,        1],
+            [EnemyType.Elite,       Hero.Mei,           2],
+            [EnemyType.Elite,       Hero.Roadhog,       1],
+            [EnemyType.Minion,      Hero.Doomfist,      2]
+        ],
         // melees
         [
             [EnemyType.Boss,        Hero.Reinhardt,     1],
@@ -1122,7 +1140,7 @@ define assetList:
         // air boss
         [
             [EnemyType.Boss,        Hero.Pharah, 		1],
-            [EnemyType.Elite,      Hero.Mercy, 		    5]
+            [EnemyType.Elite,       Hero.Mercy, 		5]
         ],
         [
             [EnemyType.Boss,        Hero.Echo, 		    1],
@@ -1160,17 +1178,12 @@ define assetList:
         ],
         // turrets
         [
-            [EnemyType.Boss,        Hero.Bastion, 		1],
-            [EnemyType.Elite,       Hero.Symmetra, 		2],
-            [EnemyType.Minion,      Hero.Torbjorn, 		3]
-        ],
-        [
-            [EnemyType.Boss,        Hero.Bastion, 		1],
+            [EnemyType.Boss,        Hero.Torbjorn, 		1],
             [EnemyType.Elite,       Hero.Symmetra, 		2],
             [EnemyType.Minion,      Hero.Symmetra, 		3]
         ],
         [
-            [EnemyType.Boss,        Hero.Bastion, 		1],
+            [EnemyType.Boss,        Hero.Symmetra, 		1],
             [EnemyType.Elite,       Hero.Torbjorn, 		2],
             [EnemyType.Minion,      Hero.Torbjorn, 		3]
         ],
@@ -1184,6 +1197,10 @@ define assetList:
             [EnemyType.Boss,        someHero, 		    1],
             [EnemyType.Boss,        someHero, 		    1],
             [EnemyType.Elite,       someHero, 		    1]
+        ],
+        [
+            [EnemyType.Elite,       someHero, 		    4],
+            [EnemyType.Minion,       someHero, 		    2]
         ]
     ];
 
@@ -1222,8 +1239,8 @@ if(
     if(enemyType == EnemyType.Minion){ 
         StartScalingPlayer(ep, 0.75, false);
         StartModifyingHeroVoiceLines(ep, 1.25, false);
-        SetMaxHealth(ep, 50);
-        SetHealingReceived(ep, 50);
+        SetMaxHealth(ep, 100);
+        SetHealingReceived(ep, 100);
         SetHealingDealt(ep, 40);
         eachDealtDamageScale = 0.5;
         eachChargeUltInterval = 80;
@@ -1250,7 +1267,7 @@ if(
     else if(enemyType == EnemyType.Boss){
         StartScalingPlayer(ep, 1.5, false);
         StartModifyingHeroVoiceLines(ep, 0.5, false);
-        SetMaxHealth(ep, 900);
+        SetMaxHealth(ep, 1000);
         SetHealingReceived(ep, 600);
         SetHealingDealt(ep, 120);
         eachDealtDamageScale = 2.0;
@@ -1264,12 +1281,12 @@ if(
     else if(enemyType == EnemyType.GiantBoss){
         StartScalingPlayer(ep, 2.5, false);
         StartModifyingHeroVoiceLines(ep, 0.1, false);
-        SetMaxHealth(ep, 900);
+        SetMaxHealth(ep, 1000);
         SetHealingReceived(ep, 600);
         SetHealingDealt(ep, 120);
         eachDealtDamageScale = 4.0;
         eachChargeUltInterval = 10;
-        eachMaxSpawnInterval = 15;
+        eachMaxSpawnInterval = 10;
 
         eachNameText = "Giant Boss";
         eachNameColor = Color.Purple;
@@ -1478,8 +1495,8 @@ void PlayTeleportEffect(define isBefore)"PlayTeleportEffect"{
     }
 }
 
-void TeleportWithEffect()"DoTeleportWithEffect"{
-    Wait(SlotOf(ep) * 0.2, WaitBehavior.AbortWhenFalse);
+void TeleportWithEffect()"TeleportWithEffect"{
+    Wait(SlotOf(ep) * 0.1, WaitBehavior.AbortWhenFalse);
     // show pre teleport effect
     PlayTeleportEffect(true);
     // Teleport
@@ -1503,8 +1520,12 @@ if(
     teleportPosition = InvalidPosition();
     // set root
     SetStatus(ep, null, Status.Rooted, MaxValue());
+    // show pre teleport effect
+    PlayTeleportEffect(true);
     // Teleport to spawn room
     Respawn(AllPlayers(Team.Team2));
+    // show teleport effect
+    PlayTeleportEffect(false);
 }
 
 rule: "EnemBot/Teleport/teleportByPortalEnabled"
@@ -1571,7 +1592,7 @@ rule: "EnemBot/Teleport/teleportByPlayerEntered"
 Event.OngoingPlayer
 Team.Team2
 if(
-    (NormalizedHealth() > 0.5) &&
+    // (NormalizedHealth() > 0.5) &&
     portalEnable &&
     portalState == PortalState.UnderAttack
 ){
@@ -1589,10 +1610,10 @@ rule: "EnemBot/Teleport/teleportByPlayerNotFound"
 Event.OngoingPlayer
 Team.Team2
 if(
-    (NormalizedHealth() > 0.5) &&
+    // (NormalizedHealth() > 0.5) &&
     portalEnable &&
     !IsInLineOfSight(ep,
-        ClosestPlayerToPortal(),
+        ClosestPlayerToMe,
         BarrierLOS.NoBarriersBlock)
 ){
     Wait(3, WaitBehavior.AbortWhenFalse);
@@ -1701,7 +1722,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // And the round progresses, the Bot deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
     confirmDealDamage = WorkshopSettingReal("Bot Settings", "Initial Deal Damage", 25, 0, 1000, 1);
-    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round Progress", 1.75, 0, 1000, 2);
+    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round Progress", 1.5, 0, 1000, 2);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
     confirmDealDamage /= ConvertToBalancedValue(0.7, Team.Team1);
@@ -1726,7 +1747,6 @@ Team.Team2
 if(
     Attacker() == ep
 ){
-    Wait(deadEffectTime, WaitBehavior.AbortWhenFalse);
     Respawn();
 }
 
@@ -1841,7 +1861,7 @@ if(
     !IsInLineOfSight(ep, leader)
 ){
     Wait(5, WaitBehavior.AbortWhenFalse);   
-    Wait(SlotOf(ep) * 0.2, WaitBehavior.AbortWhenFalse);
+    Wait(SlotOf(ep) * 0.1, WaitBehavior.AbortWhenFalse);
     Teleport(
         ep, NearestWalkablePosition(leader + RandomPosition(1, 0, 1))
     );
