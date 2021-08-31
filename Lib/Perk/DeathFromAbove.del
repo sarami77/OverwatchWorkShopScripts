@@ -13,21 +13,17 @@ if(
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
     // set hud
     perk[Perk.perkEffectAndText] = [];
-    CreatePerkEffectHud(
-        IsUsingUltimate() ?
-            <"Current weapon is <0>.", "120mm HE cannon"> :
-            <"Press ability1 button <1> to change weapon. Current weapon is <0>.",
-                IsInAlternateForm() ?
-                "5mm minigun" :
-                "10mm auto cannon" ,
-            ButtonGuide(Button.Ability1)>
-    );
-    perk[Perk.perkEffectAndText] [0] = LastTextID();
     CreatePerkEffectHud( 
         perk[Perk.perkEffectStatus] == PerkEffectStatus.Triggered ? 
             <"Hold secondary fire button <0> to accelerate in facing direction.", ButtonGuide(Button.SecondaryFire)> : 
             ""
         );
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+    CreatePerkEffectHud(
+        IsUsingUltimate() ?
+            "howitzer available." :
+            <"Press ability1 button <1> to change <0>.", IsInAlternateForm() ? "auto cannon" : "gatling gun", ButtonGuide(Button.Ability1)>
+    );
     perk[Perk.perkEffectAndText] [1] = LastTextID();
     CreatePerkEffectHud( 
         perk[Perk.perkEffectStatus] == PerkEffectStatus.Triggered ? 
@@ -191,7 +187,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define splashDamageRangeMinigun: 1.0;
+define splashDamageRangeMinigun: 0.75;
 
 rule: "Perk/Player/DeathFromAbove/splashDamageMinigun"
 Event.OngoingPlayer
@@ -223,7 +219,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define splashDamageRangeAutoCanon: 2.0;
+define splashDamageRangeAutoCanon: 1.5;
 
 rule: "Perk/Player/DeathFromAbove/splashDamageAutoCanon"
 Event.OngoingPlayer
@@ -237,21 +233,22 @@ if(
 ){
     // get aimPosition
     aimPosition = AimingPosition();
-    landPosition = RandomPosition(1.25, 1.25, 1.25);
+    landPosition = RandomPosition(1.0, 1.0, 1.0);
     // splash damage
     Damage(
         PlayersWithinRadius(
             aimPosition + landPosition, splashDamageRangeAutoCanon,
             Team.Team2, RadiusLOS.Off),
-        ep, 120);
+        ep, 180);
     // play blast
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.GoodExplosion,
         Color.Orange, aimPosition + landPosition,
         splashDamageRangeAutoCanon);
-    Wait(0.15, WaitBehavior.IgnoreCondition);
+    Wait(0.01, WaitBehavior.IgnoreCondition);
+    CancelPrimaryAction();
     
-    LoopIfConditionIsTrue();
+    // LoopIfConditionIsTrue();
 }
 
 rule: "Perk/Player/DeathFromAbove/chargingUlt"
