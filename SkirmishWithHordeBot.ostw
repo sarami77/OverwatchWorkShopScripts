@@ -19,7 +19,7 @@ Event.OngoingGlobal
 
     Regeneration_enableTeam = Team.All;
     Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 3, 0, 100, 1);
-    Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 50, 0, 1000, 2);
+    Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 60, 0, 1000, 2);
 
     CreateHudText(HostPlayer(),
         null,
@@ -35,6 +35,13 @@ Event.OngoingGlobal
     CreateEffect(AllPlayers(), Effect.Sphere, Color.White, teleportPos,
         combatAreaRange, EffectRev.VisibleToPositionRadiusAndColor);
 
+    // show hero change operation
+    CreateHudText(AllPlayers(),
+        null, <"Long hold reload button <0> to change hero", ButtonGuide(Button.Reload)>, null,
+        Location.Left, -2,
+        Color.Yellow, Color.Yellow, Color.Yellow,
+        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+
     ForceSpawnRoom(Team.Team1, 0);
     ForceSpawnRoom(Team.Team2, 0);
     Wait(0.1);
@@ -42,13 +49,27 @@ Event.OngoingGlobal
     StopForcingSpawnRoom(Team.Team2);
 }
 
+rule: "Player/ReturnSpawn/returnSpawn"
+Event.OngoingPlayer
+if(
+    !IsDummyBot() &&
+    IsAlive() &&
+    !IsInSpawnRoom() &&
+    IsButtonHeld(ep, Button.Reload)
+){
+    // Return to spawn room with long hold on reload button
+    WaitCancelPressConfirm();
+    Respawn();
+}
+
 rule: "ReloadBotList"
 Event.OngoingGlobal
 {
-    CreateBothBotsByInput(AllHeroes(), 24);
+    dbgMsg("ReloadBotList");
+    CreateBothBotsByInput(AllHeroes(), WorkshopSettingInteger("Bot Settings", "Bot Count", 24, 0, 24, 1));
     //CreateBothBotsByInput(AllSupportHeroes(), 24);
     //CreateBothBotsByInput([Hero.Ashe, Hero.Brigitte], 4);
-    Wait(60, WaitBehavior.AbortWhenFalse);
+    Wait(180, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -60,14 +81,14 @@ Event.OngoingGlobal
     LoopIfConditionIsTrue();
 }
 
-define combatAreaRange: 70;
-define selectionAreaRange: 200;
+globalvar define combatAreaRange = WorkshopSettingReal("Game Settings", "Combat Area Range", 50, 0, 1000, 1);
+define selectionAreaRange: 100;
 globalvar define teleportPos;
 
-disabled rule: "FastRespawnForBot"
+rule: "FastRespawnForBot"
 Event.OnDeath
 if(
-    IsDummyBot()
+    true
 ){
     Wait(1);
     Respawn(ep);
@@ -76,8 +97,15 @@ if(
 rule: "TeleortByRespawn"
 Event.OngoingPlayer
 if(
-    IsInSpawnRoom()
+    IsInSpawnRoom() &&
+    (
+        IsDummyBot() ||
+        IsMoving()
+    )
 ){
+    if(!IsDummyBot()){
+        Wait(0.25, WaitBehavior.AbortWhenFalse);
+    }
     TeleportToTeleportPosition(combatAreaRange);
 }
 
@@ -86,10 +114,10 @@ globalvar define teleportLocked;
 rule: "PullCenterByOutBound"
 Event.OngoingPlayer
 if(
+    !IsInSpawnRoom(ep) &&
     DistanceBetween(ep, teleportPos) > combatAreaRange
 ){
     if(DistanceBetween(ep, teleportPos) > combatAreaRange + 3){
-        Wait(RandomReal(0, 3), WaitBehavior.AbortWhenFalse);
         TeleportToTeleportPosition(combatAreaRange);
     }
     else{
@@ -115,10 +143,11 @@ if(
 rule: "TeleortByTargetNotFoundForPlayer"
 Event.OngoingPlayer
 if(
+    !IsInSpawnRoom(ep) &&
     !IsDummyBot() &&
     !IsInLineOfSight(ep, ClosestPlayerTo(ep, OppositeTeamOf(TeamOf())))
 ){
-    Wait(8, WaitBehavior.AbortWhenFalse);
+    Wait(10, WaitBehavior.AbortWhenFalse);
     TeleportToTeleportPosition(combatAreaRange);
     LoopIfConditionIsTrue();
 }
@@ -126,46 +155,102 @@ if(
 rule: "ShiftTeleportPositionBySpawnRoomKill"
 Event.OnDeath
 if(
-    IsInLineOfSight(ep, ClosestPlayerTo(ep, OppositeTeamOf(TeamOf()))) &&
-    IsInSpawnRoom(ClosestPlayerTo(ep, OppositeTeamOf(TeamOf())))
+    ep == Attacker()         // sucide
 ){
-    dbgMsg("ShiftTeleportPositionBySpawnRoomKill");
-    SetTeleportPositionAtRandom(selectionAreaRange / 3);
-    ForceSpawnRoom(Team.Team1, RandomInteger(0, 2));
-    ForceSpawnRoom(Team.Team2, RandomInteger(0, 2));
+    if(IsInOppsiteSpawnRoom(ep)){
+        dbgMsg("ShiftTeleportPositionBySpawnRoomKill");
+        SetTeleportPositionAtRandom(selectionAreaRange);
+        ForceSpawnRoom(Team.Team1, RandomInteger(0, 2));
+        ForceSpawnRoom(Team.Team2, RandomInteger(0, 2));
+    }
 }
 
+define minDistancePrevTeleport: 50;
+
+globalvar define prev_teleportPos;
+
 void SetTeleportPositionAtRandom(define range)"SetTeleportPositionAtRandom"{
-    teleportPos = NearestWalkablePosition(
-        teleportPos +
-        RandomPosition(range, range, range));
+    prev_teleportPos = teleportPos;
+    for(gLoopIndex = 0; gLoopIndex < 30; gLoopIndex++){
+        teleportPos = NearestWalkablePosition(
+            teleportPos +
+            RandomPosition(range, range, range));
+
+        teleportPos = NearestWalkablePosition(
+            teleportPos +
+            RandomPosition(5, 5, 5));
+
+        if(
+            // Not too close to prev_teleportPos
+            DistanceBetween(    
+                prev_teleportPos, teleportPos)
+            >= minDistancePrevTeleport
+        ){
+            break;
+        }
+        Wait(0.01, WaitBehavior.AbortWhenFalse);
+        WaitUntil(!isServerOverLoading, 10);
+    }
 }
+
+define minDistanceEnemyTeleport: 10;
+
+playervar define guardEffectEntity;
 
 void TeleportToTeleportPosition(define range)"TeleportToTeleportPosition"{
     define pos;
-    while(
-        pos == 0 ||
-        (
-            10 < DistanceBetween(pos,
-                ClosestPlayerTo(pos,
-                    OppositeTeamOf(TeamOf())))
-                &&
-            IsInLineOfSight(ep,
-                ClosestPlayerTo(ep,
-                    OppositeTeamOf(TeamOf())))
-        )
-    ){
+    for(pLoopIndex = 0; pLoopIndex < 30; pLoopIndex++){ 
         pos = NearestWalkablePosition(
             teleportPos +
             RandomPosition(range, range, range)); 
-        Wait(0.1, WaitBehavior.AbortWhenFalse);  
+        if(
+            // Not too close to enemy
+            DistanceBetween(    
+                pos, 
+                ClosestPlayerTo(
+                    ep,
+                    OppositeTeamOf(TeamOf())))
+            >= minDistanceEnemyTeleport
+            &&
+            // has line to enemy
+            IsInLineOfSight(
+                pos + Up(),
+                ClosestPlayerTo(
+                    ep,
+                    OppositeTeamOf(TeamOf())))
+                &&
+            // not inside enemy spwan room
+            !IsInOppsiteSpawnRoom(pos)
+        ){
+            break;
+        }
+        Wait(0.01, WaitBehavior.AbortWhenFalse);
+        WaitUntil(!isServerOverLoading, 10);
     }
+    // if(IsDummyBot()){
+    //     Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
+    // }
     Teleport(ep, pos);
     PlayEffect(
-        EventPlayer(), PlayEffect.DebuffImpactSound,
+        ep, PlayEffect.DebuffImpactSound,
         Color.White, ep, MaxLength());
-    SetStatus(ep, null, Status.Rooted, 1.5);
+    SetStatus(ep, null, Status.Rooted, 1);
     SetStatus(ep, null, Status.Invincible, 3);
+    DestroyEffect(guardEffectEntity);
+    guardEffectEntity = CreateEffect(
+        AllPlayers(), Effect.Sphere, Color.Gray,
+        ep, 1.25, EffectRev.PositionAndRadius);
+}
+
+rule: "hideGuardEffect"
+Event.OngoingPlayer
+Team.All
+if(
+    guardEffectEntity != 0
+){
+    Wait(3, WaitBehavior.AbortWhenFalse);
+    DestroyEffect(guardEffectEntity);
+    guardEffectEntity = 0;
 }
 
 rule: "Debug/resetTeleportPos"
@@ -178,15 +263,4 @@ if(
 ){
     WaitLongPressConfirm();
     SetTeleportPositionAtRandom(selectionAreaRange);
-}
-
-rule: "Debug/test"
-Event.OngoingPlayer
-Team.All
-if(
-    HostPlayer() == ep &&
-    IsButtonHeld(ep, Button.Crouch)
-){
-    dbgMsg(ExcludeY(FacingDirectionOf()));
-    dbgMsg(ExcludeY(-FacingDirectionOf()));
 }
