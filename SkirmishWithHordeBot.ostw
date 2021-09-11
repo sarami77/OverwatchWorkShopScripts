@@ -18,8 +18,8 @@ Event.OngoingGlobal
     DisableInspectorRecording();
 
     Regeneration_enableTeam = Team.All;
-    Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 3, 0, 100, 1);
-    Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 60, 0, 1000, 2);
+    Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 1, 0, 100, 1);
+    Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 25, 0, 1000, 2);
 
     CreateHudText(HostPlayer(),
         null,
@@ -34,19 +34,20 @@ Event.OngoingGlobal
 
     CreateEffect(AllPlayers(), Effect.Sphere, Color.White, teleportPos,
         combatAreaRange, EffectRev.VisibleToPositionRadiusAndColor);
+}
 
+rule: "Player/ReturnSpawn/showReturnSpawnOperation"
+Event.OngoingPlayer
+if(
+    !IsDummyBot() &&
+    HasSpawned()
+){
     // show hero change operation
     CreateHudText(AllPlayers(),
         null, <"Long hold reload button <0> to change hero", ButtonGuide(Button.Reload)>, null,
         Location.Left, -2,
         Color.Yellow, Color.Yellow, Color.Yellow,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
-
-    ForceSpawnRoom(Team.Team1, 0);
-    ForceSpawnRoom(Team.Team2, 0);
-    Wait(0.1);
-    StopForcingSpawnRoom(Team.Team1);
-    StopForcingSpawnRoom(Team.Team2);
 }
 
 rule: "Player/ReturnSpawn/returnSpawn"
@@ -62,13 +63,25 @@ if(
     Respawn();
 }
 
+playervar define killCount = 0;
+
+rule: "Player/KillCount/countup"
+Event.OnFinalBlow
+if(
+    HasSpawned()
+){
+    killCount ++;
+}
+
 rule: "ReloadBotList"
 Event.OngoingGlobal
 {
-    dbgMsg("ReloadBotList");
-    CreateBothBotsByInput(AllHeroes(), WorkshopSettingInteger("Bot Settings", "Bot Count", 24, 0, 24, 1));
-    //CreateBothBotsByInput(AllSupportHeroes(), 24);
-    //CreateBothBotsByInput([Hero.Ashe, Hero.Brigitte], 4);
+    dbgMsg("Reload Bot List");
+    define botNum = WorkshopSettingInteger("Bot Settings", "Bot Count", 24, 0, 24, 1);
+    CreateBothBotsByInput(AllHeroes(), botNum);
+    //CreateBothBotsByInput(AllSupportHeroes(), botNum);
+    //CreateBothBotsByInput([Hero.Ashe, Hero.Brigitte], botNum);
+
     Wait(180, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
@@ -157,8 +170,11 @@ Event.OnDeath
 if(
     ep == Attacker()         // sucide
 ){
-    if(IsInOppsiteSpawnRoom(ep)){
-        dbgMsg("ShiftTeleportPositionBySpawnRoomKill");
+    if(
+        IsInOppsiteSpawnRoom(ep) &&
+        ProbabilityTrue(50)
+    ){
+        dbgMsg("Shift Teleport Position By Spawn Room Kill");
         SetTeleportPositionAtRandom(selectionAreaRange);
         ForceSpawnRoom(Team.Team1, RandomInteger(0, 2));
         ForceSpawnRoom(Team.Team2, RandomInteger(0, 2));
@@ -232,9 +248,9 @@ void TeleportToTeleportPosition(define range)"TeleportToTeleportPosition"{
         Wait(0.01, WaitBehavior.AbortWhenFalse);
         WaitUntil(!isServerOverLoading, 10);
     }
-    // if(IsDummyBot()){
-    //     Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
-    // }
+    if(IsDummyBot()){
+        Wait(RandomReal(0, 3), WaitBehavior.AbortWhenFalse);
+    }
     Teleport(ep, pos);
     PlayEffect(
         ep, PlayEffect.DebuffImpactSound,
