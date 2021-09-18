@@ -65,6 +65,25 @@ if(
 
 playervar define killCount = 0;
 
+rule: "Player/KillCount/showText"
+Event.OngoingPlayer
+if(
+    HasSpawned()
+){
+    CreateHudText(ep,
+        <"<0> Kills", killCount>, null, null,
+        Location.Top, 3,
+        Color.White, Color.White, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+
+    CreateInWorldText(
+        AllPlayers(),
+        <"<0> Kills", killCount>,
+        ep, 1, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        Color.White, Spectators.DefaultVisibility);
+}
+
+
 rule: "Player/KillCount/countup"
 Event.OnFinalBlow
 if(
@@ -79,8 +98,8 @@ Event.OngoingGlobal
     dbgMsg("Reload Bot List");
     define botNum = WorkshopSettingInteger("Bot Settings", "Bot Count", 24, 0, 24, 1);
     CreateBothBotsByInput(AllHeroes(), botNum);
-    //CreateBothBotsByInput(AllSupportHeroes(), botNum);
-    //CreateBothBotsByInput([Hero.Ashe, Hero.Brigitte], botNum);
+    // CreateBothBotsByInput(AllSupportHeroes(), botNum);
+    // CreateBothBotsByInput([Hero.Moira, Hero.Brigitte], botNum);
 
     Wait(180, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
@@ -117,12 +136,10 @@ if(
     )
 ){
     if(!IsDummyBot()){
-        Wait(0.25, WaitBehavior.AbortWhenFalse);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
     }
     TeleportToTeleportPosition(combatAreaRange);
 }
-
-globalvar define teleportLocked;
 
 rule: "PullCenterByOutBound"
 Event.OngoingPlayer
@@ -139,6 +156,7 @@ if(
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     Wait(0.1, WaitBehavior.AbortWhenFalse);
+    WaitUntil(!isServerOverLoading, 10);
     LoopIfConditionIsTrue();
 }
 
@@ -225,11 +243,11 @@ void TeleportToTeleportPosition(define range)"TeleportToTeleportPosition"{
             RandomPosition(5, 5, 5));
 
         if(
-            // Not too close to enemy
+            // not too close to enemy
             DistanceBetween(    
                 pos, 
                 ClosestPlayerTo(
-                    ep,
+                    pos,
                     OppositeTeamOf(TeamOf())))
             >= minDistanceEnemyTeleport
             &&
@@ -237,7 +255,7 @@ void TeleportToTeleportPosition(define range)"TeleportToTeleportPosition"{
             IsInLineOfSight(
                 pos + Up(),
                 ClosestPlayerTo(
-                    ep,
+                    pos,
                     OppositeTeamOf(TeamOf())))
                 &&
             // not inside enemy spwan room
@@ -249,7 +267,7 @@ void TeleportToTeleportPosition(define range)"TeleportToTeleportPosition"{
         WaitUntil(!isServerOverLoading, 10);
     }
     if(IsDummyBot()){
-        Wait(RandomReal(0, 3), WaitBehavior.AbortWhenFalse);
+        Wait(SlotOf(ep) * 0.1, WaitBehavior.AbortWhenFalse);
     }
     Teleport(ep, pos);
     PlayEffect(
@@ -269,7 +287,7 @@ Team.All
 if(
     guardEffectEntity != 0
 ){
-    Wait(3, WaitBehavior.RestartWhenTrue);
+    Wait(3, WaitBehavior.AbortWhenFalse);
     DestroyEffect(guardEffectEntity);
     guardEffectEntity = 0;
 }
