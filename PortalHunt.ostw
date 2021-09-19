@@ -144,11 +144,11 @@ Event.OngoingGlobal
     // Regeneration
     Regeneration_enableTeam = Team.Team1;
     Regeneration_needBalanceTeam1 = true;
-    Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 3, 0, 100, 1);
-    Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 25, 0, 1000, 2);
+    Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait second until start self healing", 3, 0, 100, 1);
+    Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Self healing rate In per seconds", 25, 0, 1000, 2);
     // Revive
     Revive_enableTeam = Team.Team1;
-    Revive_timeLimit = WorkshopSettingReal("Player Settings", "Revive Accept Second", 10, 0, 100, 3);
+    Revive_timeLimit = WorkshopSettingReal("Player Settings", "Acceptance second of revial", 10, 0, 100, 3);
     // DamageText
     DamageText_enableTeam = Team.Team2;
     // ElapsedTimer
@@ -159,8 +159,8 @@ Event.OngoingGlobal
     DisableScoring();
     DisableCompletion();
 
-    // Set initial team lifes
-    initialTeamLifes = WorkshopSettingInteger("Player Settings", "Initial Team Lifes", 6, 0, 1000, 0);
+    // Set initial team Lives
+    initialTeamLives = WorkshopSettingInteger("Player Settings", "Initial team lives", 6, 0, 1000, 0);
 
     // show version and share code
     CreateHudText(AllPlayers(Team.Team1),
@@ -171,7 +171,7 @@ Event.OngoingGlobal
 
     // show hero change operation
     CreateHudText(AllPlayers(Team.Team1),
-        null, <"Long hold reload button <0> to change hero", ButtonGuide(Button.Reload)>, null,
+        null, <"Hold reload button <0> to change hero", ButtonGuide(Button.Reload)>, null,
         Location.Left, -2,
         Color.Yellow, Color.Yellow, Color.Yellow,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
@@ -193,7 +193,7 @@ Event.OngoingGlobal
     while(true){
         // repeat action for joined player
         // set objective message
-        SetObjectiveDescription(AllPlayers(Team.Team1), "find portal and attack!", HudTextRev.None);
+        SetObjectiveDescription(AllPlayers(Team.Team1), "Find the portal and close it!", HudTextRev.None);
         Wait(10, WaitBehavior.AbortWhenFalse);
     } 
 }
@@ -203,8 +203,8 @@ Event.OngoingGlobal
 if(
     initCompleted
 ){
-    // reset team lifes
-    teamLifes = initialTeamLifes;
+    // reset team Lives
+    teamLives = initialTeamLives;
     // reset round no 
     roundNo = 0;
     // reset elapsed time
@@ -242,8 +242,8 @@ if(
     portalState != PortalState.Init &&
     NumberOfPlayers(Team.Team1) <= 0
 ){
-    // reset team lifes
-    teamLifes = initialTeamLifes;
+    // reset team Lives
+    teamLives = initialTeamLives;
     // reset round no
     roundNo = 0;
     // reset elapsed time
@@ -306,37 +306,37 @@ if(
     Respawn();
 }
 
-globalvar define initialTeamLifes!;
-globalvar define teamLifes!;
-define maxTeamLifes: 12;
+globalvar define initialTeamLives!;
+globalvar define teamLives!;
+define maxTeamLives: 12;
 
-rule: "Player/TeamLifes/showTeamLifesHUD"
+rule: "Player/TeamLives/showTeamLivesHUD"
 Event.OngoingGlobal
 if(
     initCompleted
 ){
-    // show HUD of team lifes
+    // show HUD of team Lives
     CreateHudText(AllPlayers(),
-        teamLifes < maxTeamLifes ? 
-            <"Team lifes <0>", teamLifes> :
-            <"Team lifes <0> (Max Stock)", teamLifes>,
+        teamLives < maxTeamLives ? 
+            <"Team Lives <0>", teamLives> :
+            <"Team Lives <0> (Max)", teamLives>,
         null, null,
         Location.Top, 3,
         Color.Team1, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
 }
 
-rule: "Player/TeamLifes/consumeTeamLifes"
+rule: "Player/TeamLives/consumeTeamLives"
 Event.OngoingGlobal
 if(
     0 < reviveTimeoutCount
 ){
     WaitConditionConfirmed();
-    teamLifes -= reviveTimeoutCount;
+    teamLives -= reviveTimeoutCount;
     WaitChangeState();  // wait for show big message by newest value
-    if(teamLifes > 0){
+    if(teamLives > 0){
         BigMessage(AllPlayers(),
-            <"<0> <1> <2>", "Our remaining team lifes is", teamLifes, "...">);
+            <"<0> team lives remaining...", teamLives>);
 
         PlayEffect(
             AllPlayers(), PlayEffect.DebuffImpactSound,
@@ -346,11 +346,11 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Player/TeamLifes/finishGame"
+rule: "Player/TeamLives/finishGame"
 Event.OngoingGlobal
 if(
     initCompleted &&
-    teamLifes <= 0
+    teamLives <= 0
 ){
     WaitConditionConfirmed();
     // play game end portal effect
@@ -358,21 +358,21 @@ if(
     // set slow handler
     slowControlHandler = SlowControlHandler.GameEnd;
 
-    BigMessage(AllPlayers(), "Our team lifes is out...");
+    BigMessage(AllPlayers(), "No more team lives remaining...");
     SetSlowMotion(10);
     Wait(1, WaitBehavior.AbortWhenFalse);   // show slow
     SetSlowMotion(100);
     WaitNextPhase();
 
     BigMessage(AllPlayers(),
-        <"We have reached <0> round... good game!", roundNo>);
+        <"We reached <0> round... good game!", roundNo>);
     PlayRandomEmote(AllPlayers(Team.Team1));
     WaitNextPhase();
 
     DeclareTeamVictory(Team.Team1);
 }
 
-rule: "Player/TeamLifes/protectTeamLifeConsumeBySucide"
+rule: "Player/TeamLives/protectTeamLifeConsumeBySucide"
 Event.OnDeath
 Team.Team1
 if(
@@ -390,7 +390,7 @@ globalvar define playerNumInsidePortal!;
 
 define enableClosingProgress:
     portalState == PortalState.UnderAttack &&
-    teamLifes > 0;
+    teamLives > 0;
 
 rule: "Player/ClosePortal/startClosing"
 Event.OngoingGlobal
@@ -471,26 +471,26 @@ if(
         portalState == PortalState.Closing ||
         portalState == PortalState.Closed
     ) &&
-    teamLifes > 0
+    teamLives > 0
 ){
     WaitConditionConfirmed();
-    // When the countdown is complete, clear the portal and give team lifes.
+    // When the countdown is complete, clear the portal and give team Lives.
     // Later, we will generate a new portal and start the next round.
     WaitPlayEffect();   //wait portal closing effect
     portalState = PortalState.Closed;
     WaitNextPhase();
 
     // if lower than max
-    if(teamLifes < maxTeamLifes){
+    if(teamLives < maxTeamLives){
         // play got life sound
         PlayEffect(
             AllPlayers(), PlayEffect.BuffImpactSound,
             Color.White, portalPosition, MaxLength()
         );
         // show got life sound message
-        BigMessage(AllPlayers(), "We earned new team lifes!");
+        BigMessage(AllPlayers(), "We earned extra team lives!");
         // add life
-        teamLifes += 1;
+        teamLives += 1;
     }
     WaitNextPhase();
 
@@ -513,7 +513,7 @@ if(
     // Sombra stealth is exactly that
     Wait(5.0, WaitBehavior.AbortWhenFalse); // disable ability check cycle
     SetStatus(ep, null, Status.Stunned, 0.1);
-    SmallMessage(ep, "Stealth has been interrupted by the portal's magnetic field!");
+    SmallMessage(ep, "Stealth has been interrupted by the portal!");
     LoopIfConditionIsTrue();
 }
 
@@ -529,7 +529,7 @@ if(
     // WreckingBall Grapple is exactly that
     Wait(5.0, WaitBehavior.AbortWhenFalse); // disable ability check cycle
     SetStatus(ep, null, Status.Stunned, 0.1);
-    SmallMessage(ep, "Grappling hook has been interrupted by the portal's magnetic field!");
+    SmallMessage(ep, "Grappling hook has been interrupted by the portal!");
     LoopIfConditionIsTrue();
 }
 
@@ -618,7 +618,7 @@ if(
     portalEntitys[4] = CreateEffect(AllPlayers(), Effect.EnergySound, enemyColor,
         portalPosition, portalSize / 2, EffectRev.VisibleToPositionAndRadius);
     // show message
-    BigMessage(AllPlayers(), "Detected more portal... find and attack!");
+    BigMessage(AllPlayers(), "Portal detected... find portal and close it!");
 }
 
 rule: "Portal/State/Growing"
@@ -633,9 +633,9 @@ if(
     // If first growing, show message
     if(isFirstGrowing == true){
         isFirstGrowing = false;
-        BigMessage(AllPlayers(), "Portal is growing... hurry up!");
+        BigMessage(AllPlayers(), "Portal is growing... hurry!");
         WaitBigMessageHide();
-        BigMessage(AllPlayers(), "Growed portals spawn more enemys and get tough...");
+        BigMessage(AllPlayers(), "Larger portals spawn more enemies and are tougher to close...");
     }
 }
 
@@ -678,7 +678,7 @@ if(
     portalState == PortalState.Closed
 ){
     // show message
-    BigMessage(AllPlayers(), "Portal closed... good job!");
+    BigMessage(AllPlayers(), "Portal closed, nice work!");
     // init param
     portalPosition = 0;
     portalSize = 0;
@@ -726,7 +726,7 @@ if(
 rule: "Portal/Positioner/createPortal"
 Event.OngoingGlobal
 if(
-    teamLifes > 0 &&
+    teamLives > 0 &&
     portalState == PortalState.Calculating
 ){
     WaitConditionConfirmed();
@@ -800,7 +800,7 @@ globalvar define prevPortalPosition!;
 rule: "Portal/Positioner/positionChecking"
 Event.OngoingGlobal
 if(
-    teamLifes > 0 &&
+    teamLives > 0 &&
     portalState == PortalState.Checking
 ){
     // wait
@@ -1759,8 +1759,8 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // If don't enough players, adjust Bot dealt damage rate to make the game fair
     // And the round progresses, the Bot deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Initial Deal Damage", 25, 0, 1000, 1);
-    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round Progress", 2.0, 0, 1000, 2);
+    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Base Deal Damage", 25, 0, 1000, 1);
+    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round", 1.7, 0, 1000, 2);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
     confirmDealDamage /= ConvertToBalancedValue(0.7, Team.Team1);
@@ -2176,7 +2176,7 @@ void HideDebugHud()"HideDebugHud"{
     }
 }
 
-rule: "Debug/increaseTeamLifes"
+rule: "Debug/increaseTeamLives"
 Event.OngoingPlayer
 Team.All
 if(
@@ -2184,9 +2184,9 @@ if(
     IsButtonHeld(ep, Button.Interact) &&
     IsButtonHeld(ep, Button.Ability2)
 ){
-    // Increase TeamLifes
+    // Increase TeamLives
     WaitLongPressConfirm();
-    teamLifes += 1;
+    teamLives += 1;
     LoopIfConditionIsTrue();
 }
 
