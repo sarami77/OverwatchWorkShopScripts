@@ -989,32 +989,32 @@ define StartMoveInDir(define dir):
         ThrottleBehavior.ReplaceExistingThrottle,
         ThrottleRev.DirectionAndMagnitude);
 
-define stackRange: 0.75;
+define stuckRange: 0.75;
 
 playervar define prevPosition;
 
-void checkStackAndBreak()"checkStackAndBreak"{
+void checkAndBreakStuck()"checkAndBreakStuck"{
     if(
-        prevPosition != 0 &&
-        sideStepDir != 0 &&
-        moveDir != 0 &&
-        DistanceBetween(PositionOf(), prevPosition) < stackRange
+        prevPosition != 0 &&    // has prevPosition
+        sideStepDir != 0 &&     // has sidestep
+        moveDir != 0 &&         // has moveDir
+        DistanceBetween(PositionOf(), prevPosition) < stuckRange    // not move from prevPosition
     ){
-        statusText = <"checkStackAndBreak <0>", target>;
+        statusText = <"checkAndBreakStuck <0>", target>;
         
         while(
-            DistanceBetween(PositionOf(), prevPosition) < stackRange &&
-            ProbabilityTrue(70)
+            ProbabilityTrue(75) &&
+            DistanceBetween(PositionOf(), prevPosition) < stuckRange
         ){
             // change move direction
             sideStepDir = RandomValueInArray([0, 0, Right(), Left()]);
             moveDir = RandomValueInArray([Forward(), Forward(), Backward()]);
             StartMove();
             // try jump or croch
-            define breakStackButton! = RandomValueInArray([Button.Jump, Button.Crouch]);
-            StartHoldingButton(ep, breakStackButton);
-            Wait(RandomReal(1, 2), WaitBehavior.AbortWhenFalse);
-            StopHoldingButton(ep, breakStackButton);
+            define breakStuckButton! = RandomValueInArray([Button.Jump, Button.Crouch]);
+            StartHoldingButton(ep, breakStuckButton);
+            Wait(RandomReal(1, 2), WaitBehavior.IgnoreCondition);
+            StopHoldingButton(ep, breakStuckButton);
         }
     }
     else{
@@ -1041,61 +1041,6 @@ if(
     StopMove();
     StopFacing();
 }
-
-/*
-// TAG Bot/ActionState/Searching ----------
-rule: "Bot/ActionState/Searching"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    actionState == ActionState.Search
-){
-    statusText = <"Searching">;
-
-    // hero unique action
-    HeroUniqueAction();
-
-    // set initial status
-    moveDir = Forward();
-    sideStepDir = -sideStepDir;
-    StartMove();
-    targetPos = BelowPosition(targetPos);   // convert targetpPos to rechable position
-
-    // set face direction to target lost posotion
-    StartFacing(
-        ep,
-        DirectionTowards(
-            EyePosition(),
-            targetPos),
-        300,
-        Relative.ToWorld, FacingRev.DirectionAndTurnRate
-    );
-    
-    // action loop
-    while(actionState == ActionState.Search){
-        // reached target lost position
-        if(DistanceBetween(targetPos, ep) <= targetPosRange){
-            Wait(1, WaitBehavior.AbortWhenFalse);
-            actionState = ActionState.Non;
-        }
-        
-        // check stack
-        checkStackAndBreak();
-
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    }
-}
-
-rule: "Bot/ActionState/Searching/timeout"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    actionState == ActionState.Search
-){
-    Wait(5, WaitBehavior.AbortWhenFalse);
-    actionState = ActionState.Non;
-}
-*/
 
 // TAG Bot/ActionState/Attack ----------
 globalvar define botAimScat = WorkshopSettingReal("Bot Settings", "Aim Scattering (0 is head shot)", 0.25, 0, 1000, 0);
@@ -1151,28 +1096,30 @@ if(
     while(actionState == ActionState.Attack){
         // check abyss
         define detectAbyss! = 0;
-        if(IsBelowAbyss(targetDirBackward)){
+        if(
+            IsBelowAbyss(targetDirBackward)
+        ){
             detectAbyss = Backward();
             dbgPlyEft(ep);
         }
-        else if(IsBelowAbyss(targetDirForward)){
+        else if(
+            IsBelowAbyss(targetDirForward)
+        ){
             detectAbyss = Forward();
             dbgPlyEft(ep);
         }
 
         // set move direction
         define distToTarget = DistanceBetween(ep, target);
-        // target is far
         if(
-            distToTarget > AttackRangeMax ||
-            detectAbyss == Backward()
+            distToTarget > AttackRangeMax ||    // target is far
+            detectAbyss == Backward()           // has abyss at backward
         ){
             moveDir = Forward();
         }
-        // target is close
         else if(
-            distToTarget < AttackRangeMin ||
-            detectAbyss == Forward()
+            distToTarget < AttackRangeMin ||    // target is close
+            detectAbyss == Forward()            // has abyss at forward
         ){
             moveDir = Backward();
         }
@@ -1183,6 +1130,7 @@ if(
         // set sidestep direction
         // detect abyss
         if(detectAbyss != 0){
+            // no sidestep
             sideStepDir = 0;
         }
         // non side step
@@ -1190,23 +1138,24 @@ if(
             if(ProbabilityTrue(50)){
                 if(ProbabilityTrue(50)){
                     sideStepDir = Right();
-                    sideStepSecond = RandomInteger(0, 3);
+                    sideStepSecond = RandomReal(0, 3);
                 }
                 else{
                     sideStepDir = Left();
-                    sideStepSecond = RandomInteger(0, 3);
+                    sideStepSecond = RandomReal(0, 3);
                 }
             }
             else{
                 sideStepDir = 0;
-                sideStepSecond = RandomInteger(0, 3);
+                sideStepSecond = RandomReal(0, 3);
             }
         }
+
         // set move direction
         StartMove();
 
-        // check stack
-        checkStackAndBreak();
+        // check stuck
+        checkAndBreakStuck();
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
@@ -1248,39 +1197,42 @@ if(
     while(actionState == ActionState.Support){
         // check abyss
         define detectAbyss! = 0;
-        if(IsBelowAbyss(targetDirBackward)){
+        if(
+            IsBelowAbyss(targetDirBackward)
+        ){
             detectAbyss = Backward();
             dbgPlyEft(ep);
         }
-        else if(IsBelowAbyss(targetDirForward)){
+        else if(
+            IsBelowAbyss(targetDirForward)
+        ){
             detectAbyss = Forward();
             dbgPlyEft(ep);
         }
 
         // set move direction
         define distToTarget = DistanceBetween(ep, target);
-        // target is far
         if(
-            distToTarget > AttackRangeMax ||
-            detectAbyss == Backward()
+            distToTarget > AttackRangeMax ||    // target is far
+            detectAbyss == Backward()           // has abyss at backward
         ){
             moveDir = Forward();
         }
-        // target is close
         else if(
-            distToTarget < AttackRangeMin ||
-            detectAbyss == Forward()
+            distToTarget < AttackRangeMin ||    // target is close
+            detectAbyss == Forward()            // has abyss at forward
         ){
             moveDir = Backward();
         }
         else{
             moveDir = 0;
         }
+
         // set move direction
         StartMove();
         
-        // check stack
-        checkStackAndBreak();
+        // check stuck
+        checkAndBreakStuck();
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
