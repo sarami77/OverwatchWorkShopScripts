@@ -2,33 +2,33 @@ import "Utility.del";
 
 // Function enable team
 // Set team in import destination parent file
-globalvar define Regeneration_enableTeam!;
-globalvar define Regeneration_needBalanceTeam1!;
-globalvar define Regeneration_needBalanceTeam2!;
-globalvar define Regeneration_regenerationRateTeam1!;
-globalvar define Regeneration_regenerationRateTeam2!;
-globalvar define Regeneration_waitRegenTimeTeam1!;
-globalvar define Regeneration_waitRegenTimeTeam2!;
+globalvar define regenerationEnableTeam!;
+globalvar define regenerationNeedBalanceTeam1!;
+globalvar define regenerationNeedBalanceTeam2!;
+globalvar define regenerationHealthPerSecondTeam1!;
+globalvar define regenerationHealthPerSecondTeam2!;
+globalvar define regenerationStartWaitSecondTeam1!;
+globalvar define regenerationStartWaitSecondTeam2!;
 
-define Regeneration_isEnableTeam:
-    Regeneration_enableTeam == TeamOf() ||
-    Regeneration_enableTeam == Team.All;
-globalvar define playerRegenerationRateTeam1!;
-globalvar define playerRegenerationRateTeam2!;
-playervar define waitRegeneration!;
+define regenerationIsEnableTeam:
+    regenerationEnableTeam == TeamOf() ||
+    regenerationEnableTeam == Team.All;
+globalvar define regenRateTeam1!;
+globalvar define regenRateTeam2!;
+playervar define waitRegen!;
 
 rule: "Player/Regeneration/updateRate //if there are few players, incrase regeneration rate for fair play."
 Event.OngoingGlobal
 {
     // If don't enough players, adjust player regeneration rate to make the game fair
     // Multiply heal unit
-    playerRegenerationRateTeam1 = (Regeneration_regenerationRateTeam1);
-    playerRegenerationRateTeam2 = (Regeneration_regenerationRateTeam2);
+    regenRateTeam1 = (regenerationHealthPerSecondTeam1);
+    regenRateTeam2 = (regenerationHealthPerSecondTeam2);
     // Apply balance multiplier
-    if(Regeneration_needBalanceTeam1)
-        playerRegenerationRateTeam1 *= ConvertToBalancedValue(0.75, Team.Team1);  // TAG player regeneration scale
-    else if(Regeneration_regenerationRateTeam2)
-        playerRegenerationRateTeam2 *= ConvertToBalancedValue(0.75, Team.Team2);  // TAG player regeneration scale
+    if(regenerationNeedBalanceTeam1)
+        regenRateTeam1 *= ConvertToBalancedValue(0.75, Team.Team1);  // TAG player regeneration scale
+    else if(regenerationHealthPerSecondTeam2)
+        regenRateTeam2 *= ConvertToBalancedValue(0.75, Team.Team2);  // TAG player regeneration scale
 
     WaitUpdateLongCycle();
     LoopIfConditionIsTrue();
@@ -37,33 +37,33 @@ Event.OngoingGlobal
 rule: "Player/Regeneration/waitRegenerate //by taken damage"
 Event.OnDamageTaken
 if(
-    Regeneration_isEnableTeam &&
+    regenerationIsEnableTeam &&
     IsAlive(EventPlayer())
 ){
     // Stop regeneration when player receives damage
     // Resume regeneration over time
-    waitRegeneration = true;
+    waitRegen = true;
     if(TeamOf() == Team.Team1)
-        Wait(Regeneration_waitRegenTimeTeam1, WaitBehavior.RestartWhenTrue);  // TAG wait regenenation timer
+        Wait(regenerationStartWaitSecondTeam1, WaitBehavior.RestartWhenTrue);  // TAG wait regenenation timer
     else if(TeamOf() == Team.Team2)
-        Wait(Regeneration_waitRegenTimeTeam2, WaitBehavior.RestartWhenTrue);
-    waitRegeneration = false;
+        Wait(regenerationStartWaitSecondTeam2, WaitBehavior.RestartWhenTrue);
+    waitRegen = false;
 }
 
 rule: "Player/Regeneration/regenerate //heal if not damaged for a short time"
 Event.OngoingPlayer
 if(
-    Regeneration_isEnableTeam &&
+    regenerationIsEnableTeam &&
     IsAlive(EventPlayer()) &&
-    !waitRegeneration &&
+    !waitRegen &&
     Health(EventPlayer()) < MaxHealth(EventPlayer())
 ){
     // Heal until the player's health is maximized
     WaitUpdateMediumCycle();
     if(TeamOf() == Team.Team1)
-        Heal(EventPlayer(), null, playerRegenerationRateTeam1);
+        Heal(EventPlayer(), null, regenRateTeam1);
     else if(TeamOf() == Team.Team2)
-        Heal(EventPlayer(), null, playerRegenerationRateTeam2);
+        Heal(EventPlayer(), null, regenRateTeam2);
     LoopIfConditionIsTrue();
 }
 

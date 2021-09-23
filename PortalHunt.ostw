@@ -33,101 +33,10 @@ disabled rule: "Check detail with https://github.com/ItsDeltin/Overwatch-Script-
 disabled rule: "Original source code was created by [sarami77#1868]"-1{}
 disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopScripts"-1{}
 
-// TAG System ----------
-define WaitUntilServerFree(): WaitUntil(!isServerOverLoading, 5);
-
-define slowLevel: [100, 95, 90, 80, 50];    // 0～4
-globalvar define targetSlowLevel!;
-globalvar define currentSlowLevel!;
-globalvar define slowControlHandler!;
-enum SlowControlHandler{
-    None,
-    ServerOverLoadMeasures,
-    PlayerJoin,
-    GameEnd
-}
-
-rule: "System/ServerOverLoadMeasures/increaseSlowLevel"
-Event.OngoingGlobal
-if(
-    initCompleted &&    
-    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
-    isServerOverLoading &&
-    targetSlowLevel < (CountOf(slowLevel) - 1)
-){
-    // If the server is overloaded,
-    //  apply slow motion every second
-    //  to reduce the load to avoid shutting down due to server overload.
-    Wait(1, WaitBehavior.AbortWhenFalse);
-    // can increase slow level
-    if(targetSlowLevel < (CountOf(slowLevel) - 1)){
-        // increase slow level
-        targetSlowLevel ++;
-        // apply slow level
-        ApplySlowLevel(targetSlowLevel);
-    }
-    LoopIfConditionIsTrue();
-}
-
-rule: "System/ServerOverLoadMeasures/decreaseSlowLevel"
-Event.OngoingGlobal
-if(
-    initCompleted &&    
-    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
-    !isServerOverLoading &&
-    targetSlowLevel > 0
-){
-    // If the server is not overloaded,
-    //  reset slow motion every second
-    // can decrease slow level
-    Wait(0.25, WaitBehavior.AbortWhenFalse);
-    if(targetSlowLevel > 0){
-        // decrease slow level
-        targetSlowLevel --;
-        // apply slow level
-        ApplySlowLevel(targetSlowLevel);
-    }
-    LoopIfConditionIsTrue();
-}
-
-rule: "System/ServerOverLoadMeasures/reduceOverLoadOnPlayerJoin"
-Event.OnPlayerJoin
-Team.Team1
-if(
-    initCompleted &&
-    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures
-){
-    // apply slow level
-    ApplySlowLevel(3);
-    slowControlHandler = SlowControlHandler.PlayerJoin;
-}
-
-rule: "System/ServerOverLoadMeasures/restartOverLoadWatching"
-Event.OngoingGlobal
-if(
-    slowControlHandler == SlowControlHandler.PlayerJoin
-){
-    Wait(3.0, WaitBehavior.IgnoreCondition);
-    // reset slow level
-    ApplySlowLevel(0);
-    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
-}
-
-void ApplySlowLevel(define setSlowLevel!)"ApplySlowLevel"{
-    // if slow level changed
-    if(currentSlowLevel != setSlowLevel){
-        // apply slow motion
-        currentSlowLevel = setSlowLevel;
-        SetSlowMotion(slowLevel[setSlowLevel]);
-    }
-}
-
-// TAG Game ----------
-define enemyColor: Color.Purple;
+// TAG Initialize ----------
 globalvar define initCompleted!;
-globalvar define roundNo!;
 
-rule: "Game/initSetting"
+rule: "Initialize/initialize"
 Event.OngoingGlobal
 {
     // Stop records to reduce server load
@@ -136,27 +45,26 @@ Event.OngoingGlobal
     // If run it right after loading the server, some scripts fail, so wait 3 seconds
     Wait(3, WaitBehavior.AbortWhenFalse);
 
-    // Set imported function property
-    // Regeneration
-    Regeneration_enableTeam = Team.Team1;
-    Regeneration_needBalanceTeam1 = true;
-    Regeneration_waitRegenTimeTeam1 = WorkshopSettingReal("Player Settings", "Wait second until start self healing", 3, 0, 100, 1);
-    Regeneration_regenerationRateTeam1 = WorkshopSettingReal("Player Settings", "Self healing rate In per seconds", 25, 0, 1000, 2);
-    // Revive
-    Revive_enableTeam = Team.Team1;
-    Revive_timeLimit = WorkshopSettingReal("Player Settings", "Acceptance second of revial", 10, 0, 100, 3);
-    // DamageText
-    DamageText_enableTeam = Team.Team2;
-    // ElapsedTimer
-    ElapsedTimer_enable = true;
-
     // Cancel unnecessary default settings
     PauseMatchTime();
     DisableScoring();
     DisableCompletion();
 
-    // Set initial team Lives
-    initialTeamLives = WorkshopSettingInteger("Player Settings", "Initial team lives", 6, 0, 1000, 0);
+    // Set imported function property
+    // Regeneration.del
+    regenerationEnableTeam = Team.Team1;
+    regenerationNeedBalanceTeam1 = true;
+    regenerationStartWaitSecondTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Start Wait Second", 3, 0, 100, 1);
+    regenerationHealthPerSecondTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Health Per Second", 25, 0, 1000, 2);
+    // Revive.del
+    reviveEnableTeam = Team.Team1;
+    reviveTimeLimit = WorkshopSettingReal("Player Settings", "Revive Time Limit", 10, 0, 100, 3);
+    reviveRange = WorkshopSettingReal("Player Settings", "Revive Range", 2.5, 0, 100, 4);
+    reviveCompleteSecond = WorkshopSettingReal("Player Settings", "Revive Complete Second", 3, 0, 100, 5);
+    // DamageText.del
+    damageTextEnableTeam = Team.Team2;
+    // ElapsedTimer.del
+    elapsedTimerEnable = true;
 
     // show version and share code
     CreateHudText(AllPlayers(Team.Team1),
@@ -182,6 +90,9 @@ Event.OngoingGlobal
     // Start watch over load
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 
+    // Set initial team Lives
+    initialTeamLives = WorkshopSettingInteger("Player Settings", "Initial team lives", 6, 0, 1000, 0);
+
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
 
@@ -193,6 +104,98 @@ Event.OngoingGlobal
         Wait(10, WaitBehavior.AbortWhenFalse);
     } 
 }
+
+// TAG ServerOverLoadMeasures ----------
+define WaitUntilServerFree(): WaitUntil(!isServerOverLoading, 5);
+
+define slowLevel: [100, 95, 90, 80, 50];    // 0～4
+globalvar define targetSlowLevel!;
+globalvar define currentSlowLevel!;
+globalvar define slowControlHandler!;
+enum SlowControlHandler{
+    None,
+    ServerOverLoadMeasures,
+    PlayerJoin,
+    GameEnd
+}
+
+rule: "ServerOverLoadMeasures/increaseSlowLevel"
+Event.OngoingGlobal
+if(
+    initCompleted &&    
+    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
+    isServerOverLoading &&
+    targetSlowLevel < (CountOf(slowLevel) - 1)
+){
+    // If the server is overloaded,
+    //  apply slow motion every second
+    //  to reduce the load to avoid shutting down due to server overload.
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    // can increase slow level
+    if(targetSlowLevel < (CountOf(slowLevel) - 1)){
+        // increase slow level
+        targetSlowLevel ++;
+        // apply slow level
+        ApplySlowLevel(targetSlowLevel);
+    }
+    LoopIfConditionIsTrue();
+}
+
+rule: "ServerOverLoadMeasures/decreaseSlowLevel"
+Event.OngoingGlobal
+if(
+    initCompleted &&    
+    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
+    !isServerOverLoading &&
+    targetSlowLevel > 0
+){
+    // If the server is not overloaded,
+    //  reset slow motion every second
+    // can decrease slow level
+    Wait(0.25, WaitBehavior.AbortWhenFalse);
+    if(targetSlowLevel > 0){
+        // decrease slow level
+        targetSlowLevel --;
+        // apply slow level
+        ApplySlowLevel(targetSlowLevel);
+    }
+    LoopIfConditionIsTrue();
+}
+
+rule: "ServerOverLoadMeasures/reduceOverLoadOnPlayerJoin"
+Event.OnPlayerJoin
+Team.Team1
+if(
+    initCompleted &&
+    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures
+){
+    // apply slow level
+    ApplySlowLevel(3);
+    slowControlHandler = SlowControlHandler.PlayerJoin;
+}
+
+rule: "ServerOverLoadMeasures/restartOverLoadWatching"
+Event.OngoingGlobal
+if(
+    slowControlHandler == SlowControlHandler.PlayerJoin
+){
+    Wait(3.0, WaitBehavior.IgnoreCondition);
+    // reset slow level
+    ApplySlowLevel(0);
+    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
+}
+
+void ApplySlowLevel(define setSlowLevel!)"ApplySlowLevel"{
+    // if slow level changed
+    if(currentSlowLevel != setSlowLevel){
+        // apply slow motion
+        currentSlowLevel = setSlowLevel;
+        SetSlowMotion(slowLevel[setSlowLevel]);
+    }
+}
+
+// TAG Game ----------
+globalvar define roundNo!;
 
 rule: "Game/initGame"
 Event.OngoingGlobal
@@ -492,6 +495,8 @@ if(
 
     PlayRandomVoiceLine(AllPlayers(Team.Team1));
     roundNo += 1;
+    BigMessage(AllPlayers(), <"Round <0>", roundNo>);
+    WaitBigMessageHide();
     portalState = PortalState.Calculating;  // start next portal create
 }
 
@@ -574,6 +579,7 @@ if(
 }
 
 define showPortalIconOutRange: 50;
+define enemyColor: Color.Purple;
 
 rule: "Portal/State/Set  // waiting for found by players"
 Event.OngoingGlobal
@@ -1256,7 +1262,7 @@ if(
         SetHealingReceived(ep, 50);
         
         eachDealtDamageScale = 0.5;
-        eachChargeUltInterval = 80;
+        eachChargeUltInterval = 60;
         eachMaxSpawnInterval = 2;
 
         eachNameText = "Minion";
@@ -1293,7 +1299,7 @@ if(
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
-        eachMaxSpawnInterval = 30;
+        eachMaxSpawnInterval = 40;
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
@@ -1310,7 +1316,7 @@ if(
         //SetHealingReceived(ep, 100);
 
         eachDealtDamageScale = 4.0;
-        eachChargeUltInterval = 10;
+        eachChargeUltInterval = 5;
         eachMaxSpawnInterval = 30 / 6;
 
         eachNameText = "Giant Boss";
@@ -1526,6 +1532,8 @@ void PlayTeleportEffect(define isBefore)"PlayTeleportEffect"{
     else{
         // play teleport blast
         PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, ep, eachEffectTextSize);
+        // play teleport sound
+        //PlayEffect(AllPlayers(), PlayEffect.DebuffImpactSound, enemyColor, ep, 100);
     }
 }
 
@@ -2006,16 +2014,7 @@ void ShowDebugHud()"ShowDebugHud"{
 
         CreateHudText(HostPlayer(),
             null,
-            <"<0> <1>", "revive Timeout Count", reviveTimeoutCount>,
-            null,
-            Location.Left, -1,
-            Color.White, Color.Blue, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
-
-        CreateHudText(HostPlayer(),
-            null,
-            <"<0> <1>", "Regeneration Rate", playerRegenerationRateTeam1>,
+            <"<0> <1>", "Regeneration Rate", regenRateTeam1>,
             null,
             Location.Left, -1,
             Color.White, Color.Blue, Color.White,

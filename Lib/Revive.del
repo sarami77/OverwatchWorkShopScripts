@@ -2,19 +2,20 @@ import "Utility.del";
 
 // Function enable team
 // Set team in import destination parent file
-globalvar define Revive_enableTeam! = Team.Team1;
-globalvar define Revive_timeLimit! = 10;
-define Revive_isEnableTeam:
-    Revive_enableTeam == TeamOf() ||
-    Revive_enableTeam == Team.All;
+globalvar define reviveEnableTeam! = Team.All;
+globalvar define reviveTimeLimit! = 10;
+globalvar define reviveRange = 2.5;
+globalvar define reviveCompleteSecond = 3;
 
 playervar define downPosition!;
 playervar define reviveTimeRemain!;
 playervar define reviveCountDown!;
 playervar define needHelpEntitys!;
 
-define reviveCompleteSecond: 3;
-define reviveRange : 2.5;
+define reviveIsEnableTeam:
+    reviveEnableTeam == TeamOf() ||
+    reviveEnableTeam == Team.All;
+
 define CanRevive():
     IsDead() &&
     IsOnGround();
@@ -34,13 +35,13 @@ define NearTeammate():
 rule: "Player/Revive/setTimeLimit"
 Event.OngoingPlayer
 if(
-    Revive_isEnableTeam &&
+    reviveIsEnableTeam &&
     IsDead()
 ){
     // set revive time limit by player dead
     DisableRespawning();
-    SetRespawnMaxTime(ep, Revive_timeLimit);
-    reviveTimeRemain = Revive_timeLimit;
+    SetRespawnMaxTime(ep, reviveTimeLimit);
+    reviveTimeRemain = reviveTimeLimit;
 }
 
 playervar define returnPosition!;
@@ -48,7 +49,7 @@ playervar define returnPosition!;
 rule: "Player/Revive/saveReturnPosition"
 Event.OngoingPlayer
 if(
-    Revive_isEnableTeam &&
+    reviveIsEnableTeam &&
     IsAlive() &&
     IsInAir()
 ){
@@ -60,7 +61,7 @@ if(
 rule: "Player/Revive/returnGround"
 Event.OngoingPlayer
 if(
-    Revive_isEnableTeam &&
+    reviveIsEnableTeam &&
     IsDead() &&
     !IsOnGround()
 ){
@@ -76,7 +77,7 @@ if(
 rule: "Player/Revive/showNeedHelp"
 Event.OngoingPlayer
 if(
-    Revive_isEnableTeam &&
+    reviveIsEnableTeam &&
     CanRevive()
 ){
     // Display HELP on the downed player's position
@@ -109,7 +110,7 @@ if(
 rule: "Player/Revive/hideNeedHelp"
 Event.OngoingPlayer
 if(
-    Revive_isEnableTeam &&
+    reviveIsEnableTeam &&
     !CanRevive()
 ){
     // Hide HELP on the downed player's position
@@ -121,7 +122,7 @@ if(
 rule: "Player/Revive/countDownTimeLimit"
 Event.OngoingPlayer
 if(
-    Revive_isEnableTeam &&
+    reviveIsEnableTeam &&
     CanRevive() &&
     reviveTimeRemain >= 0
 ){
@@ -150,7 +151,7 @@ globalvar define reviveTimeoutCount! = 0;
 rule: "Player/Revive/reviveByTeammate //by near standing"
 Event.OngoingPlayer
 if(
-    Revive_isEnableTeam &&
+    reviveIsEnableTeam &&
     CanRevive() &&
     NearTeammate()
 ){
@@ -158,7 +159,7 @@ if(
     // The event player is the player who receives the revival.
     if(!IsDeadByAbyss()){
         // Save the reviver to display a message to the reviver
-        define reviver! = ClosestPlayerTo(EventPlayer(), Revive_enableTeam);
+        define reviver! = ClosestPlayerTo(EventPlayer(), reviveEnableTeam);
 
         SmallMessage(reviver,
             <"reviving <0> <1>...", EventPlayer(), HeroIconString(HeroOf(EventPlayer()))>);
@@ -202,7 +203,7 @@ Event.OngoingPlayer
 if(
     IsDead()
 ){
-    Wait(Revive_timeLimit + 3, WaitBehavior.AbortWhenFalse);
+    Wait(reviveTimeLimit + 3, WaitBehavior.AbortWhenFalse);
     Respawn(ep);
 }
 
