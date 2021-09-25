@@ -4,8 +4,8 @@ import "Utility.del";
 // Set team in import destination parent file
 globalvar define reviveEnableTeam! = Team.All;
 globalvar define reviveTimeLimit! = 10;
-globalvar define reviveRange = 2.5;
-globalvar define reviveCompleteSecond = 3;
+globalvar define reviveRange! = 2.5;
+globalvar define reviveCompleteSecond! = 3;
 
 playervar define downPosition!;
 playervar define reviveTimeRemain!;
@@ -24,10 +24,10 @@ define NearTeammate():
     CountOf(
         FilteredArray(
             AllPlayers(TeamOf()), (
-                ep != ArrayElement() &&
-                HasSpawned(ArrayElement()) &&
-                IsAlive(ArrayElement()) &&
-                DistanceBetween(downPosition, ArrayElement()) <= reviveRange
+                ep != ae &&
+                HasSpawned(ae) &&
+                IsAlive(ae) &&
+                DistanceBetween(downPosition, ae) <= reviveRange
             )
         )
     ) > 0;
@@ -40,7 +40,6 @@ if(
 ){
     // set revive time limit by player dead
     DisableRespawning();
-    SetRespawnMaxTime(ep, reviveTimeLimit);
     reviveTimeRemain = reviveTimeLimit;
 }
 
@@ -119,6 +118,11 @@ if(
     DestroyInWorldText(needHelpEntitys[0]);
 }
 
+define isReviving:
+        reviveIsEnableTeam &&
+        CanRevive() &&
+        NearTeammate();
+
 rule: "Player/Revive/countDownTimeLimit"
 Event.OngoingPlayer
 if(
@@ -136,10 +140,10 @@ if(
     if(
         reviveTimeRemain <= 0
     ){
-        WaitUntil(!NearTeammate(), reviveCompleteSecond);
+        WaitUntil(!isReviving, reviveCompleteSecond);
         AbortIf(IsAlive());
-
         Respawn();
+
         reviveTimeoutCount ++;
         Abort();
     }
@@ -148,12 +152,12 @@ if(
 
 globalvar define reviveTimeoutCount! = 0;
 
-rule: "Player/Revive/reviveByTeammate //by near standing"
+playervar define reviveProgressRingSize;
+
+rule: "Player/Revive/reviveByTeammate"
 Event.OngoingPlayer
 if(
-    reviveIsEnableTeam &&
-    CanRevive() &&
-    NearTeammate()
+    isReviving
 ){
     // revived when a teammate is nearby
     // The event player is the player who receives the revival.
@@ -166,8 +170,15 @@ if(
         SmallMessage(EventPlayer(),
             <"<0> <1> is reviving you...", reviver, HeroIconString(HeroOf(reviver))>);
 
+        reviveProgressRingSize = reviveRange;
+        CreateEffect(
+            AllPlayers(), Effect.Ring, Color.Yellow,
+            downPosition, reviveProgressRingSize, EffectRev.VisibleToPositionAndRadius);
+        needHelpEntitys[3] = LastCreatedEntity();
+        ChaseVariableOverTime(reviveProgressRingSize, 0, reviveCompleteSecond, TimeChaseReevaluation.None);
+
         // reviving effect and progress count
-        for(define reviveProgressSecond = 0; reviveProgressSecond < reviveCompleteSecond; reviveProgressSecond++){
+        for(define reviveProgressSecond = 0; reviveProgressSecond < reviveCompleteSecond; reviveProgressSecond ++){
             PlayEffect(
                 AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
                 Color.Yellow, EventPlayer(), 1);
@@ -176,6 +187,8 @@ if(
                 Color.Yellow, EventPlayer(), MaxValue());
             Wait(1, WaitBehavior.AbortWhenFalse);   
         }
+
+        StopChasingVariable(reviveProgressRingSize);
 
         // revive conplete effect and sound
         PlayEffect(
@@ -196,6 +209,15 @@ if(
         SmallMessage(EventPlayer(),
             <"<0> <1> revived you!", reviver, HeroIconString(HeroOf(reviver))>);
     }
+}
+
+rule: "Player/Revive/abortReviveByTeammate"
+Event.OngoingPlayer
+if(
+    !isReviving
+){
+    DestroyEffect(needHelpEntitys[3]);
+    StopChasingVariable(reviveProgressRingSize);
 }
 
 rule: "Player/Revive/failsafe"
@@ -221,8 +243,8 @@ if(
             FilteredArray(
                 AllPlayers(Team.Team1),
                 (
-                    IsDead(ArrayElement()) &&
-                    IsInLineOfSight(EventPlayer(), ArrayElement())
+                    IsDead(ae) &&
+                    IsInLineOfSight(EventPlayer(), ae)
                 )
             )
         );
