@@ -1,7 +1,6 @@
 import "Utility.del";
 
-// Function enable team
-// Set team in import destination parent file
+// TAG public property
 globalvar define reviveEnableTeam! = Team.All;
 globalvar define reviveTimeLimit! = 10;
 globalvar define reviveRange! = 2.5;
@@ -9,7 +8,6 @@ globalvar define reviveCompleteSecond! = 3;
 
 playervar define downPosition!;
 playervar define reviveTimeRemain!;
-playervar define reviveCountDown!;
 playervar define needHelpEntitys!;
 
 define reviveIsEnableTeam:
@@ -39,8 +37,13 @@ if(
     IsDead()
 ){
     // set revive time limit by player dead
-    DisableRespawning();
+    DisableRespawning();    // not work in skirmish
+    SetRespawnMaxTime(reviveTimeLimit);
     reviveTimeRemain = reviveTimeLimit;
+
+    // failsafe respawn for respawn logic not working
+    Wait(reviveTimeLimit + reviveCompleteSecond + 1, WaitBehavior.AbortWhenFalse);
+    Respawn();
 }
 
 playervar define returnPosition!;
@@ -65,12 +68,10 @@ if(
     !IsOnGround()
 ){
     if(IsDeadByAbyss()){
-        Teleport(EventPlayer(), NearestWalkablePosition(returnPosition));
+        Teleport(ep, NearestWalkablePosition(returnPosition));
+        Abort();
     }
-    else{
-        WaitUpdateMediumCycle();
-        LoopIfConditionIsTrue();
-    }
+    LoopIfConditionIsTrue();
 }
 
 rule: "Player/Revive/showNeedHelp"
@@ -84,12 +85,12 @@ if(
     // Therefore, save and use the position when down, not the position of the player
     // If down in the abyss of the map, can not revive, so do not display HELP
     if(!IsDeadByAbyss()){
-        downPosition = PositionOf(EventPlayer());
+        downPosition = PositionOf(ep);
         needHelpEntitys = [];
         
         CreateInWorldText(
             AllPlayers(), 
-                <"Revive <0> <1> <2>", EventPlayer(), HeroIconString(HeroOf(EventPlayer())), reviveTimeRemain>,
+                <"Revive <0> <1> <2>", ep, HeroIconString(HeroOf(ep)), reviveTimeRemain>,
             downPosition, 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
             Color.White, Spectators.VisibleAlways);
         needHelpEntitys[0] = LastTextID();
@@ -154,6 +155,8 @@ globalvar define reviveTimeoutCount! = 0;
 
 playervar define reviveProgressRingSize;
 
+playervar define reviver!;
+
 rule: "Player/Revive/reviveByTeammate"
 Event.OngoingPlayer
 if(
@@ -163,12 +166,12 @@ if(
     // The event player is the player who receives the revival.
     if(!IsDeadByAbyss()){
         // Save the reviver to display a message to the reviver
-        define reviver! = ClosestPlayerTo(EventPlayer(), reviveEnableTeam);
+        reviver = ClosestPlayerTo(ep, reviveEnableTeam);
 
-        SmallMessage(reviver,
-            <"reviving <0> <1>...", EventPlayer(), HeroIconString(HeroOf(EventPlayer()))>);
-        SmallMessage(EventPlayer(),
-            <"<0> <1> is reviving you...", reviver, HeroIconString(HeroOf(reviver))>);
+        // SmallMessage(reviver,
+        //     <"reviving <0> <1>.", ep, HeroIconString(HeroOf(ep))>);
+        SmallMessage(ep,
+            <"<0> <1> reviving you.", reviver, HeroIconString(HeroOf(reviver))>);
 
         reviveProgressRingSize = reviveRange;
         CreateEffect(
@@ -181,11 +184,17 @@ if(
         for(define reviveProgressSecond = 0; reviveProgressSecond < reviveCompleteSecond; reviveProgressSecond ++){
             PlayEffect(
                 AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
-                Color.Yellow, EventPlayer(), 1);
+                Color.Yellow, downPosition, 1);
             PlayEffect(
                 AllPlayers(Team.All), PlayEffect.BuffImpactSound,
-                Color.Yellow, EventPlayer(), MaxValue());
-            Wait(1, WaitBehavior.AbortWhenFalse);   
+                Color.Yellow, downPosition, MaxValue());
+                
+            define reviveCountDown! = reviveCompleteSecond - reviveProgressSecond;
+            if(0 < reviveCountDown && reviveCountDown < reviveCompleteSecond){
+                SmallMessage(ep,
+                    <"<0>", reviveCountDown>);
+            }
+            Wait(1, WaitBehavior.AbortWhenFalse);
         }
 
         StopChasingVariable(reviveProgressRingSize);
@@ -193,21 +202,21 @@ if(
         // revive conplete effect and sound
         PlayEffect(
             AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
-            Color.Yellow, EventPlayer(), 1);
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.RingExplosion,
-            Color.Yellow, EventPlayer(), 10);
+            Color.Yellow, ep, 1);
         PlayEffect(
             AllPlayers(Team.All), PlayEffect.BuffExplosionSound,
-            Color.White, EventPlayer(), MaxLength());
+            Color.White, ep, MaxLength());
+        PlayEffect(
+            AllPlayers(Team.All), PlayEffect.RingExplosion,
+            Color.Yellow, ep, reviveRange * 2);
 
-        Resurrect(EventPlayer());
-        SetStatus(EventPlayer(), null, Status.Invincible, 3);
+        Resurrect(ep);
+        SetStatus(ep, null, Status.Invincible, 3);
 
-        SmallMessage(reviver,
-            <"revived <0> <1>!", EventPlayer(), HeroIconString(HeroOf(EventPlayer()))>);
-        SmallMessage(EventPlayer(),
-            <"<0> <1> revived you!", reviver, HeroIconString(HeroOf(reviver))>);
+        // SmallMessage(reviver,
+        //     <"revived <0> <1>.", ep, HeroIconString(HeroOf(ep))>);
+        SmallMessage(ep,
+            <"<0> <1> revived you.", reviver, HeroIconString(HeroOf(reviver))>);
     }
 }
 
@@ -218,15 +227,11 @@ if(
 ){
     DestroyEffect(needHelpEntitys[3]);
     StopChasingVariable(reviveProgressRingSize);
-}
 
-rule: "Player/Revive/failsafe"
-Event.OngoingPlayer
-if(
-    IsDead()
-){
-    Wait(reviveTimeLimit + 3, WaitBehavior.AbortWhenFalse);
-    Respawn(ep);
+    if(IsDead()){
+        SmallMessage(ep,
+            <"revive aborted.">);
+    }
 }
 
 // TAG Debug ----------
@@ -244,7 +249,7 @@ if(
                 AllPlayers(Team.Team1),
                 (
                     IsDead(ae) &&
-                    IsInLineOfSight(EventPlayer(), ae)
+                    IsInLineOfSight(ep, ae)
                 )
             )
         );
@@ -252,9 +257,9 @@ if(
     if(
         reviveTarget != null
     ){
-        ApplyImpulse(EventPlayer(), 
-            VectorTowards(EventPlayer(), reviveTarget + PositionOffset()),
-            DistanceBetween(EventPlayer(), reviveTarget) * 1.3,
+        ApplyImpulse(ep, 
+            VectorTowards(ep, reviveTarget + PositionOffset()),
+            DistanceBetween(ep, reviveTarget) * 1.3,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     WaitApplyImpulseCycle();

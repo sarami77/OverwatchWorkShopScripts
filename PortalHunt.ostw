@@ -50,21 +50,25 @@ Event.OngoingGlobal
     DisableScoring();
     DisableCompletion();
 
-    // Set imported function property
+    // Set imported functions public property for user tuning
     // Regeneration.del
     regenerationEnableTeam = Team.Team1;
     regenerationNeedBalanceTeam1 = true;
-    regenerationStartWaitSecondTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Start Wait Second", 3, 0, 100, 1);
-    regenerationHealthPerSecondTeam1 = WorkshopSettingReal("Player Settings", "Regeneration Health Per Second", 25, 0, 1000, 2);
+    regenerationStartWaitSecondTeam1 =      WorkshopSettingReal("Player Settings", "Regeneration Start Wait Second",            3, 0, 100, 1);
+    regenerationHealthPerSecondTeam1 =      WorkshopSettingReal("Player Settings", "Regeneration Health Per Second",            25, 0, 1000, 2);
     // Revive.del
     reviveEnableTeam = Team.Team1;
-    reviveTimeLimit = WorkshopSettingReal("Player Settings", "Revive Time Limit", 10, 0, 100, 3);
-    reviveRange = WorkshopSettingReal("Player Settings", "Revive Range", 2.5, 0, 100, 4);
-    reviveCompleteSecond = WorkshopSettingReal("Player Settings", "Revive Complete Second", 3, 0, 100, 5);
+    reviveTimeLimit =                       WorkshopSettingReal("Player Settings", "Revive Time Limit",                         10, 0, 100, 3);
+    reviveRange =                           WorkshopSettingReal("Player Settings", "Revive Range",                              3, 0, 100, 4);
+    reviveCompleteSecond =                  WorkshopSettingReal("Player Settings", "Revive Complete Second",                    5, 0, 100, 5);
     // DamageText.del
     damageTextEnableTeam = Team.Team2;
     // ElapsedTimer.del
     elapsedTimerEnable = true;
+    // Bot.del
+    botAimScat =                            WorkshopSettingReal("Bot Settings", "Aim Scattering (0 is head shot)",              0.3, 0, 1000, 6);
+    // PerkCore.del
+    perkCorePerkDropProbability =           WorkshopSettingReal("Perk Settings", "Perk Crate Drop Rate Scale When Enemy Dead",  1, 0, 100, 7);
 
     // show version and share code
     CreateHudText(AllPlayers(Team.Team1),
@@ -116,7 +120,7 @@ Event.OngoingGlobal
 // TAG ServerOverLoadMeasures ----------
 define WaitUntilServerFree(): WaitUntil(!isServerOverLoading, 5);
 
-define slowLevel: [100, 95, 90, 80, 50];    // 0～4
+define slowLevel: [100, 95, 85, 70, 50];    // 0～4
 globalvar define targetSlowLevel!;
 globalvar define currentSlowLevel!;
 globalvar define slowControlHandler!;
@@ -740,10 +744,10 @@ if(
     portalState == PortalState.Calculating
 ){
     WaitConditionConfirmed();
-    define candidatePosition;
-    for(define retryCount = 0; retryCount < 30; retryCount++){
+    define candidatePosition!;
+    for(define retryCount! = 0; retryCount < 30; retryCount++){
         // select random player as base positoon
-        define basePlayer =
+        define basePlayer! =
             RandomValueInArray(
                 FilteredArray(
                     AllLivingPlayers(Team.Team1),
@@ -751,7 +755,7 @@ if(
                 )
             );
         // select random positon from player around
-        define randomPositon = 
+        define randomPositon! = 
             basePlayer +
             // half y derection
             VectorScaledY(
@@ -760,7 +764,7 @@ if(
                     RandomReal(0, 360), RandomReal(30, -30),
                 ) * 
                 // add random distance
-                RandomReal(25, 125), 
+                RandomReal(25, 200), 
                 0.33
             );
 
@@ -1286,8 +1290,6 @@ define assetList:
 
 globalvar define someHero!;
 
-globalvar define enemyTeamName!;
-
 rule: "EnemBot/reloadBotAsset"
 Event.OngoingGlobal
 if(
@@ -1311,7 +1313,6 @@ playervar define eachChargeUltInterval!;
 playervar define eachEffectTextSize!;
 playervar define eachNameText!;
 playervar define eachNameColor!;
-playervar define eachPerkDropProbability!;
 
 rule: "EnemBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
@@ -1585,7 +1586,7 @@ Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPositio
     return true;
 }
 
-void PlayTeleportEffect(define isBefore)"PlayTeleportEffect"{
+void PlayTeleportEffect(define isBefore!)"PlayTeleportEffect"{
     // if before teleport
     if(isBefore){
         // play teleport shadow
@@ -1869,137 +1870,6 @@ if(
     Wait(1, WaitBehavior.AbortWhenFalse);
     Respawn();
 }
-
-// TAG FriendBot ----------
-/*
-define enableFriendBot: true;
-playervar define leader; 
-define HumanList:
-    FilteredArray(
-        AllPlayers(Team.Team1),
-        (
-            !IsDummyBot(ae) &&
-            HasSpawned(ae)
-        )
-    );
-
-define FriendBotList:
-    FilteredArray(
-        AllPlayers(Team.Team1),
-        (
-            IsDummyBot(ae) &&
-            HasSpawned(ae)
-        )
-    );
-
-Number AddFriendBotBot(define team, define hero)"AddFriendBotBot"{
-    AbortIf(CountOf(HumanList) >= 6);
-
-    define slot = GetEmptySlot(team);
-    if(slot != -1){
-        define human = RandomValueInArray(
-            HumanList
-        );
-
-        // create bot
-        CreateDummyBot(
-            hero, team, slot,
-            human + RandomPosition(1, 0, 1),
-            RandomDirection()
-        );
-        Wait(0.1, WaitBehavior.IgnoreCondition);
-        WaitUntil(!isServerOverLoading, 3);
-
-        define bot! = PlayersInSlot(slot, team);
-        // choice leader from human
-        bot.leader = human;
-        // apply Leader's name
-        StartForcingDummyBotName(bot, <"<0>'s Guard <1>", human, CountOf(FriendBotList)>);
-    }
-    return slot;
-}
-
-rule: "FriendBot/fillFriendBotTeam"
-Event.OngoingGlobal
-if(
-    enableFriendBot &&
-    initCompleted &&
-    CountOf(HumanList) > 0 &&
-    NumberOfPlayers(Team.Team1) < 6
-){
-    dbgMsg("fill FriendBot Team");
-    define FriendBotHeroList = [
-        RandomSupportHero,
-        RandomSupportHero,
-        RandomTankHero,
-        RandomTankHero,
-        RandomDamageHero,
-        RandomDamageHero
-    ];
-    for(define idx! = 0; idx < 6; idx++){
-        AddFriendBotBot(Team.Team1, FriendBotHeroList[idx]);
-    }
-    
-    Wait(60, WaitBehavior.AbortWhenFalse);
-    LoopIfConditionIsTrue();
-}
-
-rule: "FriendBot/clearFriendBotTeam"
-Event.OngoingGlobal
-if(
-    enableFriendBot &&
-    initCompleted &&
-    CountOf(HumanList) <= 0
-){
-    DestroyBots(Team.Team1);
-}
-
-rule: "FriendBot/rebindLeader"
-Event.OnPlayerLeave
-Team.Team1
-if(
-    enableFriendBot &&
-    !IsDummyBot()
-){
-    define bots! = FilteredArray(
-        AllPlayers(Team.Team1), ae.leader == ep);
-    dbgHudTxt(CountOf(bots));
-
-    for(pLoopIndex = 0; pLoopIndex < CountOf(bots); pLoopIndex ++){
-        define newLeader! = RandomValueInArray(AllPlayers(Team.Team1));
-        dbgHudTxt(newLeader);
-        bots[pLoopIndex].leader = newLeader;
-    }
-}
-
-rule: "FriendBot/returnToLeader"
-Event.OngoingPlayer
-Team.Team1
-if(
-    enableFriendBot &&
-    IsDummyBot() &&
-    !IsInLineOfSight(ep, leader)
-){
-    Wait(5, WaitBehavior.AbortWhenFalse);   
-    Wait(SlotOf(ep) * 0.1, WaitBehavior.AbortWhenFalse);
-    Teleport(
-        ep, NearestWalkablePosition(leader + RandomPosition(1, 0, 1))
-    );
-    LoopIfConditionIsTrue();
-}
-
-rule: "FriendBot/fastRespawn"
-Event.OngoingPlayer
-Team.Team1
-if(
-    enableFriendBot &&
-    IsDummyBot() &&
-    !IsAlive()
-){
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
-    Respawn(ep);
-}
-*/
 
 // TAG Debug ----------
 globalvar define debugMode!;
