@@ -67,6 +67,7 @@ if(
     IsDead() &&
     !IsOnGround()
 ){
+    Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);    // for avoid server overload
     if(IsDeadByAbyss()){
         Teleport(ep, NearestWalkablePosition(returnPosition));
         Abort();
@@ -84,8 +85,8 @@ if(
     // As for the player position, the appearance position and the down position will not match the dead body where the ragdoll works
     // Therefore, save and use the position when down, not the position of the player
     // If down in the abyss of the map, can not revive, so do not display HELP
+    downPosition = PositionOf(ep);
     if(!IsDeadByAbyss()){
-        downPosition = PositionOf(ep);
         needHelpEntitys = [];
         
         CreateInWorldText(
@@ -164,60 +165,60 @@ if(
 ){
     // revived when a teammate is nearby
     // The event player is the player who receives the revival.
-    if(!IsDeadByAbyss()){
-        // Save the reviver to display a message to the reviver
-        reviver = ClosestPlayerTo(ep, reviveEnableTeam);
 
-        // SmallMessage(reviver,
-        //     <"reviving <0> <1>.", ep, HeroIconString(HeroOf(ep))>);
-        SmallMessage(ep,
-            <"<0> <1> reviving you.", reviver, HeroIconString(HeroOf(reviver))>);
+    // Save the reviver to display a message to the reviver
+    reviver = ClosestPlayerTo(ep, reviveEnableTeam);
 
-        reviveProgressRingSize = reviveRange;
-        CreateEffect(
-            AllPlayers(), Effect.Ring, Color.Yellow,
-            downPosition, reviveProgressRingSize, EffectRev.VisibleToPositionAndRadius);
-        needHelpEntitys[3] = LastCreatedEntity();
-        ChaseVariableOverTime(reviveProgressRingSize, 0, reviveCompleteSecond, TimeChaseReevaluation.None);
+    // SmallMessage(reviver,
+    //     <"reviving <0> <1>.", ep, HeroIconString(HeroOf(ep))>);
+    SmallMessage(ep,
+        <"<0> <1> reviving you.", reviver, HeroIconString(HeroOf(reviver))>);
 
-        // reviving effect and progress count
-        for(define reviveProgressSecond = 0; reviveProgressSecond < reviveCompleteSecond; reviveProgressSecond ++){
-            PlayEffect(
-                AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
-                Color.Yellow, downPosition, 1);
-            PlayEffect(
-                AllPlayers(Team.All), PlayEffect.BuffImpactSound,
-                Color.Yellow, downPosition, MaxValue());
-                
-            define reviveCountDown! = reviveCompleteSecond - reviveProgressSecond;
-            if(0 < reviveCountDown && reviveCountDown < reviveCompleteSecond){
-                SmallMessage(ep,
-                    <"<0>", reviveCountDown>);
-            }
-            Wait(1, WaitBehavior.AbortWhenFalse);
-        }
+    reviveProgressRingSize = reviveRange;
+    CreateEffect(
+        AllPlayers(), Effect.Ring, Color.Yellow,
+        downPosition, reviveProgressRingSize, EffectRev.VisibleToPositionAndRadius);
+    needHelpEntitys[3] = LastCreatedEntity();
+    ChaseVariableOverTime(reviveProgressRingSize, 0, reviveCompleteSecond, TimeChaseReevaluation.None);
 
-        StopChasingVariable(reviveProgressRingSize);
-
-        // revive conplete effect and sound
+    // reviving effect and progress count
+    for(define reviveProgressSecond = 0; reviveProgressSecond < reviveCompleteSecond; reviveProgressSecond ++){
         PlayEffect(
             AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
-            Color.Yellow, ep, 1);
+            Color.Yellow, downPosition, 1);
         PlayEffect(
-            AllPlayers(Team.All), PlayEffect.BuffExplosionSound,
-            Color.White, ep, MaxLength());
-        PlayEffect(
-            AllPlayers(Team.All), PlayEffect.RingExplosion,
-            Color.Yellow, ep, reviveRange * 2);
-
-        Resurrect(ep);
-        SetStatus(ep, null, Status.Invincible, 3);
-
-        // SmallMessage(reviver,
-        //     <"revived <0> <1>.", ep, HeroIconString(HeroOf(ep))>);
-        SmallMessage(ep,
-            <"<0> <1> revived you.", reviver, HeroIconString(HeroOf(reviver))>);
+            AllPlayers(Team.All), PlayEffect.BuffImpactSound,
+            Color.Yellow, downPosition, MaxValue());
+            
+        define reviveCountDown! = reviveCompleteSecond - reviveProgressSecond;
+        if(0 < reviveCountDown && reviveCountDown < reviveCompleteSecond){
+            SmallMessage(ep,
+                <"<0>", reviveCountDown>);
+        }
+        Wait(1, WaitBehavior.AbortWhenFalse);
     }
+
+    StopChasingVariable(reviveProgressRingSize);
+
+    // revive conplete effect and sound
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+        Color.Yellow, ep, 1);
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.BuffExplosionSound,
+        Color.White, ep, MaxLength());
+    PlayEffect(
+        AllPlayers(Team.All), PlayEffect.RingExplosion,
+        Color.Yellow, ep, reviveRange * 2);
+
+    Resurrect(ep);
+    SetStatus(ep, null, Status.Invincible, 3);
+
+    // SmallMessage(reviver,
+    //     <"revived <0> <1>.", ep, HeroIconString(HeroOf(ep))>);
+    SmallMessage(ep,
+        <"<0> <1> revived you.", reviver, HeroIconString(HeroOf(reviver))>);
+
 }
 
 rule: "Player/Revive/abortReviveByTeammate"
@@ -225,8 +226,8 @@ Event.OngoingPlayer
 if(
     !isReviving
 ){
-    DestroyEffect(needHelpEntitys[3]);
     StopChasingVariable(reviveProgressRingSize);
+    DestroyEffect(needHelpEntitys[3]);
 
     if(IsDead()){
         SmallMessage(ep,
