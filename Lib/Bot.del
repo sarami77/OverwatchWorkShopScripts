@@ -523,6 +523,450 @@ enum ButtonBehaivor{
     ReleaseRepeat
 }
 
+// TAG Bot/ActionState/StateControl ----------
+define needHealRate: 0.7;
+
+define watchUpdateRate:
+    isServerOverLoading ? 3 : 1.5;
+
+rule: "Bot/ActionState/StateControl"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    HasSpawned()
+){
+    define targetSighted! =
+        (target != 0) &&
+        IsAlive(target) &&
+        IsInLineOfSight(ep, target);
+
+    // get curent target position
+    // target Sighted
+    if(targetSighted){
+        // get targetPos
+        targetPos = PositionOf(target);
+    }
+    // target dead
+    else if(!IsAlive(target)){
+        // clear targetPos
+        targetPos = 0;
+    }
+    // else
+
+    // get new target
+    if(
+        !targetSighted ||       // target not Sighted
+        ProbabilityTrue(25) ||  // Probability
+        (                        
+            actionState == ActionState.Support &&   // support target almost full health
+            NormalizedHealth(target) > needHealRate
+        )       
+    ){
+        // set target
+        if(
+            ProbabilityTrue(supportProbability)    // each support hero Probability
+        ){
+            // find support target
+            target = FindSupportTarget();
+            // not found heal target
+            if(target == 0){
+                // find attack target
+                target = FindAttackTarget();
+            }
+        }
+        else{
+            // find attack target
+            target = FindAttackTarget();
+        }
+    }
+
+    // get next state
+    define nextActionState!;
+    // is dead
+    if(IsDead()){
+        // Non state by dead
+        nextActionState = ActionState.Non; 
+    }
+    else
+    { 
+        // has target
+        if(target != 0){
+            // target is enemy team
+            if(TeamOf() != TeamOf(target)){
+                // Attack state by enemy target
+                nextActionState = ActionState.Attack; 
+            }
+            else{
+                // Support state by friend target
+                nextActionState = ActionState.Support; 
+            }
+        }
+        else{
+            // Non state by target not found
+            nextActionState = ActionState.Non;
+        }       
+    }
+
+    // state changed
+    if(nextActionState != actionState){
+        // next state is not Non state
+        if(nextActionState != ActionState.Non){
+            // temporary set Non state for restart button control
+            actionState = ActionState.Non;
+            WaitChangeState();
+        }
+        // set next state
+        actionState = nextActionState;
+    }
+    // wait check cycle
+    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    // for load distribution
+    Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Bot/ActionState/GotoAttackStateOnDamageTaken"
+Event.OnDamageTaken
+if(
+    IsDummyBot() &&
+    Attacker() != ep &&
+    actionState == ActionState.Non
+){
+    // set attack target
+    target = Attacker();
+    // set next state
+    actionState = ActionState.Attack; 
+}
+
+define FindAttackTarget():
+    FirstOf(
+        SortedArray(
+            FilteredArray(
+                AllPlayers(OppositeTeamOf(TeamOf())),
+                (
+                    HasSpawned(ae) &&
+                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
+                    IsAlive(ae) &&
+                    !(
+                        HeroOf(ae) == Hero.Sombra &&
+                        IsUsingAbility1(ae) &&
+                        DistanceBetween(ae, ep) >= 3
+                    )
+                )
+            ),
+            DistanceBetween(ae, ep)
+        )
+    );
+
+define FindSupportTarget():
+    FirstOf(
+        SortedArray(
+            FilteredArray(
+                AllPlayers(TeamOf()),
+                (
+                    ae != ep &&
+                    HasSpawned(ae) &&
+                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
+                    IsAlive(ae) &&
+                    NormalizedHealth(ae) <= needHealRate
+                )
+            ),
+            Health(ae) - MaxHealth(ae)
+        )
+    );
+
+playervar define actionState;
+playervar define prevActionState;
+playervar define statusText;
+playervar define target;
+playervar define targetPos;
+playervar define moveDir;
+playervar define sideStepDir;
+playervar define sideStepSecond;
+
+void stopMove()"stopMove"{
+    StopThrottleInDirection();
+} 
+
+void startMove()"startMove"{
+    if(moveDir != 0 && sideStepDir != 0){
+        StartMoveInDir(moveDir + sideStepDir);
+    }
+    else if(moveDir == 0 && sideStepDir != 0){
+        StartMoveInDir(sideStepDir);
+    }
+    else if(moveDir != 0 && sideStepDir == 0){
+        StartMoveInDir(moveDir);
+    }
+    else{
+        stopMove();
+    }
+}
+
+define StartMoveInDir(define dir):
+    StartThrottleInDirection(
+        ep, dir, 1,
+        Relative.ToPlayer,
+        ThrottleBehavior.ReplaceExistingThrottle,
+        ThrottleRev.DirectionAndMagnitude);
+
+define stuckRange: 0.75;
+
+playervar define prevPosition;
+
+void checkAndBreakStuck()"checkAndBreakStuck"{
+    if(
+        prevPosition != 0 &&    // has prevPosition
+        sideStepDir != 0 &&     // has sidestep
+        moveDir != 0 &&         // has moveDir
+        DistanceBetween(PositionOf(), prevPosition) < stuckRange    // not moved from prevPosition
+    ){
+        statusText = <"checkAndBreakStuck <0>", target>;
+        
+        while(
+            // keep try break stuck prob
+            ProbabilityTrue(90) &&
+            // not moved from prevPosition yet
+            DistanceBetween(PositionOf(), prevPosition) < stuckRange
+        ){
+            // change move direction
+            moveDir = RandomValueInArray([Forward(), Forward(), Backward()]);
+            sideStepDir = RandomValueInArray([0, 0, Right(), Left()]);
+            startMove();
+            // try jump or croch
+            define breakStuckButton! = RandomValueInArray([Button.Jump, Button.Crouch]);
+            StartHoldingButton(ep, breakStuckButton);
+            Wait(RandomReal(1, 3), WaitBehavior.IgnoreCondition);   // keep hold button
+            StopHoldingButton(ep, breakStuckButton);
+        }
+    }
+    else{
+        prevPosition = PositionOf();
+    }
+}
+
+void setMoveDir(define forwardIsAbyss!, define backwardIsAbyss!){
+    // set move direction
+    define distToTarget! = DistanceBetween(ep, target);
+
+    // detect abyss at forward and backward
+    if(
+        forwardIsAbyss &&
+        backwardIsAbyss   
+    ){
+        // no movedir
+        moveDir = 0;
+    }
+    // target is far or abyss at backward
+    else if(
+        distToTarget > AttackRangeMax || backwardIsAbyss
+    ){
+        moveDir = Forward();
+    }
+    // target is close or abyss at forward in attack state
+    //   not backward in support state
+    else if(
+        actionState == ActionState.Attack &&    
+        (
+            distToTarget < AttackRangeMin || forwardIsAbyss
+        )
+    ){
+        moveDir = Backward();
+    }
+    else{
+        // no movedir
+        moveDir = 0;
+    }
+}
+
+void setSideStep(define forwardIsAbyss!, define backwardIsAbyss!){
+    // detect abyss
+    if(
+        forwardIsAbyss || backwardIsAbyss
+    ){
+        // no sidestep
+        sideStepDir = 0;
+    }
+    // now, no side step doing
+    else if(sideStepSecond == 0){
+        // no sidestep prob
+        if(ProbabilityTrue(50)){
+            // right sidestep prob
+            if(ProbabilityTrue(50)){
+                sideStepDir = Right();
+                sideStepSecond = keepSideStepSecond;
+            }
+            else{
+                sideStepDir = Left();
+                sideStepSecond = keepSideStepSecond;
+            }
+        }
+        else{
+            sideStepDir = 0;
+            sideStepSecond = keepSideStepSecond;
+        }
+    }
+}
+
+define keepSideStepSecond: RandomReal(0, 3);
+
+define aimmingPosition:
+    EyePosition(target) + RandomPosition(botAimScat, botAimScat, botAimScat);
+
+define startFacingTarget():
+    StartFacing(
+        ep,
+        DirectionTowards(
+            EyePosition(),
+            aimmingPosition
+        ),
+        300,
+        Relative.ToWorld, FacingRev.DirectionAndTurnRate
+    );
+
+define targetDirForward:
+    BlockedPositon(
+        EyePosition(), 
+        ExcludeY(
+            DirectionTowards(
+                EyePosition(),
+                EyePosition(target)
+            )
+        ),
+        moveMeterPerSec * watchUpdateRate
+    );
+
+define targetDirBackward:
+    BlockedPositon(
+        EyePosition(), 
+        ExcludeY(
+            -DirectionTowards(
+                EyePosition(),
+                EyePosition(target)
+            )
+        ),
+        moveMeterPerSec * watchUpdateRate
+    );
+
+// TAG Bot/ActionState/Non ----------
+rule: "Bot/ActionState/Non"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    actionState == ActionState.Non
+){
+    statusText = <"Non">;
+
+    // hero unique action
+    heroUniqueAction();
+
+    moveDir = 0;
+    sideStepDir = 0;
+    target = 0;
+    targetPos = 0;
+    stopMove();
+    StopFacing();
+}
+
+// TAG Bot/ActionState/Attack ----------
+rule: "Bot/ActionState/Attack"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    actionState == ActionState.Attack
+){
+    statusText = <"Attack">;
+
+    // hero unique action
+    heroUniqueAction();
+
+    // start face direction
+    startFacingTarget();
+    
+    // action loop
+    while(actionState == ActionState.Attack){
+        // check abyss
+        define forwardIsAbyss! = IsBelowAbyss(targetDirForward);
+        define backwardIsAbyss! = IsBelowAbyss(targetDirBackward);
+    
+        // set moveDir direction
+        setMoveDir(forwardIsAbyss, backwardIsAbyss);
+
+        // set sidestep direction
+        setSideStep(forwardIsAbyss, backwardIsAbyss);
+
+        // start move by moveDir and sideStepDir
+        startMove();
+
+        // check stuck
+        checkAndBreakStuck();
+
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+rule: "Bot/ActionState/Attack/sideStepSecond"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    0 < sideStepSecond
+){
+    Wait(sideStepSecond, WaitBehavior.AbortWhenFalse);
+    sideStepSecond = 0;
+}
+
+// TAG Bot/ActionState/Support ----------
+rule: "Bot/ActionState/Support"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    actionState == ActionState.Support
+){
+    statusText = <"Support">;
+
+    // hero unique action
+    heroUniqueAction();
+
+    // start face direction
+    startFacingTarget();
+    
+    // action loop
+    while(actionState == ActionState.Support){
+        // check abyss
+        define forwardIsAbyss! = IsBelowAbyss(targetDirForward);
+        define backwardIsAbyss! = IsBelowAbyss(targetDirBackward);
+    
+        // set moveDir direction
+        setMoveDir(forwardIsAbyss, backwardIsAbyss);
+
+        // no sidestep
+        sideStepDir = 0;
+
+        // start move by moveDir and sideStepDir
+        startMove();
+        
+        // check stuck
+        checkAndBreakStuck();
+
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+// TAG Bot/HeroUniqueAction ----------
+define MercyStaff: 1;
+define MercyPistol: 2;
+
+void heroUniqueAction(){
+    if(HeroOf() == Hero.Mercy){
+        if(actionState == ActionState.Attack){
+            SetWeapon(ep, MercyPistol);
+        }
+        else{
+            SetWeapon(ep, MercyStaff);
+        }
+    }
+}
+
 // TAG Bot/ButtonControl ----------
 enum ButtonControl{
     button,
@@ -533,11 +977,15 @@ enum ButtonControl{
     pressMax
 }
 
-define noShooting: false;
+define noShooting: false;   // for debug
 
 playervar define isRepeating;
 playervar define repeatMin;
 playervar define repeatMax;
+
+Boolean isMatchButton(define matchButton!, define butttons!){
+    return IsTrueForAny(butttons, ae == matchButton);
+}
 
 void StartButtonControl(define bc){
     AbortIf(noShooting);
@@ -614,7 +1062,7 @@ void StartButtonControl(define bc){
     }
 }
 
-rule: "Bot/ButtonControl/isRepeating"
+rule: "Bot/ButtonControl/releaseIsRepeating"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
@@ -622,10 +1070,6 @@ if(
 ){
     Wait(RandomReal(repeatMin, repeatMax), WaitBehavior.AbortWhenFalse);
     isRepeating = false;
-}
-
-Boolean isMatchButton(define matchButton!, define butttons!){
-    return IsTrueForAny(butttons, ae == matchButton);
 }
 
 // TAG Bot/ButtonControl/PrimaryFire ----------
@@ -806,457 +1250,6 @@ if(
 }
 
 
-// TAG Bot/ActionState/MainControl ----------
-playervar define actionState;
-playervar define prevActionState;
-playervar define statusText;
-playervar define target;
-playervar define targetPos;
-playervar define moveDir;
-playervar define sideStepDir;
-playervar define sideStepSecond;
-
-define FindAttackTarget():
-    FirstOf(
-        SortedArray(
-            FilteredArray(
-                AllPlayers(OppositeTeamOf(TeamOf())),
-                (
-                    HasSpawned(ae) &&
-                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
-                    IsAlive(ae) &&
-                    !(
-                        HeroOf(ae) == Hero.Sombra &&
-                        IsUsingAbility1(ae) &&
-                        DistanceBetween(ae, ep) >= 3
-                    )
-                )
-            ),
-            DistanceBetween(ae, ep)
-        )
-    );
-
-define FindSupportTarget():
-    FirstOf(
-        SortedArray(
-            FilteredArray(
-                AllPlayers(TeamOf()),
-                (
-                    ae != ep &&
-                    HasSpawned(ae) &&
-                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
-                    IsAlive(ae) &&
-                    NormalizedHealth(ae) <= needHealRate
-                )
-            ),
-            Health(ae) - MaxHealth(ae)
-        )
-    );
-
-define needHealRate: 0.99;
-
-define watchUpdateRate:
-    isServerOverLoading ? 3 : 1.5;
-    
-rule: "Bot/ActionState/StateControl"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    HasSpawned()
-){
-    define targetSighted =
-        (target != 0) &&
-        IsAlive(target) &&
-        IsInLineOfSight(ep, target);
-
-    // get curent target position
-    // target Sighted
-    if(targetSighted){
-        // get targetPos
-        targetPos = PositionOf(target);
-    }
-    // target dead
-    else if(!IsAlive(target)){
-        // clear targetPos
-        targetPos = 0;
-    }
-    // else
-
-    // get new target
-    if(
-        !targetSighted ||       // target not Sighted
-        ProbabilityTrue(25) ||  // Probability
-        (                        
-            actionState == ActionState.Support &&   // support target almost full health
-            NormalizedHealth(target) > needHealRate
-        )       
-    ){
-        // set target
-        if(
-            ProbabilityTrue(supportProbability)    // each support hero Probability
-        ){
-            // find support target
-            target = FindSupportTarget();
-            // not found heal target
-            if(target == 0){
-                // find attack target
-                target = FindAttackTarget();
-            }
-        }
-        else{
-            // find attack target
-            target = FindAttackTarget();
-        }
-    }
-
-    // get next state
-    define nextActionState!;
-    // self is dead
-    if(IsDead()){
-        // Non state by dead
-        nextActionState = ActionState.Non; 
-    }
-    else
-    { 
-        // has target
-        if(target != 0){
-            // target is enemy
-            if(TeamOf() != TeamOf(target)){
-                // Attack state by enemy target
-                nextActionState = ActionState.Attack; 
-            }
-            else{
-                // Support state by friend target
-                nextActionState = ActionState.Support; 
-            }
-        }
-        // // has not target 
-        // else if(targetPos != 0){
-        //     // Search state by target lost target 
-        //     nextActionState = ActionState.Search;
-        // }
-        else{
-            // Non state by target not found
-            nextActionState = ActionState.Non;
-        }       
-    }
-
-    // if state changed
-    if(nextActionState != actionState){
-        // next is not Non state
-        if(nextActionState != ActionState.Non){
-            // temporary set Non state for restart button control
-            actionState = ActionState.Non;
-            WaitChangeState();
-        }
-        // set next state
-        actionState = nextActionState;
-    }
-
-    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
-    LoopIfConditionIsTrue();
-}
-
-rule: "Bot/ActionState/GotoAttackStateOnDamageTaken"
-Event.OnDamageTaken
-if(
-    IsDummyBot() &&
-    Attacker() != ep &&
-    actionState == ActionState.Non
-){
-    // set attack target
-    target = Attacker();
-    // set next state
-    actionState = ActionState.Attack; 
-}
-
-void StopMove()"StopMove"{
-    StopThrottleInDirection();
-} 
-
-void StartMove()"StartMove"{
-    if(moveDir != 0 && sideStepDir != 0){
-        StartMoveInDir(moveDir + sideStepDir);
-    }
-    else if(moveDir == 0 && sideStepDir != 0){
-        StartMoveInDir(sideStepDir);
-    }
-    else if(moveDir != 0 && sideStepDir == 0){
-        StartMoveInDir(moveDir);
-    }
-    else{
-        StopMove();
-    }
-}
-
-define StartMoveInDir(define dir):
-    StartThrottleInDirection(
-        ep, dir, 1,
-        Relative.ToPlayer,
-        ThrottleBehavior.ReplaceExistingThrottle,
-        ThrottleRev.DirectionAndMagnitude);
-
-define stuckRange: 0.75;
-
-playervar define prevPosition;
-
-void checkAndBreakStuck()"checkAndBreakStuck"{
-    if(
-        prevPosition != 0 &&    // has prevPosition
-        sideStepDir != 0 &&     // has sidestep
-        moveDir != 0 &&         // has moveDir
-        DistanceBetween(PositionOf(), prevPosition) < stuckRange    // not move from prevPosition
-    ){
-        statusText = <"checkAndBreakStuck <0>", target>;
-        
-        while(
-            ProbabilityTrue(75) &&
-            DistanceBetween(PositionOf(), prevPosition) < stuckRange
-        ){
-            // change move direction
-            sideStepDir = RandomValueInArray([0, 0, Right(), Left()]);
-            moveDir = RandomValueInArray([Forward(), Forward(), Backward()]);
-            StartMove();
-            // try jump or croch
-            define breakStuckButton! = RandomValueInArray([Button.Jump, Button.Crouch]);
-            StartHoldingButton(ep, breakStuckButton);
-            Wait(RandomReal(1, 2), WaitBehavior.IgnoreCondition);
-            StopHoldingButton(ep, breakStuckButton);
-        }
-    }
-    else{
-        prevPosition = PositionOf();
-    }
-}
-
-// TAG Bot/ActionState/Non ----------
-rule: "Bot/ActionState/Non"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    actionState == ActionState.Non
-){
-    statusText = <"Non">;
-
-    // hero unique action
-    HeroUniqueAction();
-
-    moveDir = 0;
-    sideStepDir = 0;
-    target = 0;
-    targetPos = 0;
-    StopMove();
-    StopFacing();
-}
-
-// TAG Bot/ActionState/Attack ----------
-define aimmingPosition:
-    //EyePosition(target) + (Down() * RandomValueInArray([-0.1, 0.0, 0.1, 0.2, 0.3, 0.4]));
-    EyePosition(target) + RandomPosition(botAimScat, botAimScat, botAimScat);
-
-define targetDirForward:
-    BlockedPositon(
-        EyePosition(), 
-        ExcludeY(
-            DirectionTowards(
-                EyePosition(),
-                aimmingPosition
-            )
-        ),
-    senserLength);
-
-define targetDirBackward:
-    BlockedPositon(
-        EyePosition(), 
-        ExcludeY(
-            -DirectionTowards(
-                EyePosition(),
-                aimmingPosition
-            )
-        ),
-    senserLength);
-
-rule: "Bot/ActionState/Attack"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    actionState == ActionState.Attack
-){
-    statusText = <"Attack">;
-
-    // hero unique action
-    HeroUniqueAction();
-
-    // set face direction
-    StartFacing(
-        ep,
-        DirectionTowards(
-            EyePosition(),
-            aimmingPosition
-        ),
-        300,
-        Relative.ToWorld, FacingRev.DirectionAndTurnRate
-    );
-    
-    // action loop
-    while(actionState == ActionState.Attack){
-        // check abyss
-        define detectAbyssForward! = IsBelowAbyss(targetDirForward);
-        define detectAbyssBackward! = IsBelowAbyss(targetDirBackward);
-
-        // set move direction
-        define distToTarget! = DistanceBetween(ep, target);
-        if(
-            detectAbyssForward &&               // has abyss at forward
-            detectAbyssBackward                 // has abyss at backward
-        ){
-            // no movedir
-            moveDir = 0;
-        }
-        else if(
-            distToTarget > AttackRangeMax ||    // target is far
-            detectAbyssBackward                 // has abyss at backward
-        ){
-            moveDir = Forward();
-        }
-        else if(
-            distToTarget < AttackRangeMin ||    // target is close
-            detectAbyssForward                  // has abyss at forward
-        ){
-            moveDir = Backward();
-        }
-        else{
-            // no movedir
-            moveDir = 0;
-        }
-
-        // set sidestep direction
-        // detect abyss
-        if(
-            detectAbyssForward ||               // has abyss at forward
-            detectAbyssBackward                 // has abyss at backward
-        ){
-            // no sidestep
-            sideStepDir = 0;
-        }
-        // non side step
-        else if(sideStepSecond == 0){
-            if(ProbabilityTrue(50)){
-                if(ProbabilityTrue(50)){
-                    sideStepDir = Right();
-                    sideStepSecond = RandomReal(0, 3);
-                }
-                else{
-                    sideStepDir = Left();
-                    sideStepSecond = RandomReal(0, 3);
-                }
-            }
-            else{
-                sideStepDir = 0;
-                sideStepSecond = RandomReal(0, 3);
-            }
-        }
-
-        // set move direction
-        StartMove();
-
-        // check stuck
-        checkAndBreakStuck();
-
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    }
-}
-
-rule: "Bot/ActionState/Attack/sideStepSecond"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    0 < sideStepSecond
-){
-    Wait(sideStepSecond, WaitBehavior.AbortWhenFalse);
-    sideStepSecond = 0;
-}
-
-// TAG Bot/ActionState/Support ----------
-rule: "Bot/ActionState/Support"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    actionState == ActionState.Support
-){
-    statusText = <"Support">;
-
-    // hero unique action
-    HeroUniqueAction();
-
-    // set face direction
-    StartFacing(
-        ep,
-        DirectionTowards(
-            EyePosition(),
-            aimmingPosition
-        ),
-        300,
-        Relative.ToWorld, FacingRev.DirectionAndTurnRate
-    );
-    
-    // action loop
-    while(actionState == ActionState.Support){
-        // check abyss
-        define detectAbyssForward! = IsBelowAbyss(targetDirForward);
-        define detectAbyssBackward! = IsBelowAbyss(targetDirBackward);
-
-        // set move direction
-        define distToTarget! = DistanceBetween(ep, target);
-        if(
-            detectAbyssForward &&               // has abyss at forward
-            detectAbyssBackward                 // has abyss at backward
-        ){
-            // no movedir
-            moveDir = 0;
-        }
-        else if(
-            distToTarget > AttackRangeMax ||    // target is far
-            detectAbyssBackward                 // has abyss at backward
-        ){
-            moveDir = Forward();
-        }
-        // else if(
-        //     distToTarget < AttackRangeMin ||    // target is close
-        //     detectAbyssForward                  // has abyss at forward
-        // ){
-        //     moveDir = Backward();
-        // }
-        else{
-            // no movedir
-            moveDir = 0;
-        }
-
-        // set move direction
-        StartMove();
-        
-        // check stuck
-        checkAndBreakStuck();
-
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    }
-}
-
-// TAG Bot/HeroUniqueAction ----------
-define MercyStaff: 1;
-define MercyPistol: 2;
-
-void HeroUniqueAction(){
-    if(HeroOf() == Hero.Mercy){
-        if(actionState == ActionState.Attack){
-            SetWeapon(ep, MercyPistol);
-        }
-        else{
-            SetWeapon(ep, MercyStaff);
-        }
-    }
-}
 
 // TAG Debug ----------
 /*
