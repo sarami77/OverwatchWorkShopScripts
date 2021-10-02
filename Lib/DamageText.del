@@ -1,90 +1,72 @@
+import "Utility.del";
+
 // Function enable team
 // Set team in import destination parent file
 
 // TAG public property
-globalvar define damageTextEnableTeam!;
+globalvar define damageTextEnableTeam;
 
 define damageTextIsEnableTeam:
     damageTextEnableTeam == TeamOf() ||
     damageTextEnableTeam == Team.All;
 
-define minDisplayTime: 0.3;
-define maxDisplayTime: 10;
-playervar define damageTextEntity!;
-playervar define damageTextDisplayTime!;
-playervar define prevDamage!;
+define maxScaleDamage: 1000;
+playervar define damageTextEntity;
+playervar define damageTextPosition;
+playervar define damageTextDisplayTime;
+playervar define sumDamage;
 
-rule: "DamageFloatText/popup"
+rule: "DamageFloatText/show"
 Event.OnDamageTaken
 if(
     damageTextIsEnableTeam &&
     EventDamage() >= 1
-)
-{
-    // // debug
-    // if(Attacker() == HostPlayer()){
-    //     dbgHudTxt(EventDamage());
-    // }
-
-    // less damage than before
-    if(prevDamage > EventDamage()){
-        // wait update text according to current display time because max damage
-        Wait(damageTextDisplayTime * 0.1, WaitBehavior.RestartWhenTrue);
-    }
-    // same damage as before
-    else if(prevDamage == EventDamage()){
-        // reduces update frequently for good visibility
-        Wait(0.1, WaitBehavior.IgnoreCondition);
-    }
-    // more damage than before
-    else{
-        // update instantly with no wait
-    }
-    // hide current text
-    DestroyInWorldText(damageTextEntity);
-    // save current damage as previous damage
-    prevDamage = EventDamage();
-    // set position 
-    define damageTextPosition = EyePosition(EventPlayer());
-    // set size
-    define damageTextSize! = 1 + (EventDamage() * 0.01);
-    // set dislay time
-    damageTextDisplayTime = EventDamage() * 0.01;
-    // tune display time
-    damageTextDisplayTime = Max(damageTextDisplayTime, minDisplayTime);
-    damageTextDisplayTime = Min(damageTextDisplayTime, maxDisplayTime);
-    // set color
+){
+    // add damage
+    sumDamage += EventDamage();
+    // set text size
+    define damageTextSize! = 1 + (3 * (sumDamage / maxScaleDamage));
+    damageTextSize = Min(damageTextSize, 4);
+    // set text color
     define damageTextColor!;
-    if(400 <= EventDamage()){
-        // show purple in 400 damage over
+    if(maxScaleDamage * 1 <= sumDamage){
         damageTextColor = Color.Purple;      
     }
-    else if(200 <= EventDamage()){
-        // show red in 200 damage over
+    else if(maxScaleDamage * 0.75 <= sumDamage){
         damageTextColor = Color.Red;      
     }
-    else if(100 <= EventDamage()){
-        // show orange in 100 damage over
+    else if(maxScaleDamage * 0.5 <= sumDamage){
         damageTextColor = Color.Orange;      
     }
-    else if(50 <= EventDamage()){
-        // show yellow in 50 damage over
+    else if(maxScaleDamage * 0.25 <= sumDamage){
         damageTextColor = Color.Yellow;    
     }
     else{
-        // show white in 50 damage under
         damageTextColor = Color.White;   
     }
+    // set text position 
+    damageTextPosition = EyePosition(EventPlayer()) + PositionOffset();
+    // set text display time according damage
+    damageTextDisplayTime = 0.5 + (sumDamage / maxScaleDamage);
+    damageTextDisplayTime = Min(damageTextDisplayTime, 1);
     // show text
-    CreateInWorldText(AllPlayers(), RoundToInteger(EventDamage()), damageTextPosition,
-        damageTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
-        damageTextColor, Spectators.DefaultVisibility);
-    damageTextEntity = LastTextID();
-    // start text popup
-    UpdateEveryFrame(damageTextPosition);
-    ChaseVariableAtRate(damageTextPosition, damageTextPosition + (Up() * 10),
-        1.0, RateChaseReevaluation.DestinationAndRate);
-    // wait hide text according to damage amount
-    Wait(damageTextDisplayTime, WaitBehavior.RestartWhenTrue);
     DestroyInWorldText(damageTextEntity);
+    damageTextEntity = CreateInWorldText(
+        AllPlayers(), RoundToInteger(sumDamage), damageTextPosition, damageTextSize,
+        Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionStringAndColor,
+        damageTextColor, Spectators.DefaultVisibility);
+}
+
+rule: "DamageFloatText/hide"
+Event.OnDamageTaken
+if(
+    damageTextIsEnableTeam &&
+    sumDamage > 0
+){
+    // wait for visual recognition
+    Wait(damageTextDisplayTime, WaitBehavior.RestartWhenTrue);
+    // hide text
+    DestroyInWorldText(damageTextEntity);
+    // claer sum damage
+    sumDamage = 0;
 }
