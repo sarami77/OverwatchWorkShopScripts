@@ -59,7 +59,7 @@ Event.OngoingGlobal
     // Bot.del
     botAimScat =                            WorkshopSettingReal("Bot Settings", "Aim Scattering (0 is head shot)",              0.25, 0, 1000, 6);
     // PerkCore.del
-    perkCorePerkDropProbability =           WorkshopSettingReal("Perk Settings", "Perk Crate Drop Rate Scale When Enemy Dead",  1, 0, 100, 7);
+    perkCorePerkDropProbability =           WorkshopSettingReal("Perk Settings", "Perk Crate Drop Rate Scale When Enemy Dead",  1, 0, 100, -1);
 
     // show version and share code
     CreateHudText(AllPlayers(Team.Team1),
@@ -165,6 +165,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
+
 rule: "ServerOverLoadMeasures/reduceOverLoadOnPlayerJoin"
 Event.OnPlayerJoin
 Team.Team1
@@ -187,6 +188,7 @@ if(
     ApplySlowLevel(0);
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 }
+
 
 void ApplySlowLevel(define setSlowLevel!)"ApplySlowLevel"{
     // if slow level changed
@@ -747,7 +749,12 @@ if(
                 )
             );
         // select random positon from player around
-        define randomPositon = 
+        define distance! =
+            DistanceBetween(
+                SpawnPoints(Team.Team1)[0],
+                SpawnPoints(Team.Team2)[0]
+            );
+        define randomPositon! = 
             basePlayer +
             // half y derection
             VectorScaledY(
@@ -756,14 +763,14 @@ if(
                     RandomReal(0, 360), RandomReal(30, -30),
                 ) * 
                 // add random distance
-                RandomReal(25, 200), 
-                0.33
+                RandomReal(distance / 2, distance), 
+                0.3
             );
 
         // convert to walkble position
         candidatePosition = NearestWalkablePosition(randomPositon);
         // move candidate postion in the direction of player for avoiding map edge
-        candidatePosition += DirectionTowards(candidatePosition, basePlayer) * RandomReal(1, 25);
+        candidatePosition += DirectionTowards(candidatePosition, basePlayer) * RandomReal(1, distance / 4);
         // convert to walkble position
         candidatePosition = NearestWalkablePosition(candidatePosition);
 
@@ -1811,7 +1818,7 @@ void UpdateEachReceivedDamage()"UpdateEachReceivedDamage"{
     // Multiply damage rate
     confirmReceiveDamage = 100;
     // Apply balance multiplier
-    confirmReceiveDamage *= ConvertToBalancedValue(0.75, Team.Team1);
+    confirmReceiveDamage *= ConvertToBalancedValue(0.7, Team.Team1);
     SetDamageReceived(AllPlayers(Team.Team2), confirmReceiveDamage);
 }
 
@@ -1832,11 +1839,11 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // If don't enough players, adjust Bot dealt damage rate to make the game fair
     // And the round progresses, the Bot deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Base Deal Damage", 20, 0, 1000, 1);
-    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round", 2.0, 0, 1000, 2);
+    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Base Deal Damage", 25, 0, 1000, 1);
+    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round", 1.5, 0, 1000, 2);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
-    confirmDealDamage /= ConvertToBalancedValue(0.75, Team.Team1);
+    confirmDealDamage /= ConvertToBalancedValue(0.7, Team.Team1);
     SetDamageDealt(ep, confirmDealDamage);
 }
 
