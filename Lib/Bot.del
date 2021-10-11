@@ -437,8 +437,8 @@ if(
         primaryFireButtonPressMin = 0;
         primaryFireButtonPressMax = 1;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        secondaryFireButtonPressMin = 10;
-        secondaryFireButtonPressMax = 15;
+        secondaryFireButtonPressMin = 15;
+        secondaryFireButtonPressMax = 20;
         ability1ButtonReleaseMin = 10;
         ability1ButtonReleaseMax = 15;
         ability2ButtonReleaseMin = 10;
@@ -453,8 +453,9 @@ if(
 
         case Hero.WreckingBall:
         heroName = "WreckingBall";
-        AttackRange = AttackRange.Middle;
+        AttackRange = AttackRange.Close;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
+        primaryFireButtonPressMax = 15;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 5;
         break;
@@ -540,19 +541,6 @@ if(
         (target != 0) &&
         IsAlive(target) &&
         IsInLineOfSight(ep, target);
-
-    // get curent target position
-    // target Sighted
-    if(targetSighted){
-        // get targetPos
-        targetPos = PositionOf(target);
-    }
-    // target dead
-    else if(!IsAlive(target)){
-        // clear targetPos
-        targetPos = 0;
-    }
-    // else
 
     // get new target
     if(
@@ -680,7 +668,6 @@ playervar define actionState;
 playervar define prevActionState;
 playervar define statusText;
 playervar define target;
-playervar define targetPos;
 playervar define moveDir;
 playervar define sideStepDir;
 playervar define sideStepSecond;
@@ -722,7 +709,7 @@ void checkAndBreakStuck()"checkAndBreakStuck"{
         moveDir != 0 &&         // has moveDir
         DistanceBetween(PositionOf(), prevPosition) < stuckRange    // not moved from prevPosition
     ){
-        statusText = <"checkAndBreakStuck <0>", target>;
+        statusText = <"checkAndBreakStuck">;
         
         while(
             // keep try break stuck prob
@@ -830,15 +817,12 @@ void setSideStep(define rightIsAbyss!, define leftIsAbyss!)"setSideStep"{
 
 define keepSideStepSecond: RandomReal(0, 3);
 
-define aimmingPosition:
-    EyePosition(target) + RandomPosition(botAimScat, botAimScat, botAimScat);
-
 define startFacingTarget():
     StartFacing(
         ep,
         DirectionTowards(
             EyePosition(),
-            aimmingPosition
+            EyePosition(target) + RandomPosition(botAimScat, botAimScat, botAimScat)
         ),
         300,
         Relative.ToWorld, FacingRev.DirectionAndTurnRate
@@ -859,7 +843,7 @@ if(
     moveDir = 0;
     sideStepDir = 0;
     target = 0;
-    targetPos = 0;
+
     stopMove();
     StopFacing();
 }
@@ -878,6 +862,7 @@ if(
 
     // set initial face direction
     SetFacing(ep, EyePosition(target), Relative.ToWorld);
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
 
     // start facing direction
     startFacingTarget();
@@ -937,6 +922,7 @@ if(
 
     // set initial face direction
     SetFacing(ep, EyePosition(target), Relative.ToWorld);
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
 
     // start facing direction
     startFacingTarget();
@@ -1336,28 +1322,20 @@ if(
                 target != 0
             ) ||                
             (
-                actionState == ActionState.Search &&
-                targetPos != 0
+                actionState == ActionState.Search
             )
         )
         ? debugInfoDisplayeTo : null,
         BeamType.BadBeam,
         EyePosition(),
             actionState == ActionState.Attack ||
-            actionState == ActionState.Support ?
-                target :
-                targetPos,
+            target,
             actionState == ActionState.Search ?
                 Color.White:
                 actionState == ActionState.Attack ?
                     Color.Red :
                     Color.Blue,
         EffectRev.VisibleToPositionRadiusAndColor);
-    // show targetPos ring
-    CreateEffect(
-        ep.actionState == ActionState.Search ? debugInfoDisplayeTo : null,
-        Effect.Ring, Color.White,
-        targetPos, targetPosRange, EffectRev.VisibleToPositionRadiusAndColor);
     while(true){
         if(IsBelowAbyss(targetDirBackward)){
             dbgPlyEft(ep);
