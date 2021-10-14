@@ -140,12 +140,15 @@ playervar define AttackRangeMax;
 
 define targetPosRange: 6;
 
+define basicButtonControlTime: 5;
+
 rule: "Bot/SetActionRoutine"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
     HasSpawned()
 ){
+        AttackRange = AttackRange.Middle;
         heroName = "Default";
         supportProbability = 0;
         supportButtons = [];
@@ -155,7 +158,6 @@ if(
             Button.Ability1,
             Button.Ability2
         ];
-        AttackRange = AttackRange.Middle;
 
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         primaryFireButtonReleaseMin = 0;
@@ -245,7 +247,9 @@ if(
         heroName = "Brigitte";
         AttackRange = AttackRange.Melee;
 		secondaryFireButtonPressMin = 5;
-        supportProbability = 50;
+        ability2ButtonReleaseMin = 1;
+        ability2ButtonReleaseMax = 1;
+        supportProbability = 75;
         supportButtons = [
             Button.Ability2
         ];
@@ -326,8 +330,10 @@ if(
         heroName = "Mercy";
         AttackRange = AttackRange.Far;
         primaryFireButtonReleaseMax = 2;
-        ability1ButtonReleaseMax = 1;
-        ability2ButtonReleaseMax = 1;
+        ability1ButtonReleaseMin = 1;
+        ability1ButtonReleaseMax = 2;
+        ability2ButtonReleaseMin = 1;
+        ability2ButtonReleaseMax = 2;
         supportProbability = 100;
         supportButtons = [
             Button.PrimaryFire,
@@ -412,10 +418,11 @@ if(
         heroName = "Symmetra";
         AttackRange = AttackRange.Middle;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        secondaryFireButtonReleaseMin = 1;
-        ability1ButtonReleaseMin = 1.5;
+        secondaryFireButtonPressMin = 1;
+        secondaryFireButtonPressMax = 3;
+        ability1ButtonReleaseMin = 1;
         ability1ButtonReleaseMax = 3;
-        ability2ButtonReleaseMax = 20;
+        ability2ButtonReleaseMax = 15;
         break;
 
         case Hero.Torbjorn:
@@ -464,12 +471,24 @@ if(
         heroName = "Zarya";
         AttackRange = AttackRange.Middle;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
+        ability2ButtonReleaseMin = 1;
+        ability2ButtonReleaseMax = 1;
         break;
 
         case Hero.Zenyatta:
         heroName = "Zenyatta";
         AttackRange = AttackRange.Far;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
+        primaryFireButtonReleaseMin = 1;
+        secondaryFireButtonReleaseMin = 1;
+        ability1ButtonReleaseMin = 0.5;
+        ability1ButtonReleaseMax = 0.5;
+        ability1ButtonPressMin = 0.5;
+        ability1ButtonPressMax = 0.5;
+        ability2ButtonReleaseMin = 0.5;
+        ability2ButtonReleaseMax = 0.5;
+        ability2ButtonPressMin = 0.5;
+        ability2ButtonPressMax = 0.5;
         ultimateButtonReleaseMax = 30;
         supportProbability = 50;
         supportButtons = [
@@ -545,7 +564,7 @@ if(
     // get new target
     if(
         !targetSighted ||       // target not Sighted
-        ProbabilityTrue(25) ||  // Probability
+        ProbabilityTrue(25) ||  // change target Probability
         (                        
             actionState == ActionState.Support &&   // support target almost full health
             NormalizedHealth(target) > needHealRate
@@ -670,7 +689,6 @@ playervar define statusText;
 playervar define target;
 playervar define moveDir;
 playervar define sideStepDir;
-playervar define sideStepSecond;
 
 void stopMove()"stopMove"{
     StopThrottleInDirection();
@@ -739,30 +757,34 @@ void setMoveDir(define forwardIsAbyss!, define backwardIsAbyss!)"setMoveDir"{
     // set move direction
     define distToTarget! = DistanceBetween(ep, target);
 
-    // detect abyss at forward and backward
+    // select dir
+    // target is close
     if(
-        forwardIsAbyss && backwardIsAbyss
-    ){
-        // no movedir
-        moveDir = 0;
-    }
-    // target is close and not forward abyss
-    else if(
-        distToTarget > AttackRangeMax && !forwardIsAbyss
+        distToTarget > AttackRangeMax
     ){
         moveDir = Forward();
     }
-    // target is close and not backward abyss
+    // target is close
     //   and in attack state (not backward in support state)
     else if(
         actionState == ActionState.Attack &&    
-        distToTarget < AttackRangeMin && !backwardIsAbyss
+        distToTarget < AttackRangeMin
 
     ){
         moveDir = Backward();
     }
     else{
         // no moveDir
+        moveDir = 0;
+    }
+
+    // check abyss
+    // can't forward
+    if(forwardIsAbyss && moveDir == Forward()){
+        moveDir = 0;
+    }
+    // can't backward
+    if(backwardIsAbyss && moveDir == Backward()){
         moveDir = 0;
     }
 }
@@ -772,50 +794,57 @@ void setSideStep(define rightIsAbyss!, define leftIsAbyss!)"setSideStep"{
     define isGoodRange! =
         distToTarget >= AttackRangeMin &&
         distToTarget <= AttackRangeMax;
-    // now, stoped side step and my range
-    if(sideStepSecond == 0 && isGoodRange){
-        // start keep side step
-        sideStepSecond = keepSideStepSecond;
-
-        // detect abyss at right and left
-        if(
-            rightIsAbyss && leftIsAbyss
-        ){
-            // no sideStepDir
+    // now my range
+    if(isGoodRange){
+        // select dir
+        // no change sidestep prob
+        if(ProbabilityTrue(50)){
+            // sideStepDir = X;
+        }
+        // no sidestep prob
+        else if(ProbabilityTrue(25)){
             sideStepDir = 0;
         }
+        // has sidestep
         else{
-            // no sidestep prob
+            // right sidestep prob
             if(ProbabilityTrue(50)){
+                sideStepDir = Right();
+            }
+            // left sidestep
+            else{
+                sideStepDir = Left();
+            }
+        }
+
+        // check abyss
+        // first check right prob
+        if(ProbabilityTrue(50)){
+            // can't right
+            if(rightIsAbyss && sideStepDir == Right()){
+                sideStepDir = Left();
+            }
+            // can't left too
+            if(leftIsAbyss && sideStepDir == Left()){
                 sideStepDir = 0;
             }
-            else
-            {
-                // right sidestep
-                if(ProbabilityTrue(50)){
-                    if(!rightIsAbyss){
-                        sideStepDir = Right();
-                    }
-                    else{
-                        sideStepDir = Left();
-                    }
-                }
-                // left sidestep
-                else{
-                    if(!leftIsAbyss){
-                        sideStepDir = Left();
-                    }
-                    else{
-                        sideStepDir = Right();
-                    }
-                }
+        }
+        else{
+            // can't left
+            if(leftIsAbyss && sideStepDir == Left()){
+                sideStepDir = Right();
+            }
+            // can't right too
+            if(rightIsAbyss && sideStepDir == Right()){
+                sideStepDir = 0;
             }
         }
     }
+    else{
+        sideStepDir = 0;
+    }
     // else
 }
-
-define keepSideStepSecond: RandomReal(0, 3);
 
 define startFacingTarget():
     StartFacing(
@@ -877,16 +906,11 @@ if(
         // set moveDir direction
         setMoveDir(fAbyss, bAbyss);
 
-        define rAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Right() + moveDir, distance));    // care moveDir
-        define lAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Left() + moveDir, distance));
+        define rAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Right(), distance));    // care moveDir
+        define lAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Left(), distance));
 
         // set sidestep direction
         setSideStep(rAbyss, lAbyss);
-
-        // if(fAbyss) dbgPlyEft(BlockedPositonByLocalVector(Forward(), distance));
-        // if(bAbyss) dbgPlyEft(BlockedPositonByLocalVector(Backward(), distance));
-        // if(rAbyss) dbgPlyEft(BlockedPositonByLocalVector(Right() + moveDir, distance));
-        // if(lAbyss) dbgPlyEft(BlockedPositonByLocalVector(Left() + moveDir, distance));
 
         // start move by moveDir and sideStepDir
         startMove();
@@ -896,16 +920,6 @@ if(
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
-}
-
-rule: "Bot/ActionState/Attack/sideStepSecond"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    0 < sideStepSecond
-){
-    Wait(sideStepSecond, WaitBehavior.AbortWhenFalse);
-    sideStepSecond = 0;
 }
 
 // TAG Bot/ActionState/Support ----------
@@ -939,9 +953,6 @@ if(
 
         // no sidestepDir
         sideStepDir = 0;
-
-        // if(fAbyss) dbgPlyEft(BlockedPositonByLocalVector(Forward(), distance));
-        // if(bAbyss) dbgPlyEft(BlockedPositonByLocalVector(Backward(), distance));
 
         // start move by moveDir and sideStepDir
         startMove();
@@ -988,6 +999,8 @@ Boolean isMatchButton(define matchButton!, define butttons!){
     return IsTrueForAny(butttons, ae == matchButton);
 }
 
+define buttonControlTimeScale: 1;
+
 void StartButtonControl(define bc){
     AbortIf(
         noShooting &&
@@ -1031,26 +1044,23 @@ void StartButtonControl(define bc){
         StopHoldingButton(ep, bc[ButtonControl.button]);
     }
     else{
-        // swap param if inverse
-        define temp = 0;
+        /*
+        // role value to low if inverse value
         if(bc[ButtonControl.releaseMin] > bc[ButtonControl.releaseMax]){
-            temp = bc[ButtonControl.releaseMin];
             bc[ButtonControl.releaseMin] = bc[ButtonControl.releaseMax];
-            bc[ButtonControl.releaseMax] = temp;
         }
         if(bc[ButtonControl.pressMin] > bc[ButtonControl.pressMax]){
-            temp = bc[ButtonControl.pressMin];
             bc[ButtonControl.pressMin] = bc[ButtonControl.pressMax];
-            bc[ButtonControl.pressMax] = temp;
         }
+        */
 
         // start button
         if(bc[ButtonControl.buttonOperation] == ButtonBehaivor.ReleasePress){
             while(true){
-                Wait(RandomReal(bc[ButtonControl.releaseMin], bc[ButtonControl.releaseMax]), WaitBehavior.AbortWhenFalse);
+                Wait(buttonControlTimeScale * RandomReal(bc[ButtonControl.releaseMin], bc[ButtonControl.releaseMax]), WaitBehavior.AbortWhenFalse);
 
                 StartHoldingButton(ep, bc[ButtonControl.button]);
-                Wait(RandomReal(bc[ButtonControl.pressMin], bc[ButtonControl.pressMax]), WaitBehavior.AbortWhenFalse);
+                Wait(buttonControlTimeScale * RandomReal(bc[ButtonControl.pressMin], bc[ButtonControl.pressMax]), WaitBehavior.AbortWhenFalse);
 
                 StopHoldingButton(ep, bc[ButtonControl.button]);
             }
@@ -1059,7 +1069,7 @@ void StartButtonControl(define bc){
             repeatMin = bc[ButtonControl.pressMin];
             repeatMax = bc[ButtonControl.pressMax];
             while(true){
-                Wait(RandomReal(bc[ButtonControl.releaseMin], bc[ButtonControl.releaseMax]), WaitBehavior.AbortWhenFalse);
+                Wait(buttonControlTimeScale * RandomReal(bc[ButtonControl.releaseMin], bc[ButtonControl.releaseMax]), WaitBehavior.AbortWhenFalse);
 
                 isRepeating = true;
                 while(isRepeating){
@@ -1258,8 +1268,6 @@ if(
     // reload
     PressButton(ep, Button.Reload);
 }
-
-
 
 // TAG Debug ----------
 /*

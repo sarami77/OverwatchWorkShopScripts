@@ -17,6 +17,7 @@ Event.OngoingGlobal
 {
     DisableInspectorRecording();
 
+    // Regeneration.del
     regenerationEnableTeam = Team.All;
     define waitSecond = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 1, 0, 100, 1);
     regenerationStartWaitSecondTeam1 = waitSecond;
@@ -24,6 +25,9 @@ Event.OngoingGlobal
     define regRate = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 25, 0, 1000, 2);
     regenerationHealthPerSecondTeam1 = regRate;
     regenerationHealthPerSecondTeam2 = regRate;
+    // Bot.del
+    botAimScat = WorkshopSettingReal("Bot Settings", "Aim Scattering (0 is head shot)",              0.25, 0, 1000, 6);
+
 
     CreateHudText(HostPlayer(),
         null,
@@ -100,9 +104,10 @@ Event.OngoingGlobal
 {
     dbgMsg("Reload Bot List");
     define botNum = WorkshopSettingInteger("Bot Settings", "Bot Count", 24, 0, 24, 1);
-    CreateBothBotsByInput(AllHeroes(), botNum);
+    //CreateBothBotsByInput(AllSupportHeroes(), botNum);
+    // CreateBothBotsByInput([Hero.Zenyatta], botNum);
     // CreateBothBotsByInput(AllSupportHeroes(), botNum);
-    // CreateBothBotsByInput([Hero.Pharah, Hero.Echo, Hero.Mercy], botNum);
+    CreateBothBotsByInput([Hero.Pharah, Hero.Echo, Hero.Mercy], botNum);
 
     Wait(180, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
@@ -120,14 +125,29 @@ globalvar define combatAreaRange = WorkshopSettingReal("Game Settings", "Combat 
 define selectionAreaRange: 100;
 globalvar define teleportPos;
 
-rule: "FastRespawnForBot"
-Event.OnDeath
+rule: "FastRespaw"
+Event.OngoingPlayer
 if(
-    true
+    IsDead()
 ){
-    Wait(5);
+    Wait(3);
     Respawn(ep);
 }
+
+disabled rule: "FastAbilityCooldown"
+Event.OngoingPlayer
+if(
+    IsAlive()
+){
+    SetAbilityCooldown(ep, Button.Ability1, 0);
+    SetAbilityCooldown(ep, Button.Ability2, 0);
+    SetAbilityCooldown(ep, Button.SecondaryFire, 0);
+    SetAbilityCooldown(ep, Button.Crouch, 0);
+    SetAbilityCooldown(ep, Button.Jump, 0);
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
 
 rule: "TeleortByRespawn"
 Event.OngoingPlayer
@@ -247,7 +267,7 @@ void TeleportToTeleportPosition(define range)"TeleportToTeleportPosition"{
 
         if(
             // not too close to enemy
-            DistanceBetween(    
+            DistanceBetween(
                 pos, 
                 ClosestPlayerTo(
                     pos,
@@ -270,7 +290,7 @@ void TeleportToTeleportPosition(define range)"TeleportToTeleportPosition"{
         WaitUntil(!isServerOverLoading, 10);
     }
     if(IsDummyBot()){
-        Wait(SlotOf() * 0.2, WaitBehavior.AbortWhenFalse);
+        Wait(SlotOf() * 0.1, WaitBehavior.AbortWhenFalse);
     }
     Teleport(ep, pos);
     PlayEffect(
