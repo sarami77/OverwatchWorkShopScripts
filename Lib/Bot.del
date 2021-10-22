@@ -317,7 +317,9 @@ if(
         case Hero.Mccree:
         heroName = "Mccree";
         AttackRange = AttackRange.Close;
-        secondaryFireButtonReleaseMax = 10;
+        primaryFireButtonReleaseMin = 0;
+        primaryFireButtonReleaseMax = 2;
+        secondaryFireButtonReleaseMax = 15;
         break;
 
         case Hero.Mei:
@@ -369,7 +371,7 @@ if(
 
         case Hero.Orisa:
         heroName = "Orisa";
-        AttackRange = AttackRange.Middle;
+        AttackRange = AttackRange.Far;
         break;
 
         case Hero.Pharah:
@@ -462,9 +464,13 @@ if(
         heroName = "WreckingBall";
         AttackRange = AttackRange.Close;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        primaryFireButtonPressMax = 15;
+        primaryFireButtonReleaseMax = 20;
+        primaryFireButtonPressMax = 20;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 5;
+        secondaryFireButtonPressMax = 10;
+        ability1ButtonReleaseMin = 5;
+        ability1ButtonReleaseMax = 10;
         break;
 
         case Hero.Zarya:
@@ -505,20 +511,20 @@ if(
     // set Attack range
     switch(AttackRange){
         case AttackRange.Melee:
-            AttackRangeMin = 1;
-            AttackRangeMax = 3;
+            AttackRangeMin = 0;
+            AttackRangeMax = 4;
             break;
         case AttackRange.Close:
-            AttackRangeMin = 1;
-            AttackRangeMax = 10;
+            AttackRangeMin = 2;
+            AttackRangeMax = 8;
             break;
         case AttackRange.Middle:
-            AttackRangeMin = 10;
-            AttackRangeMax = 20;
+            AttackRangeMin = 8;
+            AttackRangeMax = 16;
             break;
         case AttackRange.Far:
-            AttackRangeMin = 20;
-            AttackRangeMax = 30;
+            AttackRangeMin = 16;
+            AttackRangeMax = 32;
             break;
     }
 }
@@ -556,6 +562,9 @@ if(
     IsDummyBot() &&
     HasSpawned()
 ){
+    // if(target != 0)
+    //     dbgPlyBemEft(EyePosition(), EyePosition(target) - PositionOffset());
+
     define targetSighted! =
         (target != 0) &&
         IsAlive(target) &&
@@ -564,7 +573,7 @@ if(
     // get new target
     if(
         !targetSighted ||       // target not Sighted
-        ProbabilityTrue(25) ||  // change target Probability
+        ProbabilityTrue(25) ||  // force change target Probability
         (                        
             actionState == ActionState.Support &&   // support target almost full health
             NormalizedHealth(target) > needHealRate
@@ -656,8 +665,7 @@ define FindAttackTarget():
                     IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
                     IsAlive(ae) &&
                     !(
-                        HeroOf(ae) == Hero.Sombra &&
-                        IsUsingAbility1(ae) &&
+                        IsStealth(ae) &&
                         DistanceBetween(ae, ep) >= 3
                     )
                 )
@@ -716,35 +724,31 @@ define StartMoveInDir(define dir):
         ThrottleBehavior.ReplaceExistingThrottle,
         ThrottleRev.DirectionAndMagnitude);
 
-define stuckRange: 0.75;
+define stuckRange: 0.5;
 
 playervar define prevPosition;
 
 void checkAndBreakStuck()"checkAndBreakStuck"{
     if(
-        prevPosition != 0 &&    // has prevPosition
-        sideStepDir != 0 &&     // has sidestep
-        moveDir != 0 &&         // has moveDir
-        DistanceBetween(PositionOf(), prevPosition) < stuckRange    // not moved from prevPosition
+        (   // has move
+            sideStepDir != 0 ||
+            moveDir != 0
+        ) &&
+        prevPosition != 0 &&
+        DistanceBetween(ep, prevPosition) <= stuckRange    // not moved from prevPosition
     ){
         statusText = <"checkAndBreakStuck">;
-        
         while(
             // keep try break stuck prob
-            //ProbabilityTrue(75) &&
+            ProbabilityTrue(75) &&
             // not moved from prevPosition yet
-            DistanceBetween(PositionOf(), prevPosition) < stuckRange
+            DistanceBetween(ep, prevPosition) <= stuckRange
         ){
-            // change move direction
-            moveDir = Forward();
-            //moveDir = RandomValueInArray([Forward(), Forward(), Backward()]);
-            //sideStepDir = RandomValueInArray([0, 0, Right(), Left()]);
-            startMove();
-
+            //dbgPlyEft(ep);
             // try jump or croch
             define breakStuckButton! = RandomValueInArray([Button.Jump, Button.Crouch]);
             StartHoldingButton(ep, breakStuckButton);
-            Wait(RandomReal(0, 2), WaitBehavior.IgnoreCondition);   // keep hold button
+            Wait(RandomReal(0.5, 1.0), WaitBehavior.IgnoreCondition);   // keep hold button
             StopHoldingButton(ep, breakStuckButton);
         }
     }
@@ -794,12 +798,12 @@ void setSideStep(define rightIsAbyss!, define leftIsAbyss!)"setSideStep"{
     define isGoodRange! =
         distToTarget >= AttackRangeMin &&
         distToTarget <= AttackRangeMax;
-    // now my range
-    if(isGoodRange){
+    // now my range or set side step prob
+    if(isGoodRange || ProbabilityTrue(50)){
         // select dir
         // no change sidestep prob
         if(ProbabilityTrue(50)){
-            // sideStepDir = X;
+            sideStepDir = sideStepDir;
         }
         // no sidestep prob
         else if(ProbabilityTrue(25)){

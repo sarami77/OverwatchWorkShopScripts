@@ -76,7 +76,8 @@ Event.OngoingPlayer
 Team.Team1
 if(
     perkType == PerkType.CarePackage &&
-    perkState  == PerkState.Using
+    perkState  == PerkState.Using &&
+    perk[Perk.perkTimeLimit] > floatDropTime
 ){
     // play blast
     PlayEffect(
@@ -86,6 +87,10 @@ if(
     WaitUpdateVeryShortCycle();
     LoopIfConditionIsTrue();
 }
+
+define jetDropTime: perk[Perk.perkTimeLimit] - floatDropTime;
+define floatDropTime: 3;
+define floatDropHight: 3;
 
 rule: "Perk/Player/CarePackage/dropPackage"
 Event.OngoingPlayer
@@ -103,7 +108,11 @@ if(
     if(!isServerOverLoading){
         UpdateEveryFrame(perkPosition);
         ChaseVariableOverTime(
-            perkPosition, landPosition, perk[Perk.perkTimeLimit] ,
+            perkPosition, landPosition + (Up() * floatDropHight), jetDropTime,
+            TimeChaseReevaluation.DestinationAndDuration);
+        Wait(jetDropTime);
+        ChaseVariableOverTime(
+            perkPosition, landPosition, floatDropTime,
             TimeChaseReevaluation.DestinationAndDuration);
     }
 }
@@ -137,7 +146,7 @@ if(
         perk[Perk.perkTargets][pLoopIndex].perk[Perk.perkCratePosition]
             = NearestWalkablePosition(landPosition + RandomPosition(3, 0, 3)) + PositionOffset();    
         perk[Perk.perkTargets][pLoopIndex].perk[Perk.perkCrateState] = PerkCrateState.Dropped;
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
     }
     perkState = PerkState.Non;
 }

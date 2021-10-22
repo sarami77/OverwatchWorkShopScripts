@@ -1,5 +1,6 @@
 import "Lib/Bot.del";
 import "Lib/Regeneration.del";
+import "Lib/DamageText.del";
 
 // TAG Bot/CreateBot ----------
 disabled rule: "SetDebugSetting"
@@ -27,7 +28,8 @@ Event.OngoingGlobal
     regenerationHealthPerSecondTeam2 = regRate;
     // Bot.del
     botAimScat = WorkshopSettingReal("Bot Settings", "Aim Scattering (0 is head shot)",              0.25, 0, 1000, 6);
-
+    // DamageText.del
+    damageTextEnableTeam = Team.All;
 
     CreateHudText(HostPlayer(),
         null,
@@ -102,12 +104,14 @@ if(
 rule: "ReloadBotList"
 Event.OngoingGlobal
 {
+    // TAG BotList
     dbgMsg("Reload Bot List");
     define botNum = WorkshopSettingInteger("Bot Settings", "Bot Count", 24, 0, 24, 1);
-    //CreateBothBotsByInput(AllSupportHeroes(), botNum);
-    // CreateBothBotsByInput([Hero.Zenyatta], botNum);
+
+    // CreateBothBotsByInput(AllHeroes(), botNum);
     // CreateBothBotsByInput(AllSupportHeroes(), botNum);
-    CreateBothBotsByInput([Hero.Pharah, Hero.Echo, Hero.Mercy], botNum);
+    CreateBothBotsByInput([Hero.Mccree], botNum);
+    // CreateBothBotsByInput([Hero.Pharah, Hero.Echo, Hero.Mercy], botNum);
 
     Wait(180, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
@@ -238,6 +242,22 @@ void SetTeleportPositionAtRandom(define range)"SetTeleportPositionAtRandom"{
             RandomPosition(5, 5, 5));
 
         if(
+            // not inside enemy spwan room team1
+            !IsTrueForAny(
+                SpawnPoints(Team.Team1),
+                (
+                    IsInLineOfSight(ae + Up(), teleportPos + Up())
+                )
+            )
+                &&
+            // not inside enemy spwan room team2
+            !IsTrueForAny(
+                SpawnPoints(Team.Team2),
+                (
+                    IsInLineOfSight(ae + Up(), teleportPos + Up())
+                )
+            )
+                &&
             // Not too close to prev_teleportPos
             DistanceBetween(    
                 prev_teleportPos, teleportPos)
@@ -266,6 +286,9 @@ void TeleportToTeleportPosition(define range)"TeleportToTeleportPosition"{
             RandomPosition(5, 5, 5));
 
         if(
+            // not inside enemy spwan room
+            !IsInOppsiteSpawnRoom(pos)
+                &&
             // not too close to enemy
             DistanceBetween(
                 pos, 
@@ -273,16 +296,14 @@ void TeleportToTeleportPosition(define range)"TeleportToTeleportPosition"{
                     pos,
                     OppositeTeamOf(TeamOf())))
             >= minDistanceEnemyTeleport
-            &&
+                &&
             // has line to enemy
             IsInLineOfSight(
                 pos + Up(),
                 ClosestPlayerTo(
                     pos,
                     OppositeTeamOf(TeamOf())))
-                &&
-            // not inside enemy spwan room
-            !IsInOppsiteSpawnRoom(pos)
+
         ){
             break;
         }
@@ -325,4 +346,16 @@ if(
 ){
     WaitLongPressConfirm();
     SetTeleportPositionAtRandom(selectionAreaRange);
+}
+
+rule: "Debug/reloadBotList"
+Event.OngoingPlayer
+Team.All
+if(
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Ultimate)
+){
+    WaitLongPressConfirm();
+    CreateBothBotsByInput(AllHeroes(), 24);
 }
