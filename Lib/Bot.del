@@ -2,7 +2,7 @@ import "Utility.del";
 import "Debug.del";
 
 // TAG public property
-globalvar define botAimScat = 0;
+globalvar define botAimScat = WorkshopSettingReal("Bot Settings", "Aim Scattering (0 is head shot)",              0.25, 0, 1000, 3);
 
 // TAG Bot/Spawn ----------
 enum BotAsset{
@@ -93,7 +93,7 @@ void CreateBothBotsByInput(define heroList, define num)"CreateBothBotsByInput"{
 }
 
 void DestroyBots(define team)"DestroyBots"{
-    for(define slotIdx = 0; slotIdx < 12; slotIdx ++){
+    for(define slotIdx = 0; slotIdx < 24; slotIdx ++){
         // try until despawn entity
         // while(HasSpawned(PlayersInSlot(slotIdx, team))){
             DestroyDummyBot(
@@ -1275,29 +1275,114 @@ if(
 
 // TAG Debug ----------
 /*
-define maxBotNum: 6;
+rule: "Debug/Init"
+Event.OngoingPlayer
+if(
+    ep == HostPlayer() &&
+    HasSpawned(ep)
+){
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load", ServerLoad()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
 
-rule: "Debug/SpawnOneBot"
+    CreateHudText(ep,
+        null, <"hold Interact button <0> to toggle all bots",
+            ButtonGuide(Button.Interact)>, null,
+        Location.Left, 0,
+        Color.Yellow, Color.Yellow, Color.Yellow,
+        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+
+    CreateHudText(ep,
+        null, <"press Interact button <0> to spawn one enemy bot",
+            ButtonGuide(Button.Interact)>, null,
+        Location.Left, 0,
+        Color.Yellow, Color.Yellow, Color.Yellow,
+        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+    
+    CreateIcon(spawnPos != 0 ? HostPlayer() : null, spawnPos, Icon.ArrowDown,
+            IconRev.VisibleToAndPosition, Color.White, true);
+
+}
+
+globalvar define spawnPos;
+
+define dummyBots:
+        FilteredArray(
+            AllPlayers(),
+            (
+                IsDummyBot(ae)
+            )
+        );
+
+rule: "Debug/TeleportAllStandbyBots"
+Event.OngoingPlayer
+if(
+    HostPlayer() == ep &&
+    0 < CountOf(dummyBots)
+){
+    Teleport(
+        FilteredArray(
+            AllPlayers(),
+            (
+                ae.actionState == ActionState.Non &&
+                IsDummyBot(ae)
+            )
+        ),
+        NearestWalkablePosition(spawnPos + RandomPosition(5, 0, 5)));
+    Wait(2, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+
+define maxBotNum: 24;
+
+rule: "Debug/ToggleSpawnAllBots"
 Event.OngoingPlayer
 if(
     ep == HostPlayer() &&
     IsButtonHeld(ep, Button.Interact)
+
 ){
     WaitLongPressConfirm();
-    define team = botSlot % 2 == 0 ? Team.Team2 : Team.Team1;
-    DestroyDummyBot(team, botSlot);
-    CreateDummyBot(RandomValueInArray(AllHeroes()), team, botSlot,
-        AimingPosition(), FacingDirectionOf()
-    );
-    if(
-        botSlot < maxBotNum &&
-        team == Team.Team2
-    )
-        botSlot ++;
-    else
-        botSlot = 0;
+
+    if(0 == CountOf(dummyBots)){
+        spawnPos = NearestWalkablePosition(AimingPosition());
+        define botNum = WorkshopSettingInteger("Bot Settings", "Bot Count", 24, 0, 24, 2);
+        CreateBothBotsByInput(AllHeroes(), botNum);
+    }
+    else{
+        DestroyBots(Team.Team1);
+        DestroyBots(Team.Team2);
+    }
 }
 
+rule: "Debug/SpawnOneEnemyBots"
+Event.OngoingPlayer
+if(
+    ep == HostPlayer() &&
+    IsButtonHeld(ep, Button.Interact)
+
+){
+    WaitUntil(!IsButtonHeld(ep, Button.Interact), 0.4);
+    AbortIf(IsButtonHeld(ep, Button.Interact));
+
+    spawnPos = NearestWalkablePosition(AimingPosition());
+    CreateDummyBot(
+        RandomValueInArray(AllHeroes()),
+        OppositeTeamOf(TeamOf()),
+        botSlot,
+        NearestWalkablePosition(AimingPosition()),
+        RandomDirection()
+    );
+    botSlot ++;
+}
+*/
+
+/*
 define debugInfoDisplayeTo:
     [HostPlayer(), ep];
 
