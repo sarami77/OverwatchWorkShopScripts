@@ -1,19 +1,208 @@
-playervar define isInvincible = false;
+import "Lib/Utility.del";
+import "Lib/Debug.del";
+import "Lib/DamageText.del" ;
+
+// Builtin -----------------------------------------------
+rule: "Builtin"
+Event.OngoingPlayer
+if(
+    HostPlayer() == EventPlayer() &&
+    HasSpawned()
+){
+   
+    // SetStatus(EventPlayer(), null, Status.PhasedOut, 99999);
+    // SetMaxHealth(EventPlayer(), 10000);
+    SetDamageDealt(EventPlayer(), 100);
+    SetDamageReceived(EventPlayer(), 100);
+    SetHealingDealt(EventPlayer(), 100);
+    SetHealingReceived(EventPlayer(), 100);
+    SetJumpVerticalSpeed(EventPlayer(), 100);
+    SetMoveSpeed(EventPlayer(), 1000);
+    SetGravity(EventPlayer(), 10);
+    SetProjectileSpeed(EventPlayer(), 100);
+    SetProjectileGravity(EventPlayer(), 100);
+    StartScalingPlayer(EventPlayer(), 1);
+    StartScalingBarriers(EventPlayer(), 1);
+    SetUltimateCharge(EventPlayer(), 0);
+
+    damageTextEnableTeam = Team.Team2;
+    // SetMoveSpeed(others, 1000);
+    SetMaxHealth(AllPlayers(Team.Team2), 10000);
+    SetRespawnMaxTime(AllPlayers(Team.Team2), 1);
+    StartScalingPlayer(AllPlayers(Team.Team2), 1);
+
+    // SetStatus(AllPlayers(Team.Team2), null, Status.Rooted, 99999);
+    // ForcePlayerHero(EventPlayer(), Hero.Widowmaker);
+
+    // CreateEffect(EventPlayer(), Effect.Ring, Color.Red,
+    //     EventPlayer(), 10, EffectRev.VisibleToPositionAndRadius);
+    // CreateEffect(EventPlayer(), Effect.Ring, Color.Orange,
+    //     EventPlayer(), 20, EffectRev.VisibleToPositionAndRadius);
+    // CreateEffect(EventPlayer(), Effect.Ring, Color.Yellow,
+    //     EventPlayer(), 30, EffectRev.VisibleToPositionAndRadius);
+    // CreateEffect(EventPlayer(), Effect.Ring, Color.SkyBlue,
+    //     EventPlayer(), 40, EffectRev.VisibleToPositionAndRadius);
+    // CreateEffect(EventPlayer(), Effect.Ring, Color.Blue,
+    //     EventPlayer(), 50, EffectRev.VisibleToPositionAndRadius);
+
+    while(true){
+        //SetMoveSpeed(EventPlayer(), 1000);
+        Wait(1, WaitBehavior.AbortWhenFalse);
+    }    
+}
+
+rule: "Debug/getPerk"
+Event.OngoingPlayer
+Team.Team1
+if(
+    IsButtonHeld(EventPlayer(), Button.Interact) &&
+    perkState == PerkState.Non &&
+    perkType == PerkType.Non
+){ 
+    WaitLongPressConfirm();
+    perkState = PerkState.Ready;
+    perkType = PerkType.Annihilator;
+}
+
+globalvar define slow = 100;
+
+rule: "Debug/setSlow"
+Event.OngoingPlayer
+Team.Team1
+if(
+    HostPlayer() == EventPlayer() &&
+    IsButtonHeld(EventPlayer(), Button.Jump) &&
+    intaractDoublePressed
+){ 
+    // 100 -> 50 -> 25 -> 10
+    if(slow == 100)
+        slow = 50;
+    else if(slow == 50)
+        slow = 25;
+    else if(slow == 25)
+        slow = 10;
+    else if(slow == 10)
+        slow = 100;
+    else
+        slow = 100;
+    SetSlowMotion(slow);
+    dbgMsg(<"setSlow <0>", slow>);
+}
+
+// globalvar define reviveRange;
+
+// Test Code -----------------------------------------------
+import "Lib/Perk/Annihilator.del";
+
+rule: "debug_global"
+Event.OngoingGlobal
+{
+    
+}
+
 
 rule: "debug_player"
 Event.OngoingPlayer
 if(
-    EventPlayer() == HostPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact)
+    IsButtonHeld(ep, Button.SecondaryFire)
 ){
-    isInvincible = !isInvincible;
 
-    if(isInvincible){
-        SmallMessage(EventPlayer(), "Invincible ON");
-        SetStatus(EventPlayer(), null, Status.Invincible, 9999);
-    }
-    else{
-        SmallMessage(EventPlayer(), "Invincible OFF");
-        ClearStatus(EventPlayer(), Status.Invincible);
-    }
+}
+
+// Debug -----------------------------------------------
+define changeTimeInterval: 0.1;
+define initialTuneUnit : 0.01;
+globalvar define tuneVal = 0.1;
+globalvar define consecutiveChangeCount = 0;
+globalvar define tuneUnit = initialTuneUnit;
+
+rule: "showParam"
+Event.OngoingGlobal
+{
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "tune Val", tuneVal>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "Server Load", ServerLoad()>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Orange, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);   
+}
+
+rule: "startIncreaseParam"
+Event.OngoingPlayer
+if(
+    HostPlayer() &&
+    (
+        IsButtonHeld(EventPlayer(), Button.Interact) &&
+        IsButtonHeld(EventPlayer(), Button.Ability2)
+    )
+){
+    tuneVal += tuneUnit;
+    Wait(changeTimeInterval, WaitBehavior.AbortWhenFalse);
+    changeTuneUnit();
+    LoopIfConditionIsTrue();
+}
+
+rule: "stopIncreaseParam"
+Event.OngoingPlayer
+if(
+    HostPlayer() &&
+    !(
+        IsButtonHeld(EventPlayer(), Button.Interact) &&
+        IsButtonHeld(EventPlayer(), Button.Ability2)
+    )
+){
+    resetTuneUnit();
+}
+
+rule: "startDecreaseParam"
+Event.OngoingPlayer
+if(
+    HostPlayer() &&
+    (
+        IsButtonHeld(EventPlayer(), Button.Interact) &&
+        IsButtonHeld(EventPlayer(), Button.Ability1)
+    )
+){
+    tuneVal -= tuneUnit;
+    Wait(changeTimeInterval, WaitBehavior.AbortWhenFalse);
+    changeTuneUnit();
+    LoopIfConditionIsTrue();
+}
+
+rule: "stopDecreaseParam"
+Event.OngoingPlayer
+if(
+    HostPlayer() &&
+    !(
+        IsButtonHeld(EventPlayer(), Button.Interact) &&
+        IsButtonHeld(EventPlayer(), Button.Ability1)
+    )
+){
+    resetTuneUnit();
+}
+
+void resetTuneUnit(){
+    tuneUnit = initialTuneUnit;
+    consecutiveChangeCount= 0;
+}
+
+void changeTuneUnit(){
+    consecutiveChangeCount ++;
+    if(consecutiveChangeCount < 10)
+        tuneUnit =  initialTuneUnit * 1;
+    else if(consecutiveChangeCount < 20 )
+        tuneUnit = initialTuneUnit * 10;
+    else if(consecutiveChangeCount < 30 )
+        tuneUnit = initialTuneUnit * 100;
+    else
+        tuneUnit = initialTuneUnit * 1000;
 }

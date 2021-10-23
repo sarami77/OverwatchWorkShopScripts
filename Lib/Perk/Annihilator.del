@@ -37,6 +37,8 @@ if(
 ){
     // reset param
     StopCamera(ep);
+    SetInvisible(ep, InvisibleTo.None);
+    isShowHeadUpDisplay = true;
     perk[Perk.perkEffectStatus] = 0;
     // reset perk hero
     StopForcingPerkHero(ep);
@@ -84,7 +86,7 @@ if(
     perkPosition = EyePosition();
     if(perk[Perk.perkTargets] != 0){
         // set camera
-        StartCamera(ep, perkPosition, EyePosition(), 10);
+        StartCamera(ep, perkPosition, EyePosition(), MaxValue());
     }
 
     perk[Perk.perkEffectStatus] = 0;
@@ -111,29 +113,20 @@ if(
             ),
             Health(ArrayElement())
         );
-    if(perk[Perk.perkEffectStatus]  <= 22){
-        // get target with insight and lowest health for kill more
-        perk[Perk.perkTargets] = FirstOf(perk[Perk.perkTargets]);
-    }
-    else{
-        // get target with insight and highst health for deal finish damage
-        perk[Perk.perkTargets] = LastOf(perk[Perk.perkTargets]);
-    }
 
-    if(perk[Perk.perkTargets] == 0){
-        // get target with near random
-        perk[Perk.perkTargets] = RandomValueInArray(perk[Perk.perkTargets]);
-            RandomValueInArray(
-                FilteredArray(
-                    AllPlayers(Team.Team2), 
-                    (
-                        IsAlive(ArrayElement()) &&
-                        DistanceBetween(ep, ArrayElement()) <= 10
-                    )
-                )
-            );
-    }
+    // get target with insight and lowest health for kill more
+    perk[Perk.perkTargets] = FirstOf(perk[Perk.perkTargets]);
+    
     if(perk[Perk.perkTargets] != 0){
+        // set visible
+        if(ProbabilityTrue(50)){
+            SetInvisible(ep, InvisibleTo.All);
+            isShowHeadUpDisplay = false;
+        }
+        else{
+            SetInvisible(ep, InvisibleTo.None);
+            isShowHeadUpDisplay = true;
+        }
         // chase target
         ApplyImpulse(ep,
             VectorTowards(ep, perk[Perk.perkTargets] + Up() + RandomPosition(1, 1, 1)),
@@ -141,7 +134,7 @@ if(
         // play movement pulse
         PlayEffect(
             AllPlayers(), PlayEffect.BadPickupEffect,
-            Color.Red, ep, 1.0);
+            Color.Red, PositionOf(), 1.0);
 
         // camera too far to player
         if(DistanceBetween(perkPosition, EyePosition()) > 15){
@@ -159,7 +152,11 @@ if(
             perkPosition = (perkPosition + EyePosition()) / 2;
         }
         // update camera
-        StartCamera(ep, perkPosition, EyePosition(), 10);
+        StartCamera(ep, perkPosition, EyePosition(), 5);
+    }
+    else{
+        SetInvisible(ep, InvisibleTo.None);
+        isShowHeadUpDisplay = true;
     }
 
     WaitUpdateVeryShortCycle();
@@ -174,15 +171,20 @@ if(
     perkState  == PerkState.Using &&
     !IsUsingUltimate()
 ){
-    // finish damage
-    Damage(
-        PlayersWithinRadius(PositionOf(ep), 10, Team.Team2, RadiusLOS.Off ),
-        ep, MaxValue()
-    );
+    // is finish move
+    if(perk[Perk.perkEffectStatus] > 22){
+        // finish damage
+        Damage(
+            PlayersWithinRadius(PositionOf(ep), 10, Team.Team2, RadiusLOS.Off ),
+            ep, MaxValue()
+        );
+    }
 
     SetDamageDealt(ep, 200);
     SetMoveSpeed(ep, 150);
     StopCamera(ep);
+    SetInvisible(ep, InvisibleTo.None);
+    isShowHeadUpDisplay = true;
     Wait(4, WaitBehavior.AbortWhenFalse);
 
     perk[Perk.perkEffectStatus] = 0;
