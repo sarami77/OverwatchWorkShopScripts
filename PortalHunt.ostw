@@ -580,8 +580,17 @@ if(
     DestroyEffect(portalEntitys[4]);
 }
 
-define showPortalIconOutRange: maxPortalSize;
 define enemyColor: Color.Purple;
+
+globalvar define portalReekTime!;
+
+define showPortal:
+    portalReekTime > 0 ||
+    portalState == PortalState.UnderAttack;
+
+define showPortalPlayers:
+    showPortal ?
+    AllPlayers() : AllPlayers(Team.Team2);
 
 rule: "Portal/State/Set  // waiting for found by players"
 Event.OngoingGlobal
@@ -592,37 +601,28 @@ if(
     // show Portal Entity by portal state changed to Show
     // Init param
     closingCount = 0;
+    portalReekTime = 0;
     // show icon
     portalEntitys = [];
-    portalEntitys[0] = CreateIcon(
-        FilteredArray(
-            AllPlayers(Team.Team1),
-            (
-                !ae.isInsidePortal &&
-                DistanceBetween(ae, portalPosition) > showPortalIconOutRange
-            )
-        ),
+    portalEntitys[0] = CreateIcon(showPortalPlayers,
         portalPosition, Icon.Spiral,
         IconRev.VisibleToAndPosition, enemyColor, true);
     // set effect
     // sphere
-    portalEntitys[1] = CreateEffect(AllPlayers(), Effect.Sphere, enemyColor,
+    portalEntitys[1] = CreateEffect(showPortalPlayers, Effect.Sphere, enemyColor,
         portalPosition, portalSize, EffectRev.VisibleToPositionAndRadius);
     // cloud
-    portalEntitys[2] = CreateEffect(AllPlayers(), Effect.Cloud, enemyColor,
+    portalEntitys[2] = CreateEffect(showPortalPlayers, Effect.Cloud, enemyColor,
         portalPosition, portalSize * 1.5, EffectRev.VisibleToPositionAndRadius);
     // aura
     // Since visibility will be poor, display only in the center of the field of view
-    portalEntitys[3] = CreateEffect(
-        FilteredArray(
-            AllPlayers(),
-            DistanceBetween(ae, portalPosition) > portalSize / 2), Effect.BadAura, enemyColor,
+    portalEntitys[3] = CreateEffect(showPortalPlayers, Effect.BadAura, enemyColor,
         portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionAndRadius);
     // sound
     portalEntitys[4] = CreateEffect(AllPlayers(), Effect.EnergySound, enemyColor,
         portalPosition, portalSize / 2, EffectRev.VisibleToPositionAndRadius);
     // show message
-    BigMessage(AllPlayers(), "Portal detected... find portal and close it!");
+    BigMessage(AllPlayers(), "Defeat enemies and track portal!");
 }
 
 rule: "Portal/State/Growing"
@@ -725,6 +725,16 @@ if(
     DestroyEffect(portalEntitys[2]);
     DestroyEffect(portalEntitys[3]);
     DestroyEffect(portalEntitys[4]);
+}
+
+rule: "Portal/Positioner/countdownReelTime"
+Event.OngoingGlobal
+if(
+    portalReekTime > 0
+){
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    portalReekTime -= 1;
+    LoopIfConditionIsTrue();
 }
 
 rule: "Portal/Positioner/createPortal"
@@ -859,14 +869,14 @@ Team.Team2
 if(
     portalEnable &&
     (
-        ep == Attacker() ||         // sucide
+        Attacker() == ep ||         // sucide
         IsInSpawnRoom(Attacker())   // killer in res room
     )
 ){
     // change room for avoid kill in res room
     ForceSpawnRoom(Team.Team1, RandomValueInArray([0, 1, 2]));
     // sucide
-    if(ep == Attacker())
+    if(Attacker() == ep)
         environmentDeathCount += 1;
     // killer in res room
     else if(IsInSpawnRoom(Attacker()))
@@ -1425,8 +1435,8 @@ if(
             eachNameColor, Spectators.DefaultVisibility);
 }
 
-rule: "EnemBot/Effect/hideBotAppearance"
-Event.OngoingPlayer
+rule: "EnemBot/Effect/hideBotAppearanceAndReek"
+Event.OnDeath
 Team.Team2
 if(
     enemyType != EnemyType.None &&
@@ -1439,6 +1449,23 @@ if(
     // play dead effect
     PlayContinuousBlast(Color.Red, PositionOf(),
         eachEffectTextSize * 1.5, eachEffectTextSize);
+
+    if(Attacker() != ep){
+        // add portal reek time
+        if(enemyType == EnemyType.Minion){
+            portalReekTime += 1;
+        }
+        else if(enemyType == EnemyType.Elite){
+            portalReekTime += 3;
+        }
+        else if(enemyType == EnemyType.Boss){
+            portalReekTime += 6;
+        }
+        else if(enemyType == EnemyType.GiantBoss){
+            portalReekTime += 10;
+        }
+    }
+    // else
 }
 
 // TAG EnemBot/Teleport ----------
@@ -1832,7 +1859,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // If don't enough players, adjust Bot dealt damage rate to make the game fair
     // And the round progresses, the Bot deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Base Deal Damage", 30, 0, 1000, 1);
+    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Base Deal Damage", 25, 0, 1000, 1);
     confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round", 1.0, 0, 1000, 2);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
@@ -1979,6 +2006,15 @@ void ShowDebugHud()"ShowDebugHud"{
         CreateHudText(HostPlayer(),
             null,
             <"<0> <1>", "distance to protal", DistanceBetween(ep, portalPosition)>,
+            null,
+            Location.Left, -1,
+            Color.White, enemyColor, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
+
+        CreateHudText(HostPlayer(),
+            null,
+            <"<0> <1>", "portal Reek Time", portalReekTime>,
             null,
             Location.Left, -1,
             Color.White, enemyColor, Color.White,
