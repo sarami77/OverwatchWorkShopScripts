@@ -109,7 +109,7 @@ Event.OngoingGlobal
 // TAG ServerOverLoadMeasures ----------
 define WaitUntilServerFree(): WaitUntil(!isServerOverLoading, 5);
 
-define slowLevel: [100, 95, 85, 70, 50];    // 0～4
+define slowLevel: [100, 90, 80, 70, 50];    // 0～4
 globalvar define targetSlowLevel!;
 globalvar define currentSlowLevel!;
 globalvar define slowControlHandler!;
@@ -153,7 +153,7 @@ if(
     // If the server is not overloaded,
     //  reset slow motion every second
     // can decrease slow level
-    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    Wait(0.3, WaitBehavior.AbortWhenFalse);
     if(targetSlowLevel > 0){
         // decrease slow level
         targetSlowLevel --;
@@ -270,33 +270,9 @@ if(
 // TAG Player ----------
 playervar define isInsidePortal!;
 
-rule: "Player/InsidePortal/update"
-Event.OngoingGlobal
-if(
-    portalEnable
-){
-    define players! = AllPlayers(Team.Team1);
-    // Set flag when player entered to portal
-    // This flag is used for functions related to portal
-    for(gLoopIndex = 0; gLoopIndex < CountOf(players); gLoopIndex++){
-        if(
-            HasSpawned(players[gLoopIndex]) &&
-            IsAlive(players[gLoopIndex]) &&
-            !IsInSpawnRoom(players[gLoopIndex]) &&
-            DistanceBetween(players[gLoopIndex], portalPosition) <= portalSize
-        ){
-            players[gLoopIndex].isInsidePortal = true;
-        }
-        else{
-            players[gLoopIndex].isInsidePortal = false;
-        }
-    }
-    WaitUntilServerFree();
-    WaitUpdateMediumCycle();
-    LoopIfConditionIsTrue();
-}
 
-rule: "Player/ReturnSpawn/returnSpawn"
+// TAG Player/ReturnSpawnRoom
+rule: "Player/ReturnSpawnRoom/return"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -313,6 +289,23 @@ globalvar define initialTeamLives!;
 globalvar define teamLives!;
 define maxTeamLives: 12;
 
+// TAG Player/FisrtFast
+rule: "Player/FisrtFast/uodate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    IsInSpawnRoom() &&
+    IsAlive() &&
+    perkState != PerkState.Using
+){
+    SetMoveSpeed(ep, 150);
+    while(!IsInLineOfSight(ep, ClosestPlayerTo(ep, Team.Team2))){
+        Wait(1, WaitBehavior.IgnoreCondition);
+    }
+    SetMoveSpeed(ep, 100);
+}
+
+// TAG Player/TeamLives
 rule: "Player/TeamLives/showTeamLivesHUD"
 Event.OngoingGlobal
 if(
@@ -386,6 +379,34 @@ if(
     Respawn();
 }
 
+// TAG Player/InsidePortal
+rule: "Player/InsidePortal/update"
+Event.OngoingGlobal
+if(
+    portalEnable
+){
+    define players! = AllPlayers(Team.Team1);
+    // Set flag when player entered to portal
+    // This flag is used for functions related to portal
+    for(gLoopIndex = 0; gLoopIndex < CountOf(players); gLoopIndex++){
+        if(
+            HasSpawned(players[gLoopIndex]) &&
+            IsAlive(players[gLoopIndex]) &&
+            !IsInSpawnRoom(players[gLoopIndex]) &&
+            DistanceBetween(players[gLoopIndex], portalPosition) <= portalSize
+        ){
+            players[gLoopIndex].isInsidePortal = true;
+        }
+        else{
+            players[gLoopIndex].isInsidePortal = false;
+        }
+    }
+    WaitUntilServerFree();
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue();
+}
+
+// TAG Player/ClosePortal
 globalvar define closingCount;
 globalvar define closingProgress;
 globalvar define closingProgressHudEntity;
@@ -504,8 +525,7 @@ if(
     portalState = PortalState.Calculating;  // start next portal create
 }
 
-playervar define inPortalEffectEntitys;
-
+// TAG Player/FairPlay
 rule: "Player/FairPlay/disableStealthWhenInside //sombra's stealth for fair play"
 Event.OngoingPlayer
 Team.Team1
@@ -1442,12 +1462,12 @@ if(
     // show evil aura
     botAppearanceEntitys[0] = 
         CreateEffect(AllPlayers(), Effect.Cloud, enemyColor,
-            ep, !IsStealth(ep) ? eachEffectTextSize * 1.5 : 0, EffectRev.VisibleToPositionAndRadius);
+            ep, eachEffectTextSize, EffectRev.VisibleToPositionAndRadius);
     // show name text
     botAppearanceEntitys[1] = 
         CreateInWorldText(
             AllPlayers(), eachNameText, 
-            ep, !IsStealth(ep) ? eachEffectTextSize : 0, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            ep, eachEffectTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             eachNameColor, Spectators.DefaultVisibility);
 }
 
