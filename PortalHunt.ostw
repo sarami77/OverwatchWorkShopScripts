@@ -41,23 +41,30 @@ Event.OngoingGlobal
     DisableScoring();
     DisableCompletion();
 
+    // Set team lives property
+    initialTeamLives =                      WorkshopSettingInteger("Player Settings", "Initial team lives",                     6, 0, 1000, 0);
+    maxTeamLives =                          WorkshopSettingInteger("Player Settings", "Max stock team lives",                   12, 0, 1000, 1);
+
     // Set imported functions public property for user tuning
     // Regeneration.del
     regenerationEnableTeam = Team.Team1;
     regenerationNeedBalanceTeam1 = true;
-    regenerationStartWaitSecondTeam1 =      WorkshopSettingReal("Player Settings", "Regeneration Start Wait Second",            3, 0, 100, 1);
-    regenerationHealthPerSecondTeam1 =      WorkshopSettingReal("Player Settings", "Regeneration Health Per Second",            25, 0, 1000, 2);
+    regenerationStartWaitSecondTeam1 =      WorkshopSettingReal("Player Settings", "Regeneration Start Wait Second",            3, 0, 100, 2);
+    regenerationHealthPerSecondTeam1 =      WorkshopSettingReal("Player Settings", "Regeneration Health Per Second",            25, 0, 1000, 3);
     // Revive.del
     reviveEnableTeam = Team.Team1;
-    reviveTimeLimit =                       WorkshopSettingReal("Player Settings", "Revive Time Limit",                         10, 0, 100, 3);
-    reviveRange =                           WorkshopSettingReal("Player Settings", "Revive Range",                              3, 0, 100, 4);
-    reviveCompleteSecond =                  WorkshopSettingReal("Player Settings", "Revive Complete Second",                    5, 0, 100, 5);
+    reviveTimeLimit =                       WorkshopSettingReal("Player Settings", "Revive Time Limit",                         10, 0, 100, 4);
+    reviveRange =                           WorkshopSettingReal("Player Settings", "Revive Range",                              3, 0, 100, 5);
+    reviveCompleteSecond =                  WorkshopSettingReal("Player Settings", "Revive Complete Second",                    5, 0, 100, 6);
     // DamageText.del
     damageTextEnableTeam = Team.Team2;
     // ElapsedTimer.del
     elapsedTimerEnable = true;
     // PerkCore.del
     perkCorePerkDropProbability =           WorkshopSettingReal("Perk Settings", "Perk Crate Drop Rate Scale When Enemy Dead",  1, 0, 100, -1);
+
+    // Start watch over load
+    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 
     // show version and share code
     CreateHudText(AllPlayers(Team.Team1),
@@ -80,6 +87,17 @@ Event.OngoingGlobal
         enemyColor, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
 
+    // show HUD of team Lives
+    CreateHudText(AllPlayers(),
+        teamLives < maxTeamLives ? 
+            <"Team Lives <0>", teamLives> :
+            <"Team Lives <0> (Max Stock)", teamLives>,
+        null, null,
+        Location.Top, 3,
+        Color.Team1, Color.White, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
+
+    // show HUD of enemy team assembly
     CreateHudText(AllPlayers(),
         null,
         null,
@@ -87,12 +105,6 @@ Event.OngoingGlobal
         Location.Right, -1,
         Color.White, Color.White, Color.Purple,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
-
-    // Start watch over load
-    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
-
-    // Set initial team Lives
-    initialTeamLives = WorkshopSettingInteger("Player Settings", "Initial team lives", 6, 0, 1000, 0);
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
@@ -153,7 +165,7 @@ if(
     // If the server is not overloaded,
     //  reset slow motion every second
     // can decrease slow level
-    Wait(0.3, WaitBehavior.AbortWhenFalse);
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
     if(targetSlowLevel > 0){
         // decrease slow level
         targetSlowLevel --;
@@ -163,7 +175,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-
+/*
 rule: "ServerOverLoadMeasures/reduceOverLoadOnPlayerJoin"
 Event.OnPlayerJoin
 Team.Team1
@@ -176,7 +188,7 @@ if(
     slowControlHandler = SlowControlHandler.PlayerJoin;
 }
 
-rule: "ServerOverLoadMeasures/restartOverLoadWatching"
+disabled rule: "ServerOverLoadMeasures/restartOverLoadWatching"
 Event.OngoingGlobal
 if(
     slowControlHandler == SlowControlHandler.PlayerJoin
@@ -186,7 +198,7 @@ if(
     ApplySlowLevel(0);
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 }
-
+*/
 
 void ApplySlowLevel(define setSlowLevel!)"ApplySlowLevel"{
     // if slow level changed
@@ -259,17 +271,15 @@ Event.OngoingGlobal
 if(
     initCompleted
 ){
-    // Reset the initial spawn room closest to the center of the map
-    ForceSpawnRoom(Team.Team1, RandomValueInArray([0]));
     // Change the spawn room regularly to keep the game fluid
+    ForceSpawnRoom(Team.Team1, RandomValueInArray([0, 1, 2]));
     ForceSpawnRoom(Team.Team2, RandomValueInArray([0, 1, 2]));
-    Wait(30, WaitBehavior.AbortWhenFalse);
+    Wait(300, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
 // TAG Player ----------
 playervar define isInsidePortal!;
-
 
 // TAG Player/ReturnSpawnRoom
 rule: "Player/ReturnSpawnRoom/return"
@@ -280,23 +290,31 @@ if(
     !IsInSpawnRoom() &&
     IsButtonHeld(ep, Button.Reload)
 ){
+    AbortIf(!IsOnGround());
     // Return to spawn room with long hold on reload button
     WaitCancelPressConfirm();
     Respawn();
 }
 
-globalvar define initialTeamLives!;
-globalvar define teamLives!;
-define maxTeamLives: 12;
-
 // TAG Player/FisrtFast
-rule: "Player/FisrtFast/uodate"
+playervar define nowDead;
+
+rule: "Player/FisrtFast/setNowDead"
 Event.OngoingPlayer
 Team.Team1
 if(
-    IsInSpawnRoom() &&
+    !IsAlive()
+){
+    nowDead = true;
+}
+
+rule: "Player/FisrtFast/setFastSpeed"
+Event.OngoingPlayer
+Team.Team1
+if(
+    nowDead &&
     IsAlive() &&
-    perkState != PerkState.Using
+    IsInSpawnRoom()
 ){
     SetMoveSpeed(ep, 150);
     while(!IsInLineOfSight(ep, ClosestPlayerTo(ep, Team.Team2))){
@@ -306,21 +324,9 @@ if(
 }
 
 // TAG Player/TeamLives
-rule: "Player/TeamLives/showTeamLivesHUD"
-Event.OngoingGlobal
-if(
-    initCompleted
-){
-    // show HUD of team Lives
-    CreateHudText(AllPlayers(),
-        teamLives < maxTeamLives ? 
-            <"Team Lives <0>", teamLives> :
-            <"Team Lives <0> (Max)", teamLives>,
-        null, null,
-        Location.Top, 3,
-        Color.Team1, Color.White, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
-}
+globalvar define initialTeamLives!;
+globalvar define teamLives!;
+globalvar define maxTeamLives;
 
 rule: "Player/TeamLives/consumeTeamLives"
 Event.OngoingGlobal
@@ -372,11 +378,13 @@ rule: "Player/TeamLives/protectTeamLifeConsumeBySucide"
 Event.OnDeath
 Team.Team1
 if(
-    Attacker() == ep &&
-    DistanceBetween(ep,
-        ClosestPlayerTo(ep, Team.Team2)) > 15
+    Attacker() == ep
 ){
-    Respawn();
+    if(
+        DistanceBetween(ep, ClosestPlayerTo(ep, Team.Team2)) > 20
+    ){
+        Respawn();
+    }
 }
 
 // TAG Player/InsidePortal
@@ -1019,7 +1027,7 @@ if(
     portalState = PortalState.Growing;
 }
 
-rule: "Portal/countdownportalUncoverTime"
+rule: "Portal/countdownPortalUncoverTime"
 Event.OngoingGlobal
 if(
     portalUncoverTime > 0
@@ -1047,6 +1055,7 @@ if(
 // TAG EnemBot ----------
 define assetList:
     [
+
         [
             "tank boss",
             [EnemyType.Boss,        RandomTankHero,     1],
@@ -1077,23 +1086,8 @@ define assetList:
         ],
         [
             "five minions",
-            [EnemyType.Boss,        RandomTankHero,     1],
-            [EnemyType.Minion,      RandomSupportHero,  5]
-        ],
-        [
-            "five minions",
             [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomSupportHero,  5]
-        ],
-        [
-            "five minions",
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomTankHero,     5]
-        ],
-        [
-            "five minions",
-            [EnemyType.Boss,        RandomSupportHero,  1],
-            [EnemyType.Minion,      RandomTankHero,     5]
+            [EnemyType.Minion,      RandomDamageHero,   5]
         ],
         [
             "four elites",
@@ -1140,6 +1134,25 @@ define assetList:
             [EnemyType.Boss,        RandomSupportHero,  1],
             [EnemyType.Minion,      RandomTankHero,     3]
         ],
+
+        [
+            "clones",
+            [EnemyType.Boss,        someHero, 		    1],
+            [EnemyType.Elite,       someHero, 		    2],
+            [EnemyType.Minion,      someHero, 		    3]
+        ],
+        [
+            "double boss clones",
+            [EnemyType.Boss,        someHero, 		    1],
+            [EnemyType.Boss,        someHero, 		    1],
+            [EnemyType.Elite,       someHero, 		    1]
+        ],
+        [
+            "four elite clones",
+            [EnemyType.Elite,       someHero, 		    4],
+            [EnemyType.Minion,      someHero, 		    2]
+        ],
+
         [
             "giant boss",
             [EnemyType.GiantBoss,   RandomTankHero,     1]
@@ -1152,6 +1165,17 @@ define assetList:
             "giant boss",
             [EnemyType.GiantBoss,   RandomSupportHero,  1]
         ],
+
+        [
+            "giant boss",
+            [EnemyType.GiantBoss,   Hero.Pharah,  1]
+        ],
+
+        [
+            "giant boss",
+            [EnemyType.GiantBoss,   Hero.Reinhardt,  1]
+        ],
+
         [
             "close range",
             [EnemyType.Boss,        Hero.Reaper,        1],
@@ -1309,29 +1333,13 @@ define assetList:
             [EnemyType.Boss,        Hero.Symmetra, 		1],
             [EnemyType.Elite,       Hero.Torbjorn, 		2],
             [EnemyType.Minion,      Hero.Torbjorn, 		3]
-        ],
-        [
-            "clones",
-            [EnemyType.Boss,        someHero, 		    1],
-            [EnemyType.Elite,       someHero, 		    2],
-            [EnemyType.Minion,      someHero, 		    3]
-        ],
-        [
-            "double boss clones",
-            [EnemyType.Boss,        someHero, 		    1],
-            [EnemyType.Boss,        someHero, 		    1],
-            [EnemyType.Elite,       someHero, 		    1]
-        ],
-        [
-            "four elite clones",
-            [EnemyType.Elite,       someHero, 		    4],
-            [EnemyType.Minion,      someHero, 		    2]
         ]
+
     ];
 
 globalvar define someHero!;
 
-rule: "EnemBot/reloadBotAsset"
+rule: "EnemyBot/reloadBotAsset"
 Event.OngoingGlobal
 if(
     portalEnable
@@ -1347,7 +1355,7 @@ if(
     }
 }
 
-// TAG EnemBot/EnemyType ----------
+// TAG EnemyBot/EnemyType ----------
 playervar define eachDealtDamageScale!;
 playervar define eachMaxSpawnInterval!;
 playervar define eachChargeUltInterval!;
@@ -1355,7 +1363,7 @@ playervar define eachEffectTextSize!;
 playervar define eachNameText!;
 playervar define eachNameColor!;
 
-rule: "EnemBot/EnemyType/setEnemyType"
+rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1448,10 +1456,10 @@ if(
     }
 }
 
-// TAG EnemBot/Effect ----------
+// TAG EnemyBot/Effect ----------
 playervar define botAppearanceEntitys!;
 
-rule: "EnemBot/Effect/showBotAppearance"
+rule: "EnemyBot/Effect/showBotAppearance"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1471,7 +1479,7 @@ if(
             eachNameColor, Spectators.DefaultVisibility);
 }
 
-rule: "EnemBot/Effect/hideBotAppearanceAndReek"
+rule: "EnemyBot/Effect/hideBotAppearanceAndReek"
 Event.OnDeath
 Team.Team2
 if(
@@ -1504,7 +1512,7 @@ if(
     // else
 }
 
-// TAG EnemBot/Teleport ----------
+// TAG EnemyBot/Teleport ----------
 define teleportAreaSize: 6;
 define minDistanceToPlayerWhenTeleport: 10;
 define ClosestPlayerToTelPos: ClosestPlayerTo(teleportPosition, Team.Team1);
@@ -1669,7 +1677,7 @@ void TeleportWithEffect()"TeleportWithEffect"{
     PlayTeleportEffect(false);
 }
 
-rule: "EnemBot/Teleport/teleportByPortalDisabled"
+rule: "EnemyBot/Teleport/teleportByPortalDisabled"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1692,7 +1700,7 @@ if(
     PlayTeleportEffect(false);
 }
 
-rule: "EnemBot/Teleport/teleportByPortalEnabled"
+rule: "EnemyBot/Teleport/teleportByPortalEnabled"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1700,7 +1708,6 @@ if(
     portalEnable
 ){
     AbortIf(DistanceBetween(ep, ClosestPlayerToPortal()) <= 10);
-    AbortIf(IsDead());
     // clear root
     ClearStatus(ep, Status.Rooted);
     // set teleport position
@@ -1710,16 +1717,15 @@ if(
     }
 }
 
-rule: "EnemBot/Teleport/teleportByPlayerEntered"
+rule: "EnemyBot/Teleport/teleportByPlayerEntered"
 Event.OngoingPlayer
 Team.Team2
 if(
-    // (NormalizedHealth() > 0.5) &&
+    IsAlive() &&
     portalEnable &&
     portalState == PortalState.UnderAttack
 ){
     AbortIf(DistanceBetween(ep, ClosestPlayerToPortal()) <= 10);
-    AbortIf(IsDead());
     // set teleport position to player around
     if(SetTeleportPositionToPlayerAround()){
         // teleport
@@ -1727,23 +1733,24 @@ if(
     }
 }
 
-rule: "EnemBot/Teleport/teleportByRespawn"
+rule: "EnemyBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
 Team.Team2
 if(
+    IsAlive() &&
     portalEnable &&
     IsInSpawnRoom()
 ){
-    AbortIf(IsDead());
+    define prob! = (60 / NumberOfPlayers(Team.Team2));
     if(
         // during portal attacks
         portalState == PortalState.UnderAttack ||
         // probability
-        ProbabilityTrue(10)
+        ProbabilityTrue(prob)
     ){
         if(
             // probability
-            ProbabilityTrue((60 / NumberOfPlayers(Team.Team2)))
+            ProbabilityTrue(10)
         ){
             // set teleport position to player around
             if(SetTeleportPositionToPlayerAround()){
@@ -1768,29 +1775,35 @@ if(
     }
 }
 
-rule: "EnemBot/Teleport/teleportByPlayerNotFound"
+define hasLine:
+    IsInLineOfSight(ep,
+            ClosestPlayerToMe,
+            BarrierLOS.NoBarriersBlock);
+
+rule: "EnemyBot/Teleport/teleportByPlayerNotFound"
 Event.OngoingPlayer
 Team.Team2
 if(
-    // (NormalizedHealth() > 0.5) &&
-    portalEnable &&
-    !IsInLineOfSight(ep,
-        ClosestPlayerToMe,
-        BarrierLOS.NoBarriersBlock)
+    IsAlive() &&
+    portalEnable
 ){
-    Wait(3, WaitBehavior.AbortWhenFalse);
+    for(define notHasLineSecond! = 0; notHasLineSecond < 3; notHasLineSecond ++){
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        if(hasLine){
+            LoopIfConditionIsTrue();
+        }
+    }
 
-    AbortIf(IsDead());    
-    // Teleport bot to player front
+    define prob! = (60 / NumberOfPlayers(Team.Team2));
     if(
         // during portal attacks
         portalState == PortalState.UnderAttack ||
         // probability
-        ProbabilityTrue(10)
+        ProbabilityTrue(prob)
     ){
         if(
             // probability
-            ProbabilityTrue((60 / NumberOfPlayers(Team.Team2)))
+            ProbabilityTrue(10)
         ){
             // set teleport position to player around
             if(SetTeleportPositionToPlayerAround()){
@@ -1817,7 +1830,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "EnemBot/Teleport/clearCommonTeleportPosition"
+rule: "EnemyBot/Teleport/clearCommonTeleportPosition"
 Event.OnDeath
 Team.Team2
 if(
@@ -1827,8 +1840,47 @@ if(
     commonTeleportPosition = 0;
 }
 
-// TAG EnemBot/chargeUltimate ----------
-rule: "EnemBot/chargeUltimate"
+
+// TAG EnemyBot/EnemyAbility
+rule: "EnemyBot/EnemyAbility/shotCall"
+Event.OngoingGlobal
+if(
+    portalState == PortalState.UnderAttack
+){
+    Wait(RandomReal(10, 30));
+    SetUltimateCharge(AllPlayers(Team.Team2), 100);
+    PressButton(AllPlayers(Team.Team2), Button.Ultimate);
+}
+
+rule: "EnemyBot/EnemyAbility/combatTeleport"
+Event.OngoingPlayer
+Team.Team2
+if(
+    enemyType == EnemyType.GiantBoss &&
+    IsAlive() &&
+    portalEnable &&
+    actionState == ActionState.Attack
+){
+    define teleportWaitSecond! =
+        (NormalizedHealth() * 10) - 1;
+    teleportWaitSecond = teleportWaitSecond < 0 ? 0 : teleportWaitSecond;
+    Wait(teleportWaitSecond, WaitBehavior.AbortWhenFalse);
+    // set teleport position to player around
+    if(SetTeleportPositionToPlayerAround()){
+        define telBeam!;
+        // teleport with beam effect
+        DestroyEffect(telBeam);
+        telBeam = CreateBeamEffect(AllPlayers(),
+            BeamType.BadBeam, EyePosition(ep) + Down(), teleportPosition,
+            Color.Purple, EffectRev.VisibleToPositionAndRadius);
+        TeleportWithEffect();
+        DestroyEffect(telBeam);
+    }
+    LoopIfConditionIsTrue();
+}
+
+// TAG EnemyBot/chargeUltimate ----------
+rule: "EnemyBot/chargeUltimate"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1841,7 +1893,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG EnemBot/SpawnInterval ----------
+// TAG EnemyBot/SpawnInterval ----------
 define deadEffectTime: 2;
 playervar define confirmSpawnInterval!;
 
@@ -1853,7 +1905,7 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     SetRespawnMaxTime(ep, confirmSpawnInterval + deadEffectTime); 
 }
 
-rule: "EnemBot/SpawnInterval/update"
+rule: "EnemyBot/SpawnInterval/update"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1864,7 +1916,7 @@ if(
     LoopIf(portalSize < maxPortalSize);
 }
 
-// TAG EnemBot/ReceivedDamage ----------
+// TAG EnemyBot/ReceivedDamage ----------
 globalvar define confirmReceiveDamage!;
 
 void UpdateEachReceivedDamage()"UpdateEachReceivedDamage"{
@@ -1876,7 +1928,7 @@ void UpdateEachReceivedDamage()"UpdateEachReceivedDamage"{
     SetDamageReceived(AllPlayers(Team.Team2), confirmReceiveDamage);
 }
 
-rule: "EnemBot/ReceivedDamage/updateByBalance //for game balance, increase by missing players count"
+rule: "EnemyBot/ReceivedDamage/updateByBalance //for game balance, increase by missing players count"
 Event.OngoingGlobal
 if(
     initCompleted
@@ -1886,22 +1938,22 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG EnemBot/DealtDamage ----------
+// TAG EnemyBot/DealtDamage ----------
 playervar define confirmDealDamage!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // If don't enough players, adjust Bot dealt damage rate to make the game fair
     // And the round progresses, the Bot deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    confirmDealDamage = WorkshopSettingReal("Bot Settings", "Base Deal Damage", 30, 0, 1000, 1);
-    confirmDealDamage += roundNo * WorkshopSettingReal("Bot Settings", "Increase Deal Damage Per Round", 1.0, 0, 1000, 2);
+    confirmDealDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 30, 0, 1000, 1);
+    confirmDealDamage += roundNo * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 2.0, 0, 1000, 2);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
     confirmDealDamage /= ConvertToBalancedValue(0.75, Team.Team1);
     SetDamageDealt(ep, confirmDealDamage);
 }
 
-rule: "EnemBot/DealtDamage/update"
+rule: "EnemyBot/DealtDamage/update"
 Event.OngoingPlayer
 Team.Team2
 if(
@@ -1913,7 +1965,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "EnemBot/SpawnInterval/fastRespawnBySucide"
+rule: "EnemyBot/SpawnInterval/fastRespawnBySucide"
 Event.OnDeath
 Team.Team2
 if(
