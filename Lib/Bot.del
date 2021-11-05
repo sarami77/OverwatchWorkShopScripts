@@ -555,6 +555,43 @@ define needHealRate: 0.7;
 define watchUpdateRate:
     isServerOverLoading ? 3 : 1.5;
 
+
+define FindAttackTarget():
+    FirstOf(
+        SortedArray(
+            FilteredArray(
+                AllPlayers(OppositeTeamOf(TeamOf())),
+                (
+                    HasSpawned(ae) &&
+                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
+                    IsAlive(ae) &&
+                    !(
+                        IsStealth(ae) &&
+                        DistanceBetween(ae, ep) >= 3
+                    )
+                )
+            ),
+            DistanceBetween(ae, ep)
+        )
+    );
+
+define FindSupportTarget():
+    FirstOf(
+        SortedArray(
+            FilteredArray(
+                AllPlayers(TeamOf()),
+                (
+                    ae != ep &&
+                    HasSpawned(ae) &&
+                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
+                    IsAlive(ae) &&
+                    NormalizedHealth(ae) <= needHealRate
+                )
+            ),
+            Health(ae) - MaxHealth(ae)
+        )
+    );
+
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
 if(
@@ -565,9 +602,14 @@ if(
     //     dbgPlyBemEft(EyePosition(), EyePosition(target) - PositionOffset());
 
     define targetSighted! =
-        (target != 0) &&
+        target != 0 &&
+        HasSpawned(target) &&
+        IsInLineOfSight(ep, target, BarrierLOS.NoBarriersBlock) &&
         IsAlive(target) &&
-        IsInLineOfSight(ep, target);
+        !(
+            IsStealth(target) &&
+            DistanceBetween(target, ep) >= 3
+        );
 
     // get new target
     if(
@@ -653,42 +695,6 @@ if(
     // set next state
     actionState = ActionState.Attack; 
 }
-
-define FindAttackTarget():
-    FirstOf(
-        SortedArray(
-            FilteredArray(
-                AllPlayers(OppositeTeamOf(TeamOf())),
-                (
-                    HasSpawned(ae) &&
-                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
-                    IsAlive(ae) &&
-                    !(
-                        IsStealth(ae) &&
-                        DistanceBetween(ae, ep) >= 3
-                    )
-                )
-            ),
-            DistanceBetween(ae, ep)
-        )
-    );
-
-define FindSupportTarget():
-    FirstOf(
-        SortedArray(
-            FilteredArray(
-                AllPlayers(TeamOf()),
-                (
-                    ae != ep &&
-                    HasSpawned(ae) &&
-                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
-                    IsAlive(ae) &&
-                    NormalizedHealth(ae) <= needHealRate
-                )
-            ),
-            Health(ae) - MaxHealth(ae)
-        )
-    );
 
 playervar define actionState;
 playervar define prevActionState;
