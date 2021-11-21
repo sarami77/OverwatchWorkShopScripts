@@ -1,6 +1,6 @@
 import "PerkCore.del";
 
-define steelRange : 8;
+define steelRange : 12;
 
 rule: "Perk/Player/SteelFormation/activate"
 Event.OngoingPlayer
@@ -36,50 +36,57 @@ if(
     perkType = PerkType.Non;
 }
 
-define nearSteel:
-    CountOf(
-        FilteredArray(
-            AllPlayers(Team.Team1),
-            (
-                ArrayElement().perkType == PerkType.SteelFormation &&
-                ArrayElement().perkState  == PerkState.Using &&
-                DistanceBetween(ep, ArrayElement()) <= steelRange
-            )
-        )
-    ) > 0;
+playervar define isSteel!;
+playervar define steelEffect!;
 
-rule: "Perk/Player/SteelFormation/updateIncludePlayers"
+rule: "Perk/Player/SteelFormation/update"
 Event.OngoingPlayer
 Team.Team1
 if(
     perkType == PerkType.SteelFormation &&
     perkState  == PerkState.Using
 ){
-    perk[Perk.perkEffectStatus] = CountOf(
+    perk[Perk.perkTargets] = 
         FilteredArray(
             PlayersWithinRadius(
-                PositionOf(ep), steelRange, Team.Team1, RadiusLOS.Off
+                ep, steelRange, Team.Team1, RadiusLOS.Off
             ), IsAlive(ArrayElement())
-        )
-    );
+        );
+    perk[Perk.perkTargets].isSteel = true;
+    perk[Perk.perkEffectStatus] = CountOf(perk[Perk.perkTargets]);
     WaitUpdateMediumCycle();
     LoopIfConditionIsTrue();
 }
 
-rule: "Perk/Player/SteelFormation/enableSteel"
+rule: "Perk/Player/SteelFormation/setSteel"
 Event.OngoingPlayer
 Team.Team1
 if(
-    nearSteel
+    isSteel
 ){
-    SetDamageReceived(ep, 50);
-}
-
-rule: "Perk/Player/SteelFormation/disableSteel"
-Event.OngoingPlayer
-Team.Team1
-if(
-    !nearSteel
-){
-    SetDamageReceived(ep, 100);
+    if(
+        0 < CountOf(
+            FilteredArray(
+                PlayersWithinRadius(
+                    ep, steelRange, Team.Team1, RadiusLOS.Off
+                ), 
+                (
+                    ae.perkType == PerkType.SteelFormation &&
+                    ae.perkState == PerkState.Using
+                )
+            )
+        )
+    ){
+        SetDamageReceived(ep, 50);
+        if(steelEffect == 0)
+            steelEffect = CreateEffect(AllPlayers(), Effect.Ring, Color.Orange, ep, 1.0, EffectRev.PositionAndRadius);
+    }
+    else{
+        SetDamageReceived(ep, 100);
+        DestroyEffect(steelEffect);
+        steelEffect = 0;
+        isSteel = false;
+    }
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue();
 }
