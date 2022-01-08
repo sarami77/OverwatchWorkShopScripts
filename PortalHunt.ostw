@@ -615,15 +615,13 @@ if(
 }
 
 
-globalvar define portalUncoverTime!;
 
-define showPortal:
-    portalUncoverTime > 0 ||
-    portalState == PortalState.UnderAttack;
 
 define showPortalPlayers:
-    showPortal ?
-    AllPlayers() : AllPlayers(Team.Team2);
+    AllPlayers();
+
+define showPortalIconPlayers:
+    FilteredArray(AllPlayers(Team.Team1), DistanceBetween(ae, portalPosition) > maxPortalSize);
 
 rule: "Portal/State/Set  // waiting for found by players"
 Event.OngoingGlobal
@@ -634,12 +632,11 @@ if(
     // show Portal Entity by portal state changed to Show
     // Init param
     closingCount = 0;
-    portalUncoverTime = 0;
     // show icon
     portalEntitys = [];
-    portalEntitys[0] = CreateIcon(showPortalPlayers,
+    portalEntitys[0] = CreateIcon(showPortalIconPlayers,
         portalPosition, Icon.Spiral,
-        IconRev.VisibleToPositionAndColor, portalIconColor, true);
+        IconRev.VisibleToPositionAndColor, enemyColor, true);
     // set effect
     // sphere
     portalEntitys[1] = CreateEffect(showPortalPlayers, Effect.Sphere, enemyColor,
@@ -1029,31 +1026,6 @@ if(
     // Resume portal growing by player exit from portal
     WaitConditionConfirmed();
     portalState = PortalState.Growing;
-}
-
-rule: "Portal/countdownPortalUncoverTime"
-Event.OngoingGlobal
-if(
-    portalUncoverTime > 0
-){
-    Wait(1, WaitBehavior.AbortWhenFalse);
-    portalUncoverTime -= 1;
-    LoopIfConditionIsTrue();
-}
-
-globalvar define portalIconColor;
-
-rule: "Portal/changerPortalIconColorWhenUncover"
-Event.OngoingGlobal
-if(
-    portalState != PortalState.UnderAttack &&
-    portalUncoverTime > 0
-){
-    portalIconColor = Color.Red;
-    Wait(0.1, WaitBehavior.IgnoreCondition);
-    portalIconColor = Color.Purple;
-    Wait(0.1, WaitBehavior.IgnoreCondition);
-    LoopIfConditionIsTrue();
 }
 
 // TAG EnemBot ----------
@@ -1497,23 +1469,6 @@ if(
     // play dead effect
     PlayContinuousBlast(Color.Red, PositionOf(),
         eachEffectTextSize * 1.5, eachEffectTextSize);
-
-    if(Attacker() != ep){
-        // add portal reek time
-        if(enemyType == EnemyType.Minion){
-            portalUncoverTime += 1;
-        }
-        else if(enemyType == EnemyType.Elite){
-            portalUncoverTime += 3;
-        }
-        else if(enemyType == EnemyType.Boss){
-            portalUncoverTime += 6;
-        }
-        else if(enemyType == EnemyType.GiantBoss){
-            portalUncoverTime += 10;
-        }
-    }
-    // else
 }
 
 // TAG EnemyBot/Teleport ----------
@@ -2100,15 +2055,6 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
-            null,
-            <"<0> <1>", "portal Reek Time", portalUncoverTime>,
-            null,
-            Location.Left, -1,
-            Color.White, enemyColor, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
-    
         CreateHudText(HostPlayer(),
             null,
             <"<0> RcvDmg <1> DltDmg <2> SpwItv <3> ChgUlt <4>", "Giant Boss Status",
