@@ -139,10 +139,6 @@ playervar define attackRange;
 playervar define attackRangeMin;
 playervar define attackRangeMax;
 
-define targetPosRange: 6;
-
-define basicButtonControlTime: 5;
-
 rule: "Bot/SetActionRoutine"
 Event.OngoingPlayer
 if(
@@ -467,11 +463,11 @@ if(
         heroName = "WreckingBall";
         attackRange = AttackRange.Close;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        primaryFireButtonReleaseMax = 20;
+        primaryFireButtonReleaseMax = 15;
         primaryFireButtonPressMax = 20;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 5;
-        secondaryFireButtonPressMax = 10;
+        secondaryFireButtonPressMax = 15;
         ability1ButtonReleaseMin = 5;
         ability1ButtonReleaseMax = 10;
         break;
@@ -556,8 +552,7 @@ enum ButtonBehaivor{
 define needHealRate: 0.7;
 
 define watchUpdateRate:
-    isServerOverLoading ? 3 : 1.5;
-
+    isServerOverLoading ? 3 : 1;
 
 define FindAttackTarget():
     FirstOf(
@@ -588,7 +583,7 @@ define FindSupportTarget():
                     HasSpawned(ae) &&
                     IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
                     IsAlive(ae) &&
-                    NormalizedHealth(ae) <= needHealRate
+                    NormalizedHealth(ae) < needHealRate
                 )
             ),
             Health(ae) - MaxHealth(ae)
@@ -616,12 +611,22 @@ if(
 
     // get new target
     if(
-        !targetSighted ||       // target not Sighted
-        ProbabilityTrue(25) ||  // force change target Probability
-        (                        
-            actionState == ActionState.Support &&   // support target almost full health
-            NormalizedHealth(target) > needHealRate
-        )       
+        // target not Sighted
+        !targetSighted
+            ||
+        (
+            // if attack target higher health, search new target.
+            actionState == ActionState.Attack &&
+            ProbabilityTrue(NormalizedHealth(target) *
+            // if support hero, highly likely to search new target.
+            (supportProbability > 0) ? 100 : 50)
+        ) 
+            ||
+        (
+            // if support target higher health, search new target.
+            actionState == ActionState.Support &&
+            ProbabilityTrue(NormalizedHealth(target) * 50)
+        )
     ){
         // set target
         if(
@@ -681,8 +686,11 @@ if(
     }
     // wait check cycle
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    // for load distribution
-    Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
+    if(isServerOverLoading){
+        // for distribute load
+        Wait(RandomInteger(0, 1), WaitBehavior.AbortWhenFalse);
+    }
+    WaitUntil(!isServerOverLoading, 10);
     LoopIfConditionIsTrue();
 }
 
@@ -706,11 +714,11 @@ playervar define target;
 playervar define moveDir;
 playervar define sideStepDir;
 
-void stopMove()"stopMove"{
+void StopMove()"StopMove"{
     StopThrottleInDirection();
 } 
 
-void startMove()"startMove"{
+void StartMove()"StartMove"{
     if(moveDir != 0 && sideStepDir != 0){
         StartMoveInDir(moveDir + sideStepDir);
     }
@@ -721,7 +729,7 @@ void startMove()"startMove"{
         StartMoveInDir(moveDir);
     }
     else{
-        stopMove();
+        StopMove();
     }
 }
 
@@ -867,7 +875,7 @@ void StartFacingTarget(){
             EyePosition(),
             EyePosition(target) + RandomPosition(botAimScat, botAimScat, botAimScat)
         ),
-        200,
+        250,
         Relative.ToWorld, FacingRev.DirectionAndTurnRate
     );
 }
@@ -888,8 +896,17 @@ if(
     sideStepDir = 0;
     target = 0;
 
-    stopMove();
+    StopMove();
     StopFacing();
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
+
+    // set initial face direction
+    SetFacing(
+        ep,
+        DirectionFromAngles(
+            RandomReal(0, 360), RandomReal(30, -30),
+        ),
+        Relative.ToWorld);
 }
 
 // TAG Bot/ActionState/Attack ----------
@@ -901,18 +918,15 @@ if(
 ){
     statusText = <"Attack">;
 
-    // hero unique action
-    heroUniqueAction();
-
-    // set initial face direction
-    SetFacing(ep, EyePosition(target), Relative.ToWorld);
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
-
     // start facing direction
     StartFacingTarget();
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
     
     // action loop
     while(actionState == ActionState.Attack){
+        // hero unique action
+        heroUniqueAction();
+
         // check abyss
         define distance! = moveMeterPerSec * watchUpdateRate;
         define fAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Forward(), distance));
@@ -928,12 +942,13 @@ if(
         setSideStep(rAbyss, lAbyss);
 
         // start move by moveDir and sideStepDir
-        startMove();
+        StartMove();
 
         // check stuck
         checkAndBreakStuck();
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+        WaitUntil(!isServerOverLoading, 10);
     }
 }
 
@@ -946,18 +961,15 @@ if(
 ){
     statusText = <"Support">;
 
-    // hero unique action
-    heroUniqueAction();
-
-    // set initial face direction
-    SetFacing(ep, EyePosition(target), Relative.ToWorld);
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
-
     // start facing direction
     StartFacingTarget();
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
 
     // action loop
     while(actionState == ActionState.Support){
+        // hero unique action
+        heroUniqueAction();
+    
         // check abyss
         define distance! = moveMeterPerSec * watchUpdateRate;
         define fAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Forward(), distance));
@@ -970,12 +982,13 @@ if(
         sideStepDir = 0;
 
         // start move by moveDir and sideStepDir
-        startMove();
+        StartMove();
         
         // check stuck
         checkAndBreakStuck();
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+        WaitUntil(!isServerOverLoading, 10);
     }
 }
 
@@ -984,15 +997,42 @@ define MercyStaff: 1;
 define MercyPistol: 2;
 
 void heroUniqueAction(){
-    if(HeroOf() == Hero.Mercy){
-        if(actionState == ActionState.Attack){
-            SetWeapon(ep, MercyPistol);
+    if(actionState == ActionState.Non){
+        // reload
+        PressButton(ep, Button.Reload);
+
+    }
+    else{
+        if(HeroOf() == Hero.Mercy){
+            if(actionState == ActionState.Attack){
+                SetWeapon(ep, MercyPistol);
+            }
+            else{
+                SetWeapon(ep, MercyStaff);
+            }
         }
-        else{
-            SetWeapon(ep, MercyStaff);
+        else if(HeroOf() == Hero.WreckingBall){
+            if(
+                AbilityCooldown(ep, Button.Crouch) <= 0 &&
+                IsButtonHeld(ep, Button.Crouch) &&
+                IsOnGround(ep)
+            ){
+                // for pile driver
+                ApplyImpulse(ep, Up(),
+                    10, Relative.ToWorld, ContraryMotion.Cancel);
+            }
+
+            while(IsFiringSecondary(ep)){
+                // for ball charge
+                define boostDir! = RandomValueInArray([Right(), Forward(), Backward(), Left()]);
+                ApplyImpulse(ep, boostDir,
+                    30, Relative.ToWorld, ContraryMotion.Cancel);
+                Wait(0.5, WaitBehavior.AbortWhenFalse);
+            }
         }
     }
 }
+
 
 // TAG Bot/ButtonControl ----------
 enum ButtonControl{
@@ -1279,9 +1319,6 @@ if(
     StopHoldingButton(ep, Button.Jump);
     StopHoldingButton(ep, Button.Crouch);
     StopHoldingButton(ep, Button.Reload);
-
-    // reload
-    PressButton(ep, Button.Reload);
 }
 
 // TAG Debug ----------
