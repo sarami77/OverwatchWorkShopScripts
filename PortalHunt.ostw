@@ -64,7 +64,7 @@ Event.OngoingGlobal
     // ElapsedTimer.del
     elapsedTimerEnable = true;
     // PerkCore.del
-    perkCorePerkDropProbability =           WorkshopSettingReal("Perk Settings", "Perk Crate Drop Rate Scale When Enemy Dead",  1.25, 0, 100, -1);
+    perkCorePerkDropProbability =           WorkshopSettingReal("Perk Settings", "Perk Crate Drop Rate Scale When Enemy Dead",  1.0, 0, 100, -1);
 
     // Start watch over load
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
@@ -623,6 +623,9 @@ define showPortalPlayers:
 define showPortalIconPlayers:
     FilteredArray(AllPlayers(Team.Team1), DistanceBetween(ae, portalPosition) > maxPortalSize);
 
+define showPortalInsidePlayers:
+    FilteredArray(AllPlayers(Team.Team1), !ae.isInsidePortal);
+
 rule: "Portal/State/Set  // waiting for found by players"
 Event.OngoingGlobal
 if(
@@ -642,11 +645,11 @@ if(
     portalEntitys[1] = CreateEffect(showPortalPlayers, Effect.Sphere, enemyColor,
         portalPosition, portalSize, EffectRev.VisibleToPositionAndRadius);
     // cloud
-    portalEntitys[2] = CreateEffect(showPortalPlayers, Effect.Cloud, enemyColor,
+    portalEntitys[2] = CreateEffect(showPortalInsidePlayers, Effect.Cloud, enemyColor,
         portalPosition, portalSize * 1.5, EffectRev.VisibleToPositionAndRadius);
     // aura
     // Since visibility will be poor, display only in the center of the field of view
-    portalEntitys[3] = CreateEffect(showPortalPlayers, Effect.BadAura, enemyColor,
+    portalEntitys[3] = CreateEffect(showPortalInsidePlayers, Effect.BadAura, enemyColor,
         portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionAndRadius);
     // sound
     portalEntitys[4] = CreateEffect(AllPlayers(), Effect.EnergySound, enemyColor,
@@ -1361,13 +1364,13 @@ if(
         eachNameColor = Color.White;
         eachEffectTextSize = 1;
 
-        eachPerkDropProbability = 2;
+        eachPerkDropProbability = 3;
     }
     else if(enemyType == EnemyType.Elite){
         StartScalingPlayer(ep, 1.0, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
 
-        SetMaxHealth(ep, 250);
+        SetMaxHealth(ep, 200);
         SetHealingDealt(ep, 100);
         SetHealingReceived(ep, 100 * 1.5);
 
@@ -1379,7 +1382,7 @@ if(
         eachNameColor = Color.Yellow;
         eachEffectTextSize = 2;
 
-        eachPerkDropProbability = 10;
+        eachPerkDropProbability = 12;
     }
     else if(enemyType == EnemyType.Boss){
         StartScalingPlayer(ep, 1.5, false);
@@ -1397,7 +1400,7 @@ if(
         eachNameColor = Color.Red;
         eachEffectTextSize = 3;
 
-        eachPerkDropProbability = 40;
+        eachPerkDropProbability = 50;
     }
     else if(enemyType == EnemyType.GiantBoss){
         StartScalingPlayer(ep, 2.5, false);
@@ -1407,7 +1410,7 @@ if(
         SetHealingDealt(ep, 200);
         SetHealingReceived(ep, 200 * 1.5);
 
-        eachDealtDamageScale = 4.0;
+        eachDealtDamageScale = 3.0;
         eachChargeUltInterval = 5;
         eachMaxSpawnInterval = 20;
 
@@ -1904,7 +1907,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // If don't enough players, adjust Bot dealt damage rate to make the game fair
     // And the round progresses, the Bot deal damage increases and becomes more difficult
     // Add damage rate according to the round progress
-    confirmDealDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 30, 0, 1000, 1);
+    confirmDealDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 25, 0, 1000, 1);
     confirmDealDamage += roundNo * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 1.5, 0, 1000, 1);
     confirmDealDamage *= eachDealtDamageScale;
     // Apply balance multiplier
