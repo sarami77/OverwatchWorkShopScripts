@@ -1,8 +1,3 @@
-// [Detail]
-// [Portal Hunt -HORDE PVE] The hell portal has been opened… Defeat enemie horde that spawn from portal and close portal!  When enter portal, start sequence of close. survive to complete.  Over time, portal grow. Grown portal spawn more enemie and get harder.  Survive using PERK dropped by enemy.  PERK has uniqe buffs, new weapon, powerful custom heroes, others.  ex) GrapplingBeam, CruisingMissile, LegendaryNinja and more than 25 types!  Unlimited rounds. How many rounds can you survive?
-// [Share Code]
-// YY1N2
-
 import "PortalHunt.setting.json";
 import "Lib/Debug.del";
 import "Lib/Utility.del";
@@ -10,8 +5,8 @@ import "Lib/ElapsedTimer.del";
 import "Lib/DamageText.del";
 import "Lib/Regeneration.del";
 import "Lib/Revive.del";
-import "Lib/PerkChooser.del";
 import "Lib/Bot.del";
+import "Lib/PerkChooser.del";
 
 // // TAG duumy define ----------
 // globalvar define perkCorePerkDropProbability;
@@ -36,9 +31,6 @@ Event.OngoingGlobal
 
     // If run it right after loading the server, some scripts fail, so wait 3 seconds
     Wait(3, WaitBehavior.AbortWhenFalse);
-
-    // CreateEffect(HostPlayer(), Effect.Sphere, Color.Yellow,
-    //     commonTeleportPosition, teleportAreaSize, EffectRev.PositionAndRadius);
 
     // Cancel unnecessary default settings
     PauseMatchTime();
@@ -126,9 +118,9 @@ Event.OngoingGlobal
 define WaitUntilServerFree(){ WaitUntil(!isServerOverLoading, 5); }
 
 define slowLevel: [100, 90, 80, 70, 50];    // 0～4
-globalvar define targetSlowLevel!;
-globalvar define currentSlowLevel!;
-globalvar define slowControlHandler!;
+globalvar define targetSlowLevel;
+globalvar define currentSlowLevel;
+globalvar define slowControlHandler;
 enum SlowControlHandler{
     None,
     ServerOverLoadMeasures,
@@ -179,32 +171,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-/*
-rule: "ServerOverLoadMeasures/reduceOverLoadOnPlayerJoin"
-Event.OnPlayerJoin
-Team.Team1
-if(
-    initCompleted &&
-    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures
-){
-    // apply slow level
-    ApplySlowLevel(3);
-    slowControlHandler = SlowControlHandler.PlayerJoin;
-}
-
-disabled rule: "ServerOverLoadMeasures/restartOverLoadWatching"
-Event.OngoingGlobal
-if(
-    slowControlHandler == SlowControlHandler.PlayerJoin
-){
-    Wait(3.0, WaitBehavior.IgnoreCondition);
-    // reset slow level
-    ApplySlowLevel(0);
-    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
-}
-*/
-
-void ApplySlowLevel(define setSlowLevel!)"ApplySlowLevel"{
+void ApplySlowLevel(define setSlowLevel)"ApplySlowLevel"{
     // if slow level changed
     if(currentSlowLevel != setSlowLevel){
         // apply slow motion
@@ -330,7 +297,7 @@ if(
 // TAG Player/TeamLives
 globalvar define initialTeamLives!;
 globalvar define teamLives!;
-globalvar define maxTeamLives;
+globalvar define maxTeamLives!;
 
 rule: "Player/TeamLives/consumeTeamLives"
 Event.OngoingGlobal
@@ -1142,7 +1109,8 @@ define assetList:
         ],		
         [
             "giant boss",
-            [EnemyType.GiantBoss,   RandomSupportHero,  1]
+            [EnemyType.GiantBoss,   RandomSupportHero,  1],
+            [EnemyType.Minion,      RandomSupportHero,  2]
         ],
 
         [
@@ -1156,6 +1124,10 @@ define assetList:
         [
             "giant boss",
             [EnemyType.GiantBoss,   Hero.Sigma,     1]
+        ],
+        [
+            "giant boss",
+            [EnemyType.GiantBoss,   Hero.Doomfist,  1]
         ],
 
         [
@@ -1403,7 +1375,7 @@ if(
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
-        eachMaxSpawnInterval = 15;
+        eachMaxSpawnInterval = 20;
         eachMinSpawnInterval = 10;
 
         eachNameText = "Boss";
@@ -1423,7 +1395,7 @@ if(
 
         eachDealtDamageScale = 3.0;
         eachChargeUltInterval = 5;
-        eachMaxSpawnInterval = 15;
+        eachMaxSpawnInterval = 10;
         eachMinSpawnInterval = 5;
 
         eachNameText = "Giant Boss";
@@ -1590,6 +1562,8 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
     return true;
 }
 
+define forceUpdateCommonPositionProb: 5;
+
 Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPosition"{
     // set telPosNearTarget at closest player from commonTeleportPosition
     define telPosNearTarget! = ClosestPlayerToComTelPos;
@@ -1601,7 +1575,7 @@ Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPositio
         // invalid commonTeleportPosition
         commonTeleportPosition ==  0 ||
         // Probability
-        ProbabilityTrue(5) ||
+        ProbabilityTrue(forceUpdateCommonPositionProb) ||
         // has not line closest player from commonTeleportPosition
         !IsInLineOfSight(commonTeleportPosition, telPosNearTarget) ||                      
         // target inside teleport area
@@ -1711,6 +1685,9 @@ if(
     }
 }
 
+define forceTeleportToPlayerAroundProb: 50 / NumberOfPlayers(Team.Team2);
+define teleportToCommonPositionProb: 90;
+
 rule: "EnemyBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
 Team.Team2
@@ -1723,24 +1700,24 @@ if(
         // during portal attacks
         portalState == PortalState.UnderAttack ||
         // probability
-        ProbabilityTrue(50 / NumberOfPlayers(Team.Team2))
+        ProbabilityTrue(forceTeleportToPlayerAroundProb)
     ){
         if(
             // probability
-            ProbabilityTrue(10)
+            ProbabilityTrue(teleportToCommonPositionProb)
         ){
-            // set teleport position to player around
-            if(SetTeleportPositionToPlayerAround()){
+            // set teleport position to common position
+            if(SetTeleportPositionToCommonPosition()){
                 // teleport
                 TeleportWithEffect();
             }
         }
         else{
-            // set teleport position to common position
-            if(SetTeleportPositionToCommonPosition()){
+            // set teleport position to player around
+            if(SetTeleportPositionToPlayerAround()){
                 // teleport
                 TeleportWithEffect();
-            }       
+            }
         }
     }
     else{
@@ -1776,24 +1753,24 @@ if(
         // during portal attacks
         portalState == PortalState.UnderAttack ||
         // probability
-        ProbabilityTrue(50 / NumberOfPlayers(Team.Team2))
+        ProbabilityTrue(forceTeleportToPlayerAroundProb)
     ){
         if(
             // probability
-            ProbabilityTrue(10)
+            ProbabilityTrue(teleportToCommonPositionProb)
         ){
-            // set teleport position to player around
-            if(SetTeleportPositionToPlayerAround()){
+            // set teleport position to common position
+            if(SetTeleportPositionToCommonPosition()){
                 // teleport
                 TeleportWithEffect();
             }
         }
         else{
-            // set teleport position to common position
-            if(SetTeleportPositionToCommonPosition()){
+            // set teleport position to player around
+            if(SetTeleportPositionToPlayerAround()){
                 // teleport
                 TeleportWithEffect();
-            }       
+            }
         }
     }
     else{
@@ -1817,14 +1794,13 @@ if(
     commonTeleportPosition = 0;
 }
 
-
 // TAG EnemyBot/EnemyAbility
 rule: "EnemyBot/EnemyAbility/shotCall"
 Event.OngoingGlobal
 if(
     portalState == PortalState.UnderAttack
 ){
-    Wait(RandomReal(10, 30));
+    Wait(RandomReal(10, 30), WaitBehavior.AbortWhenFalse);
     SetUltimateCharge(AllPlayers(Team.Team2), 100);
     PressButton(AllPlayers(Team.Team2), Button.Ultimate);
 }
@@ -1926,6 +1902,7 @@ if(
 
 // TAG EnemyBot/DealtDamage ----------
 playervar define confirmDealtDamage!;
+globalvar define threatLevel!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
@@ -1933,11 +1910,13 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // add round progress
     confirmDealtDamage += roundNo * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 2, 0, 1000, 1);
     // add team lives balance
-    confirmDealtDamage += teamLives * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Team lives", 1, 0, 1000, 1);
+    //confirmDealtDamage += teamLives * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Team lives", 2, 0, 1000, 1);
     // add team health balance
-    confirmDealtDamage += GetTeamNormalizedHealth() * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage By Team Health", 10, 0, 1000, 1);
+    confirmDealtDamage += GetTeamNormalizedHealth() * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage By Player Team Health", 20, 0, 1000, 1);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(0.6, Team.Team1);
+        // set strengthScore
+        threatLevel = confirmDealtDamage;
     // apply enemy type scale
     confirmDealtDamage *= eachDealtDamageScale;
     SetDamageDealt(ep, confirmDealtDamage);
@@ -1955,7 +1934,6 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG EnemyBot ----------
 Number GetTeamNormalizedHealth()"UpdateEachDealtDamage"{
     define teamHealth = 0;
     define teamList! = AllPlayers(Team.Team1);
@@ -1964,6 +1942,16 @@ Number GetTeamNormalizedHealth()"UpdateEachDealtDamage"{
     }
     teamHealth /= CountOf(teamList);
     return teamHealth;
+}
+
+// TAG Debug ----------
+disabled rule: "Debug/builtin"
+Event.OngoingGlobal
+if(
+    initCompleted
+){
+    CreateEffect(HostPlayer(), Effect.Sphere, Color.Yellow,
+        commonTeleportPosition, teleportAreaSize, EffectRev.PositionAndRadius);
 }
 
 globalvar define debugMode!;
@@ -2005,17 +1993,17 @@ if(
     else if(debugMode == DebugMode.SlowLevelOnly){
         DisableInspectorRecording();
         HideDebugHud();
-        ShowDebugHud();
+        ShowDebugHud(HostPlayer());
     }
     else if(debugMode == DebugMode.ShowParam){
         DisableInspectorRecording();
         HideDebugHud();
-        ShowDebugHud();
+        ShowDebugHud(HostPlayer());
     }
     else if(debugMode == DebugMode.WithRecord){
         EnableInspectorRecording();
         HideDebugHud();
-        ShowDebugHud();
+        ShowDebugHud(HostPlayer());
     }
 }
 
@@ -2024,7 +2012,7 @@ define botOfEnemyType(define enemyType): FirstOf(FilteredArray(AllPlayers(Team.T
 globalvar define debugHudEntitys!;
 
 // show debug icon and hud
-void ShowDebugHud()"ShowDebugHud"{
+void ShowDebugHud(define player!)"ShowDebugHud"{
     if(
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
@@ -2032,7 +2020,7 @@ void ShowDebugHud()"ShowDebugHud"{
         if(
             debugMode == DebugMode.WithRecord
         ){
-            CreateHudText(HostPlayer(),
+            CreateHudText(player,
                 null,
                 null,
                 "● is Recording",
@@ -2042,7 +2030,7 @@ void ShowDebugHud()"ShowDebugHud"{
             debugHudEntitys[End()] = LastTextID();
         }
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> <1>", "Regeneration Rate", regenRateTeam1>,
             null,
@@ -2051,7 +2039,7 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> <1>", "portal State", portalState>,
             null,
@@ -2060,7 +2048,7 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> <1>", "portal Size", portalSize>,
             null,
@@ -2069,7 +2057,7 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> <1>", "portal Position", portalPosition>,
             null,
@@ -2078,7 +2066,7 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> <1>", "distance to protal", DistanceBetween(ep, portalPosition)>,
             null,
@@ -2087,7 +2075,7 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> RcvDmg <1> DltDmg <2> SpwItv <3> ChgUlt <4>", "Giant Boss Status",
                 confirmReceiveDamage,
@@ -2101,7 +2089,7 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> RcvDmg <1> DltDmg <2> SpwItv <3> ChgUlt <4>", "Boss Status",
                 confirmReceiveDamage,
@@ -2115,7 +2103,7 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> RcvDmg <1> DltDmg <2> SpwItv <3> ChgUlt <4>", "Elite Status",
                 confirmReceiveDamage,
@@ -2129,7 +2117,7 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> RcvDmg <1> DltDmg <2> SpwItv <3> ChgUlt <4>", "Minion Status",
                 confirmReceiveDamage,
@@ -2143,7 +2131,16 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
+            null,
+            <"<0> <1>", "threat Level", threatLevel>,
+            null,
+            Location.Left, -1,
+            Color.White, Color.Red, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
+
+        CreateHudText(player,
             null,
             <"<0> <1>/<2>", "environment Death Count", environmentDeathCount, environmentDeathLimit>,
             null,
@@ -2152,7 +2149,7 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> <1>/<2>", "no Contact Time", notContactTime, limitTime>,
             null,
@@ -2162,7 +2159,7 @@ void ShowDebugHud()"ShowDebugHud"{
         debugHudEntitys[End()] = LastTextID();
     }
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> <1>", "Server Load", ServerLoad()>,
             null,
@@ -2175,7 +2172,7 @@ void ShowDebugHud()"ShowDebugHud"{
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
     ){
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> <1>", "Server Load Average", ServerLoadAverage()>,
             null,
@@ -2184,7 +2181,7 @@ void ShowDebugHud()"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> <1>", "Server Load Peak", ServerLoadPeak()>,
             null,
@@ -2194,7 +2191,7 @@ void ShowDebugHud()"ShowDebugHud"{
         debugHudEntitys[End()] = LastTextID();
     }
 
-        CreateHudText(HostPlayer(),
+        CreateHudText(player,
             null,
             <"<0> <1>", "current Slow Level", currentSlowLevel>,
             null,
