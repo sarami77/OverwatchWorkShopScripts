@@ -2,6 +2,9 @@ import "EnemyRush.setting.json";
 import "Lib/Debug.del";
 import "Lib/Utility.del";
 import "Lib/Bot.del";
+import "Lib/Regeneration.del";
+import "Lib/Revive.del";
+// import "Lib/DamageText.del";
 
 // TAG Signature and infomation ----------
 disabled rule: "ENEMY RUSH [HORDE_PVE]"-1{}
@@ -12,8 +15,8 @@ disabled rule: "Original source code was created by [sarami77#1868]"-1{}
 disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopScripts"-1{}
 
 // TAG Initialize ----------
-define playerTeam: Team.Team1;
-define enemyTeam: Team.Team2;
+define playerTeam: Team.Team2;
+define enemyTeam: Team.Team1;
 
 globalvar define initCompleted!;
 
@@ -28,32 +31,51 @@ Event.OngoingGlobal
 
     // Cancel unnecessary default settings
 
+    // Set imported functions public property for user tuning
+    // Regeneration.del
+    regenerationEnableTeam = Team.Team2;
+    regenerationNeedBalanceTeam2 = true;
+    regenerationStartWaitSecondTeam2 =      WorkshopSettingReal("Player Settings", "Regeneration Start Wait Second",            3, 0, 100, 2);
+    regenerationHealthPerSecondTeam2 =      WorkshopSettingReal("Player Settings", "Regeneration Health Per Second",            25, 0, 1000, 3);
+    // Revive.del
+    reviveEnableTeam = Team.Team2;
+    reviveTimeLimit =                       WorkshopSettingReal("Player Settings", "Revive Time Limit",                         10, 0, 100, 4);
+    reviveRange =                           WorkshopSettingReal("Player Settings", "Revive Range",                              3, 0, 100, 5);
+    reviveCompleteSecond =                  WorkshopSettingReal("Player Settings", "Revive Complete Second",                    5, 0, 100, 6);
+    // DamageText.del
+    // damageTextEnableTeam = Team.Team1;
+
     // Start watch over load
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 
     // show version and share code
-    CreateHudText(AllPlayers(playerTeam),
+    CreateHudText(AllPlayers(),
         null, "ENEMY RUSH [HORDE_PVE]", null,
         Location.Left, -3,
         Color.White, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
 
+    // show HUD of enemy team assembly
+    CreateHudText(AllPlayers(),
+        null,
+        null,
+        <"Enemy Team Assembly \"<0>\"", enemyTeamName>,
+        Location.Right, -1,
+        Color.White, Color.White, Color.Purple,
+        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
-
-    while(true){
-        dbgPlyEft(CurrentObjectPosition());
-        Wait(1);
-    }
 }
 
+define phaseTime: 5;
 
 rule: "Initialize/shortenAssemblingHeroes"
 Event.OngoingGlobal
 if(
     IsAssemblingHeroes()
 ){
-    SetMatchTime(1);
+    SetMatchTime(phaseTime);
 }
 
 rule: "Initialize/shortenSetup"
@@ -61,7 +83,7 @@ Event.OngoingGlobal
 if(
     IsInSetup()
 ){
-    SetMatchTime(1);
+    SetMatchTime(phaseTime);
 }
 
 // TAG ServerOverLoadMeasures ----------
@@ -130,297 +152,87 @@ void ApplySlowLevel(define setSlowLevel)"ApplySlowLevel"{
     }
 }
 
+// TAG Payload ----------
+globalvar define prevPayloadPosition!;
+
+globalvar define payloadDirection!;
+
+rule: "Payload/updatePayloadDirection"
+Event.OngoingGlobal
+if(
+    PayloadProgressPercentage() > 0
+){
+    prevPayloadPosition = PayloadPosition();
+
+    while(true){
+        define nowPayloadPosition = PayloadPosition();
+        if(
+            DistanceBetween(nowPayloadPosition, prevPayloadPosition) > 0.01
+        ){
+            payloadDirection = DirectionTowards(prevPayloadPosition, nowPayloadPosition);
+            prevPayloadPosition = nowPayloadPosition;
+        }
+        Wait(1);
+    }
+    LoopIfConditionIsTrue();
+}
+
+// TAG Player ----------
+// TAG Player/FisrtFast
+rule: "Player/FisrtFast/setFastSpeed"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsAlive() &&
+    IsInSpawnRoom()
+){
+    SetMoveSpeed(ep, 150);
+    while(!IsInLineOfSight(ep, ClosestPlayerTo(ep, enemyTeam))){
+        Wait(1, WaitBehavior.IgnoreCondition);
+    }
+    SetMoveSpeed(ep, 100);
+}
+
 // TAG EnemBot ----------
 define assetList:
     [
 
         [
-            "tank boss",
-            [EnemyType.Boss,        RandomTankHero,     1],
-            [EnemyType.Elite,       RandomDamageHero,   1],
-            [EnemyType.Elite,       RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomSupportHero,  3]
+            "basic",
+            [EnemyType.Boss,        RandomHero, 1],
+            [EnemyType.Elite,       RandomHero, 4],
+            [EnemyType.Minion,      RandomHero, 9]
         ],
         [
-            "support boss",
-            [EnemyType.Boss,        RandomSupportHero,  1],
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Minion,      RandomDamageHero,   3]
-        ],
-        [
-            "damage boss",
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Elite,       RandomSupportHero,  1],
-            [EnemyType.Elite,       RandomSupportHero,  1],
-            [EnemyType.Minion,      RandomTankHero,     3]
-        ],
-        [
-            "damage boss",
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Minion,      RandomSupportHero,  3]
-        ],
-        [
-            "five minions",
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomDamageHero,   5]
-        ],
-        [
-            "four elites",
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Elite,       RandomDamageHero,   1],
-            [EnemyType.Elite,       RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomSupportHero,  1],
-            [EnemyType.Minion,      RandomSupportHero,  1]
-        ],
-        [
-            "four elites",
-            [EnemyType.Elite,       RandomSupportHero,  1],
-            [EnemyType.Elite,       RandomSupportHero,  1],
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Elite,       RandomTankHero,     1],
-            [EnemyType.Minion,      RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomDamageHero,   1]
-        ],
-        [
-            "four elites",
-            [EnemyType.Elite,       RandomDamageHero,   1],
-            [EnemyType.Elite,       RandomDamageHero,   1],
-            [EnemyType.Elite,       RandomSupportHero,  1],
-            [EnemyType.Elite,       RandomSupportHero,  1],
-            [EnemyType.Minion,      RandomTankHero,     1],
-            [EnemyType.Minion,      RandomTankHero,     1]
+            "basic",
+            [EnemyType.Boss,        RandomHero, 1],
+            [EnemyType.Elite,       RandomHero, 5],
+            [EnemyType.Minion,      RandomHero, 8]
         ],        
         [
-            "double bosses",
-            [EnemyType.Boss,        RandomTankHero,     1],
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomSupportHero,  4]
+            "all elite",
+            [EnemyType.Elite,       RandomHero, 4],
+            [EnemyType.Elite,       RandomHero, 5],
+            [EnemyType.Elite,       RandomHero, 5]
         ],
         [
-            "double bosses",
-            [EnemyType.Boss,        RandomSupportHero,  1],
-            [EnemyType.Boss,        RandomTankHero,     1],
-            [EnemyType.Minion,      RandomDamageHero,   4]
+            "all minion",
+            [EnemyType.Minion,      RandomHero, 4],
+            [EnemyType.Minion,      RandomHero, 5],
+            [EnemyType.Minion,      RandomHero, 5]
         ],
         [
-            "double bosses",
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Boss,        RandomSupportHero,  1],
-            [EnemyType.Minion,      RandomTankHero,     4]
-        ],
-
-        [
-            "clones",
-            [EnemyType.Boss,        someHero, 		    1],
-            [EnemyType.Elite,       someHero, 		    2],
-            [EnemyType.Minion,      someHero, 		    3]
-        ],
-        [
-            "double boss clones",
-            [EnemyType.Boss,        someHero, 		    1],
-            [EnemyType.Boss,        someHero, 		    1],
-            [EnemyType.Elite,       someHero, 		    2]
-        ],
-        [
-            "four elite clones",
-            [EnemyType.Elite,       someHero, 		    4],
-            [EnemyType.Minion,      someHero, 		    2]
-        ],
-
-        [
-            "giant boss",
-            [EnemyType.GiantBoss,   RandomTankHero,     1]
+            "dual boss",
+            [EnemyType.Boss,        RandomHero, 2],
+            [EnemyType.Elite,       RandomHero, 3],
+            [EnemyType.Minion,      RandomHero, 9]
         ],
         [
             "giant boss",
-            [EnemyType.GiantBoss,   RandomDamageHero,   1]
-        ],		
-        [
-            "giant boss",
-            [EnemyType.GiantBoss,   RandomSupportHero,  1],
-            [EnemyType.Minion,      RandomSupportHero,  2]
-        ],
-
-        [
-            "giant boss",
-            [EnemyType.GiantBoss,   Hero.Pharah,  1]
-        ],
-        [
-            "giant boss",
-            [EnemyType.GiantBoss,   Hero.Reinhardt,  1]
-        ],
-        [
-            "giant boss",
-            [EnemyType.GiantBoss,   Hero.Sigma,     1]
-        ],
-        [
-            "giant boss",
-            [EnemyType.GiantBoss,   Hero.Doomfist,  1]
-        ],
-
-        [
-            "close range",
-            [EnemyType.Boss,        Hero.Reaper,        1],
-            [EnemyType.Elite,       Hero.Roadhog,       2],
-            [EnemyType.Elite,       Hero.Doomfist,      1],
-            [EnemyType.Minion,      Hero.Mei,           2]
-        ],
-        [
-            "close range",
-            [EnemyType.Boss,        Hero.Mei,           1],
-            [EnemyType.Elite,       Hero.Doomfist,      2],
-            [EnemyType.Elite,       Hero.Roadhog,       1],
-            [EnemyType.Minion,      Hero.Reaper,        2]
-        ],
-        [
-            "close range",
-            [EnemyType.Boss,        Hero.Doomfist,      1],
-            [EnemyType.Elite,       Hero.Mei,           2],
-            [EnemyType.Elite,       Hero.Reaper,        1],
-            [EnemyType.Minion,      Hero.Roadhog,       2]
-        ],
-        [
-            "melees",
-            [EnemyType.Boss,        Hero.Reinhardt,     1],
-            [EnemyType.Elite,       Hero.Doomfist,      2],
-            [EnemyType.Elite,       Hero.Mercy,         1],
-            [EnemyType.Minion,      Hero.Brigitte,      2]
-        ],
-        [
-            "melees",
-            [EnemyType.Boss,        Hero.Doomfist,      1],
-            [EnemyType.Elite,       Hero.Reinhardt,     1],
-            [EnemyType.Elite,       Hero.Brigitte,      2],
-            [EnemyType.Minion,      Hero.Mercy,         2]
-        ],
-        [
-            "flankers",
-            [EnemyType.Boss,        Hero.Soldier76,     1],
-            [EnemyType.Elite,       Hero.Doomfist,      1],
-            [EnemyType.Elite,       Hero.Genji,         1],
-            [EnemyType.Minion,      Hero.Tracer,        3]
-        ],
-        [
-            "flankers",
-            [EnemyType.Boss,        Hero.Genji,         1],
-            [EnemyType.Elite,       Hero.Doomfist,      1],
-            [EnemyType.Elite,       Hero.Tracer,        1],
-            [EnemyType.Minion,      Hero.Soldier76,     3]
-        ],
-        [
-            "long range",
-            [EnemyType.Boss,        Hero.Orisa, 		1],
-            [EnemyType.Elite,       Hero.Bastion, 		1],
-            [EnemyType.Elite,       Hero.Ana, 	        2],
-            [EnemyType.Minion,      Hero.Soldier76, 	2]
-        ],
-        [
-            "long range",
-            [EnemyType.Boss,        Hero.Bastion, 		1],
-            [EnemyType.Elite,       Hero.Orisa, 		1],
-            [EnemyType.Elite,       Hero.Soldier76, 	2],
-            [EnemyType.Minion,      Hero.Ana, 	        2]
-        ],
-        [
-            "air forces",
-            [EnemyType.Elite,       Hero.Echo, 			2],
-            [EnemyType.Elite,       Hero.Pharah, 		2],
-            [EnemyType.Minion,      Hero.Mercy, 		2]
-        ],
-        [
-            "sky queen",
-            [EnemyType.Boss,        Hero.Pharah, 		1],
-            [EnemyType.Elite,       Hero.Mercy, 		3],
-            [EnemyType.Minion,      Hero.Mercy, 		2]
-        ],
-        [
-            "sky queen",
-            [EnemyType.Boss,        Hero.Echo, 		    1],
-            [EnemyType.Elite,       Hero.Mercy, 		3],
-            [EnemyType.Minion,      Hero.Mercy, 		2]
-        ],
-        [
-            "sky queen",
-            [EnemyType.Boss,        Hero.Mercy, 		1],
-            [EnemyType.Elite,       Hero.Pharah, 		3],
-            [EnemyType.Minion,      Hero.Echo, 		    2]
-        ],
-        [
-            "snipers",
-            [EnemyType.Boss,        Hero.Hanzo,			1],
-            [EnemyType.Boss,        Hero.Widowmaker,	1],
-            [EnemyType.Elite,       Hero.Ashe, 			2],
-            [EnemyType.Minion,      Hero.Ana, 			2]
-        ],
-        [
-            "snipers",
-            [EnemyType.Boss,        Hero.Widowmaker,	1],
-            [EnemyType.Boss,        Hero.Ana,	        1],
-            [EnemyType.Elite,       Hero.Hanzo, 		2],
-            [EnemyType.Minion,      Hero.Ashe, 	        2]
-        ],
-        [
-            "snipers",
-            [EnemyType.Boss,        Hero.Ashe,			1],
-            [EnemyType.Boss,        Hero.Hanzo,	        1],
-            [EnemyType.Elite,       Hero.Ana, 		    2],
-            [EnemyType.Minion,      Hero.Widowmaker, 	2]
-        ],
-        [
-            "machines",
-            [EnemyType.Boss,        Hero.Orisa, 		1],
-            [EnemyType.Elite,       Hero.Bastion, 		2],
-            [EnemyType.Elite,       Hero.Echo,          2],
-            [EnemyType.Minion,      Hero.Zenyatta,      1]
-        ],
-        [
-            "machines",
-            [EnemyType.Boss,        Hero.Bastion, 		1],
-            [EnemyType.Elite,       Hero.Zenyatta, 		2],
-            [EnemyType.Elite,       Hero.Orisa,         2],
-            [EnemyType.Minion,      Hero.Echo,          1]
-        ],
-        [
-            "machines",
-            [EnemyType.Boss,        Hero.Echo, 		    1],
-            [EnemyType.Elite,       Hero.Zenyatta, 		2],
-            [EnemyType.Elite,       Hero.Bastion,       2],
-            [EnemyType.Minion,      Hero.Orisa,         1]
-        ],
-        [
-            "machines",
-            [EnemyType.Boss,        Hero.Zenyatta, 		1],
-            [EnemyType.Elite,       Hero.Bastion, 		2],
-            [EnemyType.Elite,       Hero.Orisa,         2],
-            [EnemyType.Minion,      Hero.Echo,          1]
-        ],
-        [
-            "Reinhardt army",
-            [EnemyType.Boss,        Hero.Reinhardt, 	1],
-            [EnemyType.Minion,      Hero.Reinhardt, 	5]
-        ],
-        [
-            "Brigitte army",
-            [EnemyType.Boss,        Hero.Reinhardt, 	1],
-            [EnemyType.Minion,      Hero.Brigitte,   	5]
-        ],
-        [
-            "turrets",
-            [EnemyType.Boss,        Hero.Torbjorn, 		1],
-            [EnemyType.Elite,       Hero.Symmetra, 		2],
-            [EnemyType.Minion,      Hero.Symmetra, 		3]
-        ],
-        [
-            "turrets",
-            [EnemyType.Boss,        Hero.Symmetra, 		1],
-            [EnemyType.Elite,       Hero.Torbjorn, 		2],
-            [EnemyType.Minion,      Hero.Torbjorn, 		3]
+            [EnemyType.GiantBoss,   RandomHero, 1],
+            [EnemyType.Minion,      RandomHero, 4],
+            [EnemyType.Minion,      RandomHero, 4]
         ]
-
     ];
 
 globalvar define someHero!;
@@ -432,20 +244,15 @@ if(
     !IsInSetup()
 ){
     dbgMsg("reloadBotAsset");
-    // change bot asset by random
-    if(
-        0 >= NumberOfPlayers(enemyTeam) ||
-        ProbabilityTrue(70)
-    ){
-        someHero = RandomHero;
-        // create all bot
-        CreateEnemyBotsByAssetList(assetList, enemyTeam);
-    }
-    Wait(10, WaitBehavior.AbortWhenFalse);
+    someHero = RandomHero;
+    // create all bot
+    CreateEnemyBotsByAssetList(assetList, enemyTeam);
+    Wait(RandomInteger(60, 120), WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
 // TAG EnemyBot/EnemyType ----------
+playervar define eachThreatLevel!;
 playervar define eachDealtDamageScale!;
 playervar define eachMaxSpawnInterval!;
 playervar define eachMinSpawnInterval!;
@@ -463,6 +270,7 @@ if(
     enemyType != EnemyType.None
 ){
     if(enemyType == EnemyType.Minion){
+        eachThreatLevel = 1;
         StartScalingPlayer(ep, 0.75, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
 
@@ -472,9 +280,9 @@ if(
         SetHealingReceived(ep, 75);
         
         eachDealtDamageScale = 0.5;
-        eachChargeUltInterval = 60;
-        eachMaxSpawnInterval = 5;
-        eachMinSpawnInterval = 0;
+        eachChargeUltInterval = 90;
+        eachMaxSpawnInterval = 15;
+        eachMinSpawnInterval = 7.5;
 
         eachNameText = "Minion";
         eachNameColor = Color.White;
@@ -483,6 +291,7 @@ if(
         eachPerkDropProbability = 3;
     }
     else if(enemyType == EnemyType.Elite){
+        eachThreatLevel = 4;
         StartScalingPlayer(ep, 1.0, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
 
@@ -492,9 +301,9 @@ if(
         SetHealingReceived(ep, 150);
 
         eachDealtDamageScale = 1.0;
-        eachChargeUltInterval = 20;
-        eachMaxSpawnInterval = 10;
-        eachMinSpawnInterval = 5;
+        eachChargeUltInterval = 30;
+        eachMaxSpawnInterval = 30;
+        eachMinSpawnInterval = 15;
 
         eachNameText = "Elite";
         eachNameColor = Color.Yellow;
@@ -503,6 +312,7 @@ if(
         eachPerkDropProbability = 12;
     }
     else if(enemyType == EnemyType.Boss){
+        eachThreatLevel = 20;
         StartScalingPlayer(ep, 1.5, false);
         StartModifyingHeroVoiceLines(ep, 0.5, false);
 
@@ -513,8 +323,8 @@ if(
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
-        eachMaxSpawnInterval = 20;
-        eachMinSpawnInterval = 10;
+        eachMaxSpawnInterval = 60;
+        eachMinSpawnInterval = 30;
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
@@ -523,6 +333,7 @@ if(
         eachPerkDropProbability = 50;
     }
     else if(enemyType == EnemyType.GiantBoss){
+        eachThreatLevel = 40;
         StartScalingPlayer(ep, 2.5, false);
         StartModifyingHeroVoiceLines(ep, 0.1, false);
 
@@ -531,10 +342,10 @@ if(
         SetHealingDealt(ep, 200);
         SetHealingReceived(ep, 300);
 
-        eachDealtDamageScale = 3.0;
-        eachChargeUltInterval = 5;
-        eachMaxSpawnInterval = 10;
-        eachMinSpawnInterval = 5;
+        eachDealtDamageScale = 4.0;
+        eachChargeUltInterval = 10;
+        eachMaxSpawnInterval = 60;
+        eachMinSpawnInterval = 30;
 
         eachNameText = "Giant Boss";
         eachNameColor = Color.Purple;
@@ -598,6 +409,7 @@ if(
 }
 
 // TAG EnemyBot/Teleport ----------
+globalvar define prvPayloadPos;
 Vector CurrentObjectPosition()"CurrentObjectPosition"{
     Vector objPos;
     define mode = CurrentGameMode();
@@ -605,28 +417,42 @@ Vector CurrentObjectPosition()"CurrentObjectPosition"{
     if(mode == GameMode.Assault){
         objPos = ObjectivePosition(CurrentObjectNo());
     }
-    else if(
-        mode == GameMode.Escort ||
-        mode == GameMode.Hybrid
-    ){
+    else if(mode == GameMode.Escort){
         objPos = PayloadPosition();
     }
+    else if(mode == GameMode.Hybrid)
+    {
+        if(CurrentObjectNo() == 0){
+            objPos = ObjectivePosition(CurrentObjectNo());
+        }
+        else{
+            objPos = PayloadPosition();
+        }
+    }
     else{
-        dbgHudTxt("ERROR ON ObjectPosition");
+        dbgHudTxt("ERROR ON CurrentObjectPosition");
     }
     return objPos;
 }
 
 Number CurrentObjectNo()"CurrentObjectNo"{
-    if(!IsObjectiveComplete(0)) return 0;
-    if(!IsObjectiveComplete(1)) return 1;
-    if(!IsObjectiveComplete(2)) return 2;
-    if(!IsObjectiveComplete(3)) return 3;
-    if(!IsObjectiveComplete(4)) return 4;
-    else return -1;
+    Number curObjNo;
+    if(!IsObjectiveComplete(0)){
+        curObjNo = 0;
+    }
+    else if(!IsObjectiveComplete(1)){
+        curObjNo = 1;
+    }
+    else if(!IsObjectiveComplete(2)){
+        curObjNo = 2;
+    }
+    else{
+        dbgHudTxt("ERROR ON CurrentObjectNo");
+    }
+    return curObjNo;
 }
 
-define teleportAreaSize: 7;
+define teleportAreaSize: 10;
 define ClosestPlayerToTelPos: ClosestPlayerTo(teleportPosition, playerTeam);
 define ClosestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, playerTeam);
 define ClosestPlayerToMe: ClosestPlayerTo(ep, playerTeam);
@@ -651,11 +477,12 @@ playervar define teleportPosition!;
 globalvar define commonTeleportPosition!;
 
 Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
+    // dbgHudTxt("SetTeleportPositionToPlayerFront");
+
     // set teleportToTarget at closest player from Object
     define teleportToTarget! = ClosestPlayerFromObject();
     if(teleportToTarget == null){
-        teleportPosition = CurrentObjectPosition();
-        return true;
+        return false;
     }
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         // select teleportPosition from middle of Object and teleportToTarget
@@ -689,17 +516,25 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
 }
 
 Boolean SetTeleportPositionToObject()"SetTeleportPositionToObjectt"{
+    // dbgHudTxt("SetTeleportPositionToObjectt");
+
     // set teleportToTarget at closest player from Object
-    teleportPosition = CurrentObjectPosition() + RandomPosition(3, 0, 3);
+    teleportPosition = CurrentObjectPosition() + RandomPosition(teleportAreaSize, 0, teleportAreaSize);
     return true;
 }
 
-Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
-    // set teleportToTarget at closest player from Object
-    define teleportToTarget! = ClosestPlayerFromObject();
+Boolean SetTeleportPositionToObjectAround()"SetTeleportPositionToObjectAround"{
+    // dbgHudTxt("SetTeleportPositionToObjectAround");
+
+    // set teleportToTarget at Object
+    define teleportToTarget! = CurrentObjectPosition() + PositionOffset();
+
+    if(payloadDirection != 0){
+        teleportToTarget = BlockedPositon(teleportToTarget, payloadDirection, 50);
+    }
+
     if(teleportToTarget == null){
-        teleportPosition = CurrentObjectPosition();
-        return true;
+        return false;
     }
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         // select teleportPosition from teleportToTarget around
@@ -712,7 +547,9 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
                 RandomReal(teleportAreaSize, 50)
             );
         // slide teleportPosition to targer for avoid map surface edge
-        teleportPosition += DirectionTowards(teleportPosition, teleportToTarget);
+        teleportPosition += DirectionTowards(teleportPosition, teleportToTarget) * teleportAreaSize;
+        // random
+        teleportPosition += RandomPosition(teleportPosition, 0, teleportPosition);
         
         define telPosNearTarget! = ClosestPlayerToTelPos;
         if(
@@ -724,7 +561,6 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
                 &&
             // Has ground of teleport position
             IsBlockedBetween(teleportPosition, ShiftedPosition(teleportPosition, Down(), 6))
-
         ){
             break;
         }
@@ -738,11 +574,12 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
 define forceUpdateCommonPositionProb: 5;
 
 Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPosition"{
+    // dbgHudTxt("SetTeleportPositionToCommonPosition");
+
     // set telPosNearTarget at closest player from commonTeleportPosition
     define telPosNearTarget! = ClosestPlayerToComTelPos;
     if(telPosNearTarget == null){
-        teleportPosition = CurrentObjectPosition();
-        return true;
+        return false;
     }
     if(
         // invalid commonTeleportPosition
@@ -756,7 +593,7 @@ Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPositio
     ){
         // new select common position
         // set teleport position to player around
-        if(SetTeleportPositionToPlayerAround()){
+        if(SetTeleportPositionToObjectAround()){
             // save teleport position as common position
             commonTeleportPosition = teleportPosition;
         }
@@ -785,7 +622,6 @@ void PlayTeleportEffect(define isBefore!)"PlayTeleportEffect"{
     else{
         // play teleport blast
         PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, ep, eachEffectTextSize);
-
     }
 }
 
@@ -800,7 +636,7 @@ void TeleportWithEffect()"TeleportWithEffect"{
 }
 
 
-define forceTeleportToPlayerAroundProb: 50 / NumberOfPlayers(enemyTeam);
+define forceTeleportToPlayerAroundProb: 50;
 define teleportToCommonPositionProb: 90;
 
 define IsPlayerOnObject: ([] != AllPlayersOnObjective(playerTeam));
@@ -830,7 +666,7 @@ if(
         }
         else{
             // set teleport position to player around
-            if(SetTeleportPositionToPlayerAround()){
+            if(SetTeleportPositionToObjectAround()){
                 // teleport
                 TeleportWithEffect();
             }
@@ -865,7 +701,7 @@ if(
         Wait(1, WaitBehavior.AbortWhenFalse);
         if(
             IsInLineOfSight(ep,
-                ClosestPlayerToMe,
+                ClosestPlayerFromObject(),
                 BarrierLOS.NoBarriersBlock)
         ){
             LoopIfConditionIsTrue();
@@ -890,7 +726,7 @@ if(
         }
         else{
             // set teleport position to player around
-            if(SetTeleportPositionToPlayerAround()){
+            if(SetTeleportPositionToObjectAround()){
                 // teleport
                 TeleportWithEffect();
             }
@@ -938,7 +774,7 @@ if(
     define teleportWaitSecond! = NormalizedHealth() * 10;
     Wait(RandomReal(teleportWaitSecond, teleportWaitSecond + 3), WaitBehavior.AbortWhenFalse);
     // set teleport position to player around
-    if(SetTeleportPositionToPlayerAround()){
+    if(SetTeleportPositionToObjectAround()){
         define telBeam!;
         // teleport with beam effect
         DestroyEffect(telBeam);
@@ -966,16 +802,51 @@ if(
 }
 
 // TAG EnemyBot/SpawnInterval ----------
-define showDeadEffectTime: 1.5;
+define showDeadEffectTime: 5;
 playervar define confirmSpawnInterval!;
 
+Number TotalObjectProgress()"TotalObjectProgress"{
+    Number progress;
+
+    if(!IsGameInProgress()){
+        progress = 100;
+    }
+    else{
+        define mode = CurrentGameMode();
+        if(mode == GameMode.Assault){
+            if(CurrentObjectNo() == 0){
+                progress = (PointCapturePercentage() / 2);
+            }
+            else{
+                progress = 50 + (PointCapturePercentage() / 2);
+            }
+        }
+        else if(mode == GameMode.Escort){
+            progress = PayloadProgressPercentage();
+        }
+        else if(mode == GameMode.Hybrid){
+            if(CurrentObjectNo() == 0){
+                progress = (PointCapturePercentage() / 2);
+            }
+            else{
+                progress = 50 + (PayloadProgressPercentage() / 2);
+            }
+        }
+        else{
+            dbgHudTxt("ERROR ON TotalObjectProgress");
+        }
+    }
+    return progress;
+}
+
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
-    confirmSpawnInterval = eachMaxSpawnInterval;
-    // confirmSpawnInterval *= (1 - (ObjectSize / maxObjectSize));
-    // confirmSpawnInterval -= (roundNo / 5);
+    confirmSpawnInterval = (eachMaxSpawnInterval - eachMinSpawnInterval);
+    confirmSpawnInterval *= (1 - (TotalObjectProgress() / 100));
     confirmSpawnInterval = Max(confirmSpawnInterval, 0);
     confirmSpawnInterval += eachMinSpawnInterval;
-    SetRespawnMaxTime(ep, confirmSpawnInterval + showDeadEffectTime); 
+    SetRespawnMaxTime(ep, confirmSpawnInterval + showDeadEffectTime);
+
+    if(0 == SlotOf())    dbgHudTxt(<"min <0>, max <1>, cfm <2>", eachMinSpawnInterval, eachMaxSpawnInterval, confirmSpawnInterval>);
 }
 
 rule: "EnemyBot/SpawnInterval/update"
@@ -1006,7 +877,7 @@ void UpdateEachReceivedDamage()"UpdateEachReceivedDamage"{
     // set base damage
     confirmReceiveDamage = 100;
     // apply team balance
-    confirmReceiveDamage *= ConvertToBalancedValue(0.6, playerTeam);
+    confirmReceiveDamage *= ConvertToBalancedValue(0.75, playerTeam);
     SetDamageReceived(AllPlayers(enemyTeam), confirmReceiveDamage);
 }
 
@@ -1023,13 +894,34 @@ if(
 // TAG EnemyBot/DealtDamage ----------
 playervar define confirmDealtDamage!;
 globalvar define threatLevel!;
+globalvar define autoTune!;
+
+rule: "EnemyBot/DealtDamage/upTune"
+Event.OnDeath
+if(
+    TeamOf() == enemyTeam &&
+    Attacker() != ep
+){
+    autoTune += 0.2;
+}
+
+rule: "EnemyBot/DealtDamage/downTune"
+Event.OnDeath
+if(
+    TeamOf() == playerTeam &&
+    Attacker() != ep
+){
+    autoTune -= 1;
+}
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 10, 0, 1000, 1);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 30, 0, 1000, 1);
     // apply team balance
-    confirmDealtDamage /= ConvertToBalancedValue(0.6, playerTeam);
-        // set strengthScore
+    confirmDealtDamage /= ConvertToBalancedValue(0.75, playerTeam);
+    // apply auto tune
+    confirmDealtDamage += autoTune;
+        // set threat Level
         threatLevel = confirmDealtDamage;
     // apply enemy type scale
     confirmDealtDamage *= eachDealtDamageScale;
@@ -1046,7 +938,6 @@ if(
     WaitUpdateLongCycle();
     LoopIfConditionIsTrue();
 }
-
 
 // TAG Debug ----------
 disabled rule: "Debug/builtin"
@@ -1206,7 +1097,16 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
             Location.Left, -1,
             Color.White, Color.Red, Color.White,
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();   }
+        debugHudEntitys[End()] = LastTextID();
+
+        CreateHudText(player,
+            null,
+            <"<0> <1>", "auto Tune", autoTune>,
+            null,
+            Location.Left, -1,
+            Color.White, Color.Red, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
 
         CreateHudText(player,
             null,
@@ -1216,7 +1116,8 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
             Color.White, Color.Orange, Color.White,
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
-
+    }
+    
     if(
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord

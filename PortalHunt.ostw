@@ -941,7 +941,6 @@ if(
 
 // TAG Portal/Growing ----------
 define maxPortalSize: 70;
-define portalStableTime: 40;
 
 rule: "Portal/Growing/startGrowingByPlayerFound"
 Event.OngoingGlobal
@@ -966,9 +965,14 @@ if(
 
 rule: "Portal/Growing/startGrowingByTimeout"
 Event.OngoingGlobal
-if(portalState == PortalState.Set){
+if(
+    portalState == PortalState.Set &&
+    portalPosition != 0
+){
     // Start portal growing by search time limit out
-    Wait(portalStableTime, WaitBehavior.AbortWhenFalse);  //wait time to start growing
+    define time! = DistanceBetween(ClosestPlayerTo(portalPosition, Team.Team1), portalPosition);
+    time = Max(10, time);
+    Wait(RoundToInteger(time), WaitBehavior.AbortWhenFalse);  //wait time to start growing
     portalState = PortalState.Growing;
 }
 
@@ -1539,7 +1543,9 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
                 RandomReal(teleportAreaSize, 50)
             );
         // slide teleportPosition to targer for avoid map surface edge
-        teleportPosition += DirectionTowards(teleportPosition, teleportToTarget);
+        teleportPosition += DirectionTowards(teleportPosition, teleportToTarget) * teleportAreaSize;
+        // random
+        teleportPosition += RandomPosition(teleportPosition, 0, teleportPosition);
         
         define telPosNearTarget! = ClosestPlayerToTelPos;
         if(
@@ -1849,9 +1855,8 @@ define showDeadEffectTime: 1.5;
 playervar define confirmSpawnInterval!;
 
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
-    confirmSpawnInterval = eachMaxSpawnInterval;
+    confirmSpawnInterval = (eachMaxSpawnInterval - eachMinSpawnInterval);
     confirmSpawnInterval *= (1 - (portalSize / maxPortalSize));
-    confirmSpawnInterval -= (roundNo / 5);
     confirmSpawnInterval = Max(confirmSpawnInterval, 0);
     confirmSpawnInterval += eachMinSpawnInterval;
     SetRespawnMaxTime(ep, confirmSpawnInterval + showDeadEffectTime); 
