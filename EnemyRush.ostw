@@ -68,7 +68,7 @@ Event.OngoingGlobal
     initCompleted = true;
 }
 
-define phaseTime: 10;
+define phaseTime: 13;
 
 rule: "Initialize/shortenAssemblingHeroes"
 Event.OngoingGlobal
@@ -276,12 +276,12 @@ define assetList:
         [
             "close range",
             [EnemyType.Boss,        Hero.Reaper,        1],
-            [EnemyType.Elite,       Hero.Doomfist,      5],
+            [EnemyType.Elite,       Hero.Dva,           5],
             [EnemyType.Minion,      Hero.Mei,           10]
         ],
         [
             "close range",
-            [EnemyType.Boss,        Hero.Doomfist,      1],
+            [EnemyType.Boss,        Hero.Dva,           1],
             [EnemyType.Elite,       Hero.Reaper,        5],
             [EnemyType.Minion,      Hero.Mei,           10]
         ],
@@ -340,16 +340,19 @@ define assetList:
         ],
         [
             "snipers elite",
+            [EnemyType.Boss,         Hero.Orisa,        1],
             [EnemyType.Elite,        Hero.Hanzo,		7],
             [EnemyType.Elite,        Hero.Widowmaker,	7]
         ],
         [
             "snipers elite",
+            [EnemyType.Boss,         Hero.Orisa,        1],
             [EnemyType.Elite,        Hero.Ashe,		    7],
             [EnemyType.Elite,        Hero.Widowmaker,	7]
         ],
         [
             "snipers elite",
+            [EnemyType.Boss,         Hero.Orisa,        1],
             [EnemyType.Elite,        Hero.Hanzo,		7],
             [EnemyType.Elite,        Hero.Ana,	        7]
         ],
@@ -367,26 +370,45 @@ define assetList:
         ],
 
         [
-            "Reinhardt army",
+            "Steel waves",
             [EnemyType.Boss,        Hero.Reinhardt, 	1],
             [EnemyType.Minion,      Hero.Reinhardt, 	15]
         ],
         [
-            "Brigitte army",
+            "Shield waves",
             [EnemyType.Boss,        Hero.Reinhardt, 	1],
             [EnemyType.Minion,      Hero.Brigitte,   	15]
         ],
+
         [
-            "turrets",
+            "many turrets",
             [EnemyType.Boss,        Hero.Torbjorn, 		1],
             [EnemyType.Elite,       Hero.Symmetra, 		5],
             [EnemyType.Minion,      Hero.Symmetra, 		10]
         ],
         [
-            "turrets",
+            "many turrets",
             [EnemyType.Boss,        Hero.Symmetra, 		1],
             [EnemyType.Elite,       Hero.Torbjorn, 		5],
             [EnemyType.Minion,      Hero.Torbjorn, 		10]
+        ],
+
+        [
+            "gunmans",
+            [EnemyType.Elite,       Hero.Cassidy, 		14]
+        ],
+
+        [
+            "Explodes",
+            [EnemyType.Boss,        Hero.Tracer, 		1],
+            [EnemyType.Elite,       Hero.Pharah, 		5],
+            [EnemyType.Minion,      Hero.Junkrat, 		10]
+        ],
+        [
+            "Explodes",
+            [EnemyType.Boss,        Hero.Junkrat, 		1],
+            [EnemyType.Elite,       Hero.Pharah, 		5],
+            [EnemyType.Minion,      Hero.Tracer, 		10]
         ]
     ];
 
@@ -407,6 +429,8 @@ if(
         PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, bot, bot.eachEffectTextSize);
     }
     someHero = RandomHero;
+    dbgMsg("reloadBotAsset WaitUntil");
+    WaitUntil(!(IsEnemyOnObject && IsPlayerOnObject), 60);
     // create all bot
     CreateEnemyBotsByAssetList(assetList, enemyTeam);
     Wait(RandomInteger(60, 120), WaitBehavior.AbortWhenFalse);
@@ -424,7 +448,7 @@ playervar define eachNameColor!;
 
 playervar define eachPerkDropProbability;   // dummy
 
-define baseMaxSpawn: 15;
+define baseMaxSpawn: 10;
 define baseMinSpawn: 5;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
@@ -666,7 +690,7 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
         ){
             break;
         }
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Wait(0.01, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     return true;
@@ -726,7 +750,7 @@ Boolean SetTeleportPositionToObjectAround()"SetTeleportPositionToObjectAround"{
         ){
             break;
         }
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Wait(0.01, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     teleportPosition -= PositionOffset();
@@ -772,6 +796,7 @@ Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPositio
 }
 
 void TeleportWithEffect()"TeleportWithEffect"{
+    // distribute serverload
     Wait(SlotOf(ep) * 0.1, WaitBehavior.AbortWhenFalse);
     // show pre teleport effect
     PlayTeleportEffect(true);
@@ -801,6 +826,7 @@ define forceActiveTeleport: 50;
 define teleportToCommonPositionProb: 50;
 
 define IsPlayerOnObject: ([] != AllPlayersOnObjective(playerTeam));
+define IsEnemyOnObject: ([] != AllPlayersOnObjective(enemyTeam));
 
 void ExecTeleport()"ExecTeleport"{
     if(
@@ -846,7 +872,7 @@ if(
 ){
     ExecTeleport();
     // failsafe
-    Wait(1, WaitBehavior.AbortWhenFalse);
+    Wait(3, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -859,11 +885,13 @@ if(
 ){
     for(define notHasLineSecond! = 0; notHasLineSecond < 3; notHasLineSecond ++){
         Wait(1, WaitBehavior.AbortWhenFalse);
-        if(
-            IsInLineOfSight(ep,
-                ClosestPlayerFromObject(),
-                BarrierLOS.NoBarriersBlock)
-        ){
+        define isPlayerNF! =
+            !IsInLineOfSight(ep,
+                ClosestPlayerToMe,
+                BarrierLOS.NoBarriersBlock);
+
+        if(!isPlayerNF){
+            // keeping condition count to up
             LoopIfConditionIsTrue();
         }
     }
@@ -892,8 +920,7 @@ if(
     enemyType == EnemyType.GiantBoss &&
     actionState == ActionState.Attack
 ){
-    define teleportWaitSecond! = NormalizedHealth() * 10;
-    Wait(RandomReal(teleportWaitSecond, teleportWaitSecond + 3), WaitBehavior.AbortWhenFalse);
+    Wait(RandomReal(10, 20), WaitBehavior.AbortWhenFalse);
     // set teleport position to player around
     if(SetTeleportPositionToObjectAround()){
         define telBeam!;
@@ -935,6 +962,8 @@ if(
     LoopIfConditionIsTrue();
 }
 
+define pos: PayloadPosition() + Vector(0, 3, 0);
+
 rule: "EnemyBot/EnemyAbility/hopToPayload"
 Event.OngoingPlayer
 if(
@@ -945,14 +974,13 @@ if(
     TotalObjectProgress() >= 95
 ){
     if(
-        IsOnGround()
+        IsOnGround() &&
+        DistanceBetween(ep, pos) >= 3.0
     ){
+        
         PressButton(ep, Button.Jump);
         ApplyImpulse(ep, 
-            VectorTowards(
-                ep,
-                PayloadPosition() + Vector(0, 2, 0)),
-            10,
+            VectorTowards(ep, pos), 10,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     
@@ -1023,7 +1051,7 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
         capScale = 0.01;
     }
     else if(40 <= diff && diff < 60){
-        capScale = 0.12;
+        capScale = 0.125;
     }
     else if(20 <= diff && diff < 40){
         capScale = 0.25;
@@ -1038,10 +1066,10 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
         capScale = 1.5;
     }
     else if(-60 <= diff && diff < -40){
-        capScale = 2.0;
+        capScale = 2.5;
     }
     else if(diff < -60){
-        capScale = 2.5;
+        capScale = 4.0;
     }
     confirmSpawnInterval *= capScale;
     SetRespawnMaxTime(ep, confirmSpawnInterval + showDeadEffectTime);

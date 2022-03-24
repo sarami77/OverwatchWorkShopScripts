@@ -109,8 +109,6 @@ Event.OngoingGlobal
 
 
     // for bulitin bug fix
-    DisableGameModeHud(AllPlayers(Team.Team1));
-    DisableGameModeInworldUI(AllPlayers(Team.Team1));
     CreateHudText(AllPlayers(Team.Team1),
         null,
         null,
@@ -123,15 +121,16 @@ Event.OngoingGlobal
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
 
-    /*
     // failsafe action
     while(true){
         // repeat action for joined player
         // set objective message
-        SetObjectiveDescription(AllPlayers(Team.Team1), "Find portal and close it!", HudTextRev.VisibleToSortOrderStringAndColor);
+        DisableGameModeHud(AllPlayers(Team.Team1));
+        DisableGameModeInworldUI(AllPlayers(Team.Team1));
+        // SetObjectiveDescription(AllPlayers(Team.Team1), "Find portal and close it!", HudTextRev.VisibleToSortOrderStringAndColor);
         Wait(5, WaitBehavior.AbortWhenFalse);
     }
-    */
+
 }
 
 // TAG ServerOverLoadMeasures ----------
@@ -288,7 +287,6 @@ if(
 }
 
 // TAG Player/FisrtFast
-
 rule: "Player/FisrtFast/setFastSpeed"
 Event.OngoingPlayer
 Team.Team1
@@ -416,6 +414,7 @@ if(
     closingCount += portalSize * 1;
     closingCount += roundNo * 5;
     closingCount = RoundToInteger(closingCount);
+    closingCount = Min(180, closingCount);
     closingProgress = 0;
     ChaseVariableOverTime(closingProgress, DefaultPercentage(), closingCount, TimeChaseReevaluation.DestinationAndDuration);
     // show progress hud
@@ -850,7 +849,7 @@ if(
 }
 
 // TAG Portal/InvalidDetect/EnvironmentDeathCount ----------
-define environmentDeathLimit: NumberOfPlayers(Team.Team2) + 1;
+define environmentDeathLimit: NumberOfPlayers(Team.Team2) + 2;
 globalvar define environmentDeathCount!;
 
 rule: "Portal/InvalidDetect/EnvironmentDeathCount/resetCount"
@@ -1348,14 +1347,14 @@ if(
         
         eachDealtDamageScale = 0.5;
         eachChargeUltInterval = 60;
-        eachMaxSpawnInterval = 5;
+        eachMaxSpawnInterval = 3;
         eachMinSpawnInterval = 0;
 
         eachNameText = "Minion";
         eachNameColor = Color.White;
         eachEffectTextSize = 1;
 
-        eachPerkDropProbability = 3;
+        eachPerkDropProbability = 5;
     }
     else if(enemyType == EnemyType.Elite){
         StartScalingPlayer(ep, 1.0, false);
@@ -1368,14 +1367,14 @@ if(
 
         eachDealtDamageScale = 1.0;
         eachChargeUltInterval = 20;
-        eachMaxSpawnInterval = 10;
-        eachMinSpawnInterval = 5;
+        eachMaxSpawnInterval = 9;
+        eachMinSpawnInterval = 3;
 
         eachNameText = "Elite";
         eachNameColor = Color.Yellow;
         eachEffectTextSize = 2;
 
-        eachPerkDropProbability = 12;
+        eachPerkDropProbability = 15;
     }
     else if(enemyType == EnemyType.Boss){
         StartScalingPlayer(ep, 1.5, false);
@@ -1388,8 +1387,8 @@ if(
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
-        eachMaxSpawnInterval = 20;
-        eachMinSpawnInterval = 10;
+        eachMaxSpawnInterval = 18;
+        eachMinSpawnInterval = 9;
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
@@ -1408,8 +1407,8 @@ if(
 
         eachDealtDamageScale = 3.0;
         eachChargeUltInterval = 5;
-        eachMaxSpawnInterval = 10;
-        eachMinSpawnInterval = 5;
+        eachMaxSpawnInterval = 9;
+        eachMinSpawnInterval = 3;
 
         eachNameText = "Giant Boss";
         eachNameColor = Color.Purple;
@@ -1866,6 +1865,7 @@ playervar define confirmSpawnInterval!;
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     confirmSpawnInterval = (eachMaxSpawnInterval - eachMinSpawnInterval);
     confirmSpawnInterval *= (1 - (portalSize / maxPortalSize));
+    confirmSpawnInterval -= roundNo / 5;
     confirmSpawnInterval = Max(confirmSpawnInterval, 0);
     confirmSpawnInterval += eachMinSpawnInterval;
     SetRespawnMaxTime(ep, confirmSpawnInterval + showDeadEffectTime); 
@@ -1923,7 +1923,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
     confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 10, 0, 1000, 1);
     // add round progress
-    confirmDealtDamage += roundNo * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 1.5, 0, 1000, 1);
+    confirmDealtDamage += roundNo * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 1.75, 0, 1000, 1);
     // add team lives balance
     //confirmDealtDamage += teamLives * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Team lives", 2, 0, 1000, 1);
     // add team health balance
@@ -1949,7 +1949,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-Number GetTeamNormalizedHealth()"UpdateEachDealtDamage"{
+Number GetTeamNormalizedHealth()"GetTeamNormalizedHealth"{
     define teamHealth = 0;
     define teamList! = AllPlayers(Team.Team1);
     for(define idx! = 0; idx < CountOf(teamList); idx++){
