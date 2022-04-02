@@ -1481,7 +1481,7 @@ if(
 }
 
 // TAG EnemyBot/Teleport ----------
-define teleportAreaSize: 7;
+define teleportAreaSize: 15;
 define ClosestPlayerToTelPos: ClosestPlayerTo(teleportPosition, Team.Team1);
 define ClosestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, Team.Team1);
 define ClosestPlayerToMe: ClosestPlayerTo(ep, Team.Team1);
@@ -1529,15 +1529,15 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
 
         define telPosNearTarget! = ClosestPlayerToTelPos;
         if(
-            // target not inside teleport area
-            DistanceBetween(telPosNearTarget, teleportPosition) >= teleportAreaSize
-                &&
             // Has line to target
-            IsInLineOfSight(telPosNearTarget, teleportPosition, BarrierLOS.NoBarriersBlock)
+            IsInLineOfSight(
+                telPosNearTarget + PositionOffset(),
+                teleportPosition + PositionOffset(),
+                BarrierLOS.NoBarriersBlock)
         ){
             break;
         }
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Wait(0.01, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     return true;
@@ -1550,39 +1550,56 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
         teleportPosition = portalPosition;
         return true;
     }
+
+    define telPosNearTarget! = ClosestPlayerToTelPos;
+    define distFromWP! = NearestWalkablePosition(telPosNearTarget);
+
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        // select teleportPosition from teleportToTarget around
-        teleportPosition =
-            BlockedPositon(
-                teleportToTarget,
-                DirectionFromAngles(
-                    RandomReal(0, 360), RandomReal(30, -30),
-                ),
-                RandomReal(teleportAreaSize, 50)
-            );
-        // slide teleportPosition to targer for avoid map surface edge
-        teleportPosition += DirectionTowards(teleportPosition, teleportToTarget) * teleportAreaSize;
-        // random
-        // teleportPosition += RandomPosition(teleportPosition, 0, teleportPosition);
-        
-        define telPosNearTarget! = ClosestPlayerToTelPos;
+        // near walkable position
+        if(DistanceBetween(PositionOf(telPosNearTarget), distFromWP) <= 0.5){
+            // select position and adjust NearestWalkablePosition;
+            teleportPosition = 
+                NearestWalkablePosition(
+                    PositionOf(teleportToTarget) +
+                    RandomPosition(
+                        teleportAreaSize,
+                        teleportAreaSize,
+                        teleportAreaSize
+                    )
+                );
+        }
+        else{
+            // select position and not adjust NearestWalkablePosition;
+            teleportPosition =
+                BlockedPositon(
+                    teleportToTarget,
+                    DirectionFromAngles(
+                        RandomReal(0, 360),
+                        RandomReal(30, -30),
+                    ),
+                    teleportAreaSize
+                );
+            // slide teleportPosition to targer for avoid map surface edge
+            teleportPosition += DirectionTowards(teleportPosition, teleportToTarget);
+        }
+        // select random and adjust 
         if(
-            // target not inside teleport area
-            DistanceBetween(telPosNearTarget, teleportPosition) >= teleportAreaSize
-                &&
             // Has line to target
-            IsInLineOfSight(telPosNearTarget, teleportPosition, BarrierLOS.NoBarriersBlock)
+            IsInLineOfSight(
+                telPosNearTarget + PositionOffset(),
+                teleportPosition + PositionOffset(),
+                BarrierLOS.NoBarriersBlock)
                 &&
             // Has ground of teleport position
-            IsBlockedBetween(teleportPosition, ShiftedPosition(teleportPosition, Down(), 6))
-
+            IsBlockedBetween(
+                teleportPosition,
+                ShiftedPosition(teleportPosition, Down(), 6))
         ){
             break;
         }
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Wait(0.01, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
-    teleportPosition -= PositionOffset();
     return true;
 }
 
@@ -1603,7 +1620,7 @@ Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPositio
         // has not line closest player from commonTeleportPosition
         !IsInLineOfSight(commonTeleportPosition, telPosNearTarget) ||                      
         // target inside teleport area
-        DistanceBetween(commonTeleportPosition, telPosNearTarget) < teleportAreaSize 
+        DistanceBetween(commonTeleportPosition, telPosNearTarget) < teleportAreaSize
     ){
         // new select common position
         // set teleport position to player around
