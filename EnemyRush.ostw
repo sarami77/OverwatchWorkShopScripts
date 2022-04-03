@@ -663,35 +663,23 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     if(teleportToTarget == null){
         return false;
     }
-    for(pLoopIndex = 0; pLoopIndex < 30; pLoopIndex++){
-        // select teleportPosition from middle of Object and teleportToTarget
-        teleportPosition =
-            NearestWalkablePosition(
-                PositionOf(teleportToTarget)
-                    + 
-                (
-                    DirectionTowards(teleportToTarget, CurrentObjectPosition())
-                        *
-                    DistanceBetween(teleportToTarget, CurrentObjectPosition()) * 0.5
-                )
-                    +
-                RandomPosition(
-                    (teleportAreaSize),
-                    (teleportAreaSize),
-                    (teleportAreaSize)
-                )
-            );
-
-        define telPosNearTarget! = ClosestPlayerToTelPos;
-        if(
-            // Has line to target
-            IsInLineOfSight(telPosNearTarget, teleportPosition, BarrierLOS.NoBarriersBlock)
-        ){
-            break;
-        }
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
-        WaitUntilServerFree();
-    }
+    // select teleportPosition from middle of Object and teleportToTarget
+    teleportPosition =
+        NearestWalkablePosition(
+            PositionOf(teleportToTarget)
+                + 
+            (
+                DirectionTowards(teleportToTarget, CurrentObjectPosition())
+                    *
+                DistanceBetween(teleportToTarget, CurrentObjectPosition()) * 0.5
+            )
+                +
+            RandomPosition(
+                (teleportAreaSize),
+                (teleportAreaSize),
+                (teleportAreaSize)
+            )
+        );
     return true;
 }
 
@@ -711,7 +699,7 @@ Boolean SetTeleportPositionToObject()"SetTeleportPositionToObjectt"{
     return true;
 }
 
-globalvar define cutOffsetDistance;
+globalvar define additinalTeleportAreaSize;
 
 define teleportAreaSizeOffset: 25;
 
@@ -721,10 +709,19 @@ Boolean SetTeleportPositionToObjectAround()"SetTeleportPositionToObjectAround"{
     // set teleportToTarget at Object
     define teleportToTarget! = CurrentObjectPosition() + Vector(0, 4, 0);
 
-    if(payloadDirection != 0){
+    if(
+        payloadDirection != 0 &&
+        IsPlayerOnObject
+    ){
+        // get bloacked position of payload ahead
         define blockedHead! = BlockedPositon(teleportToTarget, payloadDirection, teleportAreaSizeOffset);
-        cutOffsetDistance = teleportAreaSizeOffset - DistanceBetween(teleportToTarget, blockedHead);
+        // increase teleportAreaSize by cutoff distance for spam payload brock by teleport
+        additinalTeleportAreaSize = teleportAreaSizeOffset - DistanceBetween(teleportToTarget, blockedHead);
+        // change teleportTarget to payload ahead
         teleportToTarget = blockedHead;
+    }
+    else{
+        additinalTeleportAreaSize = 0;
     }
 
     for(pLoopIndex = 0; pLoopIndex < 30; pLoopIndex++){
@@ -733,9 +730,9 @@ Boolean SetTeleportPositionToObjectAround()"SetTeleportPositionToObjectAround"{
             NearestWalkablePosition(
                 teleportToTarget +
                 RandomPosition(
-                    (teleportAreaSize + cutOffsetDistance),
-                    (teleportAreaSize + cutOffsetDistance),
-                    (teleportAreaSize + cutOffsetDistance)
+                    (teleportAreaSize + additinalTeleportAreaSize),
+                    (teleportAreaSize + additinalTeleportAreaSize),
+                    (teleportAreaSize + additinalTeleportAreaSize)
                 )
             );
         
@@ -749,11 +746,6 @@ Boolean SetTeleportPositionToObjectAround()"SetTeleportPositionToObjectAround"{
                 telPosNearTarget + PositionOffsetY1(),
                 teleportPosition + PositionOffsetY1(),
                 BarrierLOS.NoBarriersBlock)
-                &&
-            // Has ground of teleport position
-            IsBlockedBetween(
-                teleportPosition,
-                ShiftedPosition(teleportPosition, Down(), 6))
         ){
             break;
         }
@@ -948,7 +940,7 @@ if(
     initCompleted &&
     !IsOverTime()
 ){
-    define interval = (1 - (TotalObjectProgress() / 100)) * 90;
+    define interval = (1 - (TotalObjectProgress() / 100)) * 80;
     Wait(RandomReal(10, 10 + interval), WaitBehavior.AbortWhenFalse);
     dbgMsg("rush !");
     Respawn(AllDeadPlayers(enemyTeam));
@@ -968,7 +960,7 @@ if(
         PressButton(AllPlayers(enemyTeam), Button.Ultimate);
     }
     else{
-        define list! = AllPlayers(enemyTeam);
+        define list! = AllLivingPlayers(enemyTeam);
         define suInterval! = RandomReal(0.5, 1.0);
         for(define suLoopIndex! = 0; suLoopIndex < CountOf(list); suLoopIndex ++){
             define bot! = list[suLoopIndex];
@@ -994,7 +986,7 @@ if(
 ){
     if(
         IsOnGround() &&
-        DistanceBetween(ep, pos) >= 3.0
+        DistanceBetween(ep, pos) >= 4.0
     ){
         
         PressButton(ep, Button.Jump);
@@ -1003,7 +995,7 @@ if(
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     
-    Wait(RandomReal(0.8, 1.2), WaitBehavior.AbortWhenFalse);
+    Wait(RandomReal(0.8, 1.8), WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -1176,10 +1168,10 @@ if(
         autoTune += 0.03 * upTuneScale;
     }
     else if(enemyType == EnemyType.Boss){
-        autoTune += 0.06 * upTuneScale;
+        autoTune += 0.09 * upTuneScale;
     }
     else if(enemyType == EnemyType.GiantBoss){
-        autoTune += 0.06 * upTuneScale;
+        autoTune += 0.09 * upTuneScale;
     }
 }
 
@@ -1217,6 +1209,50 @@ if(
     LoopIfConditionIsTrue();
 }
 
+// TAG EnemyBot/ObstIcon ----------
+playervar define obstIcon;
+define color: isBlink ? Color.Orange : Color.Yellow;
+
+rule: "EnemyBot/ObstIcon/show"
+Event.OngoingPlayer
+if(
+    TeamOf() == enemyTeam &&
+    (
+        IsPlayerOnObject &&
+        IsOnObjective(ep)
+    )
+){
+    DestroyIcon(obstIcon);
+    obstIcon = CreateIcon(AllPlayers(playerTeam), ep, Icon.ExclamationMark,
+        IconRev.PositionAndColor, color, true);
+}
+
+rule: "EnemyBot/ObstIcon/hide"
+Event.OngoingPlayer
+if(
+    TeamOf() == enemyTeam &&
+    !(
+        IsPlayerOnObject &&
+        IsOnObjective(ep)
+    )
+){
+    DestroyIcon(obstIcon);
+    obstIcon = 0;
+}
+
+globalvar define isBlink = false;
+
+rule: "EnemyBot/ObstIcon/blinkColor"
+Event.OngoingGlobal
+if(
+    initCompleted
+){
+    while(true){
+        isBlink = !isBlink;
+        Wait(0.15, WaitBehavior.AbortWhenFalse); 
+    }
+}
+
 // TAG Debug ----------
 disabled rule: "Debug/builtin"
 Event.OngoingGlobal
@@ -1225,15 +1261,6 @@ if(
 ){
     CreateEffect(HostPlayer(), Effect.Sphere, Color.Yellow,
         commonTeleportPosition, teleportAreaSize, EffectRev.PositionAndRadius);
-}
-
-globalvar define debugMode!;
-
-enum DebugMode{
-    Non,
-    SlowLevelOnly,
-    ShowParam,
-    WithRecord
 }
 
 rule: "Debug/changeDebugMode"
@@ -1390,7 +1417,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
 
         CreateHudText(player,
             null,
-            <"<0> <1>", "cutOffsetDistance", cutOffsetDistance>,
+            <"<0> <1>", "cutOffsetDistance", additinalTeleportAreaSize>,
             null,
             Location.Left, -1,
             Color.White, Color.Red, Color.White,

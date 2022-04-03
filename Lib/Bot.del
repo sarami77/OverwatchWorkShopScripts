@@ -504,6 +504,7 @@ if(
 
 enum ActionState{
     Non,
+    Staring,
     Attack,
     Support
 }
@@ -523,7 +524,7 @@ enum ButtonBehaivor{
 }
 
 // TAG Bot/ActionState/StateControl ----------
-define needHealRate: 0.7;
+define needHealRate: 0.75;
 
 define watchUpdateRate:
     isServerOverLoading ? 3 : 1.5;
@@ -573,62 +574,6 @@ if(
     // if(target != 0)
     //     dbgPlyBemEft(EyePosition(), EyePosition(target) - PositionOffset());
 
-    define targetSighted! =
-        target != 0 &&
-        HasSpawned(target) &&
-        IsAlive(target) &&
-        IsInLineOfSight(ep, target, BarrierLOS.NoBarriersBlock) &&
-        !(
-            IsStealth(target) &&
-            DistanceBetween(target, ep) >= 3
-        );
-
-    // get new target
-    if(
-        // target not Sighted
-        !targetSighted
-            ||
-        (
-            // support role
-            0 < supportPriorityProbability &&
-            (
-                // when attack state, change target by supportPriorityProbability
-                (
-                    actionState == ActionState.Attack &&
-                    (
-                        ProbabilityTrue(supportPriorityProbability)
-                    )
-                ) 
-                    ||
-                // when support state, change target by supportPriorityProbability or almost full health
-                (
-                    actionState == ActionState.Support &&
-                    ( 
-                        ProbabilityTrue(100 - supportPriorityProbability) ||
-                        NormalizedHealth(target) < needHealRate
-                    )
-                )
-            )
-        )
-    ){
-        // set target
-        if(
-            ProbabilityTrue(supportPriorityProbability)
-        ){
-            // find support target
-            target = FindSupportTarget();
-            // not found heal target
-            if(target == 0){
-                // find attack target
-                target = FindAttackTarget();
-            }
-        }
-        else{
-            // find attack target
-            target = FindAttackTarget();
-        }
-    }
-
     // get next state
     define nextActionState!;
     // is dead
@@ -638,15 +583,74 @@ if(
     }
     else
     { 
+        // get targetSighted
+        define targetSighted! =
+            target != 0 &&
+            HasSpawned(target) &&
+            IsAlive(target) &&
+            IsInLineOfSight(ep, target, BarrierLOS.NoBarriersBlock) &&
+            !(
+                IsStealth(target) &&
+                DistanceBetween(target, ep) >= 3
+            );
+
+        define tryGetTarget! = false;
+        // target not Sighted
+        if(!targetSighted){
+            tryGetTarget = true;
+        }
+        // is support enable
+        else if(0 < supportPriorityProbability){
+            if(actionState == ActionState.Attack){
+                if(
+                    ProbabilityTrue(supportPriorityProbability)
+                ){
+                    tryGetTarget = true;
+                }
+            }
+            else if(actionState == ActionState.Support){
+                if(
+                    ProbabilityTrue(100 - supportPriorityProbability)
+                ){
+                    tryGetTarget = true;
+                }
+                else if(NormalizedHealth(target) >= needHealRate){
+                    tryGetTarget = true;
+                }
+            }
+        }
+
+        // get new target
+        if(tryGetTarget){
+            // set target
+            if(
+                ProbabilityTrue(supportPriorityProbability)
+            ){
+                // find support target
+                target = FindSupportTarget();
+                // not found heal target
+                if(target == 0){
+                    // find attack target
+                    target = FindAttackTarget();
+                }
+            }
+            else{
+                // find attack target
+                target = FindAttackTarget();
+            }
+        }
+
         // has target
-        if(target != 0){
-            // target is enemy team
+        if(
+            target != 0 && target != null
+        ){
+            // target is enemy
             if(TeamOf() != TeamOf(target)){
-                // Attack state by enemy target
+                // Attack state
                 nextActionState = ActionState.Attack; 
             }
             else{
-                // Support state by friend target
+                // Support state
                 nextActionState = ActionState.Support; 
             }
         }
@@ -660,8 +664,8 @@ if(
     if(nextActionState != actionState){
         // next state is not Non state
         if(nextActionState != ActionState.Non){
-            // temporary set Non state for restart button control
-            actionState = ActionState.Non;
+            // set Non state for restart button control
+            actionState = ActionState.Staring;
             WaitChangeState();
         }
         // set next state
@@ -823,28 +827,28 @@ void setMoveDir(define forwardIsAbyss!, define backwardIsAbyss!)"setMoveDir"{
 
 void setSideStep(define rightIsAbyss!, define leftIsAbyss!)"setSideStep"{
     define distToTarget! = DistanceBetween(ep, target);
-    define isGoodRange! =
+    define isMyRange! =
         distToTarget >= actionRangeMin &&
         distToTarget <= actionRangeMax;
-    // now my range or set side step prob
-    if(isGoodRange || ProbabilityTrue(50)){
+    // now my range or prob
+    if(isMyRange || ProbabilityTrue(50)){
         // select dir
-        // no change sidestep prob
-        if(ProbabilityTrue(50)){
-            sideStepDir = sideStepDir;
-        }
-        // no sidestep prob
-        else if(ProbabilityTrue(25)){
+        if(ProbabilityTrue(10)){
+            // no sidestep
             sideStepDir = 0;
         }
-        // has sidestep
-        else{
-            // right sidestep prob
+        else if(ProbabilityTrue(50)){
+            // reverse sidestep
+            sideStepDir = -sideStepDir;
+        }
+        else if(sideStepDir == 0){
+            // set sidestep
             if(ProbabilityTrue(50)){
+                // right sidestep
                 sideStepDir = Right();
             }
-            // left sidestep
             else{
+                // left sidestep
                 sideStepDir = Left();
             }
         }
@@ -879,15 +883,21 @@ void setSideStep(define rightIsAbyss!, define leftIsAbyss!)"setSideStep"{
 }
 
 void StartFacingTarget(){
-    StartFacing(
-        ep,
-        DirectionTowards(
-            EyePosition(),
-            EyePosition(target) + RandomPosition(botAimScat, botAimScat, botAimScat)
-        ),
-        250,
-        Relative.ToWorld, FacingRev.DirectionAndTurnRate
-    );
+    if(
+        target != 0 &&
+        target != null &&
+        IsAlive(target)
+    ){
+        StartFacing(
+            ep,
+            DirectionTowards(
+                EyePosition(),
+                EyePosition(target) + RandomPosition(botAimScat, botAimScat, botAimScat)
+            ),
+            250,
+            Relative.ToWorld, FacingRev.DirectionAndTurnRate
+        );
+    }
 }
 
 // TAG Bot/ActionState/Non ----------
@@ -941,14 +951,19 @@ if(
 
         // check abyss
         define distance! = moveMeterPerSec * watchUpdateRate;
-        define fAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Forward(), distance));
-        define bAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Backward(), distance));
+        define fCheckPos! = BlockedPositonByLocalVector(Forward(), distance);
+        define fAbyss! = IsBelowAbyss(fCheckPos);
+        define bCheckPos! = BlockedPositonByLocalVector(Backward(), distance);
+        define bAbyss! = IsBelowAbyss(bCheckPos);
 
         // set moveDir direction
         setMoveDir(fAbyss, bAbyss);
 
-        define rAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Right(), distance));    // care moveDir
-        define lAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Left(), distance));
+        // check abyss
+        define rCheckPos! = BlockedPositonByLocalVector(Right(), distance);
+        define rAbyss! = IsBelowAbyss(rCheckPos);
+        define lCheckPos! = BlockedPositonByLocalVector(Left(), distance);
+        define lAbyss! = IsBelowAbyss(lCheckPos);
 
         // set sidestep direction
         setSideStep(rAbyss, lAbyss);
@@ -985,8 +1000,10 @@ if(
     
         // check abyss
         define distance! = moveMeterPerSec * watchUpdateRate;
-        define fAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Forward(), distance));
-        define bAbyss! = IsBelowAbyss(BlockedPositonByLocalVector(Backward(), distance));
+        define fCheckPos! = BlockedPositonByLocalVector(Forward(), distance);
+        define fAbyss! = IsBelowAbyss(fCheckPos);
+        define bCheckPos! = BlockedPositonByLocalVector(Backward(), distance);
+        define bAbyss! = IsBelowAbyss(bCheckPos);
     
         // set moveDir direction
         setMoveDir(fAbyss, bAbyss);
@@ -1307,7 +1324,7 @@ if(
 }
 
 // TAG Bot/ButtonControl/Reload ----------
-rule: "Bot/ButtonControl/Reload/StartButtonControl"
+disabled rule: "Bot/ButtonControl/Reload/StartButtonControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
@@ -1339,7 +1356,7 @@ if(
     StopHoldingButton(ep, Button.Ultimate);
     StopHoldingButton(ep, Button.Jump);
     StopHoldingButton(ep, Button.Crouch);
-    StopHoldingButton(ep, Button.Reload);
+    // StopHoldingButton(ep, Button.Reload);
 }
 
 // TAG Debug ----------
