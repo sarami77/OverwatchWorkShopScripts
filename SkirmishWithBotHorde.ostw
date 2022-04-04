@@ -30,15 +30,18 @@ Event.OngoingGlobal
         //SetMaxHealth(AllPlayers(), 500);
         //SetDamageDealt(AllPlayers(), 1000);
 
-        SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
+        // SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
         // Damage(AllPlayers(), null, MaxValue());
         Wait(1, WaitBehavior.AbortWhenFalse);
     }
 }
 
+globalvar define initCompleted!;
+
 rule: "InitialSetting"
 Event.OngoingGlobal
 {
+    // Stop records to reduce server load
     DisableInspectorRecording();
 
     // Regeneration.del
@@ -62,6 +65,12 @@ Event.OngoingGlobal
         Location.Left, -3,
         Color.White, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+
+    // If run it right after loading the server, some scripts fail, so wait 3 seconds
+    Wait(5, WaitBehavior.AbortWhenFalse);
+
+    // Notify completion of init game setting and start game main logic
+    initCompleted = true;
 }
 
 rule: "Player/ReturnSpawn/showReturnSpawnOperation"
@@ -128,7 +137,9 @@ if(
 
 rule: "ReloadBotList"
 Event.OngoingGlobal
-{
+if(
+    initCompleted
+){
     // TAG BotList
     dbgMsg("Reload Bot List");
     define botNum = WorkshopSettingInteger("Enemy Bot Settings", "Bot Count", 24, 0, 24, 1);
@@ -147,7 +158,7 @@ rule: "ReloadTeleportPosition"
 Event.OngoingGlobal
 {
     SetTeleportAreaPositionAtRandom();
-    Wait(120, WaitBehavior.AbortWhenFalse);
+    Wait(150, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -204,13 +215,14 @@ if(
         ExecTeleport();
     }
     else{
-        ApplyImpulse(ep, VectorTowards(ep, teleportAreaPos),
-            DistanceBetween(ep, teleportAreaPos) * 0.5,
-            Relative.ToWorld, ContraryMotion.Cancel);
+        while(true){
+            ApplyImpulse(ep, VectorTowards(ep, teleportAreaPos),
+                DistanceBetween(ep, teleportAreaPos) * 0.5,
+                Relative.ToWorld, ContraryMotion.Cancel);
+            Wait(0.1, WaitBehavior.AbortWhenFalse);
+            WaitUntil(!isServerOverLoading, RandomReal(3, 5));
+        }
     }
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
-    WaitUntil(!isServerOverLoading, RandomReal(3, 5));
-    LoopIfConditionIsTrue();
 }
 
 rule: "TeleortByTargetNotFoundForBot"
@@ -256,30 +268,30 @@ globalvar define prev_teleportPos;
 
 void SetTeleportAreaPositionAtRandom()"SetTeleportAreaPositionAtRandom"{
     prev_teleportPos = teleportAreaPos;
-
+    define temp_teleportAreaPos = teleportAreaPos;
     define selectionAreaRange = combatAreaRange * 2.5;
 
     for(gLoopIndex = 0; gLoopIndex < 30; gLoopIndex++){
 
-        teleportAreaPos = NearestWalkablePosition(
-            teleportAreaPos +
+        temp_teleportAreaPos = NearestWalkablePosition(
+            temp_teleportAreaPos +
             RandomPosition(selectionAreaRange, selectionAreaRange, selectionAreaRange));
 
-        teleportAreaPos = NearestWalkablePosition(
-            teleportAreaPos +
-            (DirectionTowards(teleportAreaPos, RandomValueInArray(AllPlayers())) * RandomReal(1, 5))
+        temp_teleportAreaPos = NearestWalkablePosition(
+            temp_teleportAreaPos +
+            (DirectionTowards(temp_teleportAreaPos, RandomValueInArray(AllPlayers())) * RandomReal(1, 5))
         );
 
         if(
             // not inside ours spwan room
-            !IsInSpawnRoomPosition(teleportAreaPos, Team.Team1) 
+            !IsInSpawnRoomPosition(temp_teleportAreaPos, Team.Team1) 
                 &&
             // not inside enemy spwan room
-            !IsInSpawnRoomPosition(teleportAreaPos, Team.Team2)
+            !IsInSpawnRoomPosition(temp_teleportAreaPos, Team.Team2)
                 &&
             // Not too close to prev_teleportPos
             DistanceBetween(    
-                prev_teleportPos, teleportAreaPos)
+                prev_teleportPos, temp_teleportAreaPos)
             >= 50
         ){
             break;
@@ -287,23 +299,30 @@ void SetTeleportAreaPositionAtRandom()"SetTeleportAreaPositionAtRandom"{
         Wait(0.1, WaitBehavior.AbortWhenFalse);
         WaitUntil(!isServerOverLoading, RandomReal(3, 5));
     }
+    teleportAreaPos = temp_teleportAreaPos;
 }
 
 
 playervar define guardEffectEntity;
 
+globalvar define parallelCount;
+
 void ExecTeleport()"ExecTeleport"{
+    if(IsDummyBot()){
+        while(parallelCount >= 4){
+            Wait(RandomReal(0.1, 1));
+        }
+    }
+
+    parallelCount ++;
+    dbgMsg(<"Start <0>", SlotOf()>);
+
     define teleportPos;
-    for(pLoopIndex = 0; pLoopIndex < 30; pLoopIndex++){ 
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){ 
 
         teleportPos = NearestWalkablePosition(
             teleportAreaPos +
             RandomPosition(combatAreaRange, combatAreaRange, combatAreaRange)); 
-
-        teleportPos = NearestWalkablePosition(
-            teleportPos +
-            DirectionTowards(teleportPos, teleportAreaPos) * RandomReal(1, 5)
-        );
 
         if(
             // not inside ours spwan room
@@ -318,7 +337,7 @@ void ExecTeleport()"ExecTeleport"{
                 ClosestPlayerTo(
                     teleportPos,
                     EnemyTeamOf()))
-            >= 10
+            >= 5
                 &&
             // has line to enemy
             IsInLineOfSight(
@@ -329,12 +348,12 @@ void ExecTeleport()"ExecTeleport"{
         ){
             break;
         }
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
-        WaitUntil(!isServerOverLoading, RandomReal(3, 5));
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        // WaitUntil(!isServerOverLoading, RandomReal(3, 5));
     }
-    if(IsDummyBot()){
-        Wait(SlotOf() * 0.1, WaitBehavior.AbortWhenFalse);
-    }
+
+    parallelCount --;
+
     Teleport(ep, teleportPos);
     PlayEffect(
         ep, PlayEffect.DebuffImpactSound,
@@ -343,7 +362,7 @@ void ExecTeleport()"ExecTeleport"{
     SetStatus(ep, null, Status.Invincible, 3);
     DestroyEffect(guardEffectEntity);
     guardEffectEntity = CreateEffect(
-        AllPlayers(), Effect.Sphere, Color.Gray,
+        AllPlayers(), Effect.Sphere, Color.White,
         ep, 1.25, EffectRev.PositionAndRadius);
 
     Wait(0.1, WaitBehavior.IgnoreCondition);
@@ -360,7 +379,7 @@ Team.All
 if(
     guardEffectEntity != 0
 ){
-    Wait(3, WaitBehavior.AbortWhenFalse);
+    Wait(3, WaitBehavior.RestartWhenTrue);
     DestroyEffect(guardEffectEntity);
     guardEffectEntity = 0;
 }
