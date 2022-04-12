@@ -465,17 +465,19 @@ if(
     initCompleted
 ){
     dbgMsg("reloadBotAsset");
+    WaitUntil(!(IsEnemyOnObject && IsPlayerOnObject), 60);
 
+    // play effect each enemy
     define list = AllLivingPlayers(enemyTeam);
     for(gLoopIndex = 0; gLoopIndex < CountOf(list); gLoopIndex ++){
-        define bot! = list[gLoopIndex];
+        define bot = list[gLoopIndex];
         PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, bot, bot.eachEffectTextSize);
     }
-    someHero = RandomHero;
-    dbgMsg("reloadBotAsset WaitUntil");
-    WaitUntil(!(IsEnemyOnObject && IsPlayerOnObject), 60);
+
     // create all bot
+    someHero = RandomHero;
     CreateEnemyBotsByAssetList(assetList, enemyTeam);
+    
     Wait(RandomInteger(60, 120), WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
@@ -637,6 +639,7 @@ if(
 
 // TAG EnemyBot/Teleport ----------
 globalvar define prvPayloadPos;
+
 Vector CurrentObjectPosition()"CurrentObjectPosition"{
     Vector objPos;
     define mode! = CurrentGameMode();
@@ -674,7 +677,6 @@ Number CurrentObjectNo()"CurrentObjectNo"{
     return curObjNo;
 }
 
-define teleportAreaSize: 10;
 define ClosestPlayerToTelPos: ClosestPlayerTo(teleportPosition, playerTeam);
 define ClosestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, playerTeam);
 define ClosestPlayerToMe: ClosestPlayerTo(ep, playerTeam);
@@ -697,6 +699,7 @@ Player ClosestPlayerFromObject()"ClosestPlayerFromObject"{
 
 playervar define teleportPosition!;
 globalvar define commonTeleportPosition!;
+define teleportAreaSize: 15;
 
 Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     // dbgHudTxt("Set Teleport Position To Player Front");
@@ -706,47 +709,69 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     if(teleportToTarget == null){
         return false;
     }
-    // select teleportPosition from middle of Object and teleportToTarget
-    teleportPosition =
-        NearestWalkablePosition(
-            PositionOf(teleportToTarget)
-                + 
-            (
-                DirectionTowards(teleportToTarget, CurrentObjectPosition())
-                    *
-                DistanceBetween(teleportToTarget, CurrentObjectPosition()) * 0.5
-            )
-                +
-            RandomPosition(
-                (teleportAreaSize),
-                (teleportAreaSize),
-                (teleportAreaSize)
-            )
-        );
+
+    for(pLoopIndex = 0; pLoopIndex < 30; pLoopIndex++){
+        // select teleportPosition from middle of Object and teleportToTarget
+        teleportPosition =
+            NearestWalkablePosition(
+                PositionOf(teleportToTarget)
+                    + 
+                (
+                    DirectionTowards(teleportToTarget, CurrentObjectPosition())
+                        *
+                    DistanceBetween(teleportToTarget, CurrentObjectPosition()) * 0.4
+                )
+                    +
+                RandomPosition(
+                    (teleportAreaSize),
+                    (teleportAreaSize),
+                    (teleportAreaSize)
+                )
+            );
+
+        if(
+            // not close to object
+            DistanceBetween(ep, CurrentObjectPosition()) > 6   
+        ){
+            break;
+        }
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        WaitUntilServerFree();
+    }
     return true;
 }
 
-Boolean SetTeleportPositionToObject()"SetTeleportPositionToObjectt"{
+Boolean SetTeleportPositionToObjectArround()"SetTeleportPositionToObjectArround"{
     // dbgHudTxt("Set Teleport Position To Objectt");
 
-    // set teleportToTarget at closest player from Object
-    teleportPosition =
-        NearestWalkablePosition(
-            CurrentObjectPosition() + 
-            RandomPosition(
-                (teleportAreaSize),
-                (teleportAreaSize),
-                (teleportAreaSize)
-            )
-        );
+    for(pLoopIndex = 0; pLoopIndex < 30; pLoopIndex++){
+        // select teleportPosition from current object around
+        teleportPosition = 
+            NearestWalkablePosition(
+                CurrentObjectPosition() +
+                RandomPosition(
+                    (teleportAreaSize),
+                    (teleportAreaSize),
+                    (teleportAreaSize)
+                )
+            );
+
+        if(
+            // not close to object
+            DistanceBetween(ep, CurrentObjectPosition()) > 6        
+        ){
+            break;
+        }
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        WaitUntilServerFree();
+    }
     return true;
 }
 
 globalvar define additinalTeleportAreaSize;
-
 define teleportAreaSizeOffset: 25;
 
-Boolean SetTeleportPositionToObjectAround()"SetTeleportPositionToObjectAround"{
+Boolean SetTeleportPositionToObjectAhead()"SetTeleportPositionToObjectAhead"{
     // dbgHudTxt("Set Teleport Position To Object Around");
 
     // set teleportToTarget at Object
@@ -767,6 +792,8 @@ Boolean SetTeleportPositionToObjectAround()"SetTeleportPositionToObjectAround"{
         additinalTeleportAreaSize = 0;
     }
 
+    define telPosNearTarget! = ClosestPlayerToTelPos;
+
     for(pLoopIndex = 0; pLoopIndex < 30; pLoopIndex++){
         // select teleportPosition from teleportToTarget around
         teleportPosition = 
@@ -778,17 +805,16 @@ Boolean SetTeleportPositionToObjectAround()"SetTeleportPositionToObjectAround"{
                     (teleportAreaSize + additinalTeleportAreaSize)
                 )
             );
-        
-        define telPosNearTarget! = ClosestPlayerToTelPos;
+    
         if(
-            // not close to payload
-            DistanceBetween(ep, PayloadPosition()) > 5
+            // not close to object
+            DistanceBetween(ep, CurrentObjectPosition()) > 6
                 &&
             // Has line to target
             IsInLineOfSight(
                 telPosNearTarget + PositionOffsetY1(),
                 teleportPosition + PositionOffsetY1(),
-                BarrierLOS.NoBarriersBlock)
+                BarrierLOS.NoBarriersBlock)            
         ){
             break;
         }
@@ -821,7 +847,7 @@ Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPositio
     ){
         // new select common position
         // set teleport position to player around
-        if(SetTeleportPositionToObjectAround()){
+        if(SetTeleportPositionToObjectAhead()){
             // save teleport position as common position
             commonTeleportPosition = teleportPosition;
         }
@@ -886,7 +912,7 @@ void ExecTeleport()"ExecTeleport"{
             }
         }
         else{
-            if(SetTeleportPositionToObjectAround()){
+            if(SetTeleportPositionToObjectAhead()){
                 TeleportWithEffect();
             }
         }
@@ -898,7 +924,7 @@ void ExecTeleport()"ExecTeleport"{
             }
         }
         else{
-            if(SetTeleportPositionToObject()){
+            if(SetTeleportPositionToObjectArround()){
                 TeleportWithEffect();
             }
         }
@@ -908,6 +934,7 @@ void ExecTeleport()"ExecTeleport"{
 rule: "EnemyBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
 if(
+    IsGameInProgress() &&
     TeamOf() == enemyTeam &&
     IsAlive() &&
     IsInSpawnRoom()
@@ -918,21 +945,22 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "EnemyBot/Teleport/teleportByPlayerNotFound"
+rule: "EnemyBot/Teleport/teleportByEnemyNotFound"
 Event.OngoingPlayer
 if(
+    IsGameInProgress() &&
     TeamOf() == enemyTeam &&
     IsAlive() &&
     !IsInSpawnRoom()
 ){
     for(define notHasLineSecond! = 0; notHasLineSecond < 3; notHasLineSecond ++){
         Wait(1, WaitBehavior.AbortWhenFalse);
-        define isPlayerNF! =
+        define isEnemyNotFound! =
             !IsInLineOfSight(ep,
                 ClosestPlayerToMe,
                 BarrierLOS.NoBarriersBlock);
 
-        if(!isPlayerNF){
+        if(!isEnemyNotFound){
             // keeping condition count to up
             LoopIfConditionIsTrue();
         }
@@ -957,14 +985,14 @@ rule: "EnemyBot/EnemyAbility/combatTeleport"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
+    IsGameInProgress() &&
     IsAlive() &&
-    !IsInSpawnRoom() &&
     enemyType == EnemyType.GiantBoss &&
     actionState == ActionState.Attack
 ){
     Wait(RandomReal(10, 20), WaitBehavior.AbortWhenFalse);
     // set teleport position to player around
-    if(SetTeleportPositionToObjectAround()){
+    if(SetTeleportPositionToObjectAhead()){
         define telBeam!;
         // teleport with beam effect
         DestroyEffect(telBeam);
@@ -980,11 +1008,11 @@ if(
 rule: "EnemyBot/EnemyAbility/rush"
 Event.OngoingGlobal
 if(
-    initCompleted &&
+    IsGameInProgress() &&
     !IsOverTime()
 ){
-    define interval = (1 - (TotalObjectProgress() / 100)) * 80;
-    Wait(RandomReal(10, 10 + interval), WaitBehavior.AbortWhenFalse);
+    define interval = (1 - (TotalObjectProgress() / 100)) * 60;
+    Wait(RandomReal(interval, 10 + interval), WaitBehavior.AbortWhenFalse);
     dbgMsg("rush !");
     Respawn(AllDeadPlayers(enemyTeam));
     LoopIfConditionIsTrue();
@@ -993,10 +1021,10 @@ if(
 rule: "EnemyBot/EnemyAbility/syncUlt"
 Event.OngoingGlobal
 if(
-    initCompleted
+    IsGameInProgress()
 ){
-    define interval = (1 - (TotalObjectProgress() / 100)) * 80;
-    Wait(RandomReal(10, 10 + interval), WaitBehavior.AbortWhenFalse);
+    define interval = (1 - (TotalObjectProgress() / 100)) * 60;
+    Wait(RandomReal(interval, 20 + interval), WaitBehavior.AbortWhenFalse);
     dbgMsg("sync Ult !");
     if(ProbabilityTrue(50)){
         SetUltimateCharge(AllPlayers(enemyTeam), 100);
@@ -1015,7 +1043,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define pos: PayloadPosition() + Vector(0, 3, 0);
+define pos: PayloadPosition() + Vector(0, 4, 0);
 
 rule: "EnemyBot/EnemyAbility/hopToPayload"
 Event.OngoingPlayer
@@ -1023,21 +1051,20 @@ if(
     initCompleted &&
     TeamOf() == enemyTeam &&
     IsAlive() &&
-    IsPlayerOnObject &&
-    TotalObjectProgress() >= 95
+    TotalObjectProgress() >= 95 &&
+    IsPlayerOnObject
 ){
     if(
         IsOnGround() &&
-        DistanceBetween(ep, pos) >= 4.0
+        DistanceBetween(ep, pos) >= 5.0
     ){
-        
         PressButton(ep, Button.Jump);
         ApplyImpulse(ep, 
             VectorTowards(ep, pos), 10,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     
-    Wait(RandomReal(0.8, 1.8), WaitBehavior.AbortWhenFalse);
+    Wait(RandomReal(1.0, 1.5), WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -1176,7 +1203,7 @@ void UpdateEachReceivedDamage()"UpdateEachReceivedDamage"{
     // set base damage
     confirmReceiveDamage = 100;
     // apply team balance
-    confirmReceiveDamage *= ConvertToBalancedValue(1.25, playerTeam);
+    confirmReceiveDamage *= ConvertToBalancedValue(1.5, playerTeam);
     SetDamageReceived(AllPlayers(enemyTeam), confirmReceiveDamage);
 }
 
@@ -1230,7 +1257,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
     confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 35, 0, 1000, 1);
     // apply team balance
-    confirmDealtDamage /= ConvertToBalancedValue(1.25, playerTeam);
+    confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
     // apply auto tune
     confirmDealtDamage += autoTune;
         // set threat Level
@@ -1294,6 +1321,76 @@ if(
         Wait(0.15, WaitBehavior.AbortWhenFalse); 
     }
 }
+
+// TAG FriendBot ----------
+/*
+define keepEmptySlotNum: 4;
+
+disabled rule: "FriendBot/reloadBotAsset"
+Event.OngoingGlobal
+if(
+    initCompleted
+){
+    reloadFriendBotAsset();
+}
+
+disabled rule: "FriendBot/reloadBotAsset"
+Event.OnPlayerJoin
+if(
+    initCompleted
+){
+    reloadFriendBotAsset();
+}
+
+disabled rule: "FriendBot/reloadBotAsset"
+Event.OnPlayerLeave
+if(
+    initCompleted &&
+    IsGameInProgress()
+){
+    reloadFriendBotAsset();
+}
+
+void reloadFriendBotAsset()"reloadFriendBotAsset"{
+    define fBotList = [Hero.Mercy, Hero.Reinhardt, Hero.Genji];
+    // create all bot
+    CreateEnemyBotsByAssetList(fBotList, playerTeam);
+}
+
+disabled rule: "FriendBot/Teleport/teleportByEnemyNotFound"
+Event.OngoingPlayer
+if(
+    IsGameInProgress() &&
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    IsAlive() &&
+    !IsInSpawnRoom()
+){
+    for(define notHasLineSecond! = 0; notHasLineSecond < 3; notHasLineSecond ++){
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        define isEnemyNotFound! =
+            !IsInLineOfSight(ep,
+                ClosestPlayerTo(ep, enemyTeam),
+                BarrierLOS.NoBarriersBlock);
+
+        if(!isEnemyNotFound){
+            // keeping condition count to up
+            LoopIfConditionIsTrue();
+        }
+    }
+
+    teleportPosition = 
+        PositionOf(
+            RandomValueInArray(
+                FilteredArray(
+                    AllPlayers(playerTeam), !IsDummyBot(ae)
+                )
+            )
+        );
+
+    LoopIfConditionIsTrue();
+}
+*/
 
 // TAG Debug ----------
 disabled rule: "Debug/builtin"
@@ -1547,13 +1644,15 @@ if(
     // Recalculate portal
     WaitLongPressConfirm();
 
+    // play effect each enemy
     define list! = AllPlayers(enemyTeam);
     for(gLoopIndex = 0; gLoopIndex < CountOf(list); gLoopIndex ++){
-        define bot! = list[gLoopIndex];
+        define bot = list[gLoopIndex];
         PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, bot, bot.eachEffectTextSize);
     }
-    someHero = RandomHero;
+
     // create all bot
+    someHero = RandomHero;
     CreateEnemyBotsByAssetList(assetList, enemyTeam);
 }
 
