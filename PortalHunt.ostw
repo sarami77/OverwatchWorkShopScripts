@@ -134,7 +134,7 @@ Event.OngoingGlobal
 }
 
 // TAG ServerOverLoadMeasures ----------
-define WaitUntilServerFree(){ WaitUntil(!isServerOverLoading, 5); }
+define WaitUntilServerFree(){ WaitUntil(!isServerOverLoading, 10); }
 
 define slowLevel: [100, 90, 80, 70, 50];    // 0～4
 globalvar define targetSlowLevel;
@@ -742,49 +742,27 @@ if(
     portalState == PortalState.Calculating
 ){
     WaitConditionConfirmed();
-    define candidatePosition!;
+    define candidatePosition;
     for(define retryCount = 0; retryCount < 30; retryCount++){
-        // select random player as base positoon
-        define basePlayer =
-            RandomValueInArray(
-                FilteredArray(
-                    AllLivingPlayers(Team.Team1),
-                    HasSpawned(ae)
-                )
-            );
-        // select random positon from player around
-        define distance! =
-            DistanceBetween(
-                SpawnPoints(Team.Team1)[0],
-                SpawnPoints(Team.Team2)[0]
-            );
-        define randomPositon! = 
-            basePlayer +
-            // half y derection
-            VectorScaledY(
-                // add random direction
-                DirectionFromAngles(
-                    RandomReal(0, 360), RandomReal(30, -30),
-                ) * 
-                // add random distance
-                RandomReal(distance / 2, distance),
-                0.25
-            );
-
+        define basePosition! = Midpoint(SpawnPoints(Team.Team1)[0], SpawnPoints(Team.Team2)[0]);
+        define distance! = DistanceBetween(SpawnPoints(Team.Team1)[0], SpawnPoints(Team.Team2)[0]);
+        // select random positon from map
+        candidatePosition = NearestWalkablePosition(
+            basePosition +
+            RandomPosition(
+                distance * 1.25,
+                distance * 0.5,
+                distance * 1.25
+            )
+        );
         // convert to walkble position
-        candidatePosition = NearestWalkablePosition(randomPositon);
+        candidatePosition = NearestWalkablePosition(candidatePosition);
         // move candidate postion in the direction of player for avoiding map edge
-        candidatePosition += DirectionTowards(candidatePosition, basePlayer) * RandomReal(1, distance / 3);
+        candidatePosition += DirectionTowards(candidatePosition, basePosition) * RandomReal(1, distance / 4);
         // convert to walkble position
         candidatePosition = NearestWalkablePosition(candidatePosition);
 
         if(
-            // close candidate postion than random positon
-            (
-                DistanceBetween(basePlayer, randomPositon) >= 
-                DistanceBetween(basePlayer, candidatePosition) + 10
-            )
-                &&
             // far postion from previous position
             (
                 DistanceBetween(prevPortalPosition, candidatePosition) >= 50
@@ -800,7 +778,7 @@ if(
         ){
             break;
         }
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     // confirm as portal position
@@ -1397,8 +1375,8 @@ if(
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
-        eachMaxSpawnInterval = 20;
-        eachMinSpawnInterval = 10;
+        eachMaxSpawnInterval = 30;
+        eachMinSpawnInterval = 15;
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
@@ -1417,8 +1395,8 @@ if(
 
         eachDealtDamageScale = 3.0;
         eachChargeUltInterval = 5;
-        eachMaxSpawnInterval = 20;
-        eachMinSpawnInterval = 10;
+        eachMaxSpawnInterval = 30;
+        eachMinSpawnInterval = 15;
 
         eachNameText = "Giant Boss";
         eachNameColor = Color.Purple;
@@ -1537,7 +1515,7 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
         ){
             break;
         }
-        Wait(0.01, WaitBehavior.AbortWhenFalse);
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     return true;
@@ -1602,7 +1580,7 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
         ){
             break;
         }
-        Wait(0.01, WaitBehavior.AbortWhenFalse);
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     return true;
