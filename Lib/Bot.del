@@ -27,7 +27,8 @@ define RandomTankHero: RandomValueInArray(AllTankHeroes());
 define RandomDamageHero: RandomValueInArray(AllDamageHeroes());
 define RandomSupportHero: RandomValueInArray(AllSupportHeroes());
 
-globalvar define botSlot!;
+globalvar define botSlot1!;
+globalvar define botSlot2!;
 globalvar define enemyTeamName!;
 
 void CreateBotsByAssetList(define assetList, define team)"CreateBotsByAssetList"{
@@ -42,18 +43,21 @@ void CreateBotsByAssetList(define assetList, define team)"CreateBotsByAssetList"
             CreateDummyBot(
                 asset[assetIdx][BotAsset.hero],
                 team,
-                botSlot,
+                team == Team.Team1 ? botSlot1 : botSlot2,
                 SpawnPoints(team)[0],
                 RandomDirection()
             );
             Wait(0.03, WaitBehavior.IgnoreCondition);
                 WaitUntil(!isServerOverLoading, 3);
             // set Bot type as enemy type
-            define bot! = PlayersInSlot(botSlot, team);
+            define bot! = PlayersInSlot(team == Team.Team1 ? botSlot1 : botSlot2, team);
             bot.enemyType = asset[assetIdx][BotAsset.EnemyType];
 
             // next slot
-            botSlot ++;
+            if(team == Team.Team1)
+                botSlot1++;
+            else
+                botSlot2++;
         }
     }
 }
@@ -67,15 +71,17 @@ void CreateBothBotsByInput(define heroList, define num)"CreateBothBotsByInput"{
     for(define slotIdx = 0; slotIdx < num; slotIdx++){
         // asign team
         define team = (slotIdx % 2 == 0) ? Team.Team1 : Team.Team2;
+
+
         // try until spawn entity
         while(
-            !HasSpawned(PlayersInSlot(botSlot, team))
+            !HasSpawned(PlayersInSlot(team == Team.Team1 ? botSlot1 : botSlot2, team))
         ){
             // create bot
             CreateDummyBot(
                 RandomValueInArray(heroList),
                 team,
-                botSlot,
+                team == Team.Team1 ? botSlot1 : botSlot2,
                 SpawnPoints(team)[0],
                 RandomDirection()
             );
@@ -83,10 +89,11 @@ void CreateBothBotsByInput(define heroList, define num)"CreateBothBotsByInput"{
             WaitUntil(!isServerOverLoading, 3);
         }   
         
-        if(team == Team.Team2){
-            // next slot
-            botSlot ++;
-        }
+        // next slot
+        if(team == Team.Team1)
+            botSlot1++;
+        else
+            botSlot2++;
     }
 }
 
@@ -99,7 +106,12 @@ void DestroyBots(define team)"DestroyBots"{
             Wait(0.01, WaitBehavior.IgnoreCondition);
         // }
     }
-    botSlot = 0;
+
+    // clear slot
+    if(team == Team.Team1)
+        botSlot1 = 0;
+    else
+        botSlot2 = 0;
 }
 
 // TAG Bot/SetBotInfo ----------
