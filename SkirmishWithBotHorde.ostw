@@ -32,7 +32,16 @@ Event.OngoingGlobal
 
         // SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
         // Damage(AllPlayers(), null, MaxValue());
-        Wait(1, WaitBehavior.AbortWhenFalse);
+        // SetUltimateCharge(AllPlayers(), 100);
+        // SetAbilityCooldown(AllPlayers(), Button.Ability1, 0);
+        // SetAbilityCooldown(AllPlayers(), Button.Ability2, 0);
+        // SetAbilityCooldown(AllPlayers(), Button.SecondaryFire, 0);
+        // SetAbilityResource(AllPlayers(), Button.Ability1, 100);
+        // SetAbilityResource(AllPlayers(), Button.Ability2, 100);
+        // SetAbilityResource(AllPlayers(), Button.SecondaryFire, 100);
+        // SetAmmo(AllPlayers(), 0, 10000);
+        // SetAmmo(AllPlayers(), 1, 10000);
+        Wait(1.0, WaitBehavior.AbortWhenFalse);
     }
 }
 
@@ -43,6 +52,8 @@ Event.OngoingGlobal
 {
     // Stop records to reduce server load
     DisableInspectorRecording();
+
+    debugMode = DebugMode.ShowParam;
 
     // Regeneration.del
     regenerationEnableTeam = Team.All;
@@ -163,7 +174,7 @@ rule: "ReloadTeleportPosition"
 Event.OngoingGlobal
 {
     SetTeleportAreaPositionAtRandom();
-    Wait(150, WaitBehavior.AbortWhenFalse);
+    Wait(120, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -176,33 +187,25 @@ if(
     Respawn(ep);
 }
 
-disabled rule: "FastAbilityCooldown"
+rule: "TeleortByRespawnForBot"
 Event.OngoingPlayer
 if(
-    IsAlive()
+    IsDummyBot() &&
+    IsInSpawnRoom()
 ){
-    SetAbilityCooldown(ep, Button.Ability1, 0);
-    SetAbilityCooldown(ep, Button.Ability2, 0);
-    SetAbilityCooldown(ep, Button.SecondaryFire, 0);
-    SetAbilityCooldown(ep, Button.Crouch, 0);
-    SetAbilityCooldown(ep, Button.Jump, 0);
-    Wait(0.5, WaitBehavior.AbortWhenFalse);
-    LoopIfConditionIsTrue();
+    ExecTeleport();
 }
 
+define keepMovingSecondOfTeleportPlayer: 0.2;
 
-rule: "TeleortByRespawn"
+rule: "TeleortByRespawnForPlayer"
 Event.OngoingPlayer
 if(
+    !IsDummyBot() &&
     IsInSpawnRoom() &&
-    (
-        IsDummyBot() ||
-        IsMoving()
-    )
+    IsMoving()
 ){
-    if(!IsDummyBot()){
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
-    }
+    Wait(keepMovingSecondOfTeleportPlayer, WaitBehavior.AbortWhenFalse);
     ExecTeleport();
 }
 
@@ -217,6 +220,7 @@ if(
     DistanceBetween(ep, teleportAreaPos) > combatAreaRange
 ){
     if(DistanceBetween(ep, teleportAreaPos) > combatAreaRange + 3){
+        Wait(keepMovingSecondOfTeleportPlayer, WaitBehavior.AbortWhenFalse);
         ExecTeleport();
     }
     else{
@@ -236,7 +240,7 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Non
 ){
-    Wait(1.5, WaitBehavior.AbortWhenFalse);
+    Wait(RandomReal(1, 5), WaitBehavior.AbortWhenFalse);
     ExecTeleport();
     LoopIfConditionIsTrue();
 }
@@ -244,11 +248,11 @@ if(
 rule: "TeleortByTargetNotFoundForPlayer"
 Event.OngoingPlayer
 if(
-    !IsInSpawnRoom(ep) &&
     !IsDummyBot() &&
+    !IsInSpawnRoom(ep) &&
     !IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf()))
 ){
-    Wait(10, WaitBehavior.AbortWhenFalse);
+    Wait(8, WaitBehavior.AbortWhenFalse);
     ExecTeleport();
     LoopIfConditionIsTrue();
 }
@@ -314,7 +318,7 @@ globalvar define parallelCount;
 void ExecTeleport()"ExecTeleport"{
     if(IsDummyBot()){
         while(parallelCount >= 4){
-            Wait(RandomReal(0.1, 1));
+            Wait(RandomReal(0.1, 1), WaitBehavior.AbortWhenFalse);
         }
     }
 
@@ -336,7 +340,7 @@ void ExecTeleport()"ExecTeleport"{
             !IsInSpawnRoomPosition(teleportPos, TeamOf()) 
                 &&
             // not inside enemy spwan room
-            !IsInSpawnRoomPosition(teleportPos, OppositeTeamOf(TeamOf()))
+            !IsInSpawnRoomPosition(teleportPos, EnemyTeamOf())
                 &&
             // not too close to enemy
             DistanceBetween(
@@ -349,9 +353,13 @@ void ExecTeleport()"ExecTeleport"{
             // has line to enemy
             IsInLineOfSight(
                 teleportPos + Up(),
-                ClosestPlayerTo(
-                    teleportPos,
-                    EnemyTeamOf()))
+                PositionOf(
+                    ClosestPlayerTo(
+                        teleportPos,
+                        EnemyTeamOf()
+                    )
+                ) + Up()
+            )
         ){
             break;
         }
