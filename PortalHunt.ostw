@@ -375,20 +375,21 @@ if(
     // Set flag when player entered to portal
     // This flag is used for functions related to portal
     for(gLoopIndex = 0; gLoopIndex < CountOf(players); gLoopIndex++){
+        define player! = players[gLoopIndex];
         if(
-            HasSpawned(players[gLoopIndex]) &&
-            IsAlive(players[gLoopIndex]) &&
-            !IsInSpawnRoom(players[gLoopIndex]) &&
-            DistanceBetween(players[gLoopIndex], portalPosition) <= portalSize
+            HasSpawned(player) &&
+            IsAlive(player) &&
+            !IsInSpawnRoom(player) &&
+            DistanceBetween(player, portalPosition) <= portalSize
         ){
-            players[gLoopIndex].isInsidePortal = true;
+            player.isInsidePortal = true;            
         }
         else{
-            players[gLoopIndex].isInsidePortal = false;
+            player.isInsidePortal = false;
         }
     }
-    WaitUntilServerFree();
     WaitUpdateMediumCycle();
+    WaitUntilServerFree();
     LoopIfConditionIsTrue();
 }
 
@@ -599,7 +600,7 @@ define showPortalPlayers:
 define showPortalIconPlayers:
     FilteredArray(AllPlayers(Team.Team1), DistanceBetween(ae, portalPosition) > maxPortalSize);
 
-define showPortalInsidePlayers:
+define showPortalOutsidePlayers:
     FilteredArray(AllPlayers(Team.Team1), !ae.isInsidePortal);
 
 rule: "Portal/State/Set  // waiting for found by players"
@@ -620,15 +621,15 @@ if(
     portalEntitys[1] = CreateEffect(showPortalPlayers, Effect.Sphere, enemyColor,
         portalPosition, portalSize, EffectRev.VisibleToPositionAndRadius);
     // cloud
-    portalEntitys[2] = CreateEffect(showPortalInsidePlayers, Effect.Cloud, enemyColor,
+    portalEntitys[2] = CreateEffect(showPortalOutsidePlayers, Effect.Cloud, enemyColor,
         portalPosition, portalSize * 1.5, EffectRev.VisibleToPositionAndRadius);
     // aura
     // Since visibility will be poor, display only in the center of the field of view
-    portalEntitys[3] = CreateEffect(showPortalInsidePlayers, Effect.BadAura, enemyColor,
+    portalEntitys[3] = CreateEffect(showPortalOutsidePlayers, Effect.BadAura, enemyColor,
         portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionAndRadius);
     // sound
     portalEntitys[4] = CreateEffect(AllPlayers(), Effect.EnergySound, enemyColor,
-        portalPosition, portalSize / 2, EffectRev.VisibleToPositionAndRadius);
+        portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionAndRadius);
     // show message
     BigMessage(AllPlayers(), "Defeat enemies and track portal!");
 }
@@ -666,22 +667,16 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Closing
 ){
-    // Hide icon
-    DestroyIcon(portalEntitys[0]);
     // apply blast impulse
     ApplyBlastImpulse(AllPlayers(Team.Team2), portalPosition, portalSize);
     // play portal closing effect and kill enemrys
     Kill(AllPlayers(Team.Team2), null);
-    // play blast sound
-    PlayEffect(
-        AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.White, portalPosition, MaxLength());
-    // play blast effect
-    PlayContinuousBlast(
-        Color.Yellow,
-        portalPosition,
-        portalSize * 1.5,
-        10);
+    // play big blast with sound
+    PlayContinuousBlast(Color.Yellow, portalPosition,
+        portalSize * 1.5, 10, 3);
+
+    // Hide icon
+    DestroyIcon(portalEntitys[0]);
 }
 
 rule: "Portal/State/Closed"
@@ -712,16 +707,9 @@ if(
     ApplyBlastImpulse(AllPlayers(Team.Team2), portalPosition, portalSize);
     // play portal closing effect and kill enemrys
     Kill(AllPlayers(Team.Team2), null);
-    // play blast sound
-    PlayEffect(
-        AllPlayers(), PlayEffect.RingExplosionSound,
-        Color.White, portalPosition, MaxLength());
-    // play blast effect
-    PlayContinuousBlast(
-        Color.Yellow,
-        portalPosition,
-        portalSize * 1.5,
-        10);
+    // play big blast with sound
+    PlayContinuousBlast(Color.Yellow, portalPosition,
+        portalSize * 1.5, 10, 3);
 
     // init param
     portalPosition = 0;
@@ -767,6 +755,8 @@ if(
             (
                 DistanceBetween(prevPortalPosition, candidatePosition) >= 50
             )
+
+            /*
                 &&
             // far postion from player
             (
@@ -775,6 +765,7 @@ if(
                     candidatePosition
                 ) >= 50
             )
+            */
         ){
             break;
         }
@@ -785,11 +776,8 @@ if(
     portalPosition = candidatePosition;
     // create portal, next check position
     portalState = PortalState.Checking;
-    // fail safe
-    Wait(5, WaitBehavior.AbortWhenFalse);
-	dbgMsg("failsafe triggered of createPortal");
-    LoopIfConditionIsTrue();
 }
+
 globalvar define prevPortalPosition;
 
 rule: "Portal/Positioner/positionChecking"
@@ -798,15 +786,12 @@ if(
     teamLives > 0 &&
     portalState == PortalState.Checking
 ){
-    // wait
+    // wait for portal position check
     Wait(1, WaitBehavior.AbortWhenFalse);
     // confirm portal position
     prevPortalPosition = portalPosition;
+    // portal create fin
     portalState = PortalState.Set;
-    // fail safe
-    Wait(5, WaitBehavior.AbortWhenFalse);
-    dbgMsg("failsafe triggered of positionChecking");
-    LoopIfConditionIsTrue();
 }
 
 // TAG Portal/InvalidDetect/InsideRespawnRoom ----------
@@ -882,7 +867,7 @@ if(
 }
 
 // TAG Portal/InvalidDetect/CantContact ----------
-define limitTime: 100;
+define limitTime: 180;
 globalvar define notContactTime!;
 
 rule: "Portal/InvalidDetect/NotContactTime/resetTime"
@@ -956,7 +941,7 @@ if(
     portalPosition != 0
 ){
     // Start portal growing by search time limit out
-    define time! = DistanceBetween(ClosestPlayerTo(portalPosition, Team.Team1), portalPosition);
+    define time! = DistanceBetween(portalPosition, ClosestPlayerTo(portalPosition, Team.Team1)) * 0.7;
     time = Max(10, time);
     Wait(RoundToInteger(time), WaitBehavior.AbortWhenFalse);  //wait time to start growing
     portalState = PortalState.Growing;
@@ -1455,7 +1440,7 @@ if(
     DestroyInWorldText(botAppearanceEntitys[1]);
     // play dead effect
     PlayContinuousBlast(Color.Red, PositionOf(),
-        eachEffectTextSize * 1.5, eachEffectTextSize);
+        eachEffectTextSize * 1.5, eachEffectTextSize, 0);
 }
 
 // TAG EnemyBot/Teleport ----------
@@ -1709,8 +1694,8 @@ if(
     }
 }
 
-define forceTeleportToPlayerAroundProb: 50 / NumberOfPlayers(Team.Team2);
-define teleportToCommonPositionProb: 90;
+define forceTeleportToPlayerAroundProb: 60 / NumberOfPlayers(Team.Team2);
+define teleportToCommonPositionProb: 80;
 
 rule: "EnemyBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
