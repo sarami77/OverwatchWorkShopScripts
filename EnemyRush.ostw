@@ -66,6 +66,22 @@ Event.OngoingGlobal
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "spawnTimeScale", spawnTimeScale>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Red, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+
+    CreateHudText(HostPlayer(),
+        null,
+        <"<0> <1>", "autoTune", autoTune>,
+        null,
+        Location.Left, -1,
+        Color.White, Color.Red, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
 }
 
 define phaseTime: 13;
@@ -473,12 +489,13 @@ if(
         define bot = list[gLoopIndex];
         PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, bot, bot.eachEffectTextSize);
     }
+    Wait(showDeadEffectTime, WaitBehavior.IgnoreCondition);
 
     // create all bot
     someHero = RandomHero;
     CreateBotsByAssetList(assetList, enemyTeam);
     
-    Wait(RandomInteger(60, 120), WaitBehavior.AbortWhenFalse);
+    Wait(RandomInteger(90, 150), WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -493,8 +510,8 @@ playervar define eachNameColor!;
 
 playervar define eachPerkDropProbability;   // dummy
 
-define baseMaxSpawn: 12;
-define baseMinSpawn: 7;
+define baseMaxSpawn: 10;
+define baseMinSpawn: 5;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
@@ -699,7 +716,7 @@ Player ClosestPlayerFromObject()"ClosestPlayerFromObject"{
 
 playervar define teleportPosition!;
 globalvar define commonTeleportPosition!;
-define teleportAreaSize: 15;
+define teleportAreaSize: 10;
 
 Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     // dbgHudTxt("Set Teleport Position To Player Front");
@@ -719,7 +736,7 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
                 (
                     DirectionTowards(teleportToTarget, CurrentObjectPosition())
                         *
-                    DistanceBetween(teleportToTarget, CurrentObjectPosition()) * 0.4
+                    DistanceBetween(teleportToTarget, CurrentObjectPosition()) * 0.3
                 )
                     +
                 RandomPosition(
@@ -785,6 +802,7 @@ Boolean SetTeleportPositionToObjectAhead()"SetTeleportPositionToObjectAhead"{
         define blockedHead! = BlockedPositon(teleportToTarget, payloadDirection, teleportAreaSizeOffset);
         // increase teleportAreaSize by cutoff distance for spam payload brock by teleport
         additinalTeleportAreaSize = teleportAreaSizeOffset - DistanceBetween(teleportToTarget, blockedHead);
+        additinalTeleportAreaSize /= 2;
         // change teleportTarget to payload ahead
         teleportToTarget = blockedHead;
     }
@@ -1011,9 +1029,10 @@ if(
     IsGameInProgress() &&
     !IsOverTime()
 ){
-    define interval = (1 - (TotalObjectProgress() / 100)) * 60;
-    Wait(RandomReal(interval, 20 + interval), WaitBehavior.AbortWhenFalse);
+    define interval = (1 - (TotalObjectProgress() / 100)) * 30;
+    Wait(RandomReal(interval, 30 + interval), WaitBehavior.AbortWhenFalse);
     dbgMsg("rush !");
+
     Respawn(AllDeadPlayers(enemyTeam));
     LoopIfConditionIsTrue();
 }
@@ -1023,9 +1042,10 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    define interval = (1 - (TotalObjectProgress() / 100)) * 120;
+    define interval = (1 - (TotalObjectProgress() / 100)) * 40;
     Wait(RandomReal(interval, 40 + interval), WaitBehavior.AbortWhenFalse);
     dbgMsg("sync Ult !");
+
     if(ProbabilityTrue(50)){
         SetUltimateCharge(AllPlayers(enemyTeam), 100);
         PressButton(AllPlayers(enemyTeam), Button.Ultimate);
@@ -1043,28 +1063,29 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define pos: PayloadPosition() + Vector(0, 4, 0);
+define OnPayloadPosition: PayloadPosition() + Vector(0, 4, 0);
 
-rule: "EnemyBot/EnemyAbility/hopToPayload"
+rule: "EnemyBot/EnemyAbility/closeHopToPayload"
 Event.OngoingPlayer
 if(
     initCompleted &&
     TeamOf() == enemyTeam &&
-    IsAlive() &&
     TotalObjectProgress() >= 95 &&
-    IsPlayerOnObject
+    IsAlive()
 ){
     if(
+        IsPlayerOnObject &&
+        CountOf(AllPlayersOnObjective(enemyTeam)) <= NumberOfPlayers(enemyTeam) / 4 &&
         IsOnGround() &&
-        DistanceBetween(ep, pos) >= 5.0
+        DistanceBetween(ep, OnPayloadPosition) >= 5.0
     ){
         PressButton(ep, Button.Jump);
         ApplyImpulse(ep, 
-            VectorTowards(ep, pos), 10,
+            VectorTowards(ep, OnPayloadPosition), 10,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     
-    Wait(RandomReal(1.0, 1.5), WaitBehavior.AbortWhenFalse);
+    Wait(RandomReal(0.75, 1.75), WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -1120,45 +1141,37 @@ Number TotalObjectProgress()"TotalObjectProgress"{
     return progress;
 }
 
+globalvar define spawnTimeScale;
+
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     confirmSpawnInterval = (eachMaxSpawnInterval - eachMinSpawnInterval);
     confirmSpawnInterval *= (1 - (TotalObjectProgress() / 100));
     confirmSpawnInterval += eachMinSpawnInterval;
     
     define diff = GameProgressDiff();
-    define capScale;
-    if(60 <= diff){
-        capScale = 0.001
-        ;
+    if(50 <= diff){
+        spawnTimeScale = 0.01;
     }
-    else if(40 <= diff && diff < 60){
-        capScale = 0.125;
+    else if(30 <= diff && diff < 50){
+        spawnTimeScale = 0.25;
     }
-    else if(20 <= diff && diff < 40){
-        capScale = 0.25;
+    else if(10 <= diff && diff < 30){
+        spawnTimeScale = 0.5;
     }
-    else if(0 <= diff && diff < 20){
-        capScale = 0.5;
+    else if(-10 <= diff && diff < 10){
+        spawnTimeScale = 1.0;
     }
-    else if(-20 <= diff && diff < 0){
-        capScale = 1.0;
+    else if(-30 <= diff && diff < -10){
+        spawnTimeScale = 1.5;
     }
-    else if(-40 <= diff && diff < -20){
-        capScale = 1.5;
+    else if(-50 <= diff && diff < -30){
+        spawnTimeScale = 2.5;
     }
-    else if(-60 <= diff && diff < -40){
-        capScale = 2.5;
+    else if(diff < -50){
+        spawnTimeScale = 4.0;
     }
-    else if(diff < -60){
-        capScale = 4.0;
-    }
-    confirmSpawnInterval *= capScale;
+    confirmSpawnInterval *= spawnTimeScale;
     SetRespawnMaxTime(ep, confirmSpawnInterval + showDeadEffectTime);
-
-    if(0 == SlotOf() && isDebugMode){
-        dbgHudTxt(<"diff <0>, capScale <1>, cnf <2>, max <3>, min <4>, type <5>",
-            diff, capScale, confirmSpawnInterval, eachMaxSpawnInterval, eachMinSpawnInterval, enemyType>);
-    }
 }
 
 Number GameProgressDiff()"GameProgressDiff"{
@@ -1223,7 +1236,7 @@ playervar define confirmDealtDamage!;
 globalvar define threatLevel!;
 globalvar define autoTune!;
 
-define upTuneScale: 2.5;
+define upTuneScale: 4.0;
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1256,7 +1269,7 @@ if(
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 35, 0, 1000, 1);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 30, 0, 1000, 1);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
     // apply auto tune
@@ -1581,6 +1594,7 @@ if(
         define bot = list[gLoopIndex];
         PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, bot, bot.eachEffectTextSize);
     }
+    Wait(showDeadEffectTime, WaitBehavior.IgnoreCondition);
 
     // create all bot
     someHero = RandomHero;
