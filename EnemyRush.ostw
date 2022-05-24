@@ -66,22 +66,6 @@ Event.OngoingGlobal
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
-
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "spawnTimeScale", spawnTimeScale>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Red, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "autoTune", autoTune>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Red, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
 }
 
 define phaseTime: 13;
@@ -213,6 +197,7 @@ if(
 // TAG EnemBot ----------
 define assetList:
     [
+        // random hero
         [
             "basic",
             [EnemyType.Boss,        RandomHero,         1],
@@ -295,7 +280,7 @@ define assetList:
             "10 elites clones",
             [EnemyType.Elite,       someHero, 		    10]
         ],
-
+        
         [
             "giant boss",
             [EnemyType.GiantBoss,   RandomTankHero,     1],
@@ -310,8 +295,10 @@ define assetList:
             "giant boss",
             [EnemyType.GiantBoss,   RandomSupportHero,  1],
             [EnemyType.Minion,      RandomSupportHero,  10]
-        ],
+        ]
 
+        // specificatied hero
+        /*
         [
             "giant boss",
             [EnemyType.GiantBoss,   Hero.Pharah,        1],
@@ -332,7 +319,6 @@ define assetList:
             [EnemyType.GiantBoss,   Hero.Doomfist,      1],
             [EnemyType.Minion,      RandomSupportHero,  10]
         ],
-
         [
             "close range",
             [EnemyType.Boss,        Hero.Reaper,        1],
@@ -428,7 +414,6 @@ define assetList:
             [EnemyType.Elite,       Hero.Orisa, 		5],
             [EnemyType.Minion,      Hero.Bastion,       10]
         ],
-
         [
             "Steel waves",
             [EnemyType.Boss,        Hero.Reinhardt, 	1],
@@ -439,7 +424,6 @@ define assetList:
             [EnemyType.Boss,        Hero.Reinhardt, 	1],
             [EnemyType.Minion,      Hero.Brigitte,   	15]
         ],
-
         [
             "many turrets",
             [EnemyType.Boss,        Hero.Torbjorn, 		1],
@@ -452,12 +436,10 @@ define assetList:
             [EnemyType.Elite,       Hero.Torbjorn, 		5],
             [EnemyType.Minion,      Hero.Torbjorn, 		10]
         ],
-
         [
             "gunmans",
             [EnemyType.Elite,       Hero.Cassidy, 		14]
         ],
-
         [
             "Explodes",
             [EnemyType.Boss,        Hero.Tracer, 		1],
@@ -470,6 +452,7 @@ define assetList:
             [EnemyType.Elite,       Hero.Junkrat, 		5],
             [EnemyType.Minion,      Hero.Pharah, 		10]
         ]
+        */
     ];
 
 globalvar define someHero!;
@@ -478,7 +461,8 @@ globalvar define someHero!;
 rule: "EnemyBot/reloadBotAsset"
 Event.OngoingGlobal
 if(
-    initCompleted
+    initCompleted &&
+    (IsInSetup() && MatchTime() <= 5) || IsGameInProgress()
 ){
     dbgMsg("reloadBotAsset");
     WaitUntil(!(IsEnemyOnObject && IsPlayerOnObject), 60);
@@ -600,8 +584,10 @@ if(
         eachPerkDropProbability = 100;
 
         // set addtinal health
-        AddHealthPoolToPlayer(ep, HealthType.Armor, 2500, true, false);
-        AddHealthPoolToPlayer(ep, HealthType.Shields, 2500, true, false);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        define health! = MaxHealth(ep) * 0.5;
+        AddHealthPoolToPlayer(ep, HealthType.Armor, health, true, false);
+        AddHealthPoolToPlayer(ep, HealthType.Shields, health, true, false);
     }
 
     UpdateEachDealtDamage();
@@ -719,8 +705,6 @@ globalvar define commonTeleportPosition!;
 define teleportAreaSize: 10;
 
 Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
-    // dbgHudTxt("Set Teleport Position To Player Front");
-    
     // set teleportToTarget at closest player from Object
     define teleportToTarget! = ClosestPlayerFromObject();
     if(teleportToTarget == null){
@@ -759,8 +743,6 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
 }
 
 Boolean SetTeleportPositionToObjectArround()"SetTeleportPositionToObjectArround"{
-    // dbgHudTxt("Set Teleport Position To Objectt");
-
     for(pLoopIndex = 0; pLoopIndex < 30; pLoopIndex++){
         // select teleportPosition from current object around
         teleportPosition = 
@@ -789,8 +771,6 @@ globalvar define additinalTeleportAreaSize;
 define teleportAreaSizeOffset: 25;
 
 Boolean SetTeleportPositionToObjectAhead()"SetTeleportPositionToObjectAhead"{
-    // dbgHudTxt("Set Teleport Position To Object Around");
-
     // set teleportToTarget at Object
     define teleportToTarget! = CurrentObjectPosition() + Vector(0, 4, 0);
 
@@ -846,8 +826,6 @@ Boolean SetTeleportPositionToObjectAhead()"SetTeleportPositionToObjectAhead"{
 define forceUpdateCommonPositionProb: 5;
 
 Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPosition"{
-    // dbgHudTxt("Set Teleport Position To CommonPosition");
-
     // set telPosNearTarget at closest player from commonTeleportPosition
     define telPosNearTarget! = ClosestPlayerToComTelPos;
     if(telPosNearTarget == null){
@@ -908,7 +886,7 @@ void PlayTeleportEffect(define isBefore!)"PlayTeleportEffect"{
     }
 }
 
-define forceActiveTeleport: 50;
+define forceActiveTeleport: 30;
 define teleportToCommonPositionProb: 50;
 
 define IsPlayerOnObject: ([] != AllPlayersOnObjective(playerTeam));
@@ -973,13 +951,12 @@ if(
 ){
     for(define notHasLineSecond! = 0; notHasLineSecond < 3; notHasLineSecond ++){
         Wait(1, WaitBehavior.AbortWhenFalse);
-        define isEnemyNotFound! =
-            !IsInLineOfSight(ep,
-                ClosestPlayerToMe,
-                BarrierLOS.NoBarriersBlock);
-
-        if(!isEnemyNotFound){
-            // keeping condition count to up
+        define hasTarget! = (actionState != ActionState.Non);
+        define nearObject! = (DistanceBetween(ep, CurrentObjectPosition()) <= 20);
+        if(
+            hasTarget && nearObject 
+        ){
+            // reset count up
             LoopIfConditionIsTrue();
         }
     }
@@ -1015,7 +992,7 @@ if(
         // teleport with beam effect
         DestroyEffect(telBeam);
         telBeam = CreateBeamEffect(AllPlayers(),
-            BeamType.BadBeam, EyePosition(ep) + Down(), teleportPosition,
+            BeamType.BadBeam, Midpoint(EyePosition(), PositionOf()), teleportPosition,
             Color.Purple, EffectRev.VisibleToPositionAndRadius);
         TeleportWithEffect();
         DestroyEffect(telBeam);
@@ -1075,8 +1052,8 @@ if(
 ){
     if(
         IsPlayerOnObject &&
-        CountOf(AllPlayersOnObjective(enemyTeam)) <= NumberOfPlayers(enemyTeam) / 4 &&
         IsOnGround() &&
+        CountOf(AllPlayersOnObjective(enemyTeam)) <= NumberOfPlayers(enemyTeam) / 4 &&
         DistanceBetween(ep, OnPayloadPosition) >= 5.0
     ){
         PressButton(ep, Button.Jump);
@@ -1085,7 +1062,7 @@ if(
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     
-    Wait(RandomReal(0.75, 1.75), WaitBehavior.AbortWhenFalse);
+    Wait(RandomReal(0.75, 1.25), WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -1180,12 +1157,6 @@ Number GameProgressDiff()"GameProgressDiff"{
     Number timePrg  = RoundToInteger(MatchTime() / 3.0);  // MAX 300
     timePrg = 100 - timePrg;
     prgDiff = objPrg - timePrg;
-
-    if(0 == SlotOf() && isDebugMode){
-        dbgHudTxt(<"prgDiff <0>, objPrg <1>, timePrg <2>    ",
-            prgDiff, objPrg, timePrg>);
-    }
-
     return prgDiff;
 }
 
@@ -1489,37 +1460,18 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-        CreateHudText(player,
+        CreateHudText(HostPlayer(),
             null,
-            <"<0> <1>", "auto Tune", autoTune>,
-            null,
-            Location.Left, -1,
-            Color.White, Color.Red, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
-
-        CreateHudText(player,
-            null,
-            <"<0> <1>", "cutOffsetDistance", additinalTeleportAreaSize>,
+            <"<0> <1>", "spawnTimeScale", spawnTimeScale>,
             null,
             Location.Left, -1,
             Color.White, Color.Red, Color.White,
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
 
-
-        CreateHudText(player,
+        CreateHudText(HostPlayer(),
             null,
-            <"<0> <1>", "TotalObjectProgress()", TotalObjectProgress()>,
-            null,
-            Location.Left, -1,
-            Color.White, Color.Red, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
-
-        CreateHudText(player,
-            null,
-            <"<0> <1>", "GameProgressDiff()", GameProgressDiff()>,
+            <"<0> <1>", "autoTune", autoTune>,
             null,
             Location.Left, -1,
             Color.White, Color.Red, Color.White,
