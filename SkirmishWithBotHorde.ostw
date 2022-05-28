@@ -151,6 +151,9 @@ if(
 
 globalvar define botNum;
 
+define ActionRangeHeroes(define actionRange, define team):
+    FilteredArray(AllPlayers(team), ae.actionRange == actionRange);
+
 rule: "ReloadBotList"
 Event.OngoingGlobal
 if(
@@ -159,12 +162,10 @@ if(
     // TAG BotList
     dbgMsg("Reload Bot List");
     
-    CreateBotsByHeroList(AllHeroes(), botNum / 2, Team.Team1);
-    CreateBotsByHeroList(AllHeroes(), botNum / 2, Team.Team2);
-    // CreateBotsByHeroList(AllSupportHeroes(), botNum);
-    // CreateBotsByHeroList([Hero.Brigitte, Hero.Reaper], botNum);
-    // CreateBotsByHeroList([Hero.WreckingBall, Hero.Reinhardt, Hero.Pharah, Hero.Echo, Hero.Reaper, Hero.Mercy, Hero.Baptiste], botNum);
-    // CreateBotsByHeroList([Hero.Pharah, Hero.Echo, Hero.Mercy], botNum);
+    define teamAsset = AllHeroes();
+    // define teamAsset = [Hero.Ashe];
+    CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team1);
+    CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team2);
 
     Wait(180, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
@@ -240,7 +241,7 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Non
 ){
-    Wait(RandomReal(1, 5), WaitBehavior.AbortWhenFalse);
+    Wait(3, WaitBehavior.AbortWhenFalse);
     ExecTeleport();
     LoopIfConditionIsTrue();
 }
@@ -252,7 +253,7 @@ if(
     !IsInSpawnRoom(ep) &&
     !IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf()))
 ){
-    Wait(8, WaitBehavior.AbortWhenFalse);
+    Wait(9, WaitBehavior.AbortWhenFalse);
     ExecTeleport();
     LoopIfConditionIsTrue();
 }
@@ -350,15 +351,21 @@ void ExecTeleport()"ExecTeleport"{
                     EnemyTeamOf()))
             >= 5
                 &&
-            // has line to enemy
-            IsInLineOfSight(
-                teleportPos + Up(),
-                PositionOf(
-                    ClosestPlayerTo(
-                        teleportPos,
-                        EnemyTeamOf()
-                    )
-                ) + Up()
+            (
+                // ignore has line to enemy
+                ProbabilityTrue(10)
+                    ||
+                // has line to enemy
+                IsInLineOfSight(
+                    teleportPos + Up(),
+                    PositionOf(
+                        ClosestPlayerTo(
+                            teleportPos,
+                            EnemyTeamOf()
+                        )
+                    ) + Up()
+                
+                )
             )
         ){
             break;
