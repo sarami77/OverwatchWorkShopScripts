@@ -597,11 +597,17 @@ define showPortalIconPlayers:
 define showPortalOutsidePlayers:
     FilteredArray(AllPlayers(Team.Team1), !ae.isInsidePortal);
 
+globalvar define portalColor;
+
+
+
 rule: "Portal/State/Set  // waiting for found by players"
 Event.OngoingGlobal
 if(
     portalState == PortalState.Set
 ){
+    portalColor = enemyColor;
+
     DestroyIcon(portalEntitys[0]);
     // show Portal Entity by portal state changed to Show
     // Init param
@@ -609,21 +615,21 @@ if(
     // show icon
     portalEntitys = [];
     portalEntitys[0] = CreateIcon(showPortalIconPlayers, portalPosition, Icon.Spiral,
-        IconRev.VisibleToPositionAndColor, enemyColor, true);
+        IconRev.VisibleToPositionAndColor, portalColor, true);
     // set effect
     // sphere
-    portalEntitys[1] = CreateEffect(showPortalPlayers, Effect.Sphere, enemyColor,
-        portalPosition, portalSize, EffectRev.VisibleToPositionAndRadius);
+    portalEntitys[1] = CreateEffect(showPortalPlayers, Effect.Sphere, portalColor,
+        portalPosition, portalSize, EffectRev.VisibleToPositionRadiusAndColor);
     // cloud
-    portalEntitys[2] = CreateEffect(showPortalOutsidePlayers, Effect.Cloud, enemyColor,
-        portalPosition, portalSize * 1.5, EffectRev.VisibleToPositionAndRadius);
+    portalEntitys[2] = CreateEffect(showPortalOutsidePlayers, Effect.Cloud, portalColor,
+        portalPosition, portalSize * 1.5, EffectRev.VisibleToPositionRadiusAndColor);
     // aura
     // Since visibility will be poor, display only in the center of the field of view
-    portalEntitys[3] = CreateEffect(showPortalOutsidePlayers, Effect.BadAura, enemyColor,
-        portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionAndRadius);
+    portalEntitys[3] = CreateEffect(showPortalOutsidePlayers, Effect.BadAura, portalColor,
+        portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionRadiusAndColor);
     // sound
-    portalEntitys[4] = CreateEffect(AllPlayers(), Effect.EnergySound, enemyColor,
-        portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionAndRadius);
+    portalEntitys[4] = CreateEffect(AllPlayers(), Effect.EnergySound, portalColor,
+        portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionRadiusAndColor);
     // show message
     BigMessage(AllPlayers(), "Defeat enemies and track portal!");
 }
@@ -633,20 +639,22 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Growing
 ){
+    portalColor = enemyColor;
+
     // Start growing portal with warning message
     ChaseVariableAtRate(
-        portalSize, maxPortalSize, 1 + (roundNo / 6),
+        portalSize, maxPortalSize, 1 + (roundNo / 5),
         RateChaseReevaluation.DestinationAndRate);  // startGrowing
     // If first growing, show message
     if(isFirstGrowing == true){
         isFirstGrowing = false;
         BigMessage(AllPlayers(), "Portal is growing... hurry!");
         WaitBigMessageHide();
-        BigMessage(AllPlayers(), "Larger portals spawn more enemies and get tough to close...");
+        BigMessage(AllPlayers(), "Growed portal spawn more enemies and get tough to close...");
     }
 }
 
-rule: "Portal/State/Suspended"
+rule: "Portal/State/UnderAttack"
 Event.OngoingGlobal
 if(
     portalState == PortalState.UnderAttack
@@ -656,11 +664,25 @@ if(
     StopChasingVariable(portalSize);
 }
 
+rule: "Portal/changePortalColor"
+Event.OngoingGlobal
+if(
+    portalState == PortalState.UnderAttack
+){
+    portalColor = Color.White;
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
+    portalColor = enemyColor;
+    Wait(0.1 + 1.9 * (1 - closingProgress / DefaultPercentage()), WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
 rule: "Portal/State/Closing"
 Event.OngoingGlobal
 if(
     portalState == PortalState.Closing
 ){
+    portalColor = Color.White;
+
     // apply blast impulse
     ApplyBlastImpulse(AllPlayers(Team.Team2), portalPosition, portalSize);
     // play portal closing effect and kill enemrys
@@ -727,14 +749,14 @@ if(
     define candidatePosition;
     for(define retryCount = 0; retryCount < 30; retryCount++){
         define basePosition! = Midpoint(SpawnPoints(Team.Team1)[0], SpawnPoints(Team.Team2)[0]);
-        define distance! = DistanceBetween(SpawnPoints(Team.Team1)[0], SpawnPoints(Team.Team2)[0]);
+        define distance! = DistanceBetween(SpawnPoints(Team.Team1)[0], SpawnPoints(Team.Team2)[0]) / 2;
         // select random positon from map
         candidatePosition = NearestWalkablePosition(
             basePosition +
             RandomPosition(
-                distance * 0.8,
-                distance * 0.4,
-                distance * 0.8
+                distance * 1.2,
+                distance * 0.5,
+                distance * 1.2
             )
         );
 
@@ -750,17 +772,14 @@ if(
             (
                 DistanceBetween(prevPortalPosition, candidatePosition) >= 50
             )
-
-            /*
-                &&
-            // far postion from player
-            (
-                DistanceBetween(
-                    ClosestPlayerTo(candidatePosition, Team.Team1),
-                    candidatePosition
-                ) >= 50
-            )
-            */
+            //     &&
+            // // far postion from player
+            // (
+            //     DistanceBetween(
+            //         ClosestPlayerTo(candidatePosition, Team.Team1),
+            //         candidatePosition
+            //     ) >= 50
+            // )
         ){
             break;
         }
@@ -936,8 +955,7 @@ if(
     portalPosition != 0
 ){
     // Start portal growing by search time limit out
-    define time! = DistanceBetween(portalPosition, ClosestPlayerTo(portalPosition, Team.Team1)) * 0.7;
-    time = Max(10, time);
+    define time! = DistanceBetween(portalPosition, ClosestPlayerTo(portalPosition, Team.Team1)) * 0.6;
     Wait(RoundToInteger(time), WaitBehavior.AbortWhenFalse);  //wait time to start growing
     portalState = PortalState.Growing;
 }
