@@ -325,6 +325,7 @@ if(
         case Hero.Lucio:
         heroName = "Lucio";
         actionRange = ActionRange.Middle;
+        ultimateButtonReleaseMax = 15;
         supportPriorityProbability = 25;
         supportButtons = [
             Button.Ability1,
@@ -337,13 +338,14 @@ if(
         actionRange = ActionRange.Close;
         primaryFireButtonReleaseMin = 0;
         primaryFireButtonReleaseMax = 2;
-        secondaryFireButtonReleaseMax = 15;
+        secondaryFireButtonReleaseMax = 20;
         break;
 
         case Hero.Mei:
         heroName = "Mei";
         actionRange = ActionRange.Close;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
+        ultimateButtonReleaseMax = 30;
         break;
 
         case Hero.Mercy:
@@ -480,7 +482,7 @@ if(
         primaryFireButtonReleaseMax = 15;
         primaryFireButtonPressMax = 20;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        secondaryFireButtonPressMin = 5;
+        secondaryFireButtonPressMin = 6;
         secondaryFireButtonPressMax = 15;
         ability1ButtonReleaseMin = 5;
         ability1ButtonReleaseMax = 10;
@@ -1074,24 +1076,37 @@ if(
 }
 
 // TAG Bot/HeroUniqueAction ----------
+define canMeleeKill:
+    DistanceBetween(ep, target) <= 2.5 &&
+    Health(target) <= 30;
 define MercyStaff: 1;
 define MercyPistol: 2;
 
 void heroAction(){
     // common action
+    // melee
+    while(
+        actionState != ActionState.Non &&
+        canMeleeKill
+    ){
+        PressButton(ep, Button.Melee);
+        Wait(0.5, WaitBehavior.AbortWhenFalse);
+    }
+
+    // reload
     if(
         actionState == ActionState.Non ||
         (MaxAmmo(ep, 0) > 0 && Ammo(ep, 0) <= 0 ) ||
         (MaxAmmo(ep, 1) > 0 && Ammo(ep, 1) <= 0 )
     ){
-        // reload
         PressButton(ep, Button.Reload);
     }
 
-    // unique action
-    if(
+    // hero unique action
+    else if(
         actionState != ActionState.Non
     ){
+        // Mercy's change weapon
         if(HeroOf() == Hero.Mercy){
             if(actionState == ActionState.Attack){
                 SetWeapon(ep, MercyPistol);
@@ -1100,17 +1115,18 @@ void heroAction(){
                 SetWeapon(ep, MercyStaff);
             }
         }
+        // WreckingBall's jump for pile driver
         else if(HeroOf() == Hero.WreckingBall){
             if(
                 AbilityCooldown(ep, Button.Crouch) <= 0 &&
                 IsButtonHeld(ep, Button.Crouch) &&
                 IsOnGround(ep)
             ){
-                // for pile driver
                 ApplyImpulse(ep, Up(),
                     10, Relative.ToWorld, ContraryMotion.Cancel);
             }
 
+        // WreckingBall's accel for ball tackle
             while(IsFiringSecondary(ep)){
                 // for ball charge
                 define boostDir! = RandomValueInArray([Right(), Forward(), Backward(), Left()]);
@@ -1368,8 +1384,8 @@ if(
             ButtonBehaivor.ReleasePress,
             5,
             10,
-            1,
-            2
+            0,
+            2.5
         ]
     );
 }
