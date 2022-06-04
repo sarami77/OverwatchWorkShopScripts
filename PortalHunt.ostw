@@ -29,8 +29,8 @@ Event.OngoingGlobal
     // Stop records to reduce server load
     DisableInspectorRecording();
 
-    // If run it right after loading the server, some scripts fail, so wait 3 seconds
-    Wait(3, WaitBehavior.AbortWhenFalse);
+    // If run it right after loading the server, some scripts fail, so wait few seconds
+    Wait(5, WaitBehavior.AbortWhenFalse);
 
     // Cancel unnecessary default settings
     DisableScoring();
@@ -107,16 +107,11 @@ Event.OngoingGlobal
         Color.White, Color.White, Color.Purple,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
 
+    // reset player position
+    Respawn(AllPlayers());
+
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
-
-    // failsafe action
-    while(true){
-        // repeat action for joined player
-        // set objective message
-        SetObjectiveDescription(AllPlayers(Team.Team1), "Find and attack portal!", HudTextRev.VisibleToSortOrderStringAndColor);
-        Wait(5, WaitBehavior.AbortWhenFalse);
-    }
 }
 
 // TAG ServerOverLoadMeasures ----------
@@ -302,7 +297,7 @@ if(
     WaitChangeState();  // wait for show big message by newest value
     if(teamLives > 0){
         BigMessage(AllPlayers(),
-            <"<0> team lives remaining...", teamLives>);
+            <"<0> team lives remaining.", teamLives>);
 
         PlayEffect(
             AllPlayers(), PlayEffect.DebuffImpactSound,
@@ -324,14 +319,14 @@ if(
     // set slow handler
     slowControlHandler = SlowControlHandler.GameEnd;
 
-    BigMessage(AllPlayers(), "Team lives ran out...");
+    BigMessage(AllPlayers(), "Team lives ran out.");
     SetSlowMotion(10);
     Wait(1, WaitBehavior.AbortWhenFalse);   // show slow
     SetSlowMotion(100);
     WaitNextPhase();
 
     BigMessage(AllPlayers(),
-        <"We reached <0> round... good game!", roundNo>);
+        <"We reached <0> round. good game!", roundNo>);
     PlayRandomEmote(AllPlayers(Team.Team1));
     WaitNextPhase();
 
@@ -379,6 +374,34 @@ if(
     LoopIfConditionIsTrue();
 }
 
+// TAG Player/ObjectiveDescription
+rule: "Player/ObjectiveDescription/update"
+Event.OngoingGlobal
+if(
+    initCompleted
+){
+    if(
+        portalState == PortalState.Set ||
+        portalState == PortalState.Growing
+    ){
+        SetObjectiveDescription(AllPlayers(Team.Team1), "Find and attack portal!", HudTextRev.VisibleToSortOrderStringAndColor);
+    }
+    else if(
+        portalState == PortalState.UnderAttack
+    ){
+        SetObjectiveDescription(AllPlayers(Team.Team1), "Attacking portal. Stay inside and Survive!", HudTextRev.VisibleToSortOrderStringAndColor);
+    }
+    else if(portalState == PortalState.Closed){
+        SetObjectiveDescription(AllPlayers(Team.Team1), "Portal closed. Nice work!", HudTextRev.VisibleToSortOrderStringAndColor);
+    }
+    else if(portalState == PortalState.End){
+        SetObjectiveDescription(AllPlayers(Team.Team1), <"Team lives ran out. We reached <0> round. good game!", roundNo>, HudTextRev.VisibleToSortOrderStringAndColor);
+    }
+    WaitUpdateMediumCycle();
+    LoopIfConditionIsTrue();
+}
+
+
 // TAG Player/ClosePortal
 globalvar define closingCount;
 globalvar define closingProgress;
@@ -401,7 +424,7 @@ if(
     closingCount += portalSize * 1;
     closingCount += roundNo * 5;
     closingCount = RoundToInteger(closingCount, Rounding.Up);
-    closingCount = Min(180, closingCount);
+    closingCount = Min(300, closingCount);
     closingProgress = 0;
     ChaseVariableOverTime(closingProgress, DefaultPercentage(), closingCount, TimeChaseReevaluation.DestinationAndDuration);
     // show progress hud
@@ -409,7 +432,7 @@ if(
         CreateProgressBarHudText(
             AllPlayers(),
             closingProgress,
-            <"<0> players attacking the portal. Until portal closes...", playerNumInsidePortal >,
+            <"<0> players attacking portal. Until portal closes.", playerNumInsidePortal >,
             Location.Top, 4,
             Color.White,
             Color.White,
@@ -620,7 +643,7 @@ if(
     portalEntitys[4] = CreateEffect(AllPlayers(), Effect.EnergySound, portalColor,
         portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionRadiusAndColor);
     // show message
-    BigMessage(AllPlayers(), "Defeat enemies and track portal!");
+    BigMessage(AllPlayers(), "Next Portal Detected. Find and attack portal!");
 }
 
 rule: "Portal/State/Growing"
@@ -637,9 +660,9 @@ if(
     // If first growing, show message
     if(isFirstGrowing == true){
         isFirstGrowing = false;
-        BigMessage(AllPlayers(), "Portal is growing... hurry!");
+        BigMessage(AllPlayers(), "Portal is growing. Hurry up!");
         WaitBigMessageHide();
-        BigMessage(AllPlayers(), "Growed portal spawn more enemies and get tough to close...");
+        BigMessage(AllPlayers(), "Growed portal spawn more enemies and get tough to close.");
     }
 }
 
@@ -690,7 +713,7 @@ if(
     portalState == PortalState.Closed
 ){
     // show message
-    BigMessage(AllPlayers(), "Portal closed... nice work!");
+    BigMessage(AllPlayers(), "Portal closed. Nice work!");
     // init param
     portalPosition = 0;
     portalSize = 0;
@@ -1322,7 +1345,7 @@ if(
         
         eachDealtDamageScale = 0.5;
         eachChargeUltInterval = 60;
-        eachMaxSpawnInterval = 5;
+        eachMaxSpawnInterval = 3;
         eachMinSpawnInterval = 0;
 
         eachNameText = "Minion";
@@ -1363,7 +1386,7 @@ if(
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
         eachMaxSpawnInterval = 30;
-        eachMinSpawnInterval = 15;
+        eachMinSpawnInterval = 10;
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
@@ -1383,7 +1406,7 @@ if(
         eachDealtDamageScale = 3.0;
         eachChargeUltInterval = 5;
         eachMaxSpawnInterval = 30;
-        eachMinSpawnInterval = 15;
+        eachMinSpawnInterval = 10;
 
         eachNameText = "Giant Boss";
         eachNameColor = Color.Purple;
