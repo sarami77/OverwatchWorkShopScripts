@@ -23,8 +23,10 @@ if(
     perk[Perk.perkEffectAndText] = [];
     CreatePerkEffectHud(<"Thunder strike power <0>", perk[Perk.thunderStrikePower]>);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
-    CreatePerkEffectHud(<"Hold melee button <0> to shot thunder strike.", ButtonGuide(Button.Melee)>);
+    CreatePerkEffectHud(<"Continuous consumes power while button holding.">);
     perk[Perk.perkEffectAndText] [1] = LastTextID();
+    CreatePerkEffectHud(<"Hold melee button <0> to shot thunder strike.", ButtonGuide(Button.Melee)>);
+    perk[Perk.perkEffectAndText] [2] = LastTextID();
 }
 
 rule: "Perk/Player/GrudgeThunderStrike/deactivate"
@@ -37,10 +39,9 @@ if(
     // reset text
     DestroyHudText(perk[Perk.perkEffectAndText] [0]);
     DestroyHudText(perk[Perk.perkEffectAndText] [1]);
+    DestroyHudText(perk[Perk.perkEffectAndText] [2]);
     // reset effect
-    DestroyEffect(perk[Perk.perkEffectAndText] [2]);
     DestroyEffect(perk[Perk.perkEffectAndText] [3]);
-    DestroyEffect(perk[Perk.perkEffectAndText] [4]);
     // reset type
     perkType = PerkType.Non;
 }
@@ -70,25 +71,25 @@ if(
     AbortIf(perk[Perk.thunderStrikePower] <= 0);
     
     // create Trajectory of Thunder
+    DestroyEffect(perk[Perk.perkEffectAndText] [3]);
     CreateBeamEffect(AllPlayers(), BeamType.GoodBeam,
         landPosition, landPosition2,
-        Color.SkyBlue, EffectRev.VisibleToPositionRadiusAndColor);
-    perk[Perk.perkEffectAndText] [4] = LastCreatedEntity(); 
+        Color.Blue, EffectRev.VisibleToPositionRadiusAndColor);
+    perk[Perk.perkEffectAndText] [3] = LastCreatedEntity(); 
 
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
 }
 
-disabled rule: "Perk/Player/GrudgeThunderStrike/cancelShot"
+rule: "Perk/Player/GrudgeThunderStrike/cancelShot"
 Event.OngoingPlayer
 Team.Team1
 if(
     perkType == PerkType.GrudgeThunderStrike &&
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
-    IsButtonHeld(ep, Button.Melee)
+    !IsButtonHeld(ep, Button.Melee)
 ){
-    WaitLongPressConfirm();
-    DestroyEffect(perk[Perk.perkEffectAndText] [4]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [3]);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
 }
 
@@ -101,7 +102,7 @@ if(
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
     perk[Perk.thunderStrikePower] <= 0
 ){
-    DestroyEffect(perk[Perk.perkEffectAndText] [4]);
+    DestroyEffect(perk[Perk.perkEffectAndText] [3]);
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;
 }
 
@@ -141,13 +142,13 @@ if(
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
-        Color.SkyBlue,
+        Color.Blue,
         landPosition,
         1);
     // play ring
     PlayEffect(
         AllPlayers(), PlayEffect.RingExplosion,
-        Color.SkyBlue,
+        Color.Blue,
         landPosition,
         thunderStrikeDamageRange);
     // play blast sound

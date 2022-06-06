@@ -117,7 +117,7 @@ Event.OngoingGlobal
 // TAG ServerOverLoadMeasures ----------
 define WaitUntilServerFree(){ WaitUntil(!isServerOverLoading, 10); }
 
-define slowLevel: [100, 90, 80, 70, 50];    // 0～4
+define slowLevel: [100, 95, 85, 70, 50];    // 0～4
 globalvar define targetSlowLevel;
 globalvar define currentSlowLevel;
 globalvar define slowControlHandler;
@@ -161,7 +161,7 @@ if(
     // If the server is not overloaded,
     //  reset slow motion every second
     // can decrease slow level
-    Wait(0.7, WaitBehavior.AbortWhenFalse);
+    Wait(0.8, WaitBehavior.AbortWhenFalse);
     if(targetSlowLevel > 0){
         // decrease slow level
         targetSlowLevel = 0;
@@ -1548,7 +1548,7 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
 
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         // target on walkable position
-        if(DistanceBetween(PositionOf(telPosNearTarget), distFromWP) <= 0.5){
+        if(DistanceBetween(PositionOf(telPosNearTarget), distFromWP) <= 1){
             // select position and adjust NearestWalkablePosition;
             teleportPosition = 
                 NearestWalkablePosition(
@@ -1600,8 +1600,6 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
     return true;
 }
 
-define forceUpdateCommonPositionProb: 5;
-
 Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPosition"{
     // set telPosNearTarget at closest player from commonTeleportPosition
     define telPosNearTarget! = ClosestPlayerToComTelPos;
@@ -1612,12 +1610,12 @@ Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPositio
     if(
         // invalid commonTeleportPosition
         commonTeleportPosition ==  0 ||
-        // Probability
-        ProbabilityTrue(forceUpdateCommonPositionProb) ||
-        // has not line closest player from commonTeleportPosition
-        !IsInLineOfSight(commonTeleportPosition, telPosNearTarget) ||                      
-        // target inside teleport area
-        DistanceBetween(commonTeleportPosition, telPosNearTarget) < teleportAreaSize
+        // has not line to target from common teleport position
+        !IsInLineOfSight(commonTeleportPosition, telPosNearTarget) ||
+        // target too close common teleport position
+        DistanceBetween(commonTeleportPosition, telPosNearTarget) < 5 ||
+        // force update common teleport position Probability
+        ProbabilityTrue(5)
     ){
         // new select common position
         // set teleport position to player around
@@ -1723,9 +1721,6 @@ if(
     }
 }
 
-define forceTeleportToPlayerAroundProb: 60 / NumberOfPlayers(Team.Team2);
-define teleportToCommonPositionProb: 80;
-
 rule: "EnemyBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
 Team.Team2
@@ -1734,37 +1729,7 @@ if(
     portalEnable &&
     IsInSpawnRoom()
 ){
-    if(
-        // during portal attacks
-        portalState == PortalState.UnderAttack ||
-        // probability
-        ProbabilityTrue(forceTeleportToPlayerAroundProb)
-    ){
-        if(
-            // probability
-            ProbabilityTrue(teleportToCommonPositionProb)
-        ){
-            // set teleport position to common position
-            if(SetTeleportPositionToCommonPosition()){
-                // teleport
-                TeleportWithEffect();
-            }
-        }
-        else{
-            // set teleport position to player around
-            if(SetTeleportPositionToPlayerAround()){
-                // teleport
-                TeleportWithEffect();
-            }
-        }
-    }
-    else{
-        // set teleport position to player front
-        if(SetTeleportPositionToPlayerFront()){
-            // teleport
-            TeleportWithEffect();
-        }
-    }
+    HybridTeleport();
 }
 
 define hasLine:
@@ -1789,16 +1754,20 @@ if(
             LoopIfConditionIsTrue();
         }
     }
+    HybridTeleport();
+    LoopIfConditionIsTrue();
+}
 
+void HybridTeleport(){
     if(
         // during portal attacks
         portalState == PortalState.UnderAttack ||
-        // probability
-        ProbabilityTrue(forceTeleportToPlayerAroundProb)
+        // force active teleport Probprobability
+        ProbabilityTrue(60 / NumberOfPlayers(Team.Team2))
     ){
         if(
-            // probability
-            ProbabilityTrue(teleportToCommonPositionProb)
+            // teleport to common position Probprobability
+            ProbabilityTrue(80)
         ){
             // set teleport position to common position
             if(SetTeleportPositionToCommonPosition()){
@@ -1821,8 +1790,6 @@ if(
             TeleportWithEffect();
         }
     }
-
-    LoopIfConditionIsTrue();
 }
 
 rule: "EnemyBot/Teleport/clearCommonTeleportPosition"
@@ -1952,9 +1919,9 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // add team health balance
     confirmDealtDamage += GetTeamNormalizedHealth() * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage By Player Team Total Health", 10, 0, 1000, -8);
     // add round progress
-    confirmDealtDamage += roundNo * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 1.5, 0, 1000, -7);
+    confirmDealtDamage += roundNo * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 2.0, 0, 1000, -7);
     // add team lives balance
-    confirmDealtDamage += teamLives * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Team lives", 1.5, 0, 1000, -6);
+    confirmDealtDamage += teamLives * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Team lives", 2.0, 0, 1000, -6);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(0.75, Team.Team1);
     // set threat Level
@@ -2309,4 +2276,19 @@ if(
     // Set portal position to aim center
     WaitLongPressConfirm();
     portalSize = maxPortalSize;
+}
+
+disabled rule: "Debug/showCommonTeleportPosition"
+Event.OngoingPlayer
+Team.All
+if(
+    HostPlayer() == ep &&
+    initCompleted
+){
+    CreateBeamEffect(HostPlayer(),
+        BeamType.BadBeam, ep, commonTeleportPosition,
+        IsInLineOfSight(ep, commonTeleportPosition) ? Color.Yellow : Color.White, EffectRev.PositionRadiusAndColor);
+    CreateEffect(HostPlayer(),
+        Effect.Sphere, IsInLineOfSight(ep, commonTeleportPosition) ? Color.Yellow : Color.White, commonTeleportPosition,
+        5, EffectRev.PositionRadiusAndColor);
 }
