@@ -13,7 +13,7 @@ if(
     perk[Perk.perkTimeLimit] = 180;
     // set hud
     perk[Perk.perkEffectAndText] = [];
-    CreatePerkEffectHud(<"Formation include <0> players.", perk[Perk.perkEffectStatus] >);
+    CreatePerkEffectHud(<"Giving armor to <0> players inside formation.", perk[Perk.perkEffectStatus] >);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
     // set effect
     CreateEffect(AllPlayers(), Effect.Ring, Color.Orange,
@@ -36,7 +36,7 @@ if(
     perkType = PerkType.Non;
 }
 
-playervar define isSteel!;
+playervar define isSteel! = false;
 playervar define steelEffect!;
 
 rule: "Perk/Player/SteelFormation/update"
@@ -50,7 +50,8 @@ if(
         FilteredArray(
             PlayersWithinRadius(
                 ep, steelRange, Team.Team1, RadiusLOS.Off
-            ), IsAlive(ArrayElement())
+            ),
+            IsAlive(ae)
         );
     perk[Perk.perkTargets].isSteel = true;
     perk[Perk.perkEffectStatus] = CountOf(perk[Perk.perkTargets]);
@@ -58,13 +59,22 @@ if(
     LoopIfConditionIsTrue();
 }
 
+define giveArmorUnit: 25;
+define maxArmorLimit: GetHeroOriginalHealth(HeroOf(ep)) + 100;
+
 rule: "Perk/Player/SteelFormation/setSteel"
 Event.OngoingPlayer
 Team.Team1
 if(
-    isSteel
+    isSteel &&
+    !IsInSpawnRoom()
 ){
-    if(
+    DestroyEffect(steelEffect);
+    steelEffect = CreateEffect(AllPlayers(), Effect.Ring, Color.Orange, ep, 1.0, EffectRev.PositionAndRadius);
+
+    while(
+        IsAlive(ep) &&
+        !IsInSpawnRoom() &&
         0 < CountOf(
             FilteredArray(
                 PlayersWithinRadius(
@@ -77,16 +87,29 @@ if(
             )
         )
     ){
-        SetDamageReceived(ep, 50);
-        if(steelEffect == 0)
-            steelEffect = CreateEffect(AllPlayers(), Effect.Ring, Color.Orange, ep, 1.0, EffectRev.PositionAndRadius);
+        if(maxArmorLimit > MaxHealth(ep)){
+            define giveArmor!;
+            define diffArmor! = maxArmorLimit - MaxHealth(ep);
+            if(diffArmor < giveArmorUnit){
+                giveArmor = diffArmor;
+            }
+            else{
+                giveArmor = giveArmorUnit;
+            }
+            AddHealthPoolToPlayer(ep, HealthType.Armor, giveArmor, false, false);
+        }
+        Wait(1, WaitBehavior.IgnoreCondition);
     }
-    else{
-        SetDamageReceived(ep, 100);
-        DestroyEffect(steelEffect);
-        steelEffect = 0;
-        isSteel = false;
-    }
-    WaitUpdateMediumCycle();
-    LoopIfConditionIsTrue();
+
+    DestroyEffect(steelEffect);
+    isSteel = false;
+}
+
+rule: "Perk/Player/SteelFormation/setSteel"
+Event.OngoingPlayer
+Team.Team1
+if(
+    IsInSpawnRoom()
+){
+    RemoveAllHealthPoolsFromPlayer(ep);
 }
