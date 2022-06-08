@@ -542,7 +542,7 @@ if(
 
 enum ActionState{
     Non,
-    Staring,
+    Changing,
     Attack,
     Support
 }
@@ -603,6 +603,8 @@ define FindSupportTarget():
         )
     );
 
+define maxChangeTargetProbability: 50;
+
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
 if(
@@ -637,9 +639,10 @@ if(
         if(!targetSighted){
             tryGetTarget = true;
         }
-        // is support enable
+        // is support role hero
         else if(0 < supportPriorityProbability){
             if(actionState == ActionState.Attack){
+                // change target dependent on support priority probablity
                 if(
                     ProbabilityTrue(supportPriorityProbability)
                 ){
@@ -647,20 +650,25 @@ if(
                 }
             }
             else if(actionState == ActionState.Support){
+                // change target dependent on support target health
                 if(
-                    ProbabilityTrue(NormalizedHealth(target) * 75)
+                    ProbabilityTrue(NormalizedHealth(target) * maxChangeTargetProbability)
                 ){
                     tryGetTarget = true;
                 }
-                else if(NormalizedHealth(target) >= needHealRate){
+                // almost full healed
+                else if(
+                    NormalizedHealth(target) >= needHealRate
+                ){
                     tryGetTarget = true;
                 }
             }
         }
-        // is support disable
+        // is not support role hero
         else{
+            // change target dependent on attack target health
             if(
-                ProbabilityTrue(NormalizedHealth(target) * 75)
+                ProbabilityTrue(NormalizedHealth(target) * maxChangeTargetProbability)
             ){
                 tryGetTarget = true;
             }
@@ -711,20 +719,17 @@ if(
         // next state is not Non state
         if(nextActionState != ActionState.Non){
             // set Non state for restart button control
-            actionState = ActionState.Staring;
+            actionState = ActionState.Changing;
             WaitChangeState();
         }
         // set next state
         actionState = nextActionState;
     }
-    // wait check cycle
-    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
 
-    // for distribute load
-    if(isServerOverLoading){
-        
-        Wait(RandomInteger(0, 0.5), WaitBehavior.AbortWhenFalse);
-    }
+    // distribute serverload
+    Wait(RandomInteger(0, 0.5), WaitBehavior.AbortWhenFalse);
+
+    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     WaitUntil(!isServerOverLoading, 10);
     LoopIfConditionIsTrue();
 }
@@ -1003,7 +1008,7 @@ if(
         heroAction();
 
         // check abyss
-        define distance! = moveMeterPerSec * watchUpdateRate;
+        define distance! = walkMeterPerSec * watchUpdateRate;
         define fCheckPos! = BlockedPositonByLocalVector(Forward(), distance);
         define fAbyss! = IsBelowAbyss(fCheckPos);
         define bCheckPos! = BlockedPositonByLocalVector(Backward(), distance);
@@ -1052,7 +1057,7 @@ if(
         heroAction();
     
         // check abyss
-        define distance! = moveMeterPerSec * watchUpdateRate;
+        define distance! = walkMeterPerSec * watchUpdateRate;
         define fCheckPos! = BlockedPositonByLocalVector(Forward(), distance);
         define fAbyss! = IsBelowAbyss(fCheckPos);
         define bCheckPos! = BlockedPositonByLocalVector(Backward(), distance);
@@ -1115,8 +1120,9 @@ void heroAction(){
                 SetWeapon(ep, MercyStaff);
             }
         }
-        // WreckingBall's jump for pile driver
+        
         else if(HeroOf() == Hero.WreckingBall){
+            // WreckingBall's jump for pile driver
             if(
                 AbilityCooldown(ep, Button.Crouch) <= 0 &&
                 IsButtonHeld(ep, Button.Crouch) &&
@@ -1126,7 +1132,7 @@ void heroAction(){
                     10, Relative.ToWorld, ContraryMotion.Cancel);
             }
 
-        // WreckingBall's accel for ball tackle
+            // WreckingBall's accsell for ball tackle
             while(IsFiringSecondary(ep)){
                 // for ball charge
                 define boostDir! = RandomValueInArray([Right(), Forward(), Backward(), Left()]);

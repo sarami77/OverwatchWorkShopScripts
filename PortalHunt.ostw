@@ -240,8 +240,8 @@ if(
     initCompleted
 ){
     // Change the spawn room regularly to keep the game fluid
-    ForceSpawnRoom(Team.Team1, RandomValueInArray([0, 1, 2]));
-    ForceSpawnRoom(Team.Team2, RandomValueInArray([0, 1, 2]));
+    ForceSpawnRoom(Team.Team1, RandomValueInArray([0, 1, 1, 1, 2]));
+    ForceSpawnRoom(Team.Team2, RandomValueInArray([0, 1, 1, 1, 2]));
     Wait(300, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
@@ -250,7 +250,7 @@ if(
 playervar define isInsidePortal!;
 
 // TAG Player/ReturnSpawnRoom
-rule: "Player/ReturnSpawnRoom/return"
+rule: "Player/ReturnSpawnRoom/manualReturn"
 Event.OngoingPlayer
 Team.Team1
 if(
@@ -264,11 +264,11 @@ if(
     Respawn();
 }
 
-// TAG Player/FisrtFast
-rule: "Player/FisrtFast/setFastSpeed"
+rule: "Player/ReturnSpawnRoom/setFastSpeed"
 Event.OngoingPlayer
 Team.Team1
 if(
+    initCompleted &&
     IsAlive() &&
     IsInSpawnRoom()
 ){
@@ -776,14 +776,6 @@ if(
             (
                 DistanceBetween(prevPortalPosition, candidatePosition) >= 50
             )
-            //     &&
-            // // far postion from player
-            // (
-            //     DistanceBetween(
-            //         ClosestPlayerTo(candidatePosition, Team.Team1),
-            //         candidatePosition
-            //     ) >= 50
-            // )
         ){
             break;
         }
@@ -805,15 +797,15 @@ if(
     portalState == PortalState.Checking
 ){
     // wait for portal position check
-    Wait(1, WaitBehavior.AbortWhenFalse);
+    Wait(3, WaitBehavior.AbortWhenFalse);
     // confirm portal position
     prevPortalPosition = portalPosition;
     // portal create fin
     portalState = PortalState.Set;
 }
 
-// TAG Portal/InvalidDetect/InsideRespawnRoom ----------
-rule: "Portal/InvalidDetect/InsideRespawnRoom/resetPortal"
+// TAG Portal/Positioner/InsideRespawnRoom ----------
+rule: "Portal/Positioner/InsideRespawnRoom/resetPortal"
 Event.OngoingGlobal
 if(
     portalEnable &&
@@ -829,40 +821,41 @@ if(
     portalState = PortalState.Calculating;
 }
 
-// TAG Portal/InvalidDetect/EnvironmentDeathCount ----------
-define environmentDeathLimit: NumberOfPlayers(Team.Team2) + 2;
+// TAG Portal/Positioner/EnvironmentDeathCount ----------
+define environmentDeathLimit: NumberOfPlayers(Team.Team2);
 globalvar define environmentDeathCount!;
 
-rule: "Portal/InvalidDetect/EnvironmentDeathCount/resetCount"
+rule: "Portal/Positioner/EnvironmentDeathCount/resetCount"
 Event.OngoingGlobal
 if(
-    !portalEnable &&
-    environmentDeathCount > 0
+    !portalEnable
 ){
     environmentDeathCount = 0;
 }
 
-rule: "Portal/InvalidDetect/EnvironmentDeathCount/countup"
+rule: "Portal/Positioner/EnvironmentDeathCount/countup"
 Event.OnDeath
 Team.Team2
 if(
     portalEnable &&
     (
-        Attacker() == ep ||         // sucide
+        Attacker() == ep ||         // killed by res room
         IsInSpawnRoom(Attacker())   // killer in res room
     )
 ){
     // change room for avoid kill in res room
     ForceSpawnRoom(Team.Team1, RandomValueInArray([0, 1, 2]));
     // sucide
-    if(Attacker() == ep)
+    if(Attacker() == ep){
         environmentDeathCount += 1;
+    }
     // killer in res room
-    else if(IsInSpawnRoom(Attacker()))
+    else if(IsInSpawnRoom(Attacker())){
         environmentDeathCount += 3;
+    }
 }
 
-rule: "Portal/InvalidDetect/EnvironmentDeathCount/reduceCount"
+rule: "Portal/Positioner/EnvironmentDeathCount/reduceCount"
 Event.OngoingGlobal
 if(
     portalEnable &&
@@ -873,7 +866,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Portal/InvalidDetect/EnvironmentDeathCount/resetPortal"
+rule: "Portal/Positioner/EnvironmentDeathCount/resetPortal"
 Event.OngoingGlobal
 if(
     portalEnable &&
@@ -884,11 +877,11 @@ if(
     portalState = PortalState.Calculating;
 }
 
-// TAG Portal/InvalidDetect/CantContact ----------
+// TAG Portal/Positioner/CantContact ----------
 define limitTime: 180;
 globalvar define notContactTime!;
 
-rule: "Portal/InvalidDetect/NotContactTime/resetTime"
+rule: "Portal/Positioner/NotContactTime/resetTime"
 Event.OngoingGlobal
 if(
     !portalEnable
@@ -897,7 +890,7 @@ if(
     notContactTime = 0;
 }
 
-rule: "Portal/InvalidDetect/NotContactTime/countup"
+rule: "Portal/Positioner/NotContactTime/countup"
 Event.OngoingGlobal
 if(
     portalEnable &&
@@ -909,7 +902,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Portal/InvalidDetect/NotContactTime/detectContact"
+rule: "Portal/Positioner/NotContactTime/detectContact"
 Event.OngoingGlobal
 if(
     portalState == PortalState.UnderAttack
@@ -917,7 +910,7 @@ if(
     notContactTime = -1;
 }
 
-rule: "Portal/InvalidDetect/NotContactTime/resetPortal"
+rule: "Portal/Positioner/NotContactTime/resetPortal"
 Event.OngoingGlobal
 if(
     portalEnable &&
@@ -1337,8 +1330,8 @@ if(
         
         eachDealtDamageScale = 0.5;
         eachChargeUltInterval = 60;
-        eachMaxSpawnInterval = 3;
-        eachMinSpawnInterval = 1;
+        eachMaxSpawnInterval = 5;
+        eachMinSpawnInterval = 0;
 
         eachNameText = "Minion";
         eachNameColor = Color.White;
@@ -1357,8 +1350,8 @@ if(
 
         eachDealtDamageScale = 1.0;
         eachChargeUltInterval = 20;
-        eachMaxSpawnInterval = 9;
-        eachMinSpawnInterval = 3;
+        eachMaxSpawnInterval = 10;
+        eachMinSpawnInterval = 5;
 
         eachNameText = "Elite";
         eachNameColor = Color.Yellow;
@@ -1377,8 +1370,8 @@ if(
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
-        eachMaxSpawnInterval = 27;
-        eachMinSpawnInterval = 9;
+        eachMaxSpawnInterval = 20;
+        eachMinSpawnInterval = 10;
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
@@ -1397,8 +1390,8 @@ if(
 
         eachDealtDamageScale = 3.0;
         eachChargeUltInterval = 5;
-        eachMaxSpawnInterval = 27;
-        eachMinSpawnInterval = 9;
+        eachMaxSpawnInterval = 20;
+        eachMinSpawnInterval = 10;
 
         eachNameText = "Giant Boss";
         eachNameColor = Color.Purple;
