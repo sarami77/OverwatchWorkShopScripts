@@ -36,8 +36,9 @@ if(
     perkType = PerkType.Non;
 }
 
-playervar define isSteel! = false;
-playervar define steelEffect!;
+playervar define isSteeling! = false;
+playervar define steelingEffect!;
+playervar define steeledHero!;
 
 rule: "Perk/Player/SteelFormation/update"
 Event.OngoingPlayer
@@ -53,7 +54,7 @@ if(
             ),
             IsAlive(ae)
         );
-    perk[Perk.perkTargets].isSteel = true;
+    perk[Perk.perkTargets].isSteeling = true;
     perk[Perk.perkEffectStatus] = CountOf(perk[Perk.perkTargets]);
     WaitUpdateMediumCycle();
     LoopIfConditionIsTrue();
@@ -66,15 +67,13 @@ rule: "Perk/Player/SteelFormation/setSteel"
 Event.OngoingPlayer
 Team.Team1
 if(
-    isSteel &&
-    !IsInSpawnRoom()
+    isSteeling
 ){
-    DestroyEffect(steelEffect);
-    steelEffect = CreateEffect(AllPlayers(), Effect.Ring, Color.Orange, ep, 1.0, EffectRev.PositionAndRadius);
-
+    DestroyEffect(steelingEffect);
+    steelingEffect = CreateEffect(AllPlayers(), Effect.Ring, Color.Orange, ep, 1.0, EffectRev.PositionAndRadius);
+    steeledHero = HeroOf();
     while(
         IsAlive(ep) &&
-        !IsInSpawnRoom() &&
         0 < CountOf(
             FilteredArray(
                 PlayersWithinRadius(
@@ -87,7 +86,9 @@ if(
             )
         )
     ){
-        if(maxArmorLimit > MaxHealth(ep)){
+        if(
+            maxArmorLimit > MaxHealth(ep)
+        ){
             define giveArmor!;
             define diffArmor! = maxArmorLimit - MaxHealth(ep);
             if(diffArmor < giveArmorUnit){
@@ -100,16 +101,16 @@ if(
         }
         Wait(1, WaitBehavior.IgnoreCondition);
     }
-
-    DestroyEffect(steelEffect);
-    isSteel = false;
+    DestroyEffect(steelingEffect);
+    isSteeling = false;
 }
 
-rule: "Perk/Player/SteelFormation/setSteel"
+rule: "Perk/Player/SteelFormation/releaseSteel"
 Event.OngoingPlayer
 Team.Team1
 if(
-    IsInSpawnRoom()
+    steeledHero != HeroOf()
 ){
     RemoveAllHealthPoolsFromPlayer(ep);
+    steeledHero = HeroOf();
 }

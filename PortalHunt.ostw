@@ -394,6 +394,9 @@ if(
     else if(portalState == PortalState.End){
         SetObjectiveDescription(AllPlayers(Team.Team1), "Team lives ran out. good game!", HudTextRev.VisibleToSortOrderStringAndColor);
     }
+    else if(portalState == PortalState.Calculating){
+        SetObjectiveDescription(AllPlayers(Team.Team1), "Scanning portal... Stand by.", HudTextRev.VisibleToSortOrderStringAndColor);
+    }
     WaitUpdateMediumCycle();
     LoopIfConditionIsTrue();
 }
@@ -420,8 +423,8 @@ if(
     WaitConditionConfirmed();
     // kick progress
     closingCount = 10;
-    closingCount += portalSize * 1;
-    closingCount += roundNo * 5;
+    closingCount += portalSize * 0.5;
+    closingCount += roundNo * 10;
     closingCount = RoundToInteger(closingCount, Rounding.Up);
     closingCount = Min(maxClosingCount, closingCount);
     closingProgress = 0;
@@ -557,7 +560,7 @@ define enemyColor: Color.Purple;
 
 globalvar define portalState;
 enum PortalState{
-    Non,
+    Changing,
     Init,
     Calculating,
     Checking,
@@ -635,7 +638,7 @@ if(
     portalEntitys[4] = CreateEffect(showPortalPlayers, Effect.EnergySound, portalColor,
         portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionRadiusAndColor);
     // show message
-    BigMessage(showPortalPlayers, "Next Portal Detected. Find and attack portal!");
+    BigMessage(showPortalPlayers, "New portal detected. Find and attack portal!");
 }
 
 rule: "Portal/State/Growing"
@@ -654,7 +657,7 @@ if(
         isFirstGrowing = false;
         BigMessage(AllPlayers(), "Portal is growing. Hurry up!");
         WaitBigMessageHide();
-        BigMessage(AllPlayers(), "Growed portal spawn more enemies and get tough to close.");
+        BigMessage(AllPlayers(), "Growed portal spawn more enemies and get hard to close.");
     }
 }
 
@@ -779,7 +782,7 @@ if(
         ){
             break;
         }
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     // confirm as portal position
@@ -822,7 +825,7 @@ if(
 }
 
 // TAG Portal/Positioner/EnvironmentDeathCount ----------
-define environmentDeathLimit: NumberOfPlayers(Team.Team2);
+define environmentDeathLimit: NumberOfPlayers(Team.Team2) + 1;
 globalvar define environmentDeathCount!;
 
 rule: "Portal/Positioner/EnvironmentDeathCount/resetCount"
@@ -1330,7 +1333,7 @@ if(
         
         eachDealtDamageScale = 0.5;
         eachChargeUltInterval = 60;
-        eachMaxSpawnInterval = 5;
+        eachMaxSpawnInterval = 3;
         eachMinSpawnInterval = 0;
 
         eachNameText = "Minion";
@@ -1350,14 +1353,14 @@ if(
 
         eachDealtDamageScale = 1.0;
         eachChargeUltInterval = 20;
-        eachMaxSpawnInterval = 10;
-        eachMinSpawnInterval = 5;
+        eachMaxSpawnInterval = 9;
+        eachMinSpawnInterval = 3;
 
         eachNameText = "Elite";
         eachNameColor = Color.Yellow;
         eachEffectTextSize = basicInWorldTextSize + 1;
 
-        eachPerkDropProbability = 10;
+        eachPerkDropProbability = 9;
     }
     else if(enemyType == EnemyType.Boss){
         StartScalingPlayer(ep, 1.5, false);
@@ -1370,14 +1373,14 @@ if(
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
-        eachMaxSpawnInterval = 20;
-        eachMinSpawnInterval = 10;
+        eachMaxSpawnInterval = 27;
+        eachMinSpawnInterval = 9;
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
         eachEffectTextSize = basicInWorldTextSize + 2;
 
-        eachPerkDropProbability = 25;
+        eachPerkDropProbability = 27;
     }
     else if(enemyType == EnemyType.GiantBoss){
         StartScalingPlayer(ep, 2.5, false);
@@ -1512,7 +1515,7 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
         ){
             break;
         }
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     return true;
@@ -1577,7 +1580,7 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
         ){
             break;
         }
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     return true;
@@ -1898,13 +1901,13 @@ globalvar define threatLevel!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 5.0, 0, 1000, -9);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 4.0, 0, 1000, -9);
     // add team health balance
-    confirmDealtDamage += GetTeamNormalizedHealth() * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage By Player Team Total Health", 10, 0, 1000, -8);
+    confirmDealtDamage += GetTeamNormalizedHealth() * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage By Player Team Total Health", 5, 0, 1000, -8);
     // add round progress
     confirmDealtDamage += roundNo * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 2.0, 0, 1000, -7);
     // add team lives balance
-    confirmDealtDamage += teamLives * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Team lives", 2.0, 0, 1000, -6);
+    confirmDealtDamage += teamLives * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Team lives", 1.0, 0, 1000, -6);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(0.75, Team.Team1);
     // set threat Level
@@ -2221,7 +2224,7 @@ if(
 ){
     // Recalculate portal
     WaitLongPressConfirm();
-    portalState = PortalState.Non;
+    portalState = PortalState.Changing;
     WaitChangeState();  // Wait for the changed status to be processed first
     portalState = PortalState.Calculating;
 }
@@ -2239,7 +2242,7 @@ if(
 ){
     // Set portal position to aim center
     WaitLongPressConfirm();
-    portalState = PortalState.Non;
+    portalState = PortalState.Changing;
     debugAimingPosition = AimingPosition();
     WaitChangeState();  // Wait for the changed status to be processed first
     portalState = PortalState.Calculating;
