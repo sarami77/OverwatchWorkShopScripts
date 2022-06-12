@@ -1,0 +1,50 @@
+import "Utility.del";
+import "Bot.del";
+
+define playerTeam: Team.Team2;
+define enemyTeam: Team.Team1;
+
+void AddBuddyBot(Hero hero!){
+    CreateBotsByHeroInput(hero, 1, playerTeam);
+}
+
+// TAG Buddy ----------
+
+rule: "addBuddy"
+Event.OngoingPlayer
+Team.All
+if(
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Jump)
+){
+    dbgMsg("addBuddy");
+    AddBuddyBot(Hero.Mercy);
+}
+
+// TAG Buddy/Teleport ----------
+rule: "Buddy/Teleport/teleportByEnemyNotFound"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    TeamOf() == playerTeam &&
+    IsGameInProgress() &&
+    IsAlive() &&
+    !IsInSpawnRoom()
+){
+    for(define notHasLineSecond! = 0; notHasLineSecond < 3; notHasLineSecond ++){
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        define hasTarget! = (actionState != ActionState.Non);
+        define nearObject! = (DistanceBetween(ep, ClosestPlayerTo(ep, playerTeam)) <= 20);
+        if(
+            hasTarget && nearObject 
+        ){
+            // reset count up
+            LoopIfConditionIsTrue();
+        }
+    }
+    Teleport(ep, NearestWalkablePosition(
+        PositionOf(ClosestPlayerTo(ep, playerTeam)) +
+        RandomPosition(2,0,2)));
+    LoopIfConditionIsTrue();
+}
