@@ -18,11 +18,13 @@ if(
     IsAlive() &&
     actionState == ActionState.Non
 ){
+    // try follow loop
     for(define notHasLineSecond! = 0; notHasLineSecond < followHopTryCount; notHasLineSecond ++){
-        Wait(RandomReal(0, 0.5));
         Wait(followIntervalSecond, WaitBehavior.AbortWhenFalse);
-        // has support target
+        
+        // get followPlayer
         if(
+            // has support target
             actionState == ActionState.Support &&
             target != 0
         )
@@ -44,18 +46,21 @@ if(
             );
         }
 
+        // set destination
         StopForcingDummyBotName(ep);
         if(
-            followPlayer == null &&
-            IsGameInProgress()
+            followPlayer == null
         ){
-            followPlayer = CurrentObjectPosition();
             StartForcingDummyBotName(ep, <"No Follow Player">);
+            if(IsGameInProgress()){
+                followPlayer = CurrentObjectPosition();
+            }
         }
         else{
             StartForcingDummyBotName(ep, <"Follower of <0>", followPlayer>);
-        }   
-        
+        }
+
+        // follow 
         define dist! = DistanceBetween(ep, followPlayer);
         define hasNearPlayer! = dist <= followRange;
         define hasLineNearPlayer = IsInLineOfSight(ep, followPlayer);
@@ -63,24 +68,27 @@ if(
             hasNearPlayer &&
             hasLineNearPlayer
         ){
+            // stop follow
             StopMove();
             // reset try count
             LoopIfConditionIsTrue();           
         }
         else{
+            // start follow
             SetFacing(
                 ep,
                 DirectionTowards(ep, followPlayer),
                 Relative.ToWorld);
-            
-            if(dist < followRange * 2){
-                // walk
+            // timing distibute
+            Wait(RandomReal(0, 0.3), WaitBehavior.IgnoreCondition);
+            // near followRange
+            if(dist <= followRange * 1.25){
+                // by walk
                 moveDir = Forward();
-                sideStepDir = 0;
                 StartMove();
             }
-            else{
-                // hop
+            else if(dist <= followRange * 3){
+                // by hop
                 ApplyImpulse(
                     ep, VectorTowards(
                         ep, PositionOf(followPlayer) + Vector(0, dist * 0.1, 0)
@@ -88,15 +96,18 @@ if(
                     DistanceBetween(ep, followPlayer) * followHopEmpluseScale,
                     Relative.ToWorld, ContraryMotion.Cancel);
             }
+            else{
+                // by teleport
+                break;
+            }
         }
     }
 
+    // try follow count over
     Teleport(ep,
         NearestWalkablePosition(
-            PositionOf(
-                followPlayer
-            ) +
-            RandomPosition(followRange, 0, followRange)
+            PositionOf(followPlayer) +
+            DirectionTowards(followPlayer, ep)
         )
     );
     
@@ -112,20 +123,25 @@ if(
     actionState == ActionState.Non
 ){
     Wait(RandomInteger(5, 15) ,WaitBehavior.AbortWhenFalse);
-    SetFacing(
-        ep,
-        DirectionTowards(
-            ep,
-            RandomValueInArray(
-                FilteredArray(
-                    AllPlayers(playerTeam),
-                    (
-                        DistanceBetween(ae, ep) <= 10
-                    )
+    define helloTarget! = 
+        RandomValueInArray(
+            FilteredArray(
+                AllPlayers(playerTeam),
+                (
+                    DistanceBetween(ae, ep) <= 10
                 )
             )
-        )
-    );
-    Communicate(ep, Communication.Hello);
+        );
+
+    if(helloTarget != null){
+        Communicate(ep, Communication.Hello);
+        if(!IsMoving()){
+            SetFacing(
+                ep,
+                DirectionTowards(ep, helloTarget),
+                Relative.ToWorld);
+        }
+    }
+    
     LoopIfConditionIsTrue();
 }

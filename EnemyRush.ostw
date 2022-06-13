@@ -1,6 +1,7 @@
 import "EnemyRush.setting.json";
 import "Lib/Debug.del";
 import "Lib/Utility.del";
+import "Lib/ServerOverLoadMeasures.del";
 import "Lib/Bot.del";
 import "Lib/Buddy.del";
 
@@ -68,123 +69,56 @@ if(
     SetMatchTime(phaseTime);
 }
 
-// TAG ServerOverLoadMeasures ----------
-define WaitUntilServerFree(){ WaitUntil(!isServerOverLoading, 5); }
-
-define slowLevel: [100, 90, 80, 70, 50];    // 0～4
-globalvar define targetSlowLevel;
-globalvar define currentSlowLevel;
-globalvar define slowControlHandler;
-enum SlowControlHandler{
-    None,
-    ServerOverLoadMeasures,
-    PlayerJoin,
-    GameEnd
-}
-
-rule: "ServerOverLoadMeasures/increaseSlowLevel"
-Event.OngoingGlobal
-if(
-    initCompleted &&    
-    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
-    isServerOverLoading &&
-    targetSlowLevel < (CountOf(slowLevel) - 1)
-){
-    // If the server is overloaded,
-    //  apply slow motion every second
-    //  to reduce the load to avoid shutting down due to server overload.
-    Wait(1, WaitBehavior.AbortWhenFalse);
-    // increase slow level
-    targetSlowLevel ++;
-    // apply slow level
-    ApplySlowLevel(targetSlowLevel);
-
-    LoopIfConditionIsTrue();
-}
-
-rule: "ServerOverLoadMeasures/decreaseSlowLevel"
-Event.OngoingGlobal
-if(
-    initCompleted &&
-    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
-    !isServerOverLoading &&
-    targetSlowLevel > 0
-){
-    // If the server is not overloaded,
-    //  reset slow motion every second
-    // can decrease slow level
-    Wait(0.5, WaitBehavior.AbortWhenFalse);
-    // decrease slow level
-    targetSlowLevel --;
-    // apply slow level
-    ApplySlowLevel(targetSlowLevel);
-
-    LoopIfConditionIsTrue();
-}
-
-void ApplySlowLevel(define setSlowLevel)"ApplySlowLevel"{
-    // if slow level changed
-    if(currentSlowLevel != setSlowLevel){
-        // apply slow motion
-        currentSlowLevel = setSlowLevel;
-        SetSlowMotion(slowLevel[setSlowLevel]);
-    }
-}
-
 // TAG Buddy ----------
 rule: "Buddy/BuddyContorl"
 Event.OngoingGlobal
 if(
     initCompleted
 ){
-    while(true){
-        define buddyList! = [
-            Hero.Soldier76,
-            Hero.Genji,
-            Hero.Reinhardt,
+    define buddyList! = 
+    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", false) ?
+        // random list
+        [
+            RandomSupportHero,
+            RandomTankHero,
+            RandomDamageHero,
+            RandomSupportHero,
+            RandomTankHero,
+            RandomDamageHero,
+            RandomSupportHero,
+            RandomDamageHero
+        ]
+    :
+        // fix list
+        [
             Hero.Mercy,
-            Hero.Hanzo,
-            Hero.Sigma,
+            Hero.Reinhardt,
+            Hero.Genji,
             Hero.Ana,
+            Hero.Sigma,
+            Hero.Hanzo,
+            Hero.Zenyatta,
             Hero.Doomfist
         ];
-        define maxBuddyNum! = CountOf(buddyList);
-        define maxSlotNum! = NumberOfSlots(playerTeam);
-        define entityNum! = NumberOfPlayers(playerTeam);
+    buddyList = ArraySlice(buddyList, 0,
+        WorkshopSettingInteger("Follower AI Settings(Join on behalf of absent player)", "Follower Max Num", 3, 0, 8, 1)
+    );
+    define prevPlayerNum! = -1;
+    define maxSlotNum! = NumberOfSlots(playerTeam);
+
+    while(true){
         define playerNum! = CountOf(
                 FilteredArray(
                     AllPlayers(playerTeam),
                     !IsDummyBot(ae)));
-        define buddyNum! = CountOf(
-                FilteredArray(
-                    AllPlayers(playerTeam),
-                    IsDummyBot(ae)));
-        define emptySlotNum! = maxSlotNum - playerNum;
-
-        // dbgHudTxt(<"maxBuddyNum <0>", maxBuddyNum>);
-        // dbgHudTxt(<"maxSlotNum <0>", maxSlotNum>);
-        // dbgHudTxt(<"entityNum <0>", entityNum>);
-        // dbgHudTxt(<"playerNum <0>", playerNum>);
-        // dbgHudTxt(<"buddyNum <0>", buddyNum>);
-        // dbgHudTxt(<"emptySlotNum <0>", emptySlotNum>);
 
         define reloadBuddyList! = false;
         if(
-            // not buddy full && not slot full
-            (
-                (entityNum < maxSlotNum) &&
-                (buddyNum < maxBuddyNum)
-            )
+            // player num changed
+            prevPlayerNum != playerNum
         ){
-            // dbgHudTxt(<"can buddy more <0>", 0>);
-            reloadBuddyList = true;
-        }
-
-        if(
-            // entity over
-            (entityNum > maxSlotNum)
-        ){
-            // dbgHudTxt(<"entity over  <0>", 0>);
+            // dbgHudTxt(<"player Num changed <0> -> <1>", prevPlayerNum, playerNum>);
+            prevPlayerNum = playerNum;
             reloadBuddyList = true;
         }
 
@@ -193,9 +127,11 @@ if(
         ){
             // dbgHudTxt(<"reload buddy list <0>", 0>);
             DestroyBots(playerTeam);
-            buddyList = ArraySlice(buddyList, 0, emptySlotNum);
-            for(gLoopIndex = 0; gLoopIndex < CountOf(buddyList); gLoopIndex++){
-                CreateBotsByHeroInput(buddyList[gLoopIndex], 1, playerTeam);
+            define emptySlotNum! = maxSlotNum - playerNum;
+                dbgHudTxt(<"empty Slot Num <0>", emptySlotNum>);
+            define addList! = ArraySlice(buddyList, 0, emptySlotNum);
+            for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(addList); buddyAddIndex++){
+                CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
             }
         }
         else{

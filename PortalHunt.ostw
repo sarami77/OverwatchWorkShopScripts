@@ -1,6 +1,7 @@
 import "PortalHunt.setting.json";
 import "Lib/Debug.del";
 import "Lib/Utility.del";
+import "Lib/ServerOverLoadMeasures.del";
 import "Lib/ElapsedTimer.del";
 import "Lib/DamageText.del";
 import "Lib/Regeneration.del";
@@ -112,69 +113,6 @@ Event.OngoingGlobal
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
-}
-
-// TAG ServerOverLoadMeasures ----------
-define WaitUntilServerFree(){ WaitUntil(!isServerOverLoading, 10); }
-
-define slowLevel: [100, 95, 85, 70, 50];    // 0～4
-globalvar define targetSlowLevel;
-globalvar define currentSlowLevel;
-globalvar define slowControlHandler;
-enum SlowControlHandler{
-    None,
-    ServerOverLoadMeasures,
-    PlayerJoin,
-    GameEnd
-}
-
-rule: "ServerOverLoadMeasures/increaseSlowLevel"
-Event.OngoingGlobal
-if(
-    initCompleted &&    
-    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
-    isServerOverLoading &&
-    targetSlowLevel < (CountOf(slowLevel) - 1)
-){
-    // If the server is overloaded,
-    //  apply slow motion every second
-    //  to reduce the load to avoid shutting down due to server overload.
-    Wait(1, WaitBehavior.AbortWhenFalse);
-    // increase slow level
-    targetSlowLevel ++;
-    // apply slow level
-    ApplySlowLevel(targetSlowLevel);
-
-    LoopIfConditionIsTrue();
-}
-
-rule: "ServerOverLoadMeasures/decreaseSlowLevel"
-Event.OngoingGlobal
-if(
-    initCompleted &&
-    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
-    !isServerOverLoading &&
-    targetSlowLevel > 0
-){
-    // If the server is not overloaded,
-    //  reset slow motion every second
-    // can decrease slow level
-    Wait(0.5, WaitBehavior.AbortWhenFalse);
-    // decrease slow level
-    targetSlowLevel --;
-    // apply slow level
-    ApplySlowLevel(targetSlowLevel);
-
-    LoopIfConditionIsTrue();
-}
-
-void ApplySlowLevel(define setSlowLevel)"ApplySlowLevel"{
-    // if slow level changed
-    if(currentSlowLevel != setSlowLevel){
-        // apply slow motion
-        currentSlowLevel = setSlowLevel;
-        SetSlowMotion(slowLevel[setSlowLevel]);
-    }
 }
 
 // TAG Game ----------
