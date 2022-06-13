@@ -539,8 +539,6 @@ enum ButtonBehaivor{
 }
 
 // TAG Bot/ActionState/StateControl ----------
-define needHealRate: 0.75;
-
 define watchUpdateRate:
     isServerOverLoading ? 4 : 2;
 
@@ -551,8 +549,8 @@ define FindAttackTarget():
                 AllPlayers(OppositeTeamOf(TeamOf())),
                 (
                     HasSpawned(ae) &&
-                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
                     IsAlive(ae) &&
+                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
                     !(
                         IsStealth(ae) &&
                         DistanceBetween(ae, ep) >= 3
@@ -570,17 +568,17 @@ define FindSupportTarget():
                 AllPlayers(TeamOf()),
                 (
                     ae != ep &&
+                    ProbabilityTrue((1 - NormalizedHealth(ae)) * supportPriorityProbability) &&
                     HasSpawned(ae) &&
-                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
                     IsAlive(ae) &&
-                    NormalizedHealth(ae) < needHealRate
+                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
                 )
             ),
             Health(ae) - MaxHealth(ae)
         )
     );
 
-define maxChangeTargetProbability: 70;
+define maxChangeTargetProbability: 50;
 
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
@@ -626,16 +624,16 @@ if(
             else if(actionState == ActionState.Support){
                 // change target dependent on support target health
                 if(
-                    ProbabilityTrue(NormalizedHealth(target) * maxChangeTargetProbability)
+                    ProbabilityTrue(NormalizedHealth(target) * supportPriorityProbability)
                 ){
                     tryGetTarget = true;
                 }
-                // almost full healed
-                else if(
-                    NormalizedHealth(target) >= needHealRate
-                ){
-                    tryGetTarget = true;
-                }
+                // // almost full healed
+                // else if(
+                //     NormalizedHealth(target) >= needHealRate
+                // ){
+                //     tryGetTarget = true;
+                // }
             }
         }
         // is not support role hero
