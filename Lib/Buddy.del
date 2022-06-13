@@ -1,50 +1,129 @@
 import "Utility.del";
 import "Bot.del";
 
-define playerTeam: Team.Team2;
-define enemyTeam: Team.Team1;
-
-void AddBuddyBot(Hero hero!){
-    CreateBotsByHeroInput(hero, 1, playerTeam);
-}
-
 // TAG Buddy ----------
 
-rule: "addBuddy"
-Event.OngoingPlayer
-Team.All
-if(
-    HostPlayer() == ep &&
-    IsButtonHeld(ep, Button.Interact) &&
-    IsButtonHeld(ep, Button.Jump)
-){
-    dbgMsg("addBuddy");
-    AddBuddyBot(Hero.Mercy);
-}
+define followRange: 8;
+define followIntervalSecond: 0.5;
+define followHopTryCount: 6;
+define followHopEmpluseScale: 2.2;
+playervar define followPlayer;
 
-// TAG Buddy/Teleport ----------
-rule: "Buddy/Teleport/teleportByEnemyNotFound"
+rule: "Buddy/Teleport/hopToFollower"
 Event.OngoingPlayer
 if(
-    IsDummyBot() &&
     TeamOf() == playerTeam &&
-    IsGameInProgress() &&
+    IsDummyBot() &&
+    HasSpawned() &&
     IsAlive() &&
-    !IsInSpawnRoom()
+    actionState == ActionState.Non
 ){
-    for(define notHasLineSecond! = 0; notHasLineSecond < 3; notHasLineSecond ++){
-        Wait(1, WaitBehavior.AbortWhenFalse);
-        define hasTarget! = (actionState != ActionState.Non);
-        define nearObject! = (DistanceBetween(ep, ClosestPlayerTo(ep, playerTeam)) <= 20);
+    for(define notHasLineSecond! = 0; notHasLineSecond < followHopTryCount; notHasLineSecond ++){
+        Wait(RandomReal(0, 0.5));
+        Wait(followIntervalSecond, WaitBehavior.AbortWhenFalse);
+        // has support target
         if(
-            hasTarget && nearObject 
+            actionState == ActionState.Support &&
+            target != 0
+        )
+        {
+            followPlayer = target;
+        }
+        else{
+            followPlayer = FirstOf(
+                SortedArray(
+                    FilteredArray(
+                        AllLivingPlayers(playerTeam),
+                        (
+                            !IsDummyBot(ae) &&
+                            HasSpawned(ae)
+                        )
+                    ),
+                    DistanceBetween(ae, ep)
+                )
+            );
+        }
+
+        StopForcingDummyBotName(ep);
+        if(
+            followPlayer == null &&
+            IsGameInProgress()
         ){
-            // reset count up
-            LoopIfConditionIsTrue();
+            followPlayer = CurrentObjectPosition();
+            StartForcingDummyBotName(ep, <"No Followy">);
+        }
+        else{
+            StartForcingDummyBotName(ep, <"Follower of <0>", followPlayer>);
+        }   
+        
+        define dist! = DistanceBetween(ep, followPlayer);
+        define hasNearPlayer! = dist <= followRange;
+        define hasLineNearPlayer = IsInLineOfSight(ep, followPlayer);
+        if(
+            hasNearPlayer &&
+            hasLineNearPlayer
+        ){
+            StopMove();
+            // reset try count
+            LoopIfConditionIsTrue();           
+        }
+        else{
+            SetFacing(
+                ep,
+                DirectionTowards(ep, followPlayer),
+                Relative.ToWorld);
+            
+            if(dist < followRange * 2){
+                moveDir = Forward();
+                sideStepDir = 0;
+                StartMove();
+            }
+            else{
+                ApplyImpulse(
+                    ep, VectorTowards(
+                        ep, PositionOf(followPlayer) + Vector(0, dist * 0.1, 0)
+                    ),
+                    DistanceBetween(ep, followPlayer) * followHopEmpluseScale,
+                    Relative.ToWorld, ContraryMotion.Cancel);
+            }
         }
     }
-    Teleport(ep, NearestWalkablePosition(
-        PositionOf(ClosestPlayerTo(ep, playerTeam)) +
-        RandomPosition(2,0,2)));
+
+    Teleport(ep,
+        NearestWalkablePosition(
+            PositionOf(
+                followPlayer
+            ) +
+            RandomPosition(followRange, 0, followRange)
+        )
+    );
+    
+    LoopIfConditionIsTrue();
+}
+
+rule: "Buddy/Teleport/sayHello"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned() &&
+    actionState == ActionState.Non
+){
+    Wait(RandomInteger(5, 15) ,WaitBehavior.AbortWhenFalse);
+    SetFacing(
+        ep,
+        DirectionTowards(
+            ep,
+            RandomValueInArray(
+                FilteredArray(
+                    AllPlayers(playerTeam),
+                    (
+                        DistanceBetween(ae, ep) <= 10
+                    )
+                )
+            )
+        )
+    );
+    Communicate(ep, Communication.Hello);
     LoopIfConditionIsTrue();
 }

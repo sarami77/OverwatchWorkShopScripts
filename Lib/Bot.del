@@ -27,8 +27,6 @@ define RandomTankHero: RandomValueInArray(AllTankHeroes());
 define RandomDamageHero: RandomValueInArray(AllDamageHeroes());
 define RandomSupportHero: RandomValueInArray(AllSupportHeroes());
 
-globalvar define botSlot1!;
-globalvar define botSlot2!;
 globalvar define enemyTeamName!;
 
 void CreateBotsByAssetList(define assetList, define team)"CreateBotsByAssetList"{
@@ -39,25 +37,21 @@ void CreateBotsByAssetList(define assetList, define team)"CreateBotsByAssetList"
     // create bot by asset
     for(define assetIdx! = 1; assetIdx < CountOf(asset); assetIdx++){
         for(define botCount! = 0; botCount < asset[assetIdx][BotAsset.count]; botCount++){
+            // get empty slot
+            define slot! = getEmptySlotNo(team);
             // create bot
             CreateDummyBot(
                 asset[assetIdx][BotAsset.hero],
                 team,
-                team == Team.Team1 ? botSlot1 : botSlot2,
+                slot,
                 SpawnPoints(team)[0],
                 RandomDirection()
             );
             Wait(0.1, WaitBehavior.IgnoreCondition);
-                WaitUntil(!isServerOverLoading, 3);
+            WaitUntil(!isServerOverLoading, 3);
             // set Bot type as enemy type
-            define bot! = PlayersInSlot(team == Team.Team1 ? botSlot1 : botSlot2, team);
+            define bot! = PlayersInSlot(slot, team);
             bot.enemyType = asset[assetIdx][BotAsset.EnemyType];
-
-            // next slot
-            if(team == Team.Team1)
-                botSlot1++;
-            else
-                botSlot2++;
         }
     }
 }
@@ -68,75 +62,57 @@ void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsBy
 
     // create bot by asset
     for(define slotIdx = 0; slotIdx < num; slotIdx++){
-        // try until spawn entity
-        while(
-            !HasSpawned(PlayersInSlot(team == Team.Team1 ? botSlot1 : botSlot2, team))
-        ){
-            // create bot
-            CreateDummyBot(
-                RandomValueInArray(heroList),
-                team,
-                team == Team.Team1 ? botSlot1 : botSlot2,
-                SpawnPoints(team)[0],
-                RandomDirection()
-            );
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-            WaitUntil(!isServerOverLoading, 3);
-        }   
-        
-        // next slot
-        if(team == Team.Team1)
-            botSlot1++;
-        else
-            botSlot2++;
+        // get empty slot
+        define slot! = getEmptySlotNo(team);
+        // create bot
+        CreateDummyBot(
+            RandomValueInArray(heroList),
+            team,
+            slot,
+            SpawnPoints(team)[0],
+            RandomDirection()
+        );
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        WaitUntil(!isServerOverLoading, 3);
     }
 }
 
 void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHeroInput"{
-    DestroyBots(team);
-    Wait(0.1, WaitBehavior.IgnoreCondition);
-
     // create bot by asset
     for(define slotIdx = 0; slotIdx < num; slotIdx++){
-        // try until spawn entity
-        while(
-            !HasSpawned(PlayersInSlot(team == Team.Team1 ? botSlot1 : botSlot2, team))
-        ){
-            // create bot
-            CreateDummyBot(
-                hero,
-                team,
-                team == Team.Team1 ? botSlot1 : botSlot2,
-                SpawnPoints(team)[0],
-                RandomDirection()
-            );
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-            WaitUntil(!isServerOverLoading, 3);
-        }   
-        
-        // next slot
-        if(team == Team.Team1)
-            botSlot1++;
-        else
-            botSlot2++;
+        // get empty slot
+        define slot! = getEmptySlotNo(team);
+        // create bot
+        CreateDummyBot(
+            hero,
+            team,
+            slot,
+            SpawnPoints(team)[0],
+            RandomDirection()
+        );
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        WaitUntil(!isServerOverLoading, 3);
     }
 }
 
-void DestroyBots(define team)"DestroyBots"{
-    for(define slotIdx = 0; slotIdx < 24; slotIdx ++){
-        // try until despawn entity
-        // while(HasSpawned(PlayersInSlot(slotIdx, team))){
-            DestroyDummyBot(
-                team, slotIdx);
-            Wait(0.01, WaitBehavior.IgnoreCondition);
-        // }
-    }
+define builtinMaxSlotNum: 24;
 
-    // clear slot
-    if(team == Team.Team1)
-        botSlot1 = 0;
-    else
-        botSlot2 = 0;
+void DestroyBots(define team!)"DestroyBots"{
+    for(define slotIdx = 0; slotIdx < builtinMaxSlotNum; slotIdx ++){
+        DestroyDummyBot(
+            team, slotIdx);
+        Wait(0.01, WaitBehavior.IgnoreCondition);
+    }
+}
+
+Number getEmptySlotNo(define team!)"getEmptySlotNo"{
+    for(define slotNo! = 0; slotNo < builtinMaxSlotNum; slotNo++){
+        if(PlayersInSlot(slotNo, team) == null) {
+            return slotNo;
+        }
+    }
+    dbgMsg("getEmptySlotNo not found empty slot");
+    return -1;
 }
 
 // TAG Bot/SetBotInfo ----------
@@ -351,6 +327,7 @@ if(
         case Hero.Mercy:
         heroName = "Mercy";
         actionRange = ActionRange.Far;
+        primaryFireButtonReleaseMax = 1;
         secondaryFireButtonReleaseMax = 10;
         ability1ButtonReleaseMin = 1;
         ability1ButtonReleaseMax = 2;
@@ -413,7 +390,7 @@ if(
         case Hero.Sigma:
         heroName = "Sigma";
         actionRange = ActionRange.Middle;
-        secondaryFireButtonReleaseMax = 15;
+        secondaryFireButtonReleaseMax = 5;
         secondaryFireButtonPressMax = 1;
         ultimateButtonReleaseMax = 25;
         break;
@@ -985,7 +962,7 @@ if(
             DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf())),
             Relative.ToWorld);
 
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+        Wait(watchUpdateRate * 2, WaitBehavior.AbortWhenFalse);
         WaitUntil(!isServerOverLoading, 10);
     }    // action loop
 }
@@ -1081,9 +1058,6 @@ if(
 }
 
 // TAG Bot/HeroUniqueAction ----------
-define canMeleeKill:
-    DistanceBetween(ep, target) <= 2.5 &&
-    Health(target) <= 30;
 define MercyStaff: 1;
 define MercyPistol: 2;
 
@@ -1091,8 +1065,9 @@ void heroAction(){
     // common action
     // melee
     while(
-        actionState != ActionState.Non &&
-        canMeleeKill
+        actionState == ActionState.Attack &&
+        Health(target) <= 30 &&
+        DistanceBetween(ep, target) <= 2.5
     ){
         PressButton(ep, Button.Melee);
         Wait(0.5, WaitBehavior.AbortWhenFalse);
@@ -1433,170 +1408,3 @@ if(
 }
 
 // TAG Debug ----------
-/*
-rule: "Debug/Init"
-Event.OngoingPlayer
-if(
-    ep == HostPlayer() &&
-    HasSpawned(ep)
-){
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "Server Load", ServerLoad()>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-
-    CreateHudText(ep,
-        null, <"hold Interact button <0> to toggle all bots",
-            ButtonGuide(Button.Interact)>, null,
-        Location.Left, 0,
-        Color.Yellow, Color.Yellow, Color.Yellow,
-        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
-
-    CreateHudText(ep,
-        null, <"press Interact button <0> to spawn one enemy bot",
-            ButtonGuide(Button.Interact)>, null,
-        Location.Left, 0,
-        Color.Yellow, Color.Yellow, Color.Yellow,
-        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
-    
-    CreateIcon(spawnPos != 0 ? HostPlayer() : null, spawnPos, Icon.ArrowDown,
-            IconRev.VisibleToAndPosition, Color.White, true);
-
-}
-
-globalvar define spawnPos;
-
-define dummyBots:
-        FilteredArray(
-            AllPlayers(),
-            (
-                IsDummyBot(ae)
-            )
-        );
-
-rule: "Debug/TeleportAllStandbyBots"
-Event.OngoingPlayer
-if(
-    HostPlayer() == ep &&
-    0 < CountOf(dummyBots)
-){
-    Teleport(
-        FilteredArray(
-            AllPlayers(),
-            (
-                ae.actionState == ActionState.Non &&
-                IsDummyBot(ae)
-            )
-        ),
-        NearestWalkablePosition(spawnPos + RandomPosition(5, 0, 5)));
-    Wait(2, WaitBehavior.AbortWhenFalse);
-    LoopIfConditionIsTrue();
-}
-
-
-define maxBotNum: 24;
-
-rule: "Debug/ToggleSpawnAllBots"
-Event.OngoingPlayer
-if(
-    ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact)
-
-){
-    WaitLongPressConfirm();
-
-    if(0 == CountOf(dummyBots)){
-        spawnPos = NearestWalkablePosition(AimingPosition());
-        define botNum = WorkshopSettingInteger("Enemy Bot Settings", "Bot Count", 24, 0, 24, 2);
-        CreateBotsByHeroList(AllHeroes(), botNum);
-    }
-    else{
-        DestroyBots(Team.Team1);
-        DestroyBots(Team.Team2);
-    }
-}
-
-rule: "Debug/SpawnOneEnemyBots"
-Event.OngoingPlayer
-if(
-    ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact)
-
-){
-    WaitUntil(!IsButtonHeld(ep, Button.Interact), 0.4);
-    AbortIf(IsButtonHeld(ep, Button.Interact));
-
-    spawnPos = NearestWalkablePosition(AimingPosition());
-    CreateDummyBot(
-        RandomValueInArray(AllHeroes()),
-        OppositeTeamOf(TeamOf()),
-        botSlot,
-        NearestWalkablePosition(AimingPosition()),
-        RandomDirection()
-    );
-    botSlot ++;
-}
-*/
-
-/*
-define debugInfoDisplayeTo:
-    [HostPlayer(), ep];
-
-rule: "Debug/ShowDebugInfo"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    HasSpawned()
-){  
-    // show status text
-    CreateInWorldText(
-        debugInfoDisplayeTo,
-        actionState,
-        ep + (Up() * 2), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-        Color.White, Spectators.DefaultVisibility);
-    // show actionState ring
-    CreateEffect(
-        ep.actionState != ActionState.Non ? debugInfoDisplayeTo : null,
-        Effect.Ring,
-            actionState == ActionState.Search ?
-                Color.White:
-                actionState == ActionState.Attack ?
-                    Color.Red :
-                    Color.Blue,
-        ep, 1, EffectRev.VisibleToPositionRadiusAndColor);
-    // show target path beam
-    CreateBeamEffect(
-        (
-            (
-                (
-                    actionState == ActionState.Attack ||
-                    actionState == ActionState.Support
-                ) &&
-                target != 0
-            ) ||                
-            (
-                actionState == ActionState.Search
-            )
-        )
-        ? debugInfoDisplayeTo : null,
-        BeamType.BadBeam,
-        EyePosition(),
-            actionState == ActionState.Attack ||
-            target,
-            actionState == ActionState.Search ?
-                Color.White:
-                actionState == ActionState.Attack ?
-                    Color.Red :
-                    Color.Blue,
-        EffectRev.VisibleToPositionRadiusAndColor);
-    while(true){
-        if(IsBelowAbyss(targetDirBackward)){
-            dbgPlyEft(ep);
-        }
-        Wait(1);
-    }
-}
-*/

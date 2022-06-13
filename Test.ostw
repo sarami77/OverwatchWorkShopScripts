@@ -1,9 +1,12 @@
 import "Test.setting.json";
 import "Lib/Utility.del";
 import "Lib/Debug.del";
-import "Lib/DamageText.del" ;
+// import "Lib/DamageText.del" ;
 
 // Builtin -----------------------------------------------
+globalvar define playerTeam;
+globalvar define enemyTeam;
+
 rule: "Builtin"
 Event.OngoingPlayer
 if(
@@ -13,25 +16,21 @@ if(
     debugMode = DebugMode.SlowLevelOnly;
 
     // SetStatus(ep, null, Status.PhasedOut, 99999);
-    SetMaxHealth(ep, 100);
-    SetDamageDealt(ep, 100);
-    SetDamageReceived(ep, 100);
-    SetHealingDealt(ep, 100);
-    SetHealingReceived(ep, 100);
-    SetJumpVerticalSpeed(ep, 100);
+    SetMaxHealth(ep, 10000);
+    // SetDamageDealt(ep, 100);
+    // SetDamageReceived(ep, 100);
+    // SetHealingDealt(ep, 100);
+    // SetHealingReceived(ep, 100);
+    SetJumpVerticalSpeed(ep, 10);
     SetMoveSpeed(ep, 1000);
-    SetGravity(ep, 10);
-    SetProjectileSpeed(ep, 100);
-    SetProjectileGravity(ep, 100);
-    StartScalingPlayer(ep, 1);
-    StartScalingBarriers(ep, 1);
-    SetUltimateCharge(ep, 0);
+    // SetGravity(ep, 10);
+    // SetProjectileSpeed(ep, 100);
+    // SetProjectileGravity(ep, 100);
+    // StartScalingPlayer(ep, 1);
+    // StartScalingBarriers(ep, 1);
+    // SetUltimateCharge(ep, 0);
 
-    damageTextEnableTeam = Team.Team2;
-    // SetMoveSpeed(others, 1000);
-    SetMaxHealth(AllPlayers(Team.Team2), 100);
-    SetRespawnMaxTime(AllPlayers(Team.Team2), 1);
-    StartScalingPlayer(AllPlayers(Team.Team2), 1);
+    // damageTextEnableTeam = Team.All;
 
     // SetStatus(AllPlayers(Team.Team2), null, Status.Rooted, 99999);
     // ForcePlayerHero(ep, Hero.Widowmaker);
@@ -48,6 +47,14 @@ if(
     //     ep, 50, EffectRev.VisibleToPositionAndRadius);
 
     while(true){
+        if(TeamOf(HostPlayer()) == Team.Team1){
+            playerTeam = Team.Team1;
+            enemyTeam = Team.Team2;
+        }
+        else if(TeamOf(HostPlayer()) == Team.Team2){
+            playerTeam = Team.Team2;
+            enemyTeam = Team.Team1;
+        }
 
 
         Wait(5, WaitBehavior.AbortWhenFalse);
@@ -55,8 +62,8 @@ if(
 }
 
 // Test Code -----------------------------------------------
-import "Lib/Perk/SteelFormation.del";
-
+import "Lib/Buddy.del";
+/*
 rule: "Debug/getPerk"
 Event.OngoingPlayer
 Team.Team1
@@ -68,26 +75,82 @@ if(
     WaitLongPressConfirm();
     perkState = PerkState.Ready;
     perkType = PerkType.SteelFormation;
-
 }
+*/
 
 rule: "debug_global"
 Event.OngoingGlobal
-{
+if(
+    HasSpawned(HostPlayer())
+){
+ 
 }
 
 rule: "debug_player"
 Event.OngoingPlayer
-{
-}
-
-rule: "debug_DebugButtonPressed"
-Event.OngoingPlayer
 if(
     HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact)
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Reload)
 ){
+    define buddyList! = [Hero.Genji, Hero.Reinhardt, Hero.Mercy];
+    define maxBuddyNum! = CountOf(buddyList);
+    define maxSlotNum! = NumberOfSlots(playerTeam);
+    define entityNum! = NumberOfPlayers(playerTeam);
+    define playerNum! = CountOf(
+            FilteredArray(
+                AllPlayers(playerTeam),
+                !IsDummyBot(ae)));
+    define buddyNum! = CountOf(
+            FilteredArray(
+                AllPlayers(playerTeam),
+                IsDummyBot(ae)));
+    define emptySlotNum! = maxSlotNum - playerNum;
+
+    // dbgHudTxt(<"maxBuddyNum <0>", maxBuddyNum>);
+    // dbgHudTxt(<"maxSlotNum <0>", maxSlotNum>);
+    // dbgHudTxt(<"entityNum <0>", entityNum>);
+    // dbgHudTxt(<"playerNum <0>", playerNum>);
+    // dbgHudTxt(<"buddyNum <0>", buddyNum>);
+    // dbgHudTxt(<"emptySlotNum <0>", emptySlotNum>);
+
+    define reloadBuddyList! = false;
+    if(
+        // not buddy full && not slot full
+        (
+            (entityNum < maxSlotNum) &&
+            (buddyNum < maxBuddyNum)
+        )
+    ){
+        // dbgHudTxt(<"can buddy more <0>", 0>);
+        reloadBuddyList = true;
+    }
+
+    if(
+        // entity over 
+        (entityNum > maxSlotNum)
+    ){
+        // dbgHudTxt(<"entity over  <0>", 0>);
+        reloadBuddyList = true;
+    }
+
+    if(
+        reloadBuddyList
+    ){
+        // dbgHudTxt(<"reload buddy list <0>", 0>);
+        DestroyBots(playerTeam);
+        buddyList = ArraySlice(buddyList, 0, emptySlotNum);
+        for(gLoopIndex = 0; gLoopIndex < CountOf(buddyList); gLoopIndex++){
+            CreateBotsByHeroInput(buddyList[gLoopIndex], 1, playerTeam);
+        }
+    }
+    else{
+        // dbgHudTxt(<"Keep buddy list <0>", 0>);
+    }
 }
+
+
+
 
 // Debug/Slow -----------------------------------------------
 globalvar define slow = 100;
@@ -97,8 +160,8 @@ Event.OngoingPlayer
 Team.Team1
 if(
     HostPlayer() == ep &&
-    IsButtonHeld(ep, Button.Jump) &&
-    intaractDoublePressed
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Jump)
 ){ 
     // 100 -> 50 -> 25 -> 10
     if(slow == 100)

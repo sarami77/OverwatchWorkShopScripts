@@ -2,9 +2,7 @@ import "EnemyRush.setting.json";
 import "Lib/Debug.del";
 import "Lib/Utility.del";
 import "Lib/Bot.del";
-// import "Lib/Regeneration.del";
-// import "Lib/Revive.del";
-// import "Lib/DamageText.del";
+import "Lib/Buddy.del";
 
 // TAG Signature and infomation ----------
 disabled rule: "ENEMY RUSH -HORDE PVE [ver.2.0] Share code [V7PEF]"-1{}
@@ -133,6 +131,81 @@ void ApplySlowLevel(define setSlowLevel)"ApplySlowLevel"{
     }
 }
 
+// TAG Buddy ----------
+rule: "Buddy/BuddyContorl"
+Event.OngoingGlobal
+if(
+    initCompleted
+){
+    while(true){
+        define buddyList! = [
+            Hero.Soldier76,
+            Hero.Genji,
+            Hero.Reinhardt,
+            Hero.Mercy,
+            Hero.Hanzo,
+            Hero.Sigma,
+            Hero.Ana,
+            Hero.Doomfist
+        ];
+        define maxBuddyNum! = CountOf(buddyList);
+        define maxSlotNum! = NumberOfSlots(playerTeam);
+        define entityNum! = NumberOfPlayers(playerTeam);
+        define playerNum! = CountOf(
+                FilteredArray(
+                    AllPlayers(playerTeam),
+                    !IsDummyBot(ae)));
+        define buddyNum! = CountOf(
+                FilteredArray(
+                    AllPlayers(playerTeam),
+                    IsDummyBot(ae)));
+        define emptySlotNum! = maxSlotNum - playerNum;
+
+        // dbgHudTxt(<"maxBuddyNum <0>", maxBuddyNum>);
+        // dbgHudTxt(<"maxSlotNum <0>", maxSlotNum>);
+        // dbgHudTxt(<"entityNum <0>", entityNum>);
+        // dbgHudTxt(<"playerNum <0>", playerNum>);
+        // dbgHudTxt(<"buddyNum <0>", buddyNum>);
+        // dbgHudTxt(<"emptySlotNum <0>", emptySlotNum>);
+
+        define reloadBuddyList! = false;
+        if(
+            // not buddy full && not slot full
+            (
+                (entityNum < maxSlotNum) &&
+                (buddyNum < maxBuddyNum)
+            )
+        ){
+            // dbgHudTxt(<"can buddy more <0>", 0>);
+            reloadBuddyList = true;
+        }
+
+        if(
+            // entity over
+            (entityNum > maxSlotNum)
+        ){
+            // dbgHudTxt(<"entity over  <0>", 0>);
+            reloadBuddyList = true;
+        }
+
+        if(
+            reloadBuddyList
+        ){
+            // dbgHudTxt(<"reload buddy list <0>", 0>);
+            DestroyBots(playerTeam);
+            buddyList = ArraySlice(buddyList, 0, emptySlotNum);
+            for(gLoopIndex = 0; gLoopIndex < CountOf(buddyList); gLoopIndex++){
+                CreateBotsByHeroInput(buddyList[gLoopIndex], 1, playerTeam);
+            }
+        }
+        else{
+            // dbgHudTxt(<"Keep buddy list <0>", 0>);
+        }
+    
+        Wait(5, WaitBehavior.IgnoreCondition);
+    }
+}
+
 // TAG Payload ----------
 globalvar define prevPayloadPosition!;
 
@@ -246,6 +319,7 @@ define assetList:
             [EnemyType.Minion,      RandomHero,         8]
         ],
 
+        /*
         [
             "clones",
             [EnemyType.Boss,        someHero, 		    1],
@@ -261,6 +335,7 @@ define assetList:
             "10 elites clones",
             [EnemyType.Elite,       someHero, 		    10]
         ],
+        */
         
         [
             "giant boss",
@@ -522,8 +597,6 @@ if(
         eachNameText = "Elite";
         eachNameColor = Color.Yellow;
         eachEffectTextSize = basicInWorldTextSize + 1;
-
-        eachPerkDropProbability = 12;
     }
     else if(enemyType == EnemyType.Boss){
         StartScalingPlayer(ep, 1.5, false);
@@ -542,8 +615,6 @@ if(
         eachNameText = "Boss";
         eachNameColor = Color.Red;
         eachEffectTextSize = basicInWorldTextSize + 2;
-
-        eachPerkDropProbability = 50;
     }
     else if(enemyType == EnemyType.GiantBoss){
         StartScalingPlayer(ep, 2.5, false);
@@ -562,8 +633,6 @@ if(
         eachNameText = "Giant Boss";
         eachNameColor = Color.Purple;
         eachEffectTextSize = basicInWorldTextSize + 3;
-
-        eachPerkDropProbability = 100;
 
         // set addtinal health
         Wait(0.1, WaitBehavior.AbortWhenFalse);
@@ -936,7 +1005,10 @@ if(
         define hasTarget! = (actionState != ActionState.Non);
         define nearObject! = (DistanceBetween(ep, CurrentObjectPosition()) <= 20);
         if(
-            hasTarget && nearObject 
+            !(      // not
+                !hasTarget ||                       // not has target
+                (!nearObject && IsPlayerOnObject)   // not near object on player attaking
+            )
         ){
             // reset count up
             LoopIfConditionIsTrue();
