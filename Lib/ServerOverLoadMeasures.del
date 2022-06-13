@@ -1,0 +1,64 @@
+import "Utility.del";
+
+// TAG ServerOverLoadMeasures ----------
+define WaitUntilServerFree(){ WaitUntil(!isServerOverLoading, 5); }
+
+define slowLevel: [100, 90, 80, 70, 50];    // 0～4
+globalvar define targetSlowLevel;
+globalvar define currentSlowLevel;
+globalvar define slowControlHandler;
+enum SlowControlHandler{
+    None,
+    ServerOverLoadMeasures,
+    PlayerJoin,
+    GameEnd
+}
+
+rule: "ServerOverLoadMeasures/increaseSlowLevel"
+Event.OngoingGlobal
+if(
+    initCompleted &&    
+    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
+    isServerOverLoading &&
+    targetSlowLevel < (CountOf(slowLevel) - 1)
+){
+    // If the server is overloaded,
+    //  apply slow motion every second
+    //  to reduce the load to avoid shutting down due to server overload.
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    // increase slow level
+    targetSlowLevel ++;
+    // apply slow level
+    ApplySlowLevel(targetSlowLevel);
+
+    LoopIfConditionIsTrue();
+}
+
+rule: "ServerOverLoadMeasures/decreaseSlowLevel"
+Event.OngoingGlobal
+if(
+    initCompleted &&
+    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
+    !isServerOverLoading &&
+    targetSlowLevel > 0
+){
+    // If the server is not overloaded,
+    //  reset slow motion every second
+    // can decrease slow level
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+    // decrease slow level
+    targetSlowLevel --;
+    // apply slow level
+    ApplySlowLevel(targetSlowLevel);
+
+    LoopIfConditionIsTrue();
+}
+
+void ApplySlowLevel(define setSlowLevel)"ApplySlowLevel"{
+    // if slow level changed
+    if(currentSlowLevel != setSlowLevel){
+        // apply slow motion
+        currentSlowLevel = setSlowLevel;
+        SetSlowMotion(slowLevel[setSlowLevel]);
+    }
+}
