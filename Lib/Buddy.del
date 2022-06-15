@@ -3,11 +3,15 @@ import "Bot.del";
 
 // TAG Buddy ----------
 
-define followRange: 10;
-define followIntervalSecond: 0.5;
-define followHopTryCount: 6;
+define followRange: actionRangeMax / 4;
+define followIntervalSecond: 1;
+define followHopTryCount: 3;
 define followHopEmpluseScale: 2.2;
-playervar define followPlayer;
+playervar define followPlayer!;
+playervar define followerText!;
+playervar define isFirstFollowOnSpawned! = true;
+
+
 
 rule: "Buddy/Teleport/followPlayer"
 Event.OngoingPlayer
@@ -18,46 +22,78 @@ if(
     IsAlive() &&
     actionState == ActionState.Non
 ){
+    // on buddy list reloaded, tereport to player near object
+    if(isFirstFollowOnSpawned){
+        isFirstFollowOnSpawned = false;
+
+        CreateInWorldText(
+            AllPlayers(), followerText, 
+            ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            Color.SkyBlue, Spectators.DefaultVisibility);
+
+        if(IsGameInProgress()){
+            Teleport(ep, ClosestPlayerTo(CurrentObjectPosition(), playerTeam));
+        }
+        else{
+            Teleport(ep, SpawnPoints(playerTeam)[0]);
+        }
+
+    }
+
     // try follow loop
     for(define notHasLineSecond! = 0; notHasLineSecond < followHopTryCount; notHasLineSecond ++){
         Wait(followIntervalSecond, WaitBehavior.AbortWhenFalse);
         
-        // get followPlayer
         if(
-            // has support target
-            actionState == ActionState.Support &&
-            target != 0
-        )
-        {
-            followPlayer = target;
-        }
-        else{
-            followPlayer = FirstOf(
-                SortedArray(
-                    FilteredArray(
-                        AllLivingPlayers(playerTeam),
-                        (
-                            !IsDummyBot(ae) &&
-                            HasSpawned(ae)
-                        )
-                    ),
-                    DistanceBetween(ae, ep)
-                )
-            );
+            !(
+                // already has followPlayer
+                followPlayer != null &&
+                // skip update by prob
+                ProbabilityTrue(70)
+            )
+        ){
+            // get followPlayer
+            if(
+                // has support target
+                actionState == ActionState.Support &&
+                target != 0
+            )
+            {
+                followPlayer = target;
+            }
+            else{
+                // get alive player near me
+                followPlayer = FirstOf(
+                    SortedArray(
+                        FilteredArray(
+                            AllLivingPlayers(playerTeam),
+                            (
+                                !IsDummyBot(ae) &&
+                                HasSpawned(ae) &&
+                                IsAlive(ae)
+                            )
+                        ),
+                        DistanceBetween(ae, ep)
+                    )
+                );
+            }
         }
 
-        // set destination
-        StopForcingDummyBotName(ep);
+        // set destination   
         if(
             followPlayer == null
         ){
-            StartForcingDummyBotName(ep, <"No Follow Player">);
             if(IsGameInProgress()){
                 followPlayer = CurrentObjectPosition();
             }
+            else{
+                followPlayer = SpawnPoints(playerTeam)[0];
+            }
+
+            followerText = <"No Following">;
         }
         else{
-            StartForcingDummyBotName(ep, <"Follower of <0>", followPlayer>);
+            followerText = <"Following <0>", followPlayer>;
         }
 
         // follow 
@@ -79,15 +115,13 @@ if(
                 ep,
                 DirectionTowards(ep, followPlayer),
                 Relative.ToWorld);
-            // timing distibute
-            Wait(RandomReal(0, 0.3), WaitBehavior.IgnoreCondition);
             // near followRange
-            if(dist <= followRange * 1.25){
+            if(dist <= followRange * 1.5){
                 // by walk
                 moveDir = Forward();
                 StartMove();
             }
-            else if(dist <= followRange * 3){
+            else if(dist <= followRange * 5){
                 // by hop
                 ApplyImpulse(
                     ep, VectorTowards(
@@ -107,7 +141,7 @@ if(
     Teleport(ep,
         NearestWalkablePosition(
             PositionOf(followPlayer) +
-            DirectionTowards(followPlayer, ep)
+            (DirectionTowards(followPlayer, ep) * (followRange / 2))
         )
     );
     

@@ -51,14 +51,12 @@ Event.OngoingGlobal
     initCompleted = true;
 }
 
-define phaseTime: 15;
-
 rule: "Initialize/shortenAssemblingHeroes"
 Event.OngoingGlobal
 if(
     IsAssemblingHeroes()
 ){
-    SetMatchTime(phaseTime);
+    SetMatchTime(15);
 }
 
 rule: "Initialize/shortenSetup"
@@ -66,7 +64,7 @@ Event.OngoingGlobal
 if(
     IsInSetup()
 ){
-    SetMatchTime(phaseTime);
+    SetMatchTime(20);
 }
 
 // TAG Buddy ----------
@@ -94,15 +92,20 @@ if(
             Hero.Mercy,
             Hero.Reinhardt,
             Hero.Genji,
-            Hero.Brigitte,
+            Hero.Moira,
             Hero.Sigma,
             Hero.Hanzo,
             Hero.Ana,
             Hero.Doomfist
         ];
+
+    // slice buddy list by setting
     buddyList = ArraySlice(buddyList, 0,
-        WorkshopSettingInteger("Follower AI Settings(Join on behalf of absent player)", "Follower Max Num", 3, 0, 8, 1)
+        WorkshopSettingInteger(
+            "Follower AI Settings(Join on behalf of absent player)",
+            "Follower Max Num", 5, 0, 8, 1)
     );
+
     define prevPlayerNum! = -1;
     define maxSlotNum! = NumberOfSlots(playerTeam);
 
@@ -111,21 +114,13 @@ if(
                 FilteredArray(
                     AllPlayers(playerTeam),
                     !IsDummyBot(ae)));
-
-        define reloadBuddyList! = false;
         if(
             // player num changed
             prevPlayerNum != playerNum
         ){
-            // dbgHudTxt(<"player Num changed <0> -> <1>", prevPlayerNum, playerNum>);
+            // save player num
             prevPlayerNum = playerNum;
-            reloadBuddyList = true;
-        }
-
-        if(
-            reloadBuddyList
-        ){
-            // dbgHudTxt(<"reload buddy list <0>", 0>);
+            // relaod buddy list
             DestroyBots(playerTeam);
             define emptySlotNum! = maxSlotNum - playerNum;
             define addList! = ArraySlice(buddyList, 0, emptySlotNum);
@@ -133,13 +128,33 @@ if(
                 CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
             }
         }
-        else{
-            // dbgHudTxt(<"Keep buddy list <0>", 0>);
-        }
     
         Wait(5, WaitBehavior.IgnoreCondition);
     }
 }
+
+rule: "Buddy/fastRespawnByKilled"
+Event.OnDeath
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    Attacker() != ep
+){
+    Wait(5, WaitBehavior.IgnoreCondition);
+    Respawn();
+}
+
+rule: "Buddy/fastRespawnBySucide"
+Event.OnDeath
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    Attacker() == ep
+){
+    Wait(1, WaitBehavior.IgnoreCondition);
+    Respawn();
+}
+
 
 // TAG Payload ----------
 globalvar define prevPayloadPosition!;
@@ -187,6 +202,24 @@ if(
 define assetList:
     [
         // random hero
+        [
+            "basic",
+            [EnemyType.Boss,        RandomHero,         1],
+            [EnemyType.Elite,       RandomHero,         5],
+            [EnemyType.Minion,      RandomHero,         10]
+        ],
+        [
+            "basic",
+            [EnemyType.Boss,        RandomHero,         1],
+            [EnemyType.Elite,       RandomHero,         5],
+            [EnemyType.Minion,      RandomHero,         10]
+        ],
+        [
+            "basic",
+            [EnemyType.Boss,        RandomHero,         1],
+            [EnemyType.Elite,       RandomHero,         5],
+            [EnemyType.Minion,      RandomHero,         10]
+        ],
         [
             "basic",
             [EnemyType.Boss,        RandomHero,         1],
@@ -438,9 +471,9 @@ define assetList:
         ],
         [
             "Explodes",
-            [EnemyType.Boss,        Hero.Tracer, 		1],
+            [EnemyType.Boss,        Hero.Pharah, 		1],
             [EnemyType.Elite,       Hero.Junkrat, 		5],
-            [EnemyType.Minion,      Hero.Pharah, 		10]
+            [EnemyType.Minion,      Hero.Tracer, 		10]
         ]
     ];
 
@@ -993,8 +1026,8 @@ if(
     IsGameInProgress() &&
     !IsOverTime()
 ){
-    define interval = (1 - (TotalObjectProgress() / 100)) * 30;
-    Wait(RandomReal(interval, 30 + interval), WaitBehavior.AbortWhenFalse);
+    define interval = (1 - (TotalObjectProgress() / 100)) * 40;
+    Wait(RandomReal(interval, 40 + interval), WaitBehavior.AbortWhenFalse);
     dbgMsg("rush !");
 
     Respawn(AllDeadPlayers(enemyTeam));
@@ -1192,7 +1225,7 @@ if(
 // TAG EnemyBot/DealtDamage ----------
 playervar define confirmDealtDamage!;
 globalvar define threatLevel!;
-globalvar define autoTune!;
+globalvar define autoTuneDmgDlt!;
 
 define upTuneScale: 4.0;
 
@@ -1203,16 +1236,16 @@ if(
     Attacker() != ep
 ){
     if(enemyType == EnemyType.Minion){
-        autoTune += 0.01 * upTuneScale;
+        autoTuneDmgDlt += 0.01 * upTuneScale;
     }
     else if(enemyType == EnemyType.Elite){
-        autoTune += 0.03 * upTuneScale;
+        autoTuneDmgDlt += 0.03 * upTuneScale;
     }
     else if(enemyType == EnemyType.Boss){
-        autoTune += 0.09 * upTuneScale;
+        autoTuneDmgDlt += 0.09 * upTuneScale;
     }
     else if(enemyType == EnemyType.GiantBoss){
-        autoTune += 0.09 * upTuneScale;
+        autoTuneDmgDlt += 0.09 * upTuneScale;
     }
 }
 
@@ -1222,7 +1255,7 @@ if(
     TeamOf() == playerTeam &&
     Attacker() != ep
 ){
-    autoTune -= 1.0;
+    autoTuneDmgDlt -= 1.0;
 }
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
@@ -1231,7 +1264,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
     // apply auto tune
-    confirmDealtDamage += autoTune;
+    confirmDealtDamage += autoTuneDmgDlt;
         // set threat Level
         threatLevel = confirmDealtDamage;
     // apply enemy type scale
@@ -1458,7 +1491,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
 
         CreateHudText(HostPlayer(),
             null,
-            <"<0> <1>", "autoTune", autoTune>,
+            <"<0> <1>", "autoTune", autoTuneDmgDlt>,
             null,
             Location.Left, -1,
             Color.White, Color.Red, Color.White,
