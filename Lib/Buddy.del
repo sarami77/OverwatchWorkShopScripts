@@ -3,15 +3,35 @@ import "Bot.del";
 
 // TAG Buddy ----------
 
-define followRange: actionRangeMax / 4;
-define followIntervalSecond: 1;
-define followHopTryCount: 3;
+define followRange: (actionRangeMax / 4) + 4;
+define followTryIntervalSecond: 0.5;
+define followTryMaxCount: 6;
 define followHopEmpluseScale: 2.2;
-playervar define followPlayer!;
+playervar define followTarget!;
 playervar define followerText!;
-playervar define isFirstFollowOnSpawned! = true;
 
+rule: "Buddy/Teleport/init"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned()
+){
+    CreateInWorldText(
+        AllPlayers(), followerText, 
+        ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        Color.SkyBlue, Spectators.DefaultVisibility);
 
+    if(IsGameInProgress()){
+        SetUltimateCharge(ep, 50);
+        // teleport to player near object
+        Teleport(ep, ClosestPlayerTo(CurrentObjectPosition(), playerTeam));
+    }
+    else{
+        // teleport to spawn point
+        Teleport(ep, SpawnPoints(playerTeam)[0]);
+    }
+}
 
 rule: "Buddy/Teleport/followPlayer"
 Event.OngoingPlayer
@@ -22,160 +42,256 @@ if(
     IsAlive() &&
     actionState == ActionState.Non
 ){
-    // on buddy list reloaded, tereport to player near object
-    if(isFirstFollowOnSpawned){
-        isFirstFollowOnSpawned = false;
-
-        CreateInWorldText(
-            AllPlayers(), followerText, 
-            ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
-            Color.SkyBlue, Spectators.DefaultVisibility);
-
-        if(IsGameInProgress()){
-            Teleport(ep, ClosestPlayerTo(CurrentObjectPosition(), playerTeam));
-        }
-        else{
-            Teleport(ep, SpawnPoints(playerTeam)[0]);
-        }
-
-    }
-
     // try follow loop
-    for(define notHasLineSecond! = 0; notHasLineSecond < followHopTryCount; notHasLineSecond ++){
-        Wait(followIntervalSecond, WaitBehavior.AbortWhenFalse);
-        
+    for(define notHasLineSecond! = 0; notHasLineSecond < followTryMaxCount; notHasLineSecond ++){
+        Wait(followTryIntervalSecond, WaitBehavior.AbortWhenFalse);
+
         if(
-            !(
-                // already has followPlayer
-                followPlayer != null &&
-                // skip update by prob
-                ProbabilityTrue(70)
-            )
+            // has not target
+            followTarget == null ||
+            ProbabilityTrue(25)
         ){
-            // get followPlayer
             if(
                 // has support target
                 actionState == ActionState.Support &&
                 target != 0
-            )
-            {
-                followPlayer = target;
+            ){
+                // get target player
+                followTarget = target;
+                followerText = <"following <0>", followTarget>;
             }
             else{
                 // get alive player near me
-                followPlayer = FirstOf(
-                    SortedArray(
-                        FilteredArray(
-                            AllLivingPlayers(playerTeam),
-                            (
-                                !IsDummyBot(ae) &&
-                                HasSpawned(ae) &&
-                                IsAlive(ae)
-                            )
-                        ),
-                        DistanceBetween(ae, ep)
-                    )
-                );
+                followTarget =
+                    FirstOf(
+                        SortedArray(
+                            FilteredArray(
+                                AllLivingPlayers(playerTeam),
+                                (
+                                    !IsDummyBot(ae) &&
+                                    HasSpawned(ae) &&
+                                    IsAlive(ae)
+                                )
+                            ), DistanceBetween(ae, ep)));
+                
+                // not find player
+                if(followTarget == null){
+                    // game in progress
+                    if(IsGameInProgress()){
+                        // get object
+                        followTarget = CurrentObjectPosition();
+                        followerText = <"following object">;
+                    }
+                    else{
+                        // get spawn point
+                        followTarget = SpawnPoints(playerTeam)[0];
+                        followerText = <"following spawn point">;
+                    }
+                }
+                else{
+                    followerText = <"following <0>", followTarget>;
+                }
             }
-        }
-
-        // set destination   
-        if(
-            followPlayer == null
-        ){
-            if(IsGameInProgress()){
-                followPlayer = CurrentObjectPosition();
-            }
-            else{
-                followPlayer = SpawnPoints(playerTeam)[0];
-            }
-
-            followerText = <"No Following">;
-        }
-        else{
-            followerText = <"Following <0>", followPlayer>;
         }
 
         // follow 
-        define dist! = DistanceBetween(ep, followPlayer);
+        define dist! = DistanceBetween(ep, followTarget);
         define hasNearPlayer! = dist <= followRange;
-        define hasLineNearPlayer = IsInLineOfSight(ep, followPlayer);
+        define hasLineNearPlayer = IsInLineOfSight(ep, followTarget);
         if(
             hasNearPlayer &&
             hasLineNearPlayer
         ){
+            SetMoveSpeed(ep, 100);
             // stop follow
             StopMove();
             // reset try count
             LoopIfConditionIsTrue();           
         }
-        else{
-            // start follow
+        else if(dist < followRange * 5){
+            // follow by walk
             SetFacing(
                 ep,
-                DirectionTowards(ep, followPlayer),
+                DirectionTowards(ep, followTarget),
                 Relative.ToWorld);
-            // near followRange
-            if(dist <= followRange * 1.5){
-                // by walk
-                moveDir = Forward();
-                StartMove();
-            }
-            else if(dist <= followRange * 5){
-                // by hop
-                ApplyImpulse(
-                    ep, VectorTowards(
-                        ep, PositionOf(followPlayer) + Vector(0, dist * 0.1, 0)
-                    ),
-                    DistanceBetween(ep, followPlayer) * followHopEmpluseScale,
-                    Relative.ToWorld, ContraryMotion.Cancel);
-            }
-            else{
-                // by teleport
-                break;
-            }
+
+            SetMoveSpeed(ep, 100 + (dist * 15));
+            moveDir = Forward();
+            StartMove();
+        }
+        else{
+            // follow by teleport
+            break;
         }
     }
 
     // try follow count over
     Teleport(ep,
         NearestWalkablePosition(
-            PositionOf(followPlayer) +
-            (DirectionTowards(followPlayer, ep) * (followRange / 2))
+            PositionOf(followTarget) +
+            (DirectionTowards(followTarget, ep) * (followRange / 3))
         )
     );
     
     LoopIfConditionIsTrue();
 }
 
-rule: "Buddy/Teleport/sayHello"
+rule: "Buddy/Teleport/followPlayer"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     IsDummyBot() &&
     HasSpawned() &&
-    actionState == ActionState.Non
+    IsAlive() &&
+    actionState != ActionState.Non
 ){
-    Wait(RandomInteger(5, 15) ,WaitBehavior.AbortWhenFalse);
-    define helloTarget! = 
-        RandomValueInArray(
-            FilteredArray(
-                AllPlayers(playerTeam),
-                (
-                    DistanceBetween(ae, ep) <= 10
-                )
-            )
-        );
+    SetMoveSpeed(ep, 100);
+}
 
-    if(helloTarget != null){
+playervar define prevNorHealth = 1.0;
+playervar define waitSecondNextComm = 5;
+rule: "Buddy/communicate"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned()
+){
+    
+    prevNorHealth = NormalizedHealth();
+
+    Wait(RandomReal(5, 10), WaitBehavior.AbortWhenFalse);
+    // Wait(RandomReal(waitSecondNextComm, waitSecondNextComm + 5), WaitBehavior.AbortWhenFalse);
+
+    if(IsInSpawnRoom()){
+        prevNorHealth = 1;
+    }
+
+    if(
+        !IsGameInProgress() &&
+        ProbabilityTrue(75)
+    ){
+        // hello
         Communicate(ep, Communication.Hello);
         if(!IsMoving()){
-            SetFacing(
-                ep,
-                DirectionTowards(ep, helloTarget),
-                Relative.ToWorld);
+            define sayTarget! = 
+                RandomValueInArray(
+                    FilteredArray(
+                        AllPlayers(playerTeam),
+                        DistanceBetween(ae, ep) <= 10));
+            
+            if(sayTarget != null){
+                SetFacing(
+                    ep,
+                    DirectionTowards(ep, sayTarget),
+                    Relative.ToWorld);
+            }
         }
     }
-    
+    else{
+        // status message
+        if(
+            !IsInSpawnRoom() &&
+            NormalizedHealth() - prevNorHealth >= 0.25
+        ){
+            Communicate(ep, Communication.Thanks);
+        }
+        else if(
+            NormalizedHealth() <= 0.5
+        ){
+            if(ProbabilityTrue(40)){
+                Communicate(ep, Communication.NeedHealing);
+            }
+            else if(ProbabilityTrue(40)){
+                Communicate(ep, Communication.NeedHelp);
+            }
+        }
+        else if(
+            ProbabilityTrue(50) &&
+            NormalizedHealth() <= 0.0
+        ){
+            Communicate(ep, Communication.Sorry);
+        }
+
+        else if(
+            NumberOfLivingPlayers(playerTeam) <= NumberOfPlayers(playerTeam) / 2
+        ){
+            Communicate(ep, Communication.FallBack);
+        }
+        else if(
+            ProbabilityTrue(25) &&
+            NumberOfLivingPlayers(enemyTeam) <= NumberOfPlayers(enemyTeam) / 2
+        ){
+            Communicate(ep, Communication.PushForward);
+        }
+
+        else if(
+            ProbabilityTrue(50) &&
+            ProbabilityTrue(UltimateChargePercent())
+        ){
+            Communicate(ep, Communication.UltimateStatus);
+        }
+
+        // situation message
+        else if(ProbabilityTrue(20)){
+
+            if(IsOnObjective()){
+                if(ProbabilityTrue(40)){
+                    Communicate(ep, Communication.GroupUp);
+                }
+                else if(ProbabilityTrue(40)){
+                    Communicate(ep, Communication.Go);
+                }
+                else{
+                    Communicate(ep, Communication.Defending);
+                }
+            }
+            else{
+                if(
+                    actionState == ActionState.Non
+                ){
+                    if(ProbabilityTrue(40)){
+                        Communicate(ep, Communication.Go);
+                    }
+                    else if(ProbabilityTrue(40)){
+                        Communicate(ep, Communication.GoingIn);
+                    }
+                    else{
+                        Communicate(ep, Communication.WithYou);
+                    }
+                }
+                else if(
+                    actionState == ActionState.Attack
+                ){
+                    if(ProbabilityTrue(40)){
+                        Communicate(ep, Communication.Attacking);
+                    }
+                    else if(ProbabilityTrue(40)){
+                        Communicate(ep, Communication.Incoming);
+                    }
+                    else if(ProbabilityTrue(40)){
+                        Communicate(ep, Communication.PushForward);
+                    }
+                    else{
+                        Communicate(ep, Communication.Go);
+                    }
+                }
+                else if(
+                    actionState == ActionState.Support
+                ){
+                    if(ProbabilityTrue(40)){
+                        Communicate(ep, Communication.WithYou);
+                    }
+                    else if(ProbabilityTrue(40)){
+                        Communicate(ep, Communication.NeedHealing);
+                    }
+                    else{
+                        Communicate(ep, Communication.YouAreWelcome);
+                    }
+                }
+            }
+        }
+    }
+
     LoopIfConditionIsTrue();
 }

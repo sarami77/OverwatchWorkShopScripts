@@ -27,7 +27,7 @@ define RandomTankHero: RandomValueInArray(AllTankHeroes());
 define RandomDamageHero: RandomValueInArray(AllDamageHeroes());
 define RandomSupportHero: RandomValueInArray(AllSupportHeroes());
 
-globalvar define enemyTeamName!;
+globalvar define enemyTeamName! = "";
 
 void CreateBotsByAssetList(define assetList, define team)"CreateBotsByAssetList"{
     DestroyBots(team);
@@ -118,7 +118,7 @@ Number getEmptySlotNo(define team!)"getEmptySlotNo"{
 // TAG Bot/SetBotInfo ----------
 
 playervar define heroName!;
-playervar define changeTargetProbForSupport!;
+playervar define healingPrioloty!;
 playervar define supportButtons!;
 playervar define attackButtons!;
 
@@ -157,7 +157,7 @@ if(
 ){
         actionRange = ActionRange.Middle;
         heroName = "Default";
-        changeTargetProbForSupport = 0;
+        healingPrioloty = 0;
         supportButtons = [];
         attackButtons = [
             Button.PrimaryFire,
@@ -200,7 +200,7 @@ if(
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 10;
         secondaryFireButtonPressMax = 15;
-        changeTargetProbForSupport = 150;
+        healingPrioloty = 100;
         supportButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
@@ -220,7 +220,7 @@ if(
         case Hero.Baptiste:
         heroName = "Baptiste";
         actionRange = ActionRange.Far;
-        changeTargetProbForSupport = 150;
+        healingPrioloty = 100;
         supportButtons = [
             Button.SecondaryFire,
             Button.Ability1,
@@ -252,7 +252,7 @@ if(
         ability2ButtonPressMax = 1;
         ability2ButtonReleaseMax = 1;
         ultimateButtonReleaseMax = 30;
-        changeTargetProbForSupport = 100;
+        healingPrioloty = 75;
         supportButtons = [
             Button.SecondaryFire,
             Button.Ability2
@@ -264,7 +264,7 @@ if(
         actionRange = ActionRange.Melee;
         primaryFireButtonReleaseMax = 3;
         secondaryFireButtonPressMin = 2;
-        secondaryFireButtonPressMax = 3;
+        secondaryFireButtonPressMax = 2.5;
         break;
 
         case Hero.Dva:
@@ -302,7 +302,7 @@ if(
         heroName = "Lucio";
         actionRange = ActionRange.Middle;
         ultimateButtonReleaseMax = 15;
-        changeTargetProbForSupport = 100;
+        healingPrioloty = 25;
         supportButtons = [
             Button.Ability1,
             Button.Ability2
@@ -330,10 +330,10 @@ if(
         primaryFireButtonReleaseMax = 1;
         secondaryFireButtonReleaseMax = 10;
         ability1ButtonReleaseMin = 1;
-        ability1ButtonReleaseMax = 2;
+        ability1ButtonReleaseMax = 1;
         ability2ButtonReleaseMin = 1;
-        ability2ButtonReleaseMax = 2;
-        changeTargetProbForSupport = 150;
+        ability2ButtonReleaseMax = 1;
+        healingPrioloty = 100;
         supportButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
@@ -345,7 +345,7 @@ if(
         case Hero.Moira:
         heroName = "Moira";
         actionRange = ActionRange.Middle;
-        changeTargetProbForSupport = 150;
+        healingPrioloty = 100;
         supportButtons = [
             Button.PrimaryFire,
             Button.Ability1,
@@ -469,8 +469,8 @@ if(
         heroName = "Zarya";
         actionRange = ActionRange.Middle;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        ability2ButtonReleaseMin = 1;
-        ability2ButtonReleaseMax = 1;
+        ability2ButtonReleaseMin = 0.5;
+        ability2ButtonReleaseMax = 0.5;
         break;
 
         case Hero.Zenyatta:
@@ -488,7 +488,7 @@ if(
         ability2ButtonPressMin = 1;
         ability2ButtonPressMax = 1;
         ultimateButtonReleaseMax = 30;
-        changeTargetProbForSupport = 100;
+        healingPrioloty = 25;
         supportButtons = [
             Button.Ability1,
             Button.Ability2
@@ -568,7 +568,7 @@ define FindSupportTarget():
                 AllPlayers(TeamOf()),
                 (
                     ae != ep &&
-                    ProbabilityTrue((1 - NormalizedHealth(ae)) * changeTargetProbForSupport) &&
+                    ProbabilityTrue((1 - NormalizedHealth(ae)) * healingPrioloty) &&
                     HasSpawned(ae) &&
                     IsAlive(ae) &&
                     IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
@@ -612,25 +612,25 @@ if(
             tryGetTarget = true;
         }
         // is support role hero
-        else if(0 < changeTargetProbForSupport){
+        else if(0 < healingPrioloty){
             if(actionState == ActionState.Attack){
-                // change target dependent on attack target helth & support prob
+                // change target dependent on attack target helth & high healing prioloty
                 if(
-                    ProbabilityTrue(NormalizedHealth(target) * changeTargetProbForSupport)
+                    ProbabilityTrue(NormalizedHealth(target) * healingPrioloty * 2.0)
                 ){
                     tryGetTarget = true;
                 }
             }
             else if(actionState == ActionState.Support){
-                // change target dependent on support target helth & support prob
+                // change target dependent on support target helth & low healing prioloty
                 if(
-                    ProbabilityTrue(NormalizedHealth(target) * changeTargetProbForSupport)
+                    ProbabilityTrue(NormalizedHealth(target) * healingPrioloty * 0.5)
                 ){
                     tryGetTarget = true;
                 }
                 // heal completed
                 else if(
-                    NormalizedHealth(target) == 1
+                    NormalizedHealth(target) >= 1
                 ){
                     tryGetTarget = true;
                 }
@@ -649,7 +649,7 @@ if(
         // get new target
         if(tryGetTarget){
             // is support role hero
-            if(0 < changeTargetProbForSupport)
+            if(0 < healingPrioloty)
             {
                 // find support target
                 target = FindSupportTarget();
@@ -1062,6 +1062,7 @@ void heroAction(){
     // melee
     while(
         actionState == ActionState.Attack &&
+        IsAlive(target) &&
         Health(target) <= 25 * 2 &&
         DistanceBetween(ep, target) <= 2.5
     ){
@@ -1072,8 +1073,8 @@ void heroAction(){
     // reload
     if(
         actionState == ActionState.Non ||
-        (MaxAmmo(ep, 0) > 0 && Ammo(ep, 0) <= 0 ) ||
-        (MaxAmmo(ep, 1) > 0 && Ammo(ep, 1) <= 0 )
+        (MaxAmmo(ep, 0) > 0 && 0 >= Ammo(ep, 0)) ||
+        (MaxAmmo(ep, 1) > 0 && 0 >= Ammo(ep, 1))
     ){
         PressButton(ep, Button.Reload);
     }

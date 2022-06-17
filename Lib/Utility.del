@@ -225,7 +225,7 @@ define AimingPosition():
         EyePosition(ep),
         EyePosition(ep) +
             (FacingDirectionOf(ep) * MaxLength()),
-        AllPlayers(OppositeTeamOf(TeamOf(ep))),
+        AllPlayers(EnemyTeamOf()),
         ep, false);
 
 // Aiming position of EventPlayer
@@ -234,7 +234,7 @@ define AimingPositionWithLimit(define limit):
         EyePosition(ep),
         EyePosition(ep) +
             (FacingDirectionOf(ep) * limit),
-        AllPlayers(OppositeTeamOf(TeamOf(ep))),
+        AllPlayers(EnemyTeamOf()),
         ep, false);
 
 define AimingPositionWithObjectLimit(define limit):
@@ -242,7 +242,7 @@ define AimingPositionWithObjectLimit(define limit):
         EyePosition(ep),
         EyePosition(ep) +
             (FacingDirectionOf(ep) * limit),
-        AllPlayers(OppositeTeamOf(TeamOf(ep))),
+        AllPlayers(EnemyTeamOf()),
         ep, true);
 
 // Aiming position of EventPlayer. but sight line collision ignore player entity
@@ -259,7 +259,7 @@ define BelowPosition(define position):
     RayCastHitPosition(
         (position + Vector(0, 0.1, 0)),
         (position + Vector(0, 0.1, 0)) + (Down() * MaxLength()),
-        AllPlayers(OppositeTeamOf(TeamOf(ep))),
+        AllPlayers(EnemyTeamOf()),
         ep, false);
 
 define InvalidPosition():
@@ -273,8 +273,44 @@ define IsInSpawnRoomPosition(define pos, define team):
         )
     );
 
-define EnemyTeamOf(): 
-    OppositeTeamOf(TeamOf());
+Vector CurrentObjectPosition()"CurrentObjectPosition"{
+    Vector objPos;
+    define mode! = CurrentGameMode();
+    define objNo = CurrentObjectNo();
+
+    if(mode == GameMode.Assault){
+        objPos = ObjectivePosition(objNo);
+    }
+    else if(mode == GameMode.Escort){
+        objPos = PayloadPosition();
+    }
+    else if(mode == GameMode.Hybrid){
+        objPos = PayloadPosition();
+    }
+    else{
+        errLog("ERROR ON CurrentObjectPosition");
+    }
+    return objPos;
+}
+
+Number CurrentObjectNo()"CurrentObjectNo"{
+    Number curObjNo;
+    if(!IsObjectiveComplete(0)){
+        curObjNo = 0;
+    }
+    else if(!IsObjectiveComplete(1)){
+        curObjNo = 1;
+    }
+    else if(!IsObjectiveComplete(2)){
+        curObjNo = 2;
+    }
+    else{
+        errLog("ERROR ON CurrentObjectNo");
+    }
+    return curObjNo;
+}
+
+
 
 // TAG Player ----------
 // Aiming Player of EventPlayer.
@@ -284,7 +320,7 @@ define AimingPlayer():
             FilteredArray(
                 PlayersInViewAngle(
                     ep,
-                    OppositeTeamOf(TeamOf(ep)),
+                    EnemyTeamOf(),
                     15
                 ),
                 (
@@ -295,6 +331,10 @@ define AimingPlayer():
             DistanceBetween(ep, ae)
         )
     );
+
+// TAG Team ----------
+define EnemyTeamOf(): 
+    OppositeTeamOf(TeamOf());
 
 // TAG Balance ----------
 // Buff scale value determined according to the unbalance of the teamscale value determined according to the unbalance of the team
