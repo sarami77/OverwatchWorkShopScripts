@@ -195,7 +195,7 @@ if(
     initCompleted
 ){
     define buddyList! = 
-    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", false, -1000) ?
+    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", false, -101) ?
         // random list
         [
             RandomSupportHero,
@@ -216,9 +216,7 @@ if(
 
     // slice buddy list by setting
     buddyList = ArraySlice(buddyList, 0,
-        WorkshopSettingInteger(
-            "Follower AI Settings(Join on behalf of absent player)",
-            "Follower Max Num", 3, 0, 5, -1000)
+        WorkshopSettingInteger("Follower AI Settings(Join on behalf of absent player)", "Follower Max Num", 5, 0, 5, -100)
     );
 
     define prevPlayerNum! = -1;
@@ -295,7 +293,7 @@ if(
     if(actionState != ActionState.Non){
         // get perk
         if(
-            ProbabilityTrue(5) &&
+            ProbabilityTrue(2) &&
             perkState == PerkState.Non
         ){
             WaitUntil(AllPlayers(Team.Team1).perkType == PerkType.Non, 1);
@@ -315,7 +313,7 @@ if(
 
         // use perk ability
         if(
-            ProbabilityTrue(20) &&
+            ProbabilityTrue(30) &&
             perkState == PerkState.Using
         ){
             StartHoldingButton(ep, Button.Melee);
@@ -332,26 +330,31 @@ if(
 
     // revive
     if(
-        ProbabilityTrue(40)
+        ProbabilityTrue(50) ||
+        actionState == ActionState.Non
     ){
-        define downPlayer! = FirstOf(FilteredArray(AllPlayers(playerTeam), !IsAlive(ae)));
-        while(
-            IsAlive(ep) &&
+        define downPlayer! = RandomValueInArray(FilteredArray(AllPlayers(playerTeam), !IsAlive(ae)));
+        if(
             downPlayer != null &&
-            !IsAlive(downPlayer) &&
-            IsInLineOfSight(ep, downPlayer)
+            downPlayer != ep
         ){
-            define distDownPlayer! = DistanceBetween(ep, downPlayer);
-            if(
-                distDownPlayer > reviveRange
+            while(
+                IsAlive(ep) &&
+                !IsAlive(downPlayer) &&
+                IsInLineOfSight(ep, downPlayer)
             ){
-                ApplyImpulse(ep, 
-                    VectorTowards(ep, downPlayer + Vector(0, 1, 0)),
-                    distDownPlayer * 3,
-                    Relative.ToWorld, ContraryMotion.Cancel);
+                define distDownPlayer! = DistanceBetween(ep, downPlayer);
+                if(
+                    distDownPlayer > reviveRange
+                ){
+                    ApplyImpulse(ep, 
+                        VectorTowards(ep, downPlayer + Vector(0, 1, 0)),
+                        distDownPlayer * 3,
+                        Relative.ToWorld, ContraryMotion.Cancel);
+                }
+                SetStatus(ep, null, Status.Rooted, 1);
+                Wait(1.0, WaitBehavior.AbortWhenFalse);        
             }
-            SetStatus(ep, null, Status.Rooted, 1);
-            Wait(1.0, WaitBehavior.AbortWhenFalse);        
         }
     }
 
@@ -366,7 +369,6 @@ if(
     IsDummyBot() &&
     Attacker() == ep
 ){
-    Wait(1, WaitBehavior.IgnoreCondition);
     Respawn();
 }
 
@@ -726,10 +728,15 @@ if(
     DestroyEffect(portalEntitys[4]);
 }
 
-define showPortalPlayers:
+define playersAny:
     AllPlayers();
-define showPortalIconPlayers:
+
+define outSidePlayersFromMaxPortalSize:
     FilteredArray(AllPlayers(playerTeam), DistanceBetween(ae, portalPosition) > maxPortalSize);
+
+define outSidePlayersFromHalfPortalSize:
+    FilteredArray(AllPlayers(playerTeam), DistanceBetween(ae, portalPosition) > portalSize / 2);
+
 globalvar define portalColor;
 
 rule: "Portal/State/Set  // waiting for found by players"
@@ -745,24 +752,24 @@ if(
     closingCount = 0;
     // show icon
     portalEntitys = [];
-    portalEntitys[0] = CreateIcon(showPortalIconPlayers, portalPosition, Icon.Spiral,
+    portalEntitys[0] = CreateIcon(outSidePlayersFromMaxPortalSize, portalPosition, Icon.Spiral,
         IconRev.VisibleToPositionAndColor, portalColor, true);
     // set effect
     // sphere
-    portalEntitys[1] = CreateEffect(showPortalPlayers, Effect.Sphere, portalColor,
+    portalEntitys[1] = CreateEffect(playersAny, Effect.Sphere, portalColor,
         portalPosition, portalSize, EffectRev.VisibleToPositionRadiusAndColor);
     // cloud
-    portalEntitys[2] = CreateEffect(showPortalPlayers, Effect.Cloud, portalColor,
+    portalEntitys[2] = CreateEffect(outSidePlayersFromHalfPortalSize, Effect.Cloud, portalColor,
         portalPosition, portalSize * 1.5, EffectRev.VisibleToPositionRadiusAndColor);
     // aura
     // Since visibility will be poor, display only in the center of the field of view
-    portalEntitys[3] = CreateEffect(showPortalPlayers, Effect.BadAura, portalColor,
+    portalEntitys[3] = CreateEffect(outSidePlayersFromHalfPortalSize, Effect.BadAura, portalColor,
         portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionRadiusAndColor);
     // sound
-    portalEntitys[4] = CreateEffect(showPortalPlayers, Effect.EnergySound, portalColor,
+    portalEntitys[4] = CreateEffect(playersAny, Effect.EnergySound, portalColor,
         portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionRadiusAndColor);
     // show message
-    BigMessage(showPortalPlayers, "New portal detected. Find and attack portal!");
+    BigMessage(playersAny, "New portal detected. Find and attack portal!");
 }
 
 rule: "Portal/State/Growing"
@@ -906,7 +913,7 @@ if(
         ){
             break;
         }
-        Wait(0.2, WaitBehavior.AbortWhenFalse);
+        Wait(0.5, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     // confirm as portal position
@@ -1504,7 +1511,7 @@ if(
         eachNameColor = Color.Red;
         eachEffectTextSize = basicInWorldTextSize + 2;
 
-        eachPerkDropProbability = 30;
+        eachPerkDropProbability = 50;
     }
     else if(enemyType == EnemyType.GiantBoss){
         StartScalingPlayer(ep, 2.5, false);
@@ -1517,14 +1524,14 @@ if(
 
         eachDealtDamageScale = 3.0;
         eachChargeUltInterval = 5;
-        eachMaxSpawnInterval = 20;
-        eachMinSpawnInterval = 10;
+        eachMaxSpawnInterval = 27;
+        eachMinSpawnInterval = 9;
 
         eachNameText = "Giant Boss";
         eachNameColor = Color.Purple;
         eachEffectTextSize = basicInWorldTextSize + 3;
 
-        eachPerkDropProbability = 50;
+        eachPerkDropProbability = 100;
 
         // set addtinal health
         Wait(0.1, WaitBehavior.AbortWhenFalse);
@@ -1631,6 +1638,11 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
 
         define telPosNearTarget! = ClosestPlayerToTelPos;
         if(
+            // Not too close to telPosNearTarget
+            DistanceBetween(    
+                telPosNearTarget, teleportPosition)
+            >= 10
+                &&
             // Has line to target
             IsInLineOfSight(
                 telPosNearTarget + PositionOffset(),
@@ -1639,7 +1651,7 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
         ){
             break;
         }
-        Wait(0.2, WaitBehavior.AbortWhenFalse);
+        Wait(0.5, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     return true;
@@ -1704,7 +1716,7 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
         ){
             break;
         }
-        Wait(0.2, WaitBehavior.AbortWhenFalse);
+        Wait(0.5, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     return true;
@@ -2027,7 +2039,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
     confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 4.0, 0, 1000, -9);
     // add team health balance
-    confirmDealtDamage += GetTeamNormalizedHealth() * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage By Player Team Total Health", 5, 0, 1000, -8);
+    // confirmDealtDamage += GetTeamNormalizedHealth() * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage By Player Team Total Health", 5, 0, 1000, -8);
     // add round progress
     confirmDealtDamage += roundNo * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 2.0, 0, 1000, -7);
     // add team lives balance
@@ -2053,6 +2065,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
+/*
 Number GetTeamNormalizedHealth()"GetTeamNormalizedHealth"{
     define teamHealth = 0;
     define teamList! = AllPlayers(playerTeam);
@@ -2062,6 +2075,7 @@ Number GetTeamNormalizedHealth()"GetTeamNormalizedHealth"{
     teamHealth /= CountOf(teamList);
     return teamHealth;
 }
+*/
 
 // TAG Debug ----------
 rule: "Debug/changeDebugMode"
@@ -2130,7 +2144,8 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
                 HudTextRev.VisibleToAndString, Spectators.VisibleNever);
             debugHudEntitys[End()] = LastTextID();
         }
-
+    
+    /*
         CreateHudText(player,
             null,
             <"<0> <1>", "Regeneration Rate", regenRateTeam1>,
@@ -2258,6 +2273,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
             Color.White, Color.White, Color.White,
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
+        */
     }
 
         CreateHudText(player,
@@ -2386,11 +2402,10 @@ if(
     // Set portal position to aim center
     WaitLongPressConfirm();
     portalSize = maxPortalSize;
-
-    Kill(HostPlayer());
 }
 
-disabled rule: "Debug/showCommonTeleportPosition"
+/*
+rule: "Debug/showCommonTeleportPosition"
 Event.OngoingPlayer
 Team.All
 if(
@@ -2404,3 +2419,4 @@ if(
         Effect.Sphere, IsInLineOfSight(ep, commonTeleportPosition) ? Color.Yellow : Color.White, commonTeleportPosition,
         5, EffectRev.PositionRadiusAndColor);
 }
+*/
