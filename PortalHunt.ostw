@@ -218,7 +218,7 @@ if(
     buddyList = ArraySlice(buddyList, 0,
         WorkshopSettingInteger(
             "Follower AI Settings(Join on behalf of absent player)",
-            "Follower Max Num", 5, 0, 5, -1000)
+            "Follower Max Num", 3, 0, 5, -1000)
     );
 
     define prevPlayerNum! = -1;
@@ -276,20 +276,26 @@ if(
         ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
         Color.SkyBlue, Spectators.DefaultVisibility);
 
+    SetUltimateCharge(ep, 50);
+
     // teleport to player near object
     Teleport(ep, ClosestPlayerTo(portalPosition, playerTeam));
 }
 
-rule: "Buddy/perkControl"
+playervar define originalHero;
+
+rule: "Buddy/ActionControl"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     IsDummyBot() &&
     HasSpawned()
 ){
-    if(IsInLineOfSight(ep, ClosestPlayerTo(ep, enemyTeam))){
+    // Perk
+    if(actionState != ActionState.Non){
+        // get perk
         if(
-            ProbabilityTrue(20) &&
+            ProbabilityTrue(5) &&
             perkState == PerkState.Non
         ){
             WaitUntil(AllPlayers(Team.Team1).perkType == PerkType.Non, 1);
@@ -297,6 +303,7 @@ if(
             perkState = PerkState.Ready;
         }
 
+        // use perk
         if(
             ProbabilityTrue(20) &&
             perkState == PerkState.Ready
@@ -306,6 +313,7 @@ if(
             StopHoldingButton(ep, Button.Interact);
         }
 
+        // use perk ability
         if(
             ProbabilityTrue(20) &&
             perkState == PerkState.Using
@@ -315,19 +323,40 @@ if(
             StopHoldingButton(ep, Button.Melee);
         }
     }
+
+    // SetHeroActionRoutine
+    if(originalHero != HeroOf()){
+        SetHeroActionRoutine();
+    }
+    originalHero = HeroOf();
+
+    // revive
+    if(
+        ProbabilityTrue(40)
+    ){
+        define downPlayer! = FirstOf(FilteredArray(AllPlayers(playerTeam), !IsAlive(ae)));
+        while(
+            IsAlive(ep) &&
+            downPlayer != null &&
+            !IsAlive(downPlayer) &&
+            IsInLineOfSight(ep, downPlayer)
+        ){
+            define distDownPlayer! = DistanceBetween(ep, downPlayer);
+            if(
+                distDownPlayer > reviveRange
+            ){
+                ApplyImpulse(ep, 
+                    VectorTowards(ep, downPlayer + Vector(0, 1, 0)),
+                    distDownPlayer * 3,
+                    Relative.ToWorld, ContraryMotion.Cancel);
+            }
+            SetStatus(ep, null, Status.Rooted, 1);
+            Wait(1.0, WaitBehavior.AbortWhenFalse);        
+        }
+    }
+
     Wait(5, WaitBehavior.IgnoreCondition);
     LoopIfConditionIsTrue();
-}
-
-rule: "Buddy/fastRespawnByKilled"
-Event.OnDeath
-if(
-    TeamOf() == playerTeam &&
-    IsDummyBot() &&
-    Attacker() != ep
-){
-    Wait(9.5, WaitBehavior.IgnoreCondition);
-    Respawn();
 }
 
 rule: "Buddy/fastRespawnBySucide"
@@ -337,7 +366,7 @@ if(
     IsDummyBot() &&
     Attacker() == ep
 ){
-    Wait(3, WaitBehavior.IgnoreCondition);
+    Wait(1, WaitBehavior.IgnoreCondition);
     Respawn();
 }
 
@@ -1455,7 +1484,7 @@ if(
         eachNameColor = Color.Yellow;
         eachEffectTextSize = basicInWorldTextSize + 1;
 
-        eachPerkDropProbability = 9;
+        eachPerkDropProbability = 10;
     }
     else if(enemyType == EnemyType.Boss){
         StartScalingPlayer(ep, 1.5, false);
@@ -1475,7 +1504,7 @@ if(
         eachNameColor = Color.Red;
         eachEffectTextSize = basicInWorldTextSize + 2;
 
-        eachPerkDropProbability = 27;
+        eachPerkDropProbability = 30;
     }
     else if(enemyType == EnemyType.GiantBoss){
         StartScalingPlayer(ep, 2.5, false);
@@ -2357,6 +2386,8 @@ if(
     // Set portal position to aim center
     WaitLongPressConfirm();
     portalSize = maxPortalSize;
+
+    Kill(HostPlayer());
 }
 
 disabled rule: "Debug/showCommonTeleportPosition"
