@@ -162,7 +162,7 @@ Team.Team2
 Player.All
 if(
     perk[Perk.perkCrateState] == PerkCrateState.NotDropped &&
-    Attacker() != EventPlayer()
+    Attacker() != ep
 ){
     // The more people who do not have a park, the higher the drop rate
     if(
@@ -201,7 +201,7 @@ define canPickupCratePlayers:
             ArrayElement().perkState == PerkState.Non &&
             ArrayElement().perkType == PerkType.Non &&
             DistanceBetween(perk[Perk.perkCratePosition], ArrayElement()) <= pickupRange &&
-            !(ArrayElement().perk[Perk.notPickupPerk] && ArrayElement() == EventPlayer())
+            !(ArrayElement().perk[Perk.notPickupPerk] && ArrayElement() == ep)
         )
     );
 
@@ -365,7 +365,7 @@ void ForcePlayerPerkHero(
     perkTarget.perk[Perk.originalHero] = HeroOf(perkTarget);
 
     // set perk hero
-    ForcePlayerHero(EventPlayer(), perkHero.hero);
+    ForcePlayerHero(ep, perkHero.hero);
     isPerkHero = true;
 
     // set primaryFireEnabled
@@ -461,7 +461,7 @@ enum PerkEffectStatus{
 // show perk name and player name
 define CreatePerkTitleHud(define title):
     CreateHudText(AllPlayers(),
-        <"<0> <1> <2>", EventPlayer(), HeroIconString(HeroOf()), title>, null, null,
+        <"<0> <1> <2>", ep, HeroIconString(HeroOf()), title>, null, null,
         Location.Left, (SlotOf() * 10) + 0,
         Color.Team1, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
@@ -504,7 +504,7 @@ define CreatePerkOperationHud():
 
 // show perk effect status on top
 define CreatePerkEffectHud(define text):
-    CreateHudText(EventPlayer(),
+    CreateHudText(ep,
         null, null, text,
         Location.Top, 5,
         Color.White, Color.White, Color.White,
@@ -516,7 +516,7 @@ define CreateHeadUpText(define text):
     CreateInWorldText(
         AllPlayers(),
         text,
-        EventPlayer(), basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
 
 // show each perk hud
@@ -695,7 +695,7 @@ void ShowPerkHUD()"ShowPerkHUD"{
     // show Aura effct
     if(perkState == PerkState.Using){
         CreateEffect(AllPlayers(), Effect.BadAura, Color.White,
-            EventPlayer(), 1, EffectRev.VisibleToPositionAndRadius);
+            ep, 1, EffectRev.VisibleToPositionAndRadius);
         perk[Perk.perkHudEntitys][5] = LastCreatedEntity();
         WaitRedraw();
     }
@@ -717,15 +717,15 @@ Player.All
 if(
     IsAlive() &&
     perkState == PerkState.Ready &&
-    IsButtonHeld(EventPlayer(), Button.Interact)
+    IsButtonHeld(ep, Button.Interact)
 ){
     WaitLongPressConfirm();
     PlayEffect(
         AllPlayers(), PlayEffect.GoodPickupEffect,
-        Color.White, EventPlayer(), 1);
+        Color.White, ep, 1);
     PlayEffect(
-        EventPlayer(), PlayEffect.BuffExplosionSound,
-        Color.White, EventPlayer(), MaxLength());
+        ep, PlayEffect.BuffExplosionSound,
+        Color.White, ep, MaxLength());
     perkState = PerkState.Using;
 }
 
@@ -796,8 +796,8 @@ if(
     // lose perk by abort operation of interact key hold
     WaitConditionConfirmed();
     PlayEffect(
-        EventPlayer(), PlayEffect.DebuffImpactSound,
-        Color.White, EventPlayer(), MaxLength());
+        ep, PlayEffect.DebuffImpactSound,
+        Color.White, ep, MaxLength());
     perkState = PerkState.Non;
 }
 
@@ -813,9 +813,9 @@ if(
     PlayEffect(
         ep, PlayEffect.DebuffImpactSound,
         Color.White, ep, MaxLength());
-    SmallMessage(EventPlayer(), <"Forgotten perk?"> );
+    SmallMessage(ep, <"Forgotten perk?"> );
     Wait(2, WaitBehavior.AbortWhenFalse);
-    SmallMessage(EventPlayer(), <"Hold interact button <0> to activate perk.", ButtonGuide(Button.Interact)> );
+    SmallMessage(ep, <"Hold interact button <0> to activate perk.", ButtonGuide(Button.Interact)> );
     LoopIfConditionIsTrue();
 }
 
@@ -830,7 +830,7 @@ if(
     // lose perk by player dead
     perkState = PerkState.Non;
     Wait(2, WaitBehavior.IgnoreCondition);
-    SmallMessage(EventPlayer(), "Lost active perk due by death.");
+    SmallMessage(ep, "Lost active perk due by death.");
 }
 
 // TAG Debug ----------
@@ -856,9 +856,9 @@ Event.OngoingPlayer
 Team.All
 Player.All
 if(
-    HostPlayer() == EventPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.PrimaryFire)
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.PrimaryFire)
 ){
     WaitLongPressConfirm();
 
@@ -878,9 +878,9 @@ Event.OngoingPlayer
 Team.All
 Player.All
 if(
-    HostPlayer() == EventPlayer() &&
-    IsButtonHeld(EventPlayer(), Button.Interact) &&
-    IsButtonHeld(EventPlayer(), Button.SecondaryFire)
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.SecondaryFire)
 ){
     WaitLongPressConfirm();
 
@@ -897,7 +897,7 @@ if(
 
 define isInCombat: 
     IsAlive() &&
-    IsInLineOfSight(EventPlayer(), ClosestPlayerTo(EventPlayer(), Team.Team2));
+    IsInLineOfSight(ep, ClosestPlayerTo(ep, Team.Team2));
 
 disabled rule: "Debug/forceGetPerk" // for bot only
 Event.OngoingPlayer
@@ -910,8 +910,8 @@ if(
     Wait(RandomInteger(1, 5), WaitBehavior.AbortWhenFalse);
 
     WaitUntil(AllPlayers(Team.Team1).perkType == PerkType.Non, 1);
-    EventPlayer().perkType = RandomValueInArray(lotteryPerkList);
-    EventPlayer().perkState = PerkState.Ready;
+    perkType = RandomValueInArray(lotteryPerkList);
+    perkState = PerkState.Ready;
 }
 
 disabled rule: "Debug/forceUsePerk" // for bot only
@@ -924,9 +924,9 @@ if(
 ){
     Wait(RandomInteger(1, 10), WaitBehavior.AbortWhenFalse);
 
-    StartHoldingButton(EventPlayer(), Button.Interact);
+    StartHoldingButton(ep, Button.Interact);
     Wait(0.5, WaitBehavior.IgnoreCondition);
-    StopHoldingButton(EventPlayer(), Button.Interact);
+    StopHoldingButton(ep, Button.Interact);
 }
 
 disabled rule: "Debug/forceUseMelee"    // for bot only
@@ -939,9 +939,9 @@ if(
 ){
     Wait(RandomInteger(1, 10), WaitBehavior.AbortWhenFalse);
 
-    StartHoldingButton(EventPlayer(), Button.Melee);
+    StartHoldingButton(ep, Button.Melee);
     Wait(0.5, WaitBehavior.IgnoreCondition);
-    StopHoldingButton(EventPlayer(), Button.Melee);  
+    StopHoldingButton(ep, Button.Melee);  
 }
 
 disabled rule: "Debug/overridePerk"

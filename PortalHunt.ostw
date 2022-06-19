@@ -7,6 +7,7 @@ import "Lib/DamageText.del";
 import "Lib/Regeneration.del";
 import "Lib/Revive.del";
 import "Lib/Bot.del";
+import "Lib/Buddy.del";
 import "Lib/PerkChooser.del";
 
 // // TAG duumy define ----------
@@ -22,6 +23,9 @@ disabled rule: "Original source code was created by [sarami77#1868]"-1{}
 disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopScripts"-1{}
 
 // TAG Initialize ----------
+define playerTeam: Team.Team1;
+define enemyTeam: Team.Team2;
+
 globalvar define initCompleted!;
 
 rule: "Initialize/initialize"
@@ -44,19 +48,19 @@ Event.OngoingGlobal
 
     // Set imported functions public property for user tuning
     // Regeneration.del
-    regenerationEnableTeam = Team.Team1;
+    regenerationEnableTeam = playerTeam;
     regenerationNeedBalanceTeam1 = true;
     regenerationStartWaitSecondTeam1 =      WorkshopSettingReal("Player Settings", "Regeneration Start Wait Second",            3, 0, 100, 2);
     regenerationHealthPerSecondTeam1 =      WorkshopSettingReal("Player Settings", "Regeneration Health Per Second",            25, 0, 1000, 3);
 
     // Revive.del
-    reviveEnableTeam = Team.Team1;
+    reviveEnableTeam = playerTeam;
     reviveTimeLimit =                       WorkshopSettingReal("Player Settings", "Revive Time Limit",                         10, 0, 100, 4);
     reviveRange =                           WorkshopSettingReal("Player Settings", "Revive Range",                              3, 0, 100, 5);
     reviveCompleteSecond =                  WorkshopSettingReal("Player Settings", "Revive Complete Second",                    5, 0, 100, 6);
 
     // DamageText.del
-    damageTextEnableTeam = Team.Team2;
+    damageTextEnableTeam = enemyTeam;
 
     // ElapsedTimer.del
     elapsedTimerEnable = true;
@@ -69,14 +73,14 @@ Event.OngoingGlobal
 
     // set game HUD
     // show version and share code
-    CreateHudText(AllPlayers(Team.Team1),
+    CreateHudText(AllPlayers(playerTeam),
         null, "PORTAL HUNT -HORDE PVE [ver 4.0] Share code [YY1N2]", null,
         Location.Left, -3,
         Color.White, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
 
     // show hero change operation
-    CreateHudText(AllPlayers(Team.Team1),
+    CreateHudText(AllPlayers(playerTeam),
         null, <"Hold reload button <0> to change hero", ButtonGuide(Button.Reload)>, null,
         Location.Left, -2,
         Color.Yellow, Color.Yellow, Color.Yellow,
@@ -138,9 +142,9 @@ Event.OngoingGlobal
 if(
     initCompleted &&
     portalState == PortalState.Init &&
-    NumberOfPlayers(Team.Team1) > 0 &&
+    NumberOfPlayers(playerTeam) > 0 &&
     IsTrueForAny(
-        AllPlayers(Team.Team1),
+        AllPlayers(playerTeam),
         (
             !IsInSpawnRoom(ae) &&
             IsMoving(ae)
@@ -150,7 +154,7 @@ if(
     // reset elapsed time
     elapsedTime = 0;
     // reset prevPortalPosition
-    prevPortalPosition = PositionOf(FirstOf(AllPlayers(Team.Team1)));
+    prevPortalPosition = PositionOf(FirstOf(AllPlayers(playerTeam)));
     // start portal creation
     portalState = PortalState.Calculating;
 }
@@ -160,7 +164,7 @@ Event.OngoingGlobal
 if(
     initCompleted &&
     portalState != PortalState.Init &&
-    NumberOfPlayers(Team.Team1) <= 0
+    NumberOfPlayers(playerTeam) <= 0
 ){
     // reset team Lives
     teamLives = initialTeamLives;
@@ -178,10 +182,163 @@ if(
     initCompleted
 ){
     // Change the spawn room regularly to keep the game fluid
-    ForceSpawnRoom(Team.Team1, RandomValueInArray([0, 1, 1, 1, 2]));
-    ForceSpawnRoom(Team.Team2, RandomValueInArray([0, 1, 1, 1, 2]));
+    ForceSpawnRoom(playerTeam, RandomValueInArray([0, 1, 1, 1, 2]));
+    ForceSpawnRoom(enemyTeam, RandomValueInArray([0, 1, 1, 1, 2]));
     Wait(300, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
+}
+
+// TAG Buddy ----------
+rule: "Buddy/BuddyContorl"
+Event.OngoingGlobal
+if(
+    initCompleted
+){
+    define buddyList! = 
+    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", false, -1000) ?
+        // random list
+        [
+            RandomSupportHero,
+            RandomTankHero,
+            RandomDamageHero,
+            RandomSupportHero,
+            RandomTankHero
+        ]
+    :
+        // fix list
+        [
+            Hero.Mercy,
+            Hero.Reinhardt,
+            Hero.Genji,
+            Hero.Moira,
+            Hero.Roadhog
+        ];
+
+    // slice buddy list by setting
+    buddyList = ArraySlice(buddyList, 0,
+        WorkshopSettingInteger(
+            "Follower AI Settings(Join on behalf of absent player)",
+            "Follower Max Num", 5, 0, 5, -1000)
+    );
+
+    define prevPlayerNum! = -1;
+    define maxSlotNum! = NumberOfSlots(playerTeam);
+    define maxBuddyNum! = CountOf(buddyList);
+
+    while(true){
+        define playerNum! =
+            CountOf(
+                FilteredArray(
+                    AllPlayers(playerTeam),
+                    !IsDummyBot(ae)));
+
+        define needBuddyNum = 
+            Min(
+                maxSlotNum - playerNum,
+                maxBuddyNum);
+
+        define buddyNum! = 
+            CountOf(
+                FilteredArray(
+                    AllPlayers(playerTeam),
+                    IsDummyBot(ae)));
+
+        if(
+            // player number changed
+            prevPlayerNum != playerNum ||
+            // not filed buddy number
+            buddyNum != needBuddyNum
+        ){
+            // save player num
+            prevPlayerNum = playerNum;
+            // relaod buddy list
+            DestroyBots(playerTeam);
+            define emptySlotNum! = maxSlotNum - playerNum;
+            define addList! = ArraySlice(buddyList, 0, emptySlotNum);
+            for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(addList); buddyAddIndex++){
+                CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
+            }
+        }
+    
+        Wait(5, WaitBehavior.IgnoreCondition);
+    }
+}
+
+rule: "Buddy/Teleport/init"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned()
+){
+    CreateInWorldText(
+        AllPlayers(), followerText, 
+        ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        Color.SkyBlue, Spectators.DefaultVisibility);
+
+    // teleport to player near object
+    Teleport(ep, ClosestPlayerTo(portalPosition, playerTeam));
+}
+
+rule: "Buddy/perkControl"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned()
+){
+    if(IsInLineOfSight(ep, ClosestPlayerTo(ep, enemyTeam))){
+        if(
+            ProbabilityTrue(20) &&
+            perkState == PerkState.Non
+        ){
+            WaitUntil(AllPlayers(Team.Team1).perkType == PerkType.Non, 1);
+            perkType = RandomValueInArray(lotteryPerkList);
+            perkState = PerkState.Ready;
+        }
+
+        if(
+            ProbabilityTrue(20) &&
+            perkState == PerkState.Ready
+        ){
+            StartHoldingButton(ep, Button.Interact);
+            Wait(0.5, WaitBehavior.IgnoreCondition);
+            StopHoldingButton(ep, Button.Interact);
+        }
+
+        if(
+            ProbabilityTrue(20) &&
+            perkState == PerkState.Using
+        ){
+            StartHoldingButton(ep, Button.Melee);
+            Wait(0.5, WaitBehavior.IgnoreCondition);
+            StopHoldingButton(ep, Button.Melee);
+        }
+    }
+    Wait(5, WaitBehavior.IgnoreCondition);
+    LoopIfConditionIsTrue();
+}
+
+rule: "Buddy/fastRespawnByKilled"
+Event.OnDeath
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    Attacker() != ep
+){
+    Wait(9.5, WaitBehavior.IgnoreCondition);
+    Respawn();
+}
+
+rule: "Buddy/fastRespawnBySucide"
+Event.OnDeath
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    Attacker() == ep
+){
+    Wait(3, WaitBehavior.IgnoreCondition);
+    Respawn();
 }
 
 // TAG Player ----------
@@ -190,8 +347,8 @@ playervar define isInsidePortal!;
 // TAG Player/ReturnSpawnRoom
 rule: "Player/ReturnSpawnRoom/manualReturn"
 Event.OngoingPlayer
-Team.Team1
 if(
+    TeamOf() == playerTeam &&
     IsAlive() &&
     !IsInSpawnRoom() &&
     IsButtonHeld(ep, Button.Reload)
@@ -204,14 +361,14 @@ if(
 
 rule: "Player/ReturnSpawnRoom/setFastSpeed"
 Event.OngoingPlayer
-Team.Team1
 if(
+    TeamOf() == playerTeam &&
     initCompleted &&
     IsAlive() &&
     IsInSpawnRoom()
 ){
     SetMoveSpeed(ep, 150);
-    while(!IsInLineOfSight(ep, ClosestPlayerTo(ep, Team.Team2))){
+    while(!IsInLineOfSight(ep, ClosestPlayerTo(ep, enemyTeam))){
         Wait(1, WaitBehavior.IgnoreCondition);
     }
     SetMoveSpeed(ep, 100);
@@ -262,20 +419,20 @@ if(
 
     BigMessage(AllPlayers(),
         <"We reached <0> round. good game!", roundNo>);
-    PlayRandomEmote(AllPlayers(Team.Team1));
+    PlayRandomEmote(AllPlayers(playerTeam));
     WaitNextPhase();
 
-    DeclareTeamVictory(Team.Team1);
+    DeclareTeamVictory(playerTeam);
 }
 
 rule: "Player/TeamLives/protectTeamLifeConsumeBySucide"
 Event.OnDeath
-Team.Team1
 if(
+    TeamOf() == playerTeam &&
     Attacker() == ep
 ){
     if(
-        DistanceBetween(ep, ClosestPlayerTo(ep, Team.Team2)) > 30
+        DistanceBetween(ep, ClosestPlayerTo(ep, enemyTeam)) > 30
     ){
         Respawn();
     }
@@ -287,7 +444,7 @@ Event.OngoingGlobal
 if(
     portalEnable
 ){
-    define players! = AllPlayers(Team.Team1);
+    define players! = AllPlayers(playerTeam);
     // Set flag when player entered to portal
     // This flag is used for functions related to portal
     for(gLoopIndex = 0; gLoopIndex < CountOf(players); gLoopIndex++){
@@ -319,21 +476,21 @@ if(
         portalState == PortalState.Set ||
         portalState == PortalState.Growing
     ){
-        SetObjectiveDescription(AllPlayers(Team.Team1), "Find and attack portal!", HudTextRev.VisibleToSortOrderStringAndColor);
+        SetObjectiveDescription(AllPlayers(playerTeam), "Find and attack portal!", HudTextRev.VisibleToSortOrderStringAndColor);
     }
     else if(
         portalState == PortalState.UnderAttack
     ){
-        SetObjectiveDescription(AllPlayers(Team.Team1), "Attacking portal. Stay inside and Survive!", HudTextRev.VisibleToSortOrderStringAndColor);
+        SetObjectiveDescription(AllPlayers(playerTeam), "Attacking portal. Stay inside and Survive!", HudTextRev.VisibleToSortOrderStringAndColor);
     }
     else if(portalState == PortalState.Closed){
-        SetObjectiveDescription(AllPlayers(Team.Team1), "Portal closed. Nice work!", HudTextRev.VisibleToSortOrderStringAndColor);
+        SetObjectiveDescription(AllPlayers(playerTeam), "Portal closed. Nice work!", HudTextRev.VisibleToSortOrderStringAndColor);
     }
     else if(portalState == PortalState.End){
-        SetObjectiveDescription(AllPlayers(Team.Team1), "Team lives ran out. good game!", HudTextRev.VisibleToSortOrderStringAndColor);
+        SetObjectiveDescription(AllPlayers(playerTeam), "Team lives ran out. good game!", HudTextRev.VisibleToSortOrderStringAndColor);
     }
     else if(portalState == PortalState.Calculating){
-        SetObjectiveDescription(AllPlayers(Team.Team1), "Scanning portal... Stand by.", HudTextRev.VisibleToSortOrderStringAndColor);
+        SetObjectiveDescription(AllPlayers(playerTeam), "Scanning portal... Stand by.", HudTextRev.VisibleToSortOrderStringAndColor);
     }
     WaitUpdateMediumCycle();
     LoopIfConditionIsTrue();
@@ -386,7 +543,7 @@ if(
         closestPlayerPortal,
         <"You are attacking portal. Stay inside and Survive!">);
     BigMessage(
-        FilteredArray(AllPlayers(Team.Team1), (closestPlayerPortal != ae)),
+        FilteredArray(AllPlayers(playerTeam), (closestPlayerPortal != ae)),
         <"<0> <1> <2>",
             closestPlayerPortal,
             HeroIconString(HeroOf(closestPlayerPortal)),
@@ -403,7 +560,7 @@ if(
 ){
     playerNumInsidePortal = CountOf(
         FilteredArray(
-            AllPlayers(Team.Team1),
+            AllPlayers(playerTeam),
             ae.isInsidePortal
         )
     );
@@ -455,7 +612,7 @@ if(
     }
     WaitNextPhase();
 
-    PlayRandomVoiceLine(AllPlayers(Team.Team1));
+    PlayRandomVoiceLine(AllPlayers(playerTeam));
     roundNo += 1;
     BigMessage(AllPlayers(), <"Round <0>", roundNo>);
     WaitBigMessageHide();
@@ -465,8 +622,8 @@ if(
 // TAG Player/FairPlay
 rule: "Player/FairPlay/disableStealthWhenInside //sombra's stealth for fair play"
 Event.OngoingPlayer
-Team.Team1
 if(
+    TeamOf() == playerTeam &&
     isInsidePortal &&
     IsStealth(ep)
 ){
@@ -480,8 +637,8 @@ if(
 
 rule: "Player/FairPlay/disableGrappleClawWhenInside // wreckingBball's grapple claw for fair play"
 Event.OngoingPlayer
-Team.Team1
 if(
+    TeamOf() == playerTeam &&
     isInsidePortal &&
     IsGrapple(ep)
 ){
@@ -543,7 +700,7 @@ if(
 define showPortalPlayers:
     AllPlayers();
 define showPortalIconPlayers:
-    FilteredArray(AllPlayers(Team.Team1), DistanceBetween(ae, portalPosition) > maxPortalSize);
+    FilteredArray(AllPlayers(playerTeam), DistanceBetween(ae, portalPosition) > maxPortalSize);
 globalvar define portalColor;
 
 rule: "Portal/State/Set  // waiting for found by players"
@@ -629,9 +786,9 @@ if(
     portalColor = Color.White;
 
     // apply blast impulse
-    ApplyBlastImpulse(AllPlayers(Team.Team2), portalPosition, portalSize);
+    ApplyBlastImpulse(AllPlayers(enemyTeam), portalPosition, portalSize);
     // play portal closing effect and kill enemrys
-    Kill(AllPlayers(Team.Team2), null);
+    Kill(AllPlayers(enemyTeam), null);
     // play big blast with sound
     PlayContinuousBlast(Color.Yellow, portalPosition,
         portalSize * 1.5, 10, 3);
@@ -665,9 +822,9 @@ if(
     portalState == PortalState.End
 ){
     // apply blast impulse
-    ApplyBlastImpulse(AllPlayers(Team.Team2), portalPosition, portalSize);
+    ApplyBlastImpulse(AllPlayers(enemyTeam), portalPosition, portalSize);
     // play portal closing effect and kill enemrys
-    Kill(AllPlayers(Team.Team2), null);
+    Kill(AllPlayers(enemyTeam), null);
     // play big blast with sound
     PlayContinuousBlast(Color.Yellow, portalPosition,
         portalSize * 1.5, 10, 3);
@@ -693,8 +850,8 @@ if(
     WaitConditionConfirmed();
     define candidatePosition;
     for(define retryCount = 0; retryCount < 30; retryCount++){
-        define basePosition! = Midpoint(SpawnPoints(Team.Team1)[0], SpawnPoints(Team.Team2)[0]);
-        define distance! = DistanceBetween(SpawnPoints(Team.Team1)[0], SpawnPoints(Team.Team2)[0]) / 2;
+        define basePosition! = Midpoint(SpawnPoints(playerTeam)[0], SpawnPoints(enemyTeam)[0]);
+        define distance! = DistanceBetween(SpawnPoints(playerTeam)[0], SpawnPoints(enemyTeam)[0]) / 2;
         // select random positon from map
         candidatePosition = NearestWalkablePosition(
             basePosition +
@@ -751,7 +908,7 @@ Event.OngoingGlobal
 if(
     portalEnable &&
     IsTrueForAny(
-        SpawnPoints(Team.Team1),
+        SpawnPoints(playerTeam),
         (
             IsInLineOfSight(ae + Up(), portalPosition)
         )
@@ -763,7 +920,7 @@ if(
 }
 
 // TAG Portal/Positioner/EnvironmentDeathCount ----------
-define environmentDeathLimit: NumberOfPlayers(Team.Team2) + 1;
+define environmentDeathLimit: NumberOfPlayers(enemyTeam) + 1;
 globalvar define environmentDeathCount!;
 
 rule: "Portal/Positioner/EnvironmentDeathCount/resetCount"
@@ -776,8 +933,8 @@ if(
 
 rule: "Portal/Positioner/EnvironmentDeathCount/countup"
 Event.OnDeath
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     portalEnable &&
     (
         Attacker() == ep ||         // killed by res room
@@ -785,7 +942,7 @@ if(
     )
 ){
     // change room for avoid kill in res room
-    ForceSpawnRoom(Team.Team1, RandomValueInArray([0, 1, 2]));
+    ForceSpawnRoom(playerTeam, RandomValueInArray([0, 1, 2]));
     // sucide
     if(Attacker() == ep){
         environmentDeathCount += 1;
@@ -893,7 +1050,7 @@ if(
     portalPosition != 0
 ){
     // Start portal growing by search time limit out
-    define time! = DistanceBetween(portalPosition, ClosestPlayerTo(portalPosition, Team.Team1)) * 0.6;
+    define time! = DistanceBetween(portalPosition, ClosestPlayerTo(portalPosition, playerTeam)) * 0.6;
     Wait(RoundToInteger(time), WaitBehavior.AbortWhenFalse);  //wait time to start growing
     portalState = PortalState.Growing;
 }
@@ -903,7 +1060,7 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Growing &&
     IsTrueForAny(
-        AllPlayers(Team.Team1), ae.isInsidePortal
+        AllPlayers(playerTeam), ae.isInsidePortal
     )
 ){
     // Suspend portal growing by player enter to portal
@@ -916,7 +1073,7 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.UnderAttack &&
     !IsTrueForAny(
-        AllPlayers(Team.Team1), ae.isInsidePortal
+        AllPlayers(playerTeam), ae.isInsidePortal
     )
 ){
     // Resume portal growing by player exit from portal
@@ -1236,12 +1393,12 @@ if(
 ){
     // change bot asset by random
     if(
-        0 >= NumberOfPlayers(Team.Team2) ||
+        0 >= NumberOfPlayers(enemyTeam) ||
         ProbabilityTrue(70)
     ){
         someHero = RandomHero;
         // create all bot
-        CreateBotsByAssetList(assetList, Team.Team2);   
+        CreateBotsByAssetList(assetList, enemyTeam);   
     }
 }
 
@@ -1256,8 +1413,8 @@ playervar define eachNameColor!;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     enemyType != EnemyType.None
 ){
     if(enemyType == EnemyType.Minion){
@@ -1362,8 +1519,8 @@ playervar define botAppearanceEntitys!;
 
 rule: "EnemyBot/Effect/showBotAppearance"
 Event.OngoingPlayer
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     enemyType != EnemyType.None &&
     IsAlive()
 ){
@@ -1382,8 +1539,8 @@ if(
 
 rule: "EnemyBot/Effect/hideBotAppearanceAndReek"
 Event.OnDeath
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     enemyType != EnemyType.None &&
     !IsAlive()
 ){
@@ -1398,15 +1555,15 @@ if(
 
 // TAG EnemyBot/Teleport ----------
 define teleportAreaSize: 15;
-define ClosestPlayerToTelPos: ClosestPlayerTo(teleportPosition, Team.Team1);
-define ClosestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, Team.Team1);
-define ClosestPlayerToMe: ClosestPlayerTo(ep, Team.Team1);
+define ClosestPlayerToTelPos: ClosestPlayerTo(teleportPosition, playerTeam);
+define ClosestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, playerTeam);
+define ClosestPlayerToMe: ClosestPlayerTo(ep, playerTeam);
 
 Player ClosestPlayerFromPortal()"ClosestPlayerFromPortal"{
     return FirstOf(
         SortedArray(
             FilteredArray(
-                AllPlayers(Team.Team1),
+                AllPlayers(playerTeam),
                 (
                     HasSpawned(ae) &&
                     IsAlive(ae) &&
@@ -1591,8 +1748,8 @@ void TeleportWithEffect()"TeleportWithEffect"{
 
 rule: "EnemyBot/Teleport/teleportByPortalDisabled"
 Event.OngoingPlayer
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     HasSpawned() &&
     !portalEnable
 ){
@@ -1607,15 +1764,15 @@ if(
     // show pre teleport effect
     PlayTeleportEffect(true);
     // Teleport to spawn room
-    Respawn(AllPlayers(Team.Team2));
+    Respawn(AllPlayers(enemyTeam));
     // show teleport effect
     PlayTeleportEffect(false);
 }
 
 rule: "EnemyBot/Teleport/teleportByPortalEnabled"
 Event.OngoingPlayer
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     HasSpawned() &&
     portalEnable
 ){
@@ -1631,8 +1788,8 @@ if(
 
 rule: "EnemyBot/Teleport/teleportByPlayerEntered"
 Event.OngoingPlayer
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     IsAlive() &&
     portalEnable &&
     portalState == PortalState.UnderAttack
@@ -1647,8 +1804,8 @@ if(
 
 rule: "EnemyBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     IsAlive() &&
     portalEnable &&
     IsInSpawnRoom()
@@ -1663,8 +1820,8 @@ define hasLine:
 
 rule: "EnemyBot/Teleport/teleportByPlayerNotFound"
 Event.OngoingPlayer
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     IsAlive() &&
     portalEnable &&
     !IsInSpawnRoom()
@@ -1687,7 +1844,7 @@ void HybridTeleport(){
         // during portal attacks
         portalState == PortalState.UnderAttack ||
         // force active teleport Probprobability
-        ProbabilityTrue(60 / NumberOfPlayers(Team.Team2))
+        ProbabilityTrue(60 / NumberOfPlayers(enemyTeam))
     ){
         if(
             // teleport to common position Probprobability
@@ -1718,8 +1875,8 @@ void HybridTeleport(){
 
 rule: "EnemyBot/Teleport/clearCommonTeleportPosition"
 Event.OnDeath
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     Attacker() == ep &&
     portalEnable
 ){
@@ -1733,14 +1890,14 @@ if(
     portalState == PortalState.UnderAttack
 ){
     Wait(RandomReal(10, 30), WaitBehavior.AbortWhenFalse);
-    SetUltimateCharge(AllPlayers(Team.Team2), 100);
-    PressButton(AllPlayers(Team.Team2), Button.Ultimate);
+    SetUltimateCharge(AllPlayers(enemyTeam), 100);
+    PressButton(AllPlayers(enemyTeam), Button.Ultimate);
 }
 
 rule: "EnemyBot/EnemyAbility/combatTeleport"
 Event.OngoingPlayer
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     enemyType == EnemyType.GiantBoss &&
     IsAlive() &&
     portalEnable &&
@@ -1765,8 +1922,8 @@ if(
 // TAG EnemyBot/chargeUltimate ----------
 rule: "EnemyBot/chargeUltimate"
 Event.OngoingPlayer
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     HasSpawned() &&
     enemyType != EnemyType.None &&
     !IsUsingUltimate()
@@ -1791,8 +1948,8 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
 
 rule: "EnemyBot/SpawnInterval/update"
 Event.OngoingPlayer
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     portalEnable &&
     enemyType != EnemyType.None
 ){
@@ -1803,8 +1960,8 @@ if(
 
 rule: "EnemyBot/SpawnInterval/fastRespawnBySucide"
 Event.OnDeath
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     Attacker() == ep &&
     portalEnable
 ){
@@ -1819,8 +1976,8 @@ void UpdateEachReceivedDamage()"UpdateEachReceivedDamage"{
     // set base damage
     confirmReceiveDamage = 100;
     // apply team balance
-    confirmReceiveDamage *= ConvertToBalancedValue(0.75, Team.Team1);
-    SetDamageReceived(AllPlayers(Team.Team2), confirmReceiveDamage);
+    confirmReceiveDamage *= ConvertToBalancedValue(0.75, playerTeam);
+    SetDamageReceived(AllPlayers(enemyTeam), confirmReceiveDamage);
 }
 
 rule: "EnemyBot/ReceivedDamage/update"
@@ -1847,7 +2004,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // add team lives balance
     confirmDealtDamage += teamLives * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Team lives", 1.0, 0, 1000, -6);
     // apply team balance
-    confirmDealtDamage /= ConvertToBalancedValue(0.75, Team.Team1);
+    confirmDealtDamage /= ConvertToBalancedValue(0.75, playerTeam);
     // set threat Level
     threatLevel = confirmDealtDamage;
     // apply enemy type scale
@@ -1857,8 +2014,8 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
 
 rule: "EnemyBot/DealtDamage/update"
 Event.OngoingPlayer
-Team.Team2
 if(
+    TeamOf() == enemyTeam &&
     portalEnable &&
     enemyType != EnemyType.None
 ){
@@ -1869,7 +2026,7 @@ if(
 
 Number GetTeamNormalizedHealth()"GetTeamNormalizedHealth"{
     define teamHealth = 0;
-    define teamList! = AllPlayers(Team.Team1);
+    define teamList! = AllPlayers(playerTeam);
     for(define idx! = 0; idx < CountOf(teamList); idx++){
         teamHealth += NormalizedHealth(teamList[idx]);
     }
@@ -1923,7 +2080,7 @@ if(
 }
 
 define End(): CountOf(debugHudEntitys);
-define botOfEnemyType(define enemyType): FirstOf(FilteredArray(AllPlayers(Team.Team2), ae.enemyType == enemyType));
+define botOfEnemyType(define enemyType): FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == enemyType));
 globalvar define debugHudEntitys!;
 
 // show debug icon and hud

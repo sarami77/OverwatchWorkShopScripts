@@ -160,12 +160,8 @@ if(
     
     prevNorHealth = NormalizedHealth();
 
-    Wait(RandomReal(5, 10), WaitBehavior.AbortWhenFalse);
+    Wait(RandomReal(5, 15), WaitBehavior.AbortWhenFalse);
     // Wait(RandomReal(waitSecondNextComm, waitSecondNextComm + 5), WaitBehavior.AbortWhenFalse);
-
-    if(IsInSpawnRoom()){
-        prevNorHealth = 1;
-    }
 
     if(
         !IsGameInProgress() &&
@@ -191,35 +187,45 @@ if(
     else{
         // status message
         if(
-            !IsInSpawnRoom() &&
-            NormalizedHealth() - prevNorHealth >= 0.25
+            (
+                // 1/4 healed
+                !IsInSpawnRoom() &&
+                NormalizedHealth() - prevNorHealth >= 0.25
+            ) ||
+            // team kill
+            NumberOfLivingPlayers(enemyTeam) <= 0
         ){
             Communicate(ep, Communication.Thanks);
         }
         else if(
-            NormalizedHealth() <= 0.5
-        ){
-            if(ProbabilityTrue(40)){
-                Communicate(ep, Communication.NeedHealing);
-            }
-            else if(ProbabilityTrue(40)){
-                Communicate(ep, Communication.NeedHelp);
-            }
-        }
-        else if(
-            ProbabilityTrue(50) &&
+            // dead
             NormalizedHealth() <= 0.0
         ){
             Communicate(ep, Communication.Sorry);
         }
+        else if(
+            // 50% health
+            NormalizedHealth() <= 0.5
+        ){
+            Communicate(ep, Communication.NeedHealing);
+        }
+        else if(
+            ProbabilityTrue(50) &&
+            // 75% health
+            NormalizedHealth() <= 0.75
+        ){
+            Communicate(ep, Communication.NeedHelp);
+        }
 
         else if(
+            // player member half dead
             NumberOfLivingPlayers(playerTeam) <= NumberOfPlayers(playerTeam) / 2
         ){
             Communicate(ep, Communication.FallBack);
         }
         else if(
             ProbabilityTrue(25) &&
+            // enemy member half dead
             NumberOfLivingPlayers(enemyTeam) <= NumberOfPlayers(enemyTeam) / 2
         ){
             Communicate(ep, Communication.PushForward);
@@ -227,13 +233,14 @@ if(
 
         else if(
             ProbabilityTrue(50) &&
+            // according ult charge
             ProbabilityTrue(UltimateChargePercent())
         ){
             Communicate(ep, Communication.UltimateStatus);
         }
 
         // situation message
-        else if(ProbabilityTrue(20)){
+        else if(ProbabilityTrue(15)){
 
             if(IsOnObjective()){
                 if(ProbabilityTrue(40)){
@@ -294,4 +301,16 @@ if(
     }
 
     LoopIfConditionIsTrue();
+}
+
+
+rule: "Buddy/resetDamage"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    IsInSpawnRoom()
+){
+    // reset prev damage for not say thanks
+    prevNorHealth = 1;
 }
