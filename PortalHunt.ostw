@@ -246,7 +246,7 @@ if(
                     AllPlayers(playerTeam),
                     !IsDummyBot(ae)));
 
-        define needBuddyNum = 
+        define needBuddyNum! = 
             Min(
                 maxSlotNum - playerNum,
                 maxBuddyNum);
@@ -309,7 +309,7 @@ if(
     if(actionState != ActionState.Non){
         // get perk
         if(
-            ProbabilityTrue(2) &&
+            ProbabilityTrue(1) &&
             perkState == PerkState.Non
         ){
             WaitUntil(AllPlayers(Team.Team1).perkType == PerkType.Non, 1);
@@ -319,7 +319,7 @@ if(
 
         // use perk
         if(
-            ProbabilityTrue(20) &&
+            ProbabilityTrue(10) &&
             perkState == PerkState.Ready
         ){
             StartHoldingButton(ep, Button.Interact);
@@ -390,8 +390,6 @@ if(
 }
 
 // TAG Player ----------
-playervar define isInsidePortal!;
-
 // TAG Player/ReturnSpawnRoom
 rule: "Player/ReturnSpawnRoom/manualReturn"
 Event.OngoingPlayer
@@ -487,6 +485,16 @@ if(
 }
 
 // TAG Player/InsidePortal
+playervar define contactPortalState!;
+enum ContactPortalStatus{
+    MaxOutSide,
+    OutSide,
+    InSide,    
+    HalfInSide
+}
+
+playervar define isInSidePortal!;
+
 rule: "Player/InsidePortal/update"
 Event.OngoingGlobal
 if(
@@ -500,13 +508,35 @@ if(
         if(
             HasSpawned(player) &&
             IsAlive(player) &&
-            !IsInSpawnRoom(player) &&
-            DistanceBetween(player, portalPosition) <= portalSize
+            !IsInSpawnRoom(player)
         ){
-            player.isInsidePortal = true;            
+            define distToPortal! = DistanceBetween(player, portalPosition);
+            if(
+                distToPortal < portalSize / 2
+            ){
+                player.contactPortalState = ContactPortalStatus.HalfInSide;
+                player.isInSidePortal = true;
+            }
+            else if(
+                distToPortal < portalSize
+            ){
+                player.contactPortalState = ContactPortalStatus.InSide;
+                player.isInSidePortal = true;
+            }
+            else if(
+                distToPortal < maxPortalSize
+            ){
+                player.contactPortalState = ContactPortalStatus.OutSide;
+                player.isInSidePortal = false;
+            }
+            else{
+                player.contactPortalState = ContactPortalStatus.MaxOutSide;
+                player.isInSidePortal = false;
+            }
         }
         else{
-            player.isInsidePortal = false;
+            player.contactPortalState = ContactPortalStatus.MaxOutSide;
+            player.isInSidePortal = false;
         }
     }
     WaitUpdateMediumCycle();
@@ -609,7 +639,7 @@ if(
     playerNumInsidePortal = CountOf(
         FilteredArray(
             AllPlayers(playerTeam),
-            ae.isInsidePortal
+            ae.isInSidePortal
         )
     );
     WaitUpdateMediumCycle();
@@ -672,7 +702,7 @@ rule: "Player/FairPlay/disableStealthWhenInside //sombra's stealth for fair play
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    isInsidePortal &&
+    isInSidePortal &&
     IsStealth(ep)
 ){
     // Some abilities are disabled inside the portal to make the game fair
@@ -683,11 +713,11 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Player/FairPlay/disableGrappleClawWhenInside // wreckingBball's grapple claw for fair play"
+disabled rule: "Player/FairPlay/disableGrappleClawWhenInside // wreckingBball's grapple claw for fair play"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    isInsidePortal &&
+    isInSidePortal &&
     IsGrapple(ep)
 ){
     // Some abilities are disabled inside the portal to make the game fair
@@ -748,11 +778,11 @@ if(
 define playersAny:
     AllPlayers();
 
-define outSidePlayersFromMaxPortalSize:
-    FilteredArray(AllPlayers(playerTeam), DistanceBetween(ae, portalPosition) > maxPortalSize);
+define playersConPtlSts(ContactPortalStatus status):
+    FilteredArray(AllPlayers(playerTeam), ae.contactPortalState == status);
 
-define outSidePlayersFromHalfPortalSize:
-    FilteredArray(AllPlayers(playerTeam), DistanceBetween(ae, portalPosition) > portalSize / 2);
+define playersNConPtlSts(ContactPortalStatus status):
+    FilteredArray(AllPlayers(playerTeam), ae.contactPortalState != status);
 
 globalvar define portalColor;
 
@@ -769,18 +799,17 @@ if(
     closingCount = 0;
     // show icon
     portalEntitys = [];
-    portalEntitys[0] = CreateIcon(outSidePlayersFromMaxPortalSize, portalPosition, Icon.Spiral,
+    portalEntitys[0] = CreateIcon(playersConPtlSts(ContactPortalStatus.MaxOutSide), portalPosition, Icon.Spiral,
         IconRev.VisibleToPositionAndColor, portalColor, true);
     // set effect
     // sphere
     portalEntitys[1] = CreateEffect(playersAny, Effect.Sphere, portalColor,
         portalPosition, portalSize, EffectRev.VisibleToPositionRadiusAndColor);
     // cloud
-    portalEntitys[2] = CreateEffect(outSidePlayersFromHalfPortalSize, Effect.Cloud, portalColor,
+    portalEntitys[2] = CreateEffect(playersNConPtlSts(ContactPortalStatus.HalfInSide), Effect.Cloud, portalColor,
         portalPosition, portalSize * 1.5, EffectRev.VisibleToPositionRadiusAndColor);
     // aura
-    // Since visibility will be poor, display only in the center of the field of view
-    portalEntitys[3] = CreateEffect(outSidePlayersFromHalfPortalSize, Effect.BadAura, portalColor,
+    portalEntitys[3] = CreateEffect(playersNConPtlSts(ContactPortalStatus.HalfInSide), Effect.BadAura, portalColor,
         portalPosition, portalSize * 1.25, EffectRev.VisibleToPositionRadiusAndColor);
     // sound
     portalEntitys[4] = CreateEffect(playersAny, Effect.EnergySound, portalColor,
@@ -1103,7 +1132,7 @@ if(
     portalPosition != 0
 ){
     // Start portal growing by search time limit out
-    define time! = DistanceBetween(portalPosition, ClosestPlayerTo(portalPosition, playerTeam)) * 0.6;
+    define time! = DistanceBetween(portalPosition, ClosestPlayerTo(portalPosition, playerTeam)) * 0.5;
     Wait(RoundToInteger(time), WaitBehavior.AbortWhenFalse);  //wait time to start growing
     portalState = PortalState.Growing;
 }
@@ -1113,7 +1142,7 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Growing &&
     IsTrueForAny(
-        AllPlayers(playerTeam), ae.isInsidePortal
+        AllPlayers(playerTeam), ae.isInSidePortal
     )
 ){
     // Suspend portal growing by player enter to portal
@@ -1126,7 +1155,7 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.UnderAttack &&
     !IsTrueForAny(
-        AllPlayers(playerTeam), ae.isInsidePortal
+        AllPlayers(playerTeam), ae.isInSidePortal
     )
 ){
     // Resume portal growing by player exit from portal
@@ -1227,7 +1256,7 @@ define assetList:
             "double boss clones",
             [EnemyType.Boss,        someHero, 		    1],
             [EnemyType.Boss,        someHero, 		    1],
-            [EnemyType.Elite,       someHero, 		    2]
+            [EnemyType.Minion,       someHero, 		    4]
         ],
         [
             "four elite clones",
@@ -1238,12 +1267,12 @@ define assetList:
         [
             "giant boss",
             [EnemyType.GiantBoss,   RandomTankHero,     1],
-            [EnemyType.Minion,      RandomSupportHero,  3]
+            [EnemyType.Minion,      RandomSupportHero,  5]
         ],
         [
             "giant boss",
             [EnemyType.GiantBoss,   RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomSupportHero,  3]
+            [EnemyType.Minion,      RandomSupportHero,  5]
         ],		
         [
             "giant boss",
@@ -1253,23 +1282,23 @@ define assetList:
 
         [
             "giant boss",
-            [EnemyType.GiantBoss,   Hero.Pharah,    1],
-            [EnemyType.Minion,      RandomSupportHero,  3]
+            [EnemyType.GiantBoss,   Hero.Pharah,        1],
+            [EnemyType.Minion,      RandomSupportHero,  5]
         ],
         [
             "giant boss",
             [EnemyType.GiantBoss,   Hero.Reinhardt,     1],
-            [EnemyType.Minion,      RandomSupportHero,  3]
+            [EnemyType.Minion,      RandomSupportHero,  5]
         ],
         [
             "giant boss",
             [EnemyType.GiantBoss,   Hero.Sigma,         1],
-            [EnemyType.Minion,      RandomSupportHero,  3]
+            [EnemyType.Minion,      RandomSupportHero,  5]
         ],
         [
             "giant boss",
             [EnemyType.GiantBoss,   Hero.Doomfist,      1],
-            [EnemyType.Minion,      RandomSupportHero,  3]
+            [EnemyType.Minion,      RandomSupportHero,  5]
         ],
 
         [
@@ -1508,7 +1537,7 @@ if(
         eachNameColor = Color.Yellow;
         eachEffectTextSize = basicInWorldTextSize + 1;
 
-        eachPerkDropProbability = 10;
+        eachPerkDropProbability = 9;
     }
     else if(enemyType == EnemyType.Boss){
         StartScalingPlayer(ep, 1.5, false);
@@ -1528,7 +1557,7 @@ if(
         eachNameColor = Color.Red;
         eachEffectTextSize = basicInWorldTextSize + 2;
 
-        eachPerkDropProbability = 50;
+        eachPerkDropProbability = 27;
     }
     else if(enemyType == EnemyType.GiantBoss){
         StartScalingPlayer(ep, 2.5, false);
@@ -1548,7 +1577,7 @@ if(
         eachNameColor = Color.Purple;
         eachEffectTextSize = basicInWorldTextSize + 3;
 
-        eachPerkDropProbability = 100;
+        eachPerkDropProbability = 27;
 
         // set addtinal health
         Wait(0.1, WaitBehavior.AbortWhenFalse);
