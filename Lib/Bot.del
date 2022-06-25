@@ -39,16 +39,18 @@ void CreateBotsByAssetList(define assetList, define team)"CreateBotsByAssetList"
         for(define botCount! = 0; botCount < asset[assetIdx][BotAsset.count]; botCount++){
             // get empty slot
             define slot! = getEmptySlotNo(team);
-            // create bot
-            CreateDummyBot(
-                asset[assetIdx][BotAsset.hero],
-                team,
-                slot,
-                SpawnPoints(team)[0],
-                RandomDirection()
-            );
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-            WaitUntilServerFree();
+            while(!HasSpawned(PlayersInSlot(slot, team))){
+                // create bot
+                CreateDummyBot(
+                    asset[assetIdx][BotAsset.hero],
+                    team,
+                    slot,
+                    SpawnPoints(team)[0],
+                    RandomDirection()
+                );
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+                WaitUntilServerFree();
+            }
             // set Bot type as enemy type
             define bot! = PlayersInSlot(slot, team);
             bot.enemyType = asset[assetIdx][BotAsset.EnemyType];
@@ -64,16 +66,18 @@ void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsBy
     for(define slotIdx = 0; slotIdx < num; slotIdx++){
         // get empty slot
         define slot! = getEmptySlotNo(team);
-        // create bot
-        CreateDummyBot(
-            RandomValueInArray(heroList),
-            team,
-            slot,
-            SpawnPoints(team)[0],
-            RandomDirection()
-        );
-        Wait(0.1, WaitBehavior.IgnoreCondition);
-        WaitUntilServerFree();
+        while(!HasSpawned(PlayersInSlot(slot, team))){
+            // create bot
+            CreateDummyBot(
+                RandomValueInArray(heroList),
+                team,
+                slot,
+                SpawnPoints(team)[0],
+                RandomDirection()
+            );
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+            WaitUntilServerFree();
+        }
     }
 }
 
@@ -727,19 +731,40 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Bot/ActionState/GotoAttackStateOnDamageTaken"
+rule: "Bot/ActionState/ChangeTargetByTargetDead"
+Event.OnElimination
+if(
+    IsDummyBot() &&
+    Victim() == target
+){
+    // is support role hero
+    if(0 < healingPrioloty)
+    {
+        // find support target
+        target = FindSupportTarget();
+        // not found heal target
+        if(target == 0){
+            // find attack target
+            target = FindAttackTarget();
+        }
+    }
+    else{
+        // find attack target
+        target = FindAttackTarget();
+    }
+}
+
+rule: "Bot/ActionState/ChangeTargetByDamageTaken"
 Event.OnDamageTaken
 if(
     IsDummyBot() &&
-    actionState == ActionState.Non &&
-    Attacker() != ep
+    Attacker() != target
 ){
-    // set attack target
-    target = Attacker();
-    // temporary set Non state for restart button control
-    actionState = ActionState.Non;
-    WaitChangeState();
-    actionState = ActionState.Attack;
+    // low health attacker then tarhet
+    if(Health(Attacker()) < Health(target)){
+        // set attacker to target
+        target = Attacker();
+    }
 }
 
 playervar define actionState;
@@ -1083,7 +1108,7 @@ void heroAction(){
     while(
         actionState == ActionState.Attack &&
         IsAlive(target) &&
-        Health(target) <= 25 * 2 &&
+        Health(target) <= (25 * 2) &&
         DistanceBetween(ep, target) <= 2.5
     ){
         PressButton(ep, Button.Melee);

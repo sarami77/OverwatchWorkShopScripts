@@ -7,13 +7,18 @@ import "Lib/Debug.del";
 globalvar define playerTeam;
 globalvar define enemyTeam;
 
+globalvar define initCompleted!;
+
 rule: "Builtin"
 Event.OngoingPlayer
 if(
     HostPlayer() == ep &&
     HasSpawned()
 ){
-    debugMode = DebugMode.SlowLevelOnly;
+    // If run it right after loading the server, some scripts fail, so wait few seconds
+    Wait(5, WaitBehavior.AbortWhenFalse);
+    
+    // debugMode = DebugMode.SlowLevelOnly;
 
     // SetStatus(ep, null, Status.PhasedOut, 99999);
     SetMaxHealth(ep, 10000);
@@ -46,6 +51,11 @@ if(
     // CreateEffect(ep, Effect.Ring, Color.Blue,
     //     ep, 50, EffectRev.VisibleToPositionAndRadius);
 
+    playerTeam = Team.Team1;
+    enemyTeam = Team.Team2;
+
+    initCompleted = true;
+
     while(true){
         if(TeamOf(HostPlayer()) == Team.Team1){
             playerTeam = Team.Team1;
@@ -55,14 +65,28 @@ if(
             playerTeam = Team.Team2;
             enemyTeam = Team.Team1;
         }
-
-
         Wait(5, WaitBehavior.AbortWhenFalse);
     }
 }
 
 // Test Code -----------------------------------------------
-import "Lib/Buddy.del";
+rule: "debug_global"
+Event.OngoingGlobal
+if(
+    HasSpawned(HostPlayer())
+){
+}
+
+rule: "debug_player"
+Event.OngoingPlayer
+if(
+    HostPlayer() &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Reload)
+){
+}
+
+// TAG Perk ----------
 /*
 rule: "Debug/getPerk"
 Event.OngoingPlayer
@@ -78,22 +102,29 @@ if(
 }
 */
 
-rule: "debug_global"
+// TAG Buddy ----------
+import "Lib/Buddy.del";
+
+rule: "Buddy/BuddyContorl"
 Event.OngoingGlobal
 if(
-    HasSpawned(HostPlayer())
-){
- 
-}
-
-rule: "debug_player"
-Event.OngoingPlayer
-if(
-    HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact) &&
-    IsButtonHeld(ep, Button.Reload)
+    initCompleted
 ){
     define buddyList! = 
+    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", false) ?
+        // random list
+        [
+            RandomSupportHero,
+            RandomTankHero,
+            RandomDamageHero,
+            RandomSupportHero,
+            RandomTankHero,
+            RandomDamageHero,
+            RandomSupportHero,
+            RandomDamageHero
+        ]
+    :
+        // fix list
         [
             Hero.Mercy,
             Hero.Reinhardt,
@@ -105,20 +136,54 @@ if(
             Hero.Doomfist
         ];
 
-    define playerNum! =
-        CountOf(
-            FilteredArray(
-                AllPlayers(playerTeam),
-                !IsDummyBot(ae)));
+    // slice buddy list by setting
+    buddyList = ArraySlice(buddyList, 0,
+        WorkshopSettingInteger(
+            "Follower AI Settings(Join on behalf of absent player)",
+            "Follower Max Num", 5, 0, 8, 1)
+    );
 
+    define prevPlayerNum! = -1;
     define maxSlotNum! = NumberOfSlots(playerTeam);
     define maxBuddyNum! = CountOf(buddyList);
+
+    while(true){
+        define playerNum! =
+            CountOf(
+                FilteredArray(
+                    AllPlayers(playerTeam),
+                    !IsDummyBot(ae)));
+
+        define needBuddyNum = 
+            Min(
+                maxSlotNum - playerNum,
+                maxBuddyNum);
+
+        define buddyNum! = 
+            CountOf(
+                FilteredArray(
+                    AllPlayers(playerTeam),
+                    IsDummyBot(ae)));
+
+        if(
+            // player number changed
+            prevPlayerNum != playerNum ||
+            // not filed buddy number
+            buddyNum != needBuddyNum
+        ){
+            // save player num
+            prevPlayerNum = playerNum;
+            // relaod buddy list
             DestroyBots(playerTeam);
             define emptySlotNum! = maxSlotNum - playerNum;
             define addList! = ArraySlice(buddyList, 0, emptySlotNum);
             for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(addList); buddyAddIndex++){
                 CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
             }
+        }
+    
+        Wait(5, WaitBehavior.IgnoreCondition);
+    }
 }
 
 // Debug/Slow -----------------------------------------------
