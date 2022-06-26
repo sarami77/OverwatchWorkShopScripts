@@ -4,7 +4,7 @@ import "Utility.del";
 globalvar define reviveEnableTeam! = Team.All;
 globalvar define reviveTimeLimit! = 10;
 globalvar define reviveRange! = 2.5;
-globalvar define reviveCompleteSecond! = 3;
+globalvar define reviveCompleteSecond! = 5;
 
 playervar define downPosition!;
 playervar define reviveTimeRemain!;
@@ -192,35 +192,16 @@ if(
             
         define reviveCountDown! = reviveCompleteSecond - reviveProgressSecond;
         if(0 < reviveCountDown && reviveCountDown < reviveCompleteSecond){
-            SmallMessage(ep,
-                <"<0>", reviveCountDown>);
-            SmallMessage(reviver,
-                <"<0>", reviveCountDown>);
+            SmallMessage(ep, <"<0>", reviveCountDown>);
+            SmallMessage(reviver, <"<0>", reviveCountDown>);
         }
         Wait(1, WaitBehavior.AbortWhenFalse);
     }
 
     StopChasingVariable(reviveProgressRingSize);
 
-    // revive conplete effect and sound
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
-        Color.Yellow, ep, 1);
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.BuffExplosionSound,
-        Color.White, ep, MaxLength());
-    PlayEffect(
-        AllPlayers(Team.All), PlayEffect.RingExplosion,
-        Color.Yellow, ep, reviveRange * 3);
-
-    Resurrect(ep);
-    SetStatus(ep, null, Status.Invincible, 3);
-
-    SmallMessage(reviver,
-        <"revived <0> <1>.", ep, HeroIconString(HeroOf(ep))>);
-    SmallMessage(ep,
-        <"<0> <1> revived you.", reviver, HeroIconString(HeroOf(reviver))>);
-
+    // revive
+    revive(reviver, ep, reviveRange * 3);
 }
 
 rule: "Player/Revive/abortReviveByTeammate"
@@ -232,39 +213,8 @@ if(
     DestroyEffect(needHelpEntitys[3]);
 
     if(IsDead()){
-        SmallMessage(ep,
-            <"revive aborted.">);
+        SmallMessage(ep, <"revive aborted.">);
     }
 }
 
 // TAG Debug ----------
-disabled rule: "Debug/forceReviveTeammate"  // for bot only
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    IsAlive() &&
-    0 < NumberOfDeadPlayers(Team.Team1)
-){
-    define reviveTarget! =
-        FirstOf(
-            FilteredArray(
-                AllPlayers(Team.Team1),
-                (
-                    IsDead(ae) &&
-                    IsInLineOfSight(ep, ae)
-                )
-            )
-        );
-
-    if(
-        reviveTarget != null
-    ){
-        ApplyImpulse(ep, 
-            VectorTowards(ep, reviveTarget + PositionOffset()),
-            DistanceBetween(ep, reviveTarget) * 1.3,
-            Relative.ToWorld, ContraryMotion.Cancel);
-    }
-    WaitApplyImpulseCycle();
-    LoopIfConditionIsTrue();    
-}
