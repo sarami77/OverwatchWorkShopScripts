@@ -117,22 +117,6 @@ Event.OngoingGlobal
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
-
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "Server Load", ServerLoad()>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "current Slow Level", currentSlowLevel>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
 }
 
 // TAG Game ----------
@@ -593,7 +577,7 @@ define enableClosingProgress:
     portalState == PortalState.UnderAttack &&
     teamLives > 0;
 
-define maxClosingCount: 240;
+define maxClosingCount: 180;
 
 rule: "Player/ClosePortal/startClosing"
 Event.OngoingGlobal
@@ -604,7 +588,7 @@ if(
     WaitConditionConfirmed();
     // kick progress
     closingCount = 10;
-    closingCount += portalSize * 0.5;
+    closingCount += portalSize * 1;
     closingCount += roundNo * 10;
     closingCount = RoundToInteger(closingCount, Rounding.Up);
     closingCount = Min(maxClosingCount, closingCount);
@@ -1144,7 +1128,7 @@ if(
     portalPosition != 0
 ){
     // Start portal growing by search time limit out
-    define time! = DistanceBetween(portalPosition, ClosestPlayerTo(portalPosition, playerTeam)) * 0.8;
+    define time! = DistanceBetween(portalPosition, ClosestPlayerTo(portalPosition, playerTeam)) * 0.7;
     Wait(RoundToInteger(time), WaitBehavior.AbortWhenFalse);  //wait time to start growing
     portalState = PortalState.Growing;
 }
@@ -1152,7 +1136,11 @@ if(
 rule: "Portal/Growing/suspendGrowingByPlayerEntered"
 Event.OngoingGlobal
 if(
-    portalState == PortalState.Growing &&
+    (
+        portalState == PortalState.Growing || 
+        portalState == PortalState.Set
+    )
+    &&
     IsTrueForAny(
         AllPlayers(playerTeam), ae.isInSidePortal
     )
@@ -1455,7 +1443,7 @@ define assetList:
             [EnemyType.Minion,      Hero.Reinhardt, 	5]
         ],
         [
-            "melee armys",
+            "armor armys",
             [EnemyType.Boss,        Hero.Reinhardt, 	1],
             [EnemyType.Minion,      Hero.Brigitte,   	5]
         ],
@@ -1542,14 +1530,14 @@ if(
 
         eachDealtDamageScale = 1.0;
         eachChargeUltInterval = 20;
-        eachMaxSpawnInterval = 9;
+        eachMaxSpawnInterval = 10;
         eachMinSpawnInterval = 3;
 
         eachNameText = "Elite";
         eachNameColor = Color.Yellow;
         eachEffectTextSize = basicInWorldTextSize + 1;
 
-        eachPerkDropProbability = 9;
+        eachPerkDropProbability = 10;
     }
     else if(enemyType == EnemyType.Boss){
         StartScalingPlayer(ep, 1.5, false);
@@ -1562,14 +1550,14 @@ if(
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
-        eachMaxSpawnInterval = 27;
-        eachMinSpawnInterval = 9;
+        eachMaxSpawnInterval = 30;
+        eachMinSpawnInterval = 10;
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
         eachEffectTextSize = basicInWorldTextSize + 2;
 
-        eachPerkDropProbability = 27;
+        eachPerkDropProbability = 30;
     }
     else if(enemyType == EnemyType.GiantBoss){
         StartScalingPlayer(ep, 2.5, false);
@@ -1648,7 +1636,8 @@ if(
 }
 
 // TAG EnemyBot/Teleport ----------
-define teleportAreaSize: 15;
+define teleportAreaSize: 30;
+define teleportTooCloseDist: 4;
 define ClosestPlayerToTelPos: ClosestPlayerTo(teleportPosition, playerTeam);
 define ClosestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, playerTeam);
 define ClosestPlayerToMe: ClosestPlayerTo(ep, playerTeam);
@@ -1699,13 +1688,18 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
             // Not too close to telPosNearTarget
             DistanceBetween(    
                 telPosNearTarget, teleportPosition)
-            >= 10
+            >= teleportTooCloseDist
                 &&
             // Has line to target
             IsInLineOfSight(
                 telPosNearTarget + PositionOffset(),
                 teleportPosition + PositionOffset(),
                 BarrierLOS.NoBarriersBlock)
+                &&
+            // Has ground of teleport position
+            IsBlockedBetween(
+                teleportPosition,
+                ShiftedPosition(teleportPosition, Down(), 6))
         ){
             break;
         }
@@ -1759,7 +1753,7 @@ Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
             // Not too close to telPosNearTarget
             DistanceBetween(    
                 telPosNearTarget, teleportPosition)
-            >= 10
+            >= teleportTooCloseDist
                 &&
             // Has line to target
             IsInLineOfSight(
@@ -1793,9 +1787,9 @@ Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPositio
         // has not line to target from common teleport position
         !IsInLineOfSight(commonTeleportPosition, telPosNearTarget) ||
         // target too close common teleport position
-        DistanceBetween(commonTeleportPosition, telPosNearTarget) < 3 ||
+        DistanceBetween(commonTeleportPosition, telPosNearTarget) < teleportTooCloseDist ||
         // force update common teleport position Probability
-        ProbabilityTrue(3)
+        ProbabilityTrue(5)
     ){
         // new select common position
         // set teleport position to player around
@@ -2111,9 +2105,9 @@ globalvar define threatLevel!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 1.0, 0, 1000, -9);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 4.0, 0, 1000, -9);
     // add team health balance
-    confirmDealtDamage += GetTeamNormalizedHealth() * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage By Player Team Total Health", 8, 0, 1000, -8);
+    confirmDealtDamage += GetTeamNormalizedHealth() * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage By Player Team Total Health", 10, 0, 1000, -8);
     // add round progress
     confirmDealtDamage += roundNo * WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 1.0, 0, 1000, -7);
     // add team lives balance
@@ -2478,19 +2472,27 @@ if(
     portalSize = maxPortalSize;
 }
 
-/*
-rule: "Debug/showCommonTeleportPosition"
-Event.OngoingPlayer
-Team.All
-if(
-    HostPlayer() == ep &&
-    initCompleted
-){
-    CreateBeamEffect(HostPlayer(),
-        BeamType.BadBeam, ep, commonTeleportPosition,
-        IsInLineOfSight(ep, commonTeleportPosition) ? Color.Yellow : Color.White, EffectRev.PositionRadiusAndColor);
-    CreateEffect(HostPlayer(),
-        Effect.Sphere, IsInLineOfSight(ep, commonTeleportPosition) ? Color.Yellow : Color.White, commonTeleportPosition,
-        5, EffectRev.PositionRadiusAndColor);
-}
-*/
+
+define comTelPosBeamColor:
+    Color.White;
+    // IsInLineOfSight(commonTeleportPosition, ClosestPlayerToTelPos) &&
+    // DistanceBetween(ClosestPlayerToTelPos, teleportPosition) >= teleportAreaSize / 2 
+    // ? Color.White : Color.Yellow;
+
+// rule: "Debug/showCommonTeleportPosition"
+// Event.OngoingPlayer
+// Team.All
+// if(
+//     HostPlayer() == ep &&
+//     initCompleted
+// ){
+//     CreateBeamEffect(isInDebugMode ? HostPlayer() :,
+//         BeamType.BadBeam, ClosestPlayerTo(commonTeleportPosition, playerTeam), commonTeleportPosition,
+//         comTelPosBeamColor, EffectRev.PositionRadiusAndColor);
+//     CreateEffect(HostPlayer(),
+//         Effect.Sphere, comTelPosBeamColor, commonTeleportPosition,
+//         teleportAreaSize, EffectRev.PositionRadiusAndColor);
+//     CreateEffect(HostPlayer(),
+//         Effect.Sphere, comTelPosBeamColor, commonTeleportPosition,
+//         teleportTooCloseDist, EffectRev.PositionRadiusAndColor);
+// }
