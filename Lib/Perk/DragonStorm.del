@@ -46,13 +46,8 @@ if(
     // reset status
     ClearStatus(ep, Status.Rooted);
     ClearStatus(ep, Status.Invincible);
-    if(perkPosition != 0){
-        while(DistanceBetween(ep, perkPosition) > 1){
-            StopForcingPlayerPosition(ep);
-            Teleport(ep, perkPosition);
-            Wait(0.5, WaitBehavior.IgnoreCondition);
-        }
-    }
+    StopForcingPlayerPosition(ep);
+    Teleport(ep, BelowPosition(perkPosition));
     StopFacing();
     // hide enemy outline
     StopForcingPlayerOutlines(
@@ -81,7 +76,6 @@ if(
 
 define dragonStormDeployPosition: PositionOf() + Vector(0, 60, 0);
 
-define maxOfDragon: 9;
 rule: "Perk/Player/DragonStorm/startDragonStorm"
 Event.OngoingPlayer
 Team.Team1
@@ -93,12 +87,23 @@ if(
 ){
     WaitLongPressConfirm();
     AbortIf(!IsButtonHeld(ep, Button.Ultimate));
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
+}
 
+define maxOfDragon: 9;
+rule: "Perk/Player/DragonStorm/startDragonStorm"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.DragonStorm &&
+    perkState  == PerkState.Using &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
+){
     CancelPrimaryAction();
     // jump movement
     ApplyImpulse(ep, Up(),
         25, Relative.ToWorld, ContraryMotion.Cancel);
-    Wait(0.5, WaitBehavior.IgnoreCondition);
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
     // set position
     perkPosition = PositionOf();
     StartForcingPlayerPosition(ep, dragonStormDeployPosition, false);
@@ -118,13 +123,13 @@ if(
     // face enemy
     autoAimingTarget = ClosestPlayerTo(ep, Team.Team2);
     StartAutoAiming();
-    Wait(0.1, WaitBehavior.IgnoreCondition);
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
     StopFacing();
     // wait aim
-    Wait(0.2, WaitBehavior.IgnoreCondition);
+    Wait(0.2, WaitBehavior.AbortWhenFalse);
 
     perk[Perk.perkEffectCount] = 0;
-    perk[Perk.perkEffectStatus] = PerkEffectStatus.Triggered;
+    perk[Perk.perkEffectStatus] = PerkEffectStatus.SecondTriggered;
 }
 
 rule: "Perk/Player/DragonStorm/deployDragons"
@@ -133,7 +138,7 @@ Team.Team1
 if(
     perkType == PerkType.DragonStorm &&
     perkState  == PerkState.Using &&
-    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.SecondTriggered &&
     perk[Perk.perkEffectCount] < maxOfDragon &&
     !IsUsingUltimate()
 ){
@@ -153,7 +158,7 @@ Team.Team1
 if(
     perkType == PerkType.DragonStorm &&
     perkState  == PerkState.Using &&
-    perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered &&
+    perk[Perk.perkEffectStatus]  == PerkEffectStatus.SecondTriggered &&
     perk[Perk.perkEffectCount] >= maxOfDragon
 ){
     Wait(1.0, WaitBehavior.AbortWhenFalse);
@@ -178,7 +183,7 @@ if(
     // face enemy
     autoAimingTarget = ClosestPlayerTo(ep, Team.Team2);
     StartAutoAiming();
-    Wait(0.5, WaitBehavior.IgnoreCondition);
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
     StopFacing();
 
     perk[Perk.perkEffectStatus] = PerkEffectStatus.Ready;

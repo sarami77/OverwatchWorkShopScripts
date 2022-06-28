@@ -9,36 +9,62 @@ globalvar define enemyTeam;
 
 globalvar define initCompleted!;
 
-rule: "Builtin"
-Event.OngoingPlayer
-if(
-    HostPlayer() == ep &&
-    HasSpawned()
-){
+rule: "BuiltinGlobal"
+Event.OngoingGlobal
+{
+    // Stop records to reduce server load
+    // DisableInspectorRecording();
+
     // If run it right after loading the server, some scripts fail, so wait few seconds
     Wait(3, WaitBehavior.AbortWhenFalse);
-    
+
     // debugMode = DebugMode.SlowLevelOnly;
 
-    SetStatus(ep, null, Status.PhasedOut, 99999);
-    SetMaxHealth(ep, 10000);
+    // damageTextEnableTeam = Team.All;
+
+    playerTeam = Team.Team1;
+    enemyTeam = Team.Team2;
+
+    initCompleted = true;
+
+    while(true){
+        SetRespawnMaxTime(AllPlayers(), 0);
+
+        if(TeamOf(HostPlayer()) == Team.Team1){
+            playerTeam = Team.Team1;
+            enemyTeam = Team.Team2;
+        }
+        else if(TeamOf(HostPlayer()) == Team.Team2){
+            playerTeam = Team.Team2;
+            enemyTeam = Team.Team1;
+        }
+        
+        Wait(1, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+rule: "BuiltinGlobal"
+Event.OngoingPlayer
+if(
+    HasSpawned(ep)
+){
+
+    // SetStatus(ep, null, Status.PhasedOut, 99999);
+    // SetMaxHealth(ep, 10000);
+    // Wait(0.1, WaitBehavior.IgnoreCondition); // wait change MaxHealth
+    // Heal(ep, null, MaxValue());
     // SetDamageDealt(ep, 100);
     // SetDamageReceived(ep, 100);
     // SetHealingDealt(ep, 100);
     // SetHealingReceived(ep, 100);
-    SetJumpVerticalSpeed(ep, 10);
-    SetMoveSpeed(ep, 1000);
+    // SetJumpVerticalSpeed(ep, 10);
+    // SetMoveSpeed(ep, 1000);
     // SetGravity(ep, 10);
     // SetProjectileSpeed(ep, 100);
     // SetProjectileGravity(ep, 100);
     // StartScalingPlayer(ep, 1);
     // StartScalingBarriers(ep, 1);
     // SetUltimateCharge(ep, 0);
-
-    // damageTextEnableTeam = Team.All;
-
-    // SetStatus(AllPlayers(Team.Team2), null, Status.Rooted, 99999);
-    // ForcePlayerHero(ep, Hero.Widowmaker);
 
     // CreateEffect(ep, Effect.Ring, Color.Red,
     //     ep, 10, EffectRev.VisibleToPositionAndRadius);
@@ -50,46 +76,24 @@ if(
     //     ep, 40, EffectRev.VisibleToPositionAndRadius);
     // CreateEffect(ep, Effect.Ring, Color.Blue,
     //     ep, 50, EffectRev.VisibleToPositionAndRadius);
-
-    playerTeam = Team.Team1;
-    enemyTeam = Team.Team2;
-
-    initCompleted = true;
-
-    while(true){
-        if(TeamOf(HostPlayer()) == Team.Team1){
-            playerTeam = Team.Team1;
-            enemyTeam = Team.Team2;
-        }
-        else if(TeamOf(HostPlayer()) == Team.Team2){
-            playerTeam = Team.Team2;
-            enemyTeam = Team.Team1;
-        }
-        Wait(5, WaitBehavior.AbortWhenFalse);
-    }
 }
 
 // Test Code -----------------------------------------------
 rule: "debug_global"
 Event.OngoingGlobal
-if(
-    HasSpawned(HostPlayer())
-){
+{
 }
 
 rule: "debug_player"
 Event.OngoingPlayer
 if(
-    HostPlayer() &&
-    IsButtonHeld(ep, Button.Interact) &&
-    IsButtonHeld(ep, Button.Reload)
+    HasSpawned(ep)
 ){
 }
 
 // TAG Perk ----------
 import "Lib/Perk/PerkCore.del";
-import "Lib/Revive.del";
-import "Lib/Perk/MedicSyringe.del";
+import "Lib/Perk/AimHack.del";
 
 rule: "Debug/getPerk"
 Event.OngoingPlayer
@@ -101,7 +105,7 @@ if(
 ){
     WaitLongPressConfirm();
     perkState = PerkState.Ready;
-    perkType = PerkType.MedicSyringe;
+    perkType = PerkType.AimHack;
 }
 
 // TAG Buddy ----------
@@ -144,87 +148,52 @@ if(
             "Follower Max Num", 2, 0, 8, 1)
     );
 
-    define prevPlayerNum! = -1;
-    define maxSlotNum! = NumberOfSlots(playerTeam);
-    define maxBuddyNum! = CountOf(buddyList);
+    // define prevPlayerNum! = -1;
+    // define maxSlotNum! = NumberOfSlots(playerTeam);
+    // define maxBuddyNum! = CountOf(buddyList);
 
-    while(true){
-        define playerNum! =
-            CountOf(
-                FilteredArray(
-                    AllPlayers(playerTeam),
-                    !IsDummyBot(ae)));
+    // while(true){
+    //     define playerNum! =
+    //         CountOf(
+    //             FilteredArray(
+    //                 AllPlayers(playerTeam),
+    //                 !IsDummyBot(ae)));
 
-        define needBuddyNum = 
-            Min(
-                maxSlotNum - playerNum,
-                maxBuddyNum);
+    //     define needBuddyNum = 
+    //         Min(
+    //             maxSlotNum - playerNum,
+    //             maxBuddyNum);
 
-        define buddyNum! = 
-            CountOf(
-                FilteredArray(
-                    AllPlayers(playerTeam),
-                    IsDummyBot(ae)));
+    //     define buddyNum! = 
+    //         CountOf(
+    //             FilteredArray(
+    //                 AllPlayers(playerTeam),
+    //                 IsDummyBot(ae)));
 
-        if(
-            // player number changed
-            prevPlayerNum != playerNum ||
-            // not filed buddy number
-            buddyNum != needBuddyNum
-        ){
-            // save player num
-            prevPlayerNum = playerNum;
-            // relaod buddy list
-            DestroyBots(playerTeam);
-            define emptySlotNum! = maxSlotNum - playerNum;
-            define addList! = ArraySlice(buddyList, 0, emptySlotNum);
-            for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(addList); buddyAddIndex++){
-                CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
-            }
-        }
+    //     if(
+    //         // player number changed
+    //         prevPlayerNum != playerNum ||
+    //         // not filed buddy number
+    //         buddyNum != needBuddyNum
+    //     ){
+    //         // save player num
+    //         prevPlayerNum = playerNum;
+    //         // relaod buddy list
+    //         DestroyBots(playerTeam);
+    //         define emptySlotNum! = maxSlotNum - playerNum;
+    //         define addList! = ArraySlice(buddyList, 0, emptySlotNum);
+    //         for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(addList); buddyAddIndex++){
+    //             CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
+    //         }
+    //     }
     
-        Wait(5, WaitBehavior.IgnoreCondition);
-    }
-}
+    //     Wait(5, WaitBehavior.IgnoreCondition);
+    // }
 
-rule: "Buddy/ActionControl"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    IsDummyBot() &&
-    HasSpawned()
-){
-    Wait(RandomReal(4, 6), WaitBehavior.AbortWhenFalse);
-
-    // revive
-    if(
-        actionState == ActionState.Non
-    ){
-        define downPlayer! = RandomValueInArray(FilteredArray(AllPlayers(playerTeam), !IsAlive(ae)));
-        if(
-            downPlayer != null &&
-            downPlayer != ep
-        ){
-            while(
-                IsAlive(ep) &&
-                !IsAlive(downPlayer) &&
-                IsInLineOfSight(ep, downPlayer)
-            ){
-                define distDownPlayer! = DistanceBetween(ep, downPlayer);
-                if(
-                    distDownPlayer > reviveRange
-                ){
-                    ApplyImpulse(ep, 
-                        VectorTowards(ep, downPlayer + Vector(0, 1, 0)),
-                        distDownPlayer * 3,
-                        Relative.ToWorld, ContraryMotion.Cancel);
-                }
-                SetStatus(ep, null, Status.Rooted, 1);
-                Wait(1.0, WaitBehavior.AbortWhenFalse);        
-            }
-        }
-    }
-    LoopIfConditionIsTrue();
+    CreateBotsByHeroInput(Hero.Bastion, 2, playerTeam);
+    CreateBotsByHeroInput(Hero.WreckingBall, 2, playerTeam);
+    CreateBotsByHeroInput(Hero.Bastion, 2, enemyTeam);
+    CreateBotsByHeroInput(Hero.WreckingBall, 2, enemyTeam);
 }
 
 // Debug/Slow -----------------------------------------------
