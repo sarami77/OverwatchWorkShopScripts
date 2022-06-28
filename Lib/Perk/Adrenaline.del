@@ -1,5 +1,7 @@
 import "PerkCore.del";
 
+define adrenalineMaxPercentage : 300;
+
 rule: "Perk/Player/Adrenaline/activate"
 Event.OngoingPlayer
 Team.Team1
@@ -10,10 +12,10 @@ if(
     // set time limit
     perk[Perk.perkTimeLimit] = 300;
     // set param
-    perk[Perk.perkEffectStatus] = 100;
+    perk[Perk.perkEffectStatus] = DefaultPercentage();
     // set hud
     perk[Perk.perkEffectAndText] = [];
-    CreatePerkEffectHud(<"Movement speed <0>%", perk[Perk.perkEffectStatus] >);
+    CreatePerkEffectHud(<"Damage dealt & Moving speed <0>%", perk[Perk.perkEffectStatus] >);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
 }
 
@@ -27,7 +29,8 @@ if(
     // reset hud
     DestroyHudText(perk[Perk.perkEffectAndText] [0]);
     // reset status
-    SetMoveSpeed(ep, 100);
+    SetMoveSpeed(ep, DefaultPercentage());
+    SetDamageDealt(ep, DefaultPercentage());
     // reset type
     perkType = PerkType.Non;
 }
@@ -40,9 +43,10 @@ if(
     perkState  == PerkState.Using &&    
     Health() < MaxHealth()
 ){
-    perk[Perk.perkEffectStatus] = RoundToInteger((1 - NormalizedHealth()) * 150);
-    perk[Perk.perkEffectStatus]  += 100;
-    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
+    perk[Perk.perkEffectStatus] = DefaultPercentage();
+    perk[Perk.perkEffectStatus] += RoundToInteger((1 - NormalizedHealth()) * (adrenalineMaxPercentage - DefaultPercentage()));
+    SetMoveSpeed(ep, perk[Perk.perkEffectStatus]);
+    SetDamageDealt(ep, perk[Perk.perkEffectStatus]);
     Wait(0.5, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
@@ -55,6 +59,7 @@ if(
     perkState  == PerkState.Using &&
     Health() == MaxHealth()
 ){
-    perk[Perk.perkEffectStatus] = 100;
-    SetMoveSpeed(ep, perk[Perk.perkEffectStatus] );
+    perk[Perk.perkEffectStatus] = DefaultPercentage();
+    SetMoveSpeed(ep, DefaultPercentage());
+    SetDamageDealt(ep, DefaultPercentage());
 }

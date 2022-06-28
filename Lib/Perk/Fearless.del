@@ -1,6 +1,7 @@
 import "PerkCore.del";
 
 define fearlessRange : 16;
+define fearlessMaxPercentage : 300;
 
 rule: "Perk/Player/Fearless/activate"
 Event.OngoingPlayer
@@ -12,14 +13,14 @@ if(
     // set time limit
     perk[Perk.perkTimeLimit] = 300;
     // set param
-    perk[Perk.perkEffectStatus] = 100;
+    perk[Perk.perkEffectStatus] = DefaultPercentage();
     perk[Perk.perkEffectCount] = 0;
     // set hud
     perk[Perk.perkEffectAndText] = [];
     CreatePerkEffectHud(<"<0> enemies around.", perk[Perk.perkEffectCount]>);
     perk[Perk.perkEffectAndText] [0] = LastTextID();
     CreatePerkEffectHud(
-        perk[Perk.perkEffectStatus] >= 300 ?
+        perk[Perk.perkEffectStatus] >= fearlessMaxPercentage ?
         <"Damage dealt & healing received <0>% (Max Charge)", RoundToInteger(perk[Perk.perkEffectStatus], Rounding.Down)> :
         <"Damage dealt & healing received <0>%", RoundToInteger(perk[Perk.perkEffectStatus], Rounding.Down)>
     );
@@ -43,8 +44,8 @@ if(
     // reset effect
     DestroyEffect(perk[Perk.perkEffectAndText] [2]);
     // reset status
-    SetDamageDealt(ep, perk[Perk.perkEffectStatus]);
-    SetHealingReceived(ep, perk[Perk.perkEffectStatus]);
+    SetDamageDealt(ep, DefaultPercentage());
+    SetHealingReceived(ep, DefaultPercentage());
     // reset type
     perkType = PerkType.Non;
 }
@@ -76,10 +77,10 @@ if(
         perk[Perk.perkEffectStatus]  -= 10;
     
     // round status value
-    if(300 < perk[Perk.perkEffectStatus] )
-        perk[Perk.perkEffectStatus] = 300;
-    else if(100 > perk[Perk.perkEffectStatus] )
-        perk[Perk.perkEffectStatus] = 100;
+    if(fearlessMaxPercentage < perk[Perk.perkEffectStatus] )
+        perk[Perk.perkEffectStatus] = fearlessMaxPercentage;
+    else if(DefaultPercentage() > perk[Perk.perkEffectStatus] )
+        perk[Perk.perkEffectStatus] = DefaultPercentage();
     
     SetDamageDealt(ep, perk[Perk.perkEffectStatus] );
     SetHealingReceived(ep, perk[Perk.perkEffectStatus] );
@@ -100,57 +101,42 @@ if(
         PlayEffect(
             AllPlayers(), PlayEffect.BadPickupEffect,
             Color.White, ep, MaxLength());
-        PlayEffect(
-            ep, PlayEffect.DebuffImpactSound,
-            Color.White, ep, 40);
         Wait(1.25, WaitBehavior.AbortWhenFalse);
     }
     else if(
-        150 <= perk[Perk.perkEffectStatus] && perk[Perk.perkEffectStatus] < 200
+        150 <= perk[Perk.perkEffectStatus] &&
+        perk[Perk.perkEffectStatus] < 200
     ){
         PlayEffect(
             AllPlayers(), PlayEffect.BadPickupEffect,
             Color.Yellow, ep, MaxLength());
-        PlayEffect(
-            ep, PlayEffect.DebuffImpactSound,
-            Color.White, ep, 40);
         Wait(1.00, WaitBehavior.AbortWhenFalse);
     }
     else if(
-        200 <= perk[Perk.perkEffectStatus] && perk[Perk.perkEffectStatus] < 250
+        200 <= perk[Perk.perkEffectStatus] &&
+        perk[Perk.perkEffectStatus] < 250
     ){
         PlayEffect(
             AllPlayers(), PlayEffect.BadPickupEffect,
             Color.Orange, ep, MaxLength());
-        PlayEffect(
-            ep, PlayEffect.DebuffImpactSound,
-            Color.White, ep, 40);
         Wait(0.75, WaitBehavior.AbortWhenFalse);
     }
     else if(
-        250 <= perk[Perk.perkEffectStatus] && perk[Perk.perkEffectStatus] < 300
+        250 <= perk[Perk.perkEffectStatus] &&
+        perk[Perk.perkEffectStatus] < fearlessMaxPercentage
     ){
         PlayEffect(
             AllPlayers(), PlayEffect.BadPickupEffect,
             Color.Red, ep, MaxLength());
-        PlayEffect(
-            ep, PlayEffect.DebuffImpactSound,
-            Color.White, ep, 40);
         Wait(0.5, WaitBehavior.AbortWhenFalse);
     }
     else if(
-        300 <= perk[Perk.perkEffectStatus]
+        fearlessMaxPercentage <= perk[Perk.perkEffectStatus]
     ){
         PlayEffect(
             AllPlayers(), PlayEffect.BadPickupEffect,
             Color.Purple, ep, MaxLength());
-        PlayEffect(
-            ep, PlayEffect.DebuffImpactSound,
-            Color.White, ep, 40);
         Wait(0.25, WaitBehavior.AbortWhenFalse);
-    }
-    else{
-        Wait(1.00, WaitBehavior.AbortWhenFalse);
     }
     
     LoopIfConditionIsTrue();
