@@ -16,7 +16,7 @@ if(
     HasSpawned()
 ){
     // If run it right after loading the server, some scripts fail, so wait few seconds
-    Wait(5, WaitBehavior.AbortWhenFalse);
+    Wait(3, WaitBehavior.AbortWhenFalse);
     
     // debugMode = DebugMode.SlowLevelOnly;
 
@@ -112,7 +112,7 @@ if(
     initCompleted
 ){
     define buddyList! = 
-    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", false) ?
+    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", true) ?
         // random list
         [
             RandomSupportHero,
@@ -141,7 +141,7 @@ if(
     buddyList = ArraySlice(buddyList, 0,
         WorkshopSettingInteger(
             "Follower AI Settings(Join on behalf of absent player)",
-            "Follower Max Num", 5, 0, 8, 1)
+            "Follower Max Num", 2, 0, 8, 1)
     );
 
     define prevPlayerNum! = -1;
@@ -185,6 +185,46 @@ if(
     
         Wait(5, WaitBehavior.IgnoreCondition);
     }
+}
+
+rule: "Buddy/ActionControl"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned()
+){
+    Wait(RandomReal(4, 6), WaitBehavior.AbortWhenFalse);
+
+    // revive
+    if(
+        actionState == ActionState.Non
+    ){
+        define downPlayer! = RandomValueInArray(FilteredArray(AllPlayers(playerTeam), !IsAlive(ae)));
+        if(
+            downPlayer != null &&
+            downPlayer != ep
+        ){
+            while(
+                IsAlive(ep) &&
+                !IsAlive(downPlayer) &&
+                IsInLineOfSight(ep, downPlayer)
+            ){
+                define distDownPlayer! = DistanceBetween(ep, downPlayer);
+                if(
+                    distDownPlayer > reviveRange
+                ){
+                    ApplyImpulse(ep, 
+                        VectorTowards(ep, downPlayer + Vector(0, 1, 0)),
+                        distDownPlayer * 3,
+                        Relative.ToWorld, ContraryMotion.Cancel);
+                }
+                SetStatus(ep, null, Status.Rooted, 1);
+                Wait(1.0, WaitBehavior.AbortWhenFalse);        
+            }
+        }
+    }
+    LoopIfConditionIsTrue();
 }
 
 // Debug/Slow -----------------------------------------------
