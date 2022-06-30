@@ -1,0 +1,139 @@
+import "PerkCore.del";
+
+define MedicSyringeRange: 3;
+
+rule: "Perk/Player/MedicSyringe/activate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.MedicSyringe &&
+    perkState == PerkState.Using
+){
+    // set time limit
+    perk[Perk.perkTimeLimit] = 300;
+    // set hud
+    CreatePerkEffectHud(<"Hold melee button <0> to heal full and revive teammate of melee range", ButtonGuide(Button.Melee)>);
+    perk[Perk.perkEffectAndText] [0] = LastTextID();
+}
+
+rule: "Perk/Player/MedicSyringe/deactivate"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.MedicSyringe &&
+    perkState  == PerkState.Non
+){
+    // reset text
+    DestroyHudText(perk[Perk.perkEffectAndText] [0]);
+    // reset effect
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    // reset type
+    perkType = PerkType.Non;
+}
+
+rule: "Perk/Player/MedicSyringe/inject"
+Event.OngoingPlayer
+Team.Team1
+if(
+    perkType == PerkType.MedicSyringe &&
+    perkState  == PerkState.Using &&
+    IsButtonHeld(ep, Button.Melee)
+){
+    WaitLongPressConfirm();
+
+    // get nearest reticle player
+    perk[Perk.perkTargets] = PlayerClosestToReticle(ep, TeamOf());
+
+    // player is far or not facing
+    if(
+        DistanceBetween(ep, perk[Perk.perkTargets]) > MedicSyringeRange ||
+        !IsInViewAngle(ep, perk[Perk.perkTargets], 90)
+    ){
+        // get nearest distance player
+        perk[Perk.perkTargets] = ClosestPlayerTo(ep, TeamOf());
+
+        // player is far or not facing
+        if(
+            DistanceBetween(ep, perk[Perk.perkTargets]) > MedicSyringeRange ||
+            !IsInViewAngle(ep, perk[Perk.perkTargets], 90)
+        ){
+            // get facing position
+            perk[Perk.perkTargets] = PositionOf(ep) + PositionOffset() + FacingDirectionOf();
+        }
+    }
+
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+    perk[Perk.perkEffectAndText] [1] = CreateBeamEffect(AllPlayers(),
+        BeamType.BadBeam,
+        PositionOf(ep) + PositionOffset(),
+        PositionOf(perk[Perk.perkTargets]) + PositionOffset(),
+        Color.Yellow, EffectRev.VisibleToPositionAndRadius);
+
+    Wait(0.1, WaitBehavior.IgnoreCondition);
+    
+    if(
+        // is player
+        HasSpawned(perk[Perk.perkTargets])
+    ){
+        if(IsAlive(perk[Perk.perkTargets])){
+            // heal
+            PlayEffect(
+                AllPlayers(Team.All), PlayEffect.GoodPickupEffect,
+                Color.Yellow, perk[Perk.perkTargets], 1);
+            PlayEffect(
+                AllPlayers(Team.All), PlayEffect.BuffImpactSound,
+                Color.Yellow, perk[Perk.perkTargets], MaxValue());
+
+            Heal(perk[Perk.perkTargets], ep, MaxValue());        
+        }
+        else{
+            // revive
+            revive(ep, perk[Perk.perkTargets], reviveRange * 3);
+        }
+    }
+
+    Wait(0.1, WaitBehavior.IgnoreCondition);
+
+    DestroyEffect(perk[Perk.perkEffectAndText] [1]);
+}
+
+rule: "Perk/Player/MedicSyringe/tryInjectForBot"
+Event.OngoingPlayer
+Team.Team1
+if(
+    IsDummyBot() &&
+    perkType == PerkType.MedicSyringe &&
+    perkState  == PerkState.Using
+){
+    Wait(1.5, WaitBehavior.AbortWhenFalse);
+
+    perk[Perk.perkTargets] = FirstOf(
+        SortedArray(
+            FilteredArray(
+                AllPlayers(TeamOf()),
+                (
+                    ae != ep &&
+                    NormalizedHealth(ae) < 1.0 &&
+                    DistanceBetween(ep, ae) <= MedicSyringeRange
+                )
+            ),
+            Health(ae)
+        )
+    );
+
+    if(
+        perk[Perk.perkTargets] != 0
+    ){
+        define prevTarget! = target;
+        target = perk[Perk.perkTargets];
+        SetFacing(ep, DirectionTowards(ep, target), Relative.ToWorld);
+        
+        SetStatus(ep, null, Status.Rooted, 1);
+        StartHoldingButton(ep, Button.Melee);
+        Wait(0.5, WaitBehavior.IgnoreCondition);
+        StopHoldingButton(ep, Button.Melee);
+
+        target = prevTarget;
+    }
+    LoopIfConditionIsTrue();
+}
