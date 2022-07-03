@@ -6,30 +6,33 @@ import "Utility.del";
 // TAG public property
 globalvar define damageTextEnableTeam;
 
-define damageTextIsEnableTeam:
+define IsDamageTextEnableTeam:
     damageTextEnableTeam == TeamOf() ||
     damageTextEnableTeam == Team.All;
 
 define maxScaleDamage: 1000;
+
+define minTextSize: basicInWorldTextSize;
 define maxTextSize: 4;
 playervar define damageTextEntity;
 playervar define damageTextPosition;
+define minTextDisplayTime: 0.1;
+define maxTextDisplayTime: 1.0;
 playervar define damageTextDisplayTime;
 playervar define sumDamage;
 
 rule: "DamageFloatText/show"
 Event.OnDamageTaken
 if(
-    damageTextIsEnableTeam &&
+    IsDamageTextEnableTeam &&
     EventDamage() >= 1
 ){
     // add damage
     sumDamage += EventDamage();
-    // set text size
-    define damageTextSize! = basicInWorldTextSize + (3 * (sumDamage / maxScaleDamage));
-    damageTextSize = Min(damageTextSize, maxTextSize);
+    // calc work value
+    define damageScale = Min(sumDamage, maxScaleDamage) / maxScaleDamage;
     // set text color
-    define damageTextColor!;
+    define damageTextColor;
     if(maxScaleDamage * 1.00 <= sumDamage){
         damageTextColor = Color.Purple;      
     }
@@ -47,9 +50,10 @@ if(
     }
     // set text position 
     damageTextPosition = EyePosition(EventPlayer()) + PositionOffset();
+    // set text size
+    define damageTextSize = minTextSize + (damageScale * (maxTextSize - minTextSize));
     // set text display time according damage
-    damageTextDisplayTime = 0.5 + (sumDamage / maxScaleDamage);
-    // damageTextDisplayTime = Min(damageTextDisplayTime, 1);
+    damageTextDisplayTime = minTextDisplayTime + (damageScale * (maxTextDisplayTime - minTextDisplayTime));
     // show text
     DestroyInWorldText(damageTextEntity);
     damageTextEntity = CreateInWorldText(
@@ -61,7 +65,7 @@ if(
 rule: "DamageFloatText/hide"
 Event.OnDamageTaken
 if(
-    damageTextIsEnableTeam &&
+    IsDamageTextEnableTeam &&
     sumDamage > 0
 ){
     // wait for visual recognition

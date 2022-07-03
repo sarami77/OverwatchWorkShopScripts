@@ -124,23 +124,19 @@ if(
     perkState  == PerkState.Using &&
     perk[Perk.perkEffectStatus]  == PerkEffectStatus.Triggered
 ){
-    
-    define isAcc = IsButtonHeld(ep, Button.SecondaryFire);
-    
     // if press accelerate button
     if(IsButtonHeld(ep, Button.SecondaryFire)){
         // move facing direction
-        
         ApplyImpulse(ep, 
             VectorScaledY(
                 FacingDirectionOf(),
-                0 > YOf(FacingDirectionOf()) ? 0.1 : 1  // if downward, scale down
+                0 > YOf(FacingDirectionOf()) ? 0.1 : 1  // if downward, y direction scale down
             ), 1,
             Relative.ToWorld, ContraryMotion.Incorporate);
     }
     else{
-        // check front surface altitude
-        define distanceFromSurface = DistanceBetween(ep, NearestWalkablePosition(ep));
+        // check surface altitude
+        define distanceFromSurface = DistanceBetween(ep, BelowPosition(ep));
         // near surface
         if(
             distanceFromSurface < keepHeight
@@ -157,7 +153,7 @@ if(
             // move to down
             ApplyImpulse(ep, Down(),
                 0.01,
-                Relative.ToPlayer, ContraryMotion.Cancel);
+                Relative.ToPlayer, ContraryMotion.Cancel);  // force down
         }        
         // move to fotward    
         ApplyImpulse(ep, Forward(),
@@ -186,7 +182,8 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define splashDamageRangeMinigun: 0.75;
+define splashDamageMinigun: 50;
+define splashDamageRangeMinigun: 1.0;
 
 rule: "Perk/Player/DeathFromAbove/splashDamageMinigun"
 Event.OngoingPlayer
@@ -200,25 +197,27 @@ if(
 ){
     // get aimPosition
     aimPosition = AimingPosition();
-    landPosition = RandomPosition(0.6, 0.6, 0.6);
+    define scat! = DistanceBetween(EyePosition(), aimPosition) * 0.03;
+    landPosition = aimPosition + RandomPosition(scat, scat, scat);
     // splash damage
     Damage(
         PlayersWithinRadius(
-            aimPosition + landPosition, splashDamageRangeMinigun,
+            landPosition, Max(splashDamageRangeMinigun, 1.75),
             Team.Team2, RadiusLOS.Off),
-        ep, 90);
+        ep, splashDamageMinigun);
     // play blast
     PlayEffect(
         AllPlayers(), PlayEffect.BadExplosion,
         Color.Yellow,
-        aimPosition + landPosition,
+        landPosition,
         splashDamageRangeMinigun);
-    WaitContinuousBlastCycle();
 
+    WaitContinuousBlastCycle();
     LoopIfConditionIsTrue();
 }
 
-define splashDamageRangeAutoCanon: 1.6;
+define splashDamageAutoCanon: 100;
+define splashDamageRangeAutoCanon: 2.0;
 
 rule: "Perk/Player/DeathFromAbove/splashDamageAutoCanon"
 Event.OngoingPlayer
@@ -231,18 +230,17 @@ if(
     IsFiringPrimary()
 ){
     // get aimPosition
-    aimPosition = AimingPosition();
-    landPosition = RandomPosition(0.5, 0.5, 0.5);
+    landPosition = AimingPosition() + RandomPosition(0.5, 0.5, 0.5);
     // splash damage
     Damage(
         PlayersWithinRadius(
-            aimPosition + landPosition, splashDamageRangeAutoCanon,
+            landPosition, splashDamageRangeAutoCanon,
             Team.Team2, RadiusLOS.Off),
-        ep, 200);
+        ep, splashDamageAutoCanon);
     // play blast
     PlayEffect(
         AllPlayers(Team.All), PlayEffect.GoodExplosion,
-        Color.Orange, aimPosition + landPosition,
+        Color.Orange, landPosition,
         splashDamageRangeAutoCanon);
     Wait(0.015, WaitBehavior.IgnoreCondition);
     CancelPrimaryAction();

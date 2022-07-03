@@ -271,7 +271,7 @@ if(
                 IsDummyBot(ae)
             );
             for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(addList); buddyAddIndex++){
-                if(ProbabilityTrue(40)){
+                if(ProbabilityTrue(50)){
                     addList[buddyAddIndex].perkType = RandomValueInArray(lotteryPerkList);
                     addList[buddyAddIndex].perkState = PerkState.Ready;
                 }
@@ -364,6 +364,7 @@ if(
             downPlayer != null &&
             downPlayer != ep
         ){
+            // has line to dead player
             while(
                 IsAlive(ep) &&
                 !IsAlive(downPlayer) &&
@@ -896,8 +897,6 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.Closed
 ){
-    // show message
-    BigMessage(AllPlayers(), "Portal closed. Nice work!");
     // init param
     portalPosition = 0;
     portalSize = 0;
@@ -908,6 +907,10 @@ if(
     DestroyEffect(portalEntitys[2]);
     DestroyEffect(portalEntitys[3]);
     DestroyEffect(portalEntitys[4]);
+    Wait(2, WaitBehavior.AbortWhenFalse);
+
+    // show message
+    BigMessage(AllPlayers(), "Portal closed. Nice work!");
 }
 
 rule: "Portal/State/End"
@@ -961,7 +964,7 @@ if(
         // move candidate postion in the direction of player for avoiding map edge
         candidatePosition += DirectionTowards(candidatePosition, basePosition) * RandomReal(1, distance / 4);
         // convert to walkble position
-        // candidatePosition = NearestWalkablePosition(candidatePosition);
+        candidatePosition = NearestWalkablePosition(candidatePosition);
 
         if(
             // far postion from previous position
@@ -1674,6 +1677,19 @@ Player ClosestPlayerFromPortal()"ClosestPlayerFromPortal"{
     );
 }
 
+Player RandomPlayerInPortal()"RandomPlayerInPortal"{
+    return RandomValueInArray(
+        FilteredArray(
+            AllPlayers(playerTeam),
+            (
+                HasSpawned(ae) &&
+                IsAlive(ae) &&
+                ae.isInSidePortal
+            )
+        )
+    );
+}
+
 playervar define teleportPosition!;
 globalvar define commonTeleportPosition!;
 
@@ -1727,7 +1743,7 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
 
 Boolean SetTeleportPositionToPlayerAround()"SetTeleportPositionToPlayerAround"{
     // set teleportToTarget at closest player from portal
-    define teleportToTarget! = ClosestPlayerFromPortal();
+    define teleportToTarget! = RandomPlayerInPortal();
     if(teleportToTarget == null){
         teleportPosition = portalPosition;
         return true;
@@ -1999,15 +2015,17 @@ if(
     portalState == PortalState.UnderAttack
 ){
     Wait(RandomReal(1, 60), WaitBehavior.AbortWhenFalse);
-    dbgMsg("shotCall");
-    
+
+    dbgMsg("shotCall start");
     define scList! = AllLivingPlayers(enemyTeam);
-    define scDelay! = RandomReal(0, 1);
+    define scDelay! = RandomReal(0.1, 2);
     for(define scLoopIndex! = 0; scLoopIndex < CountOf(scList); scLoopIndex ++){
         SetUltimateCharge(scList[scLoopIndex], 100);
         PressButton(scList[scLoopIndex], Button.Ultimate);
         Wait(scDelay, WaitBehavior.AbortWhenFalse);
     }
+    dbgMsg("shotCall end");
+
     LoopIfConditionIsTrue();
 }
 
@@ -2017,9 +2035,14 @@ if(
     portalState == PortalState.UnderAttack
 ){
     Wait(RandomReal(1, 60), WaitBehavior.AbortWhenFalse);
-    dbgMsg("rush");
-    
-    Respawn(AllDeadPlayers(enemyTeam));
+
+    dbgMsg("rush start");
+    for(define rushCount = RandomInteger(5, 20); rushCount > 0; rushCount--){
+        Respawn(AllDeadPlayers(enemyTeam));
+        Wait(1, WaitBehavior.AbortWhenFalse);
+    }
+    dbgMsg("rush end");
+
     LoopIfConditionIsTrue();
 }
 

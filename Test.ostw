@@ -1,7 +1,7 @@
 import "Test.setting.json";
 import "Lib/Utility.del";
 import "Lib/Debug.del";
-// import "Lib/DamageText.del" ;
+import "Lib/DamageText.del" ;
 
 // Builtin -----------------------------------------------
 globalvar define playerTeam;
@@ -12,24 +12,10 @@ globalvar define initCompleted!;
 rule: "BuiltinGlobal"
 Event.OngoingGlobal
 {
-    // Stop records to reduce server load
-    // DisableInspectorRecording();
-
-    // If run it right after loading the server, some scripts fail, so wait few seconds
     Wait(3, WaitBehavior.AbortWhenFalse);
 
-    // debugMode = DebugMode.SlowLevelOnly;
-
-    // damageTextEnableTeam = Team.All;
-
-    playerTeam = Team.Team1;
-    enemyTeam = Team.Team2;
-
-    initCompleted = true;
 
     while(true){
-        SetRespawnMaxTime(AllPlayers(), 0);
-
         if(TeamOf(HostPlayer()) == Team.Team1){
             playerTeam = Team.Team1;
             enemyTeam = Team.Team2;
@@ -38,44 +24,16 @@ Event.OngoingGlobal
             playerTeam = Team.Team2;
             enemyTeam = Team.Team1;
         }
-        
+
+        damageTextEnableTeam = enemyTeam;
+
+        SetRespawnMaxTime(AllPlayers(), 0);
+        SetMaxHealth(AllPlayers(), MaxValue());
+        SetStatus(HostPlayer(), null, Status.Invincible, MaxValue());
+
+        initCompleted = true;
         Wait(1, WaitBehavior.AbortWhenFalse);
     }
-}
-
-rule: "BuiltinGlobal"
-Event.OngoingPlayer
-if(
-    HasSpawned(ep)
-){
-
-    // SetStatus(ep, null, Status.PhasedOut, 99999);
-    // SetMaxHealth(ep, 10000);
-    // Wait(0.1, WaitBehavior.IgnoreCondition); // wait change MaxHealth
-    // Heal(ep, null, MaxValue());
-    // SetDamageDealt(ep, 100);
-    // SetDamageReceived(ep, 100);
-    // SetHealingDealt(ep, 100);
-    // SetHealingReceived(ep, 100);
-    // SetJumpVerticalSpeed(ep, 10);
-    // SetMoveSpeed(ep, 1000);
-    // SetGravity(ep, 10);
-    // SetProjectileSpeed(ep, 100);
-    // SetProjectileGravity(ep, 100);
-    // StartScalingPlayer(ep, 1);
-    // StartScalingBarriers(ep, 1);
-    // SetUltimateCharge(ep, 0);
-
-    // CreateEffect(ep, Effect.Ring, Color.Red,
-    //     ep, 10, EffectRev.VisibleToPositionAndRadius);
-    // CreateEffect(ep, Effect.Ring, Color.Orange,
-    //     ep, 20, EffectRev.VisibleToPositionAndRadius);
-    // CreateEffect(ep, Effect.Ring, Color.Yellow,
-    //     ep, 30, EffectRev.VisibleToPositionAndRadius);
-    // CreateEffect(ep, Effect.Ring, Color.SkyBlue,
-    //     ep, 40, EffectRev.VisibleToPositionAndRadius);
-    // CreateEffect(ep, Effect.Ring, Color.Blue,
-    //     ep, 50, EffectRev.VisibleToPositionAndRadius);
 }
 
 // Test Code -----------------------------------------------
@@ -93,7 +51,7 @@ if(
 
 // TAG Perk ----------
 import "Lib/Perk/PerkCore.del";
-import "Lib/Perk/AimHack.del";
+import "Lib/Perk/DeathFromAbove.del";
 
 rule: "Debug/getPerk"
 Event.OngoingPlayer
@@ -105,11 +63,12 @@ if(
 ){
     WaitLongPressConfirm();
     perkState = PerkState.Ready;
-    perkType = PerkType.AimHack;
+    perkType = PerkType.DeathFromAbove;
 }
 
 // TAG Buddy ----------
 import "Lib/Buddy.del";
+
 rule: "Buddy/BuddyContorl"
 Event.OngoingGlobal
 if(
@@ -141,59 +100,10 @@ if(
             Hero.Doomfist
         ];
 
-    // slice buddy list by setting
-    buddyList = ArraySlice(buddyList, 0,
-        WorkshopSettingInteger(
-            "Follower AI Settings(Join on behalf of absent player)",
-            "Follower Max Num", 2, 0, 8, 1)
-    );
-
-    // define prevPlayerNum! = -1;
-    // define maxSlotNum! = NumberOfSlots(playerTeam);
-    // define maxBuddyNum! = CountOf(buddyList);
-
-    // while(true){
-    //     define playerNum! =
-    //         CountOf(
-    //             FilteredArray(
-    //                 AllPlayers(playerTeam),
-    //                 !IsDummyBot(ae)));
-
-    //     define needBuddyNum = 
-    //         Min(
-    //             maxSlotNum - playerNum,
-    //             maxBuddyNum);
-
-    //     define buddyNum! = 
-    //         CountOf(
-    //             FilteredArray(
-    //                 AllPlayers(playerTeam),
-    //                 IsDummyBot(ae)));
-
-    //     if(
-    //         // player number changed
-    //         prevPlayerNum != playerNum ||
-    //         // not filed buddy number
-    //         buddyNum != needBuddyNum
-    //     ){
-    //         // save player num
-    //         prevPlayerNum = playerNum;
-    //         // relaod buddy list
-    //         DestroyBots(playerTeam);
-    //         define emptySlotNum! = maxSlotNum - playerNum;
-    //         define addList! = ArraySlice(buddyList, 0, emptySlotNum);
-    //         for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(addList); buddyAddIndex++){
-    //             CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
-    //         }
-    //     }
-    
-    //     Wait(5, WaitBehavior.IgnoreCondition);
-    // }
-
-    CreateBotsByHeroInput(Hero.Bastion, 2, playerTeam);
-    CreateBotsByHeroInput(Hero.WreckingBall, 2, playerTeam);
-    CreateBotsByHeroInput(Hero.Bastion, 2, enemyTeam);
-    CreateBotsByHeroInput(Hero.WreckingBall, 2, enemyTeam);
+    for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(buddyList); buddyAddIndex++){
+        CreateBotsByHeroInput(buddyList[buddyAddIndex], 1, playerTeam);
+        CreateBotsByHeroInput(buddyList[buddyAddIndex], 1, enemyTeam);
+    }
 }
 
 // Debug/Slow -----------------------------------------------
@@ -206,7 +116,7 @@ if(
     HostPlayer() == ep &&
     IsButtonHeld(ep, Button.Interact) &&
     IsButtonHeld(ep, Button.Jump)
-){ 
+){
     // 100 -> 50 -> 25 -> 10
     if(slow == 100)
         slow = 50;
