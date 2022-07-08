@@ -1,62 +1,44 @@
 import "Utility.del";
 
 // TAG ServerOverLoadMeasures ----------
-define slowLevel: [100, 90, 80, 65, 50];    // 0～4
-globalvar define targetSlowLevel;
-globalvar define currentSlowLevel;
+globalvar define gameLogicSpeed = 100;
 globalvar define slowControlHandler;
 enum SlowControlHandler{
     None,
     ServerOverLoadMeasures,
-    PlayerJoin,
     GameEnd
 }
 
-rule: "ServerOverLoadMeasures/increaseSlowLevel"
+rule: "ServerOverLoadMeasures/increaseGameLogicSpeed"
 Event.OngoingGlobal
 if(
-    initCompleted &&    
-    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
-    isServerOverLoading &&
-    targetSlowLevel < (CountOf(slowLevel) - 1)
-){
-    // If the server is overloaded,
-    //  apply slow motion every second
-    //  to reduce the load to avoid shutting down due to server overload.
-    Wait(1.0, WaitBehavior.AbortWhenFalse);
-    // increase slow level
-    targetSlowLevel ++;
-    // apply slow level
-    ApplySlowLevel(targetSlowLevel);
-
-    LoopIfConditionIsTrue();
-}
-
-rule: "ServerOverLoadMeasures/decreaseSlowLevel"
-Event.OngoingGlobal
-if(
-    initCompleted &&
     slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
     !isServerOverLoading &&
-    targetSlowLevel > 0
+    gameLogicSpeed < DefaultPercentage()
 ){
-    // If the server is not overloaded,
-    //  reset slow motion every second
-    // can decrease slow level
-    Wait(0.5 * (slowLevel[currentSlowLevel] / DefaultPercentage()), WaitBehavior.AbortWhenFalse);
-    // decrease slow level
-    targetSlowLevel --;
+    Wait(0.2, WaitBehavior.AbortWhenFalse);
+    // increase slow level
+    gameLogicSpeed += 1;
+    gameLogicSpeed = Min(gameLogicSpeed, DefaultPercentage());
     // apply slow level
-    ApplySlowLevel(targetSlowLevel);
+    SetSlowMotion(gameLogicSpeed);
 
     LoopIfConditionIsTrue();
 }
 
-void ApplySlowLevel(define setSlowLevel)"ApplySlowLevel"{
-    // if slow level changed
-    if(currentSlowLevel != setSlowLevel){
-        // apply slow motion
-        currentSlowLevel = setSlowLevel;
-        SetSlowMotion(slowLevel[setSlowLevel]);
-    }
+rule: "ServerOverLoadMeasures/decreaseGameLogicSpeed"
+Event.OngoingGlobal
+if(
+    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
+    isServerOverLoading &&
+    gameLogicSpeed > 0
+){
+    Wait(0.2, WaitBehavior.AbortWhenFalse);
+    // decrease slow level
+    gameLogicSpeed -= 1;
+    gameLogicSpeed = Max(gameLogicSpeed, 0);
+    // apply slow level
+    SetSlowMotion(gameLogicSpeed);
+
+    LoopIfConditionIsTrue();
 }
