@@ -355,35 +355,49 @@ if(
     buddyOriginalHero = HeroOf();
 
     // revive
-    if(
-        ProbabilityTrue(50) ||
-        actionState == ActionState.Non
-    ){
-        define downPlayer! = RandomValueInArray(FilteredArray(AllPlayers(playerTeam), !IsAlive(ae)));
+    define downPlayer! = RandomValueInArray(
+        FilteredArray(
+            AllDeadPlayers(playerTeam), 
+            (
+                ae != ep
+            )
+        )
+    );
+    // has down player
+    if(downPlayer != null){
         if(
-            downPlayer != null &&
-            downPlayer != ep
+            // has line to down player
+            IsInLineOfSight(EyePosition(), downPlayer + PositionOffset()) &&
+            (
+                // non state
+                actionState == ActionState.Non ||
+                // near to down player (max range 30m)
+                ProbabilityTrue(100 - (DistanceBetween(ep, downPlayer) / 30 * 100))
+            )
         ){
-            // has line to dead player
+            // can revive both status
             while(
                 IsAlive(ep) &&
-                !IsAlive(downPlayer) &&
-                IsInLineOfSight(EyePosition(), downPlayer + PositionOffset())
+                !IsAlive(downPlayer)
             ){
-                define distDownPlayer! = DistanceBetween(ep, downPlayer);
+                define distDownPlayer! = DistanceBetween(ep, downPlayer);  
+                // is in revive range
                 if(
                     distDownPlayer > reviveRange
                 ){
+                    // hop to down position
                     ApplyImpulse(ep, 
                         VectorTowards(ep, downPlayer + Vector(0, 1, 0)),
                         distDownPlayer * 3,
                         Relative.ToWorld, ContraryMotion.Cancel);
                 }
+                // hold position
                 SetStatus(ep, null, Status.Rooted, 1);
                 Wait(1.0, WaitBehavior.AbortWhenFalse);        
             }
         }
     }
+
     LoopIfConditionIsTrue();
 }
 
