@@ -1,28 +1,33 @@
 import "Utility.del";
 
 // TAG ServerOverLoadMeasures ----------
-globalvar define gameLogicSpeed = 100;
-globalvar define slowControlHandler;
+define maxGameLogicSpeed: 110;
+
+globalvar define slowControlHandler!;
 enum SlowControlHandler{
     None,
     ServerOverLoadMeasures,
     GameEnd
 }
 
+globalvar define gameLogicSpeed = 100;
+
 rule: "ServerOverLoadMeasures/increaseGameLogicSpeed"
 Event.OngoingGlobal
 if(
     slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
     !isServerOverLoading() &&
-    gameLogicSpeed < DefaultPercentage()
+    gameLogicSpeed < maxGameLogicSpeed
 ){
-    Wait(0.2 * (gameLogicSpeed / 100), WaitBehavior.AbortWhenFalse);
+    Wait(0.2 * (gameLogicSpeed / DefaultPercentage()), WaitBehavior.AbortWhenFalse);
     // increase slow level
-    gameLogicSpeed += 1;
-    gameLogicSpeed = Min(gameLogicSpeed, DefaultPercentage());
+    // gameLogicSpeed += 1;
+    gameLogicSpeed += RoundToInteger((maxGameLogicSpeed - gameLogicSpeed) / 10, Rounding.Up);
+    gameLogicSpeed = Min(gameLogicSpeed, maxGameLogicSpeed);
     // apply slow level
-    SetSlowMotion(gameLogicSpeed);
-
+    if(gameLogicSpeed <= DefaultPercentage()){
+        SetSlowMotion(gameLogicSpeed);
+    }
     LoopIfConditionIsTrue();
 }
 
@@ -33,12 +38,14 @@ if(
     isServerOverLoading() &&
     gameLogicSpeed > 0
 ){
-    Wait(0.2 * (gameLogicSpeed / 100), WaitBehavior.AbortWhenFalse);
+    Wait(0.2 * (gameLogicSpeed / DefaultPercentage()), WaitBehavior.AbortWhenFalse);
     // decrease slow level
     gameLogicSpeed -= 1;
+    // gameLogicSpeed -= 1 + RoundToInteger((DefaultPercentage()  - gameLogicSpeed) / 10, Rounding.Up);
     gameLogicSpeed = Max(gameLogicSpeed, 0);
     // apply slow level
-    SetSlowMotion(gameLogicSpeed);
-
+    if(gameLogicSpeed <= DefaultPercentage()){
+        SetSlowMotion(gameLogicSpeed);
+    }
     LoopIfConditionIsTrue();
 }
