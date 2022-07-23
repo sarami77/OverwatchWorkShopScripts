@@ -419,6 +419,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Sigma:
         heroName = "Sigma";
         actionRange = ActionRange.Middle;
+        primaryFireButtonReleaseMax = 0;
         secondaryFireButtonReleaseMax = 5;
         secondaryFireButtonPressMax = 1;
         ultimateButtonReleaseMax = 25;
@@ -457,7 +458,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Tracer";
         actionRange = ActionRange.Close;
         ultimateButtonReleaseMin = 1;
-        ultimateButtonReleaseMax = 2;
+        ultimateButtonReleaseMax = 1;
         break;
 
         case Hero.Widowmaker:
@@ -910,40 +911,32 @@ void setMoveDir(define forwardIsAbyss!, define backwardIsAbyss!)"setMoveDir"{
 
 void setSideStep(define rightIsAbyss!, define leftIsAbyss!)"setSideStep"{
     define distToTarget! = DistanceBetween(ep, target);
-    define isMyRange! =
-        distToTarget >= actionRangeMin &&
-        distToTarget <= actionRangeMax;
-    // now my range or prob
+    // by own range or health
     if(
-        isMyRange ||
-        ProbabilityTrue(50)
+        (
+            distToTarget >= actionRangeMin &&
+            distToTarget <= actionRangeMax
+        )
+            ||
+        ProbabilityTrue(((1 - NormalizedHealth()) * 100) + 25)
     ){
-        // select dir
-        // no side step by distance to target
-        if(ProbabilityTrue((distToTarget / 30) * 100)){
-            // no sidestep
-            sideStepDir = 0;
+        // start sidestep
+        // already has sidestep
+        if(sideStepDir != 0){
+            if(ProbabilityTrue(30)){
+                // reverse sidestep
+                sideStepDir = -sideStepDir;
+            }
+            //else
         }
         else{
-            // has sidestep
-            if(sideStepDir != 0){
-                // set side step
-                if(ProbabilityTrue(40)){
-                    // reverse sidestep
-                    sideStepDir = -sideStepDir;
-                }
-                //else
+            if(ProbabilityTrue(50)){
+                // right sidestep
+                sideStepDir = Right();
             }
             else{
-                // set side step
-                if(ProbabilityTrue(50)){
-                    // right sidestep
-                    sideStepDir = Right();
-                }
-                else{
-                    // left sidestep
-                    sideStepDir = Left();
-                }
+                // left sidestep
+                sideStepDir = Left();
             }
         }
 
@@ -971,9 +964,9 @@ void setSideStep(define rightIsAbyss!, define leftIsAbyss!)"setSideStep"{
         }
     }
     else{
+        // stop sidestep
         sideStepDir = 0;
     }
-    // else
 }
 
 define aimingPosition:

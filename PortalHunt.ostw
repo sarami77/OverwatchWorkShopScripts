@@ -1184,7 +1184,6 @@ if(
 // TAG EnemyBot ----------
 define assetList:
     [
-
         [
             "tank boss",
             [EnemyType.Boss,        RandomTankHero,     1],
@@ -1296,7 +1295,7 @@ if(
     // change bot asset by random
     if(
         0 >= NumberOfPlayers(enemyTeam) ||
-        ProbabilityTrue(70)
+        ProbabilityTrue(80)
     ){
         someHero = RandomHero;
         // create all bot
@@ -1320,7 +1319,7 @@ if(
     enemyType != EnemyType.None
 ){
     if(enemyType == EnemyType.Minion){
-        StartScalingPlayer(ep, 0.6, false);
+        StartScalingPlayer(ep, 0.5, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
 
         SetMaxHealth(ep, 50);
@@ -1366,7 +1365,7 @@ if(
         SetMaxHealth(ep, 1000);
 
         SetHealingDealt(ep, 300);
-        SetHealingReceived(ep, 300);
+        SetHealingReceived(ep, 200);
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
@@ -1645,22 +1644,32 @@ Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPositio
 void PlayTeleportEffect(define isBefore!)"PlayTeleportEffect"{
     // if before teleport
     if(isBefore){
-        if(portalEnable){
-            // play teleport shadow of own
-            PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, ep, 1);
-            // play teleport shadow of dest
-            PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, teleportPosition, 1);
-        }
+        // play teleport shadow of own
+        PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, ep, 1);
+        // play teleport shadow of dest
+        PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, teleportPosition, 1);
+        // show teleport beam effect
+        DestroyEffect(telBeam);
+        define fromSky! = IsInSpawnRoom();
+        telBeam = CreateBeamEffect(AllPlayers(),
+            BeamType.BadBeam,
+            fromSky ? 
+                teleportPosition + Vector(0, 30, 0) :
+                PositionOf() + PositionOffset(),
+            teleportPosition + PositionOffset(),
+            Color.Purple, EffectRev.VisibleToPositionAndRadius);
         // wait for show teleport shadow of before
-        Wait(0.4, WaitBehavior.IgnoreCondition);
+        Wait(0.5, WaitBehavior.IgnoreCondition);
     }
     else{
-        if(portalEnable){
-            // play teleport blast
-            PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, ep, eachEffectTextSize);
-        }
+        // play teleport blast
+        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, ep, eachEffectTextSize);
+        // hide teleport beam effect
+        DestroyEffect(telBeam);
     }
 }
+
+playervar define telBeam!;
 
 void TeleportWithEffect()"TeleportWithEffect"{
     Wait(SlotOf(ep) * 0.1, WaitBehavior.AbortWhenFalse);
@@ -1670,6 +1679,8 @@ void TeleportWithEffect()"TeleportWithEffect"{
     Teleport(ep, teleportPosition);
     // show teleport effect
     PlayTeleportEffect(false);
+    // hide teleport beam effect
+    DestroyEffect(telBeam);
 }
 
 rule: "EnemyBot/Teleport/teleportByPortalDisabled"
@@ -1851,7 +1862,7 @@ rule: "EnemyBot/EnemyAbility/combatTeleport"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    enemyType == EnemyType.GiantBoss &&
+    (enemyType == EnemyType.GiantBoss || enemyType == EnemyType.Boss)&&
     IsAlive() &&
     portalEnable &&
     actionState == ActionState.Attack
@@ -1860,14 +1871,7 @@ if(
     Wait(RandomReal(teleportWaitSecond, teleportWaitSecond + 3), WaitBehavior.AbortWhenFalse);
     // set teleport position to player around
     if(SetTeleportPositionToPlayerAround()){
-        define telBeam!;
-        // teleport with beam effect
-        DestroyEffect(telBeam);
-        telBeam = CreateBeamEffect(AllPlayers(),
-            BeamType.BadBeam, Midpoint(EyePosition(), PositionOf()), teleportPosition,
-            Color.Purple, EffectRev.VisibleToPositionAndRadius);
         TeleportWithEffect();
-        DestroyEffect(telBeam);
     }
     LoopIfConditionIsTrue();
 }
