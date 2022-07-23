@@ -573,7 +573,7 @@ if(
     enemyType != EnemyType.None
 ){
     if(enemyType == EnemyType.Minion){
-        StartScalingPlayer(ep, 0.5, false);
+        StartScalingPlayer(ep, 0.75, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
 
         SetMaxHealth(ep, 25);
@@ -729,7 +729,7 @@ playervar define teleportPosition!;
 globalvar define commonTeleportPosition!;
 define teleportAreaSize: 10;
 
-Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
+Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlayerFront"{
     // set teleportToTarget at closest player from Object
     define teleportToTarget! = ClosestPlayerFromObject();
     if(teleportToTarget == null){
@@ -767,7 +767,7 @@ Boolean SetTeleportPositionToPlayerFront()"SetTeleportPositionToPlayerFront"{
     return true;
 }
 
-Boolean SetTeleportPositionToObjectArround()"SetTeleportPositionToObjectArround"{
+Boolean SetTeleportPositionToObjectArround() playervar "SetTeleportPositionToObjectArround"{
     for(pLoopIndex = 0; pLoopIndex < 30; pLoopIndex++){
         // select teleportPosition from current object around
         teleportPosition = 
@@ -795,7 +795,7 @@ Boolean SetTeleportPositionToObjectArround()"SetTeleportPositionToObjectArround"
 globalvar define additinalTeleportAreaSize;
 define teleportAreaSizeOffset: 30;
 
-Boolean SetTeleportPositionToObjectAhead()"SetTeleportPositionToObjectAhead"{
+Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
     // set teleportToTarget at Object
     define teleportToTarget! = CurrentObjectPosition() + Vector(0, 4, 0);
 
@@ -850,7 +850,7 @@ Boolean SetTeleportPositionToObjectAhead()"SetTeleportPositionToObjectAhead"{
 
 define forceUpdateCommonPositionProb: 5;
 
-Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPosition"{
+Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCommonPosition"{
     // set telPosNearTarget at closest player from commonTeleportPosition
     define telPosNearTarget! = ClosestPlayerToComTelPos;
     if(telPosNearTarget == null){
@@ -884,8 +884,37 @@ Boolean SetTeleportPositionToCommonPosition()"SetTeleportPositionToCommonPositio
     return true;
 }
 
-void TeleportWithEffect()"TeleportWithEffect"{
-    // distribute serverload
+void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
+    // if before teleport
+    if(isBefore){
+        // play teleport shadow of own
+        PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, ep, 1);
+        // play teleport shadow of dest
+        PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, teleportPosition, 1);
+        // show teleport beam effect
+        DestroyEffect(telBeam);
+        define fromSky! = IsInSpawnRoom();
+        telBeam = CreateBeamEffect(AllPlayers(),
+            BeamType.BadBeam,
+            fromSky ? 
+                teleportPosition + Vector(0, 30, 0) :
+                PositionOf() + PositionOffset(),
+            teleportPosition + PositionOffset(),
+            Color.Purple, EffectRev.VisibleToPositionAndRadius);
+        // wait for show teleport shadow of before
+        Wait(0.4, WaitBehavior.IgnoreCondition);
+    }
+    else{
+        // play teleport blast
+        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, ep, eachEffectTextSize);
+        // hide teleport beam effect
+        DestroyEffect(telBeam);
+    }
+}
+
+playervar define telBeam!;
+
+void TeleportWithEffect() playervar "TeleportWithEffect"{
     Wait(SlotOf(ep) * 0.1, WaitBehavior.AbortWhenFalse);
     // show pre teleport effect
     PlayTeleportEffect(true);
@@ -893,22 +922,8 @@ void TeleportWithEffect()"TeleportWithEffect"{
     Teleport(ep, teleportPosition);
     // show teleport effect
     PlayTeleportEffect(false);
-}
-
-void PlayTeleportEffect(define isBefore!)"PlayTeleportEffect"{
-    // if before teleport
-    if(isBefore){
-        // play teleport shadow of own
-        PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, ep, 1);
-        // play teleport shadow of dest
-        PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, teleportPosition, 1);
-        // wait for show teleport shadow of before
-        Wait(0.4, WaitBehavior.IgnoreCondition);
-    }
-    else{
-        // play teleport blast
-        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, ep, eachEffectTextSize);
-    }
+    // hide teleport beam effect
+    DestroyEffect(telBeam);
 }
 
 define forceActiveTeleport: 30;
@@ -1039,22 +1054,16 @@ rule: "EnemyBot/EnemyAbility/combatTeleport"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    IsGameInProgress() &&
+    (enemyType == EnemyType.GiantBoss || enemyType == EnemyType.Boss)&&
     IsAlive() &&
-    enemyType == EnemyType.GiantBoss &&
-    actionState == ActionState.Attack
+    actionState == ActionState.Attack &&
+    IsGameInProgress()
 ){
-    Wait(RandomReal(10, 20), WaitBehavior.AbortWhenFalse);
-    // set teleport position to player around
-    if(SetTeleportPositionToObjectAhead()){
-        define telBeam!;
-        // teleport with beam effect
-        DestroyEffect(telBeam);
-        telBeam = CreateBeamEffect(AllPlayers(),
-            BeamType.BadBeam, Midpoint(EyePosition(), PositionOf()), teleportPosition,
-            Color.Purple, EffectRev.VisibleToPositionAndRadius);
+    define teleportWaitSecond! = NormalizedHealth() * 10;
+    Wait(RandomReal(teleportWaitSecond, teleportWaitSecond + 3), WaitBehavior.AbortWhenFalse);
+    // set teleport position to object around
+    if(SetTeleportPositionToObjectArround()){
         TeleportWithEffect();
-        DestroyEffect(telBeam);
     }
     LoopIfConditionIsTrue();
 }
