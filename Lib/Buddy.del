@@ -19,100 +19,104 @@ if(
     IsAlive() &&
     actionState == ActionState.Non
 ){
-    // try follow loop
-    for(define notHasLineSecond! = 0; notHasLineSecond < followTryMaxCount; notHasLineSecond ++){
-        Wait(followTryIntervalSecond, WaitBehavior.AbortWhenFalse);
-
-        if(
-            // has not target
-            followTarget == null ||
-            ProbabilityTrue(25)
-        ){
-            if(
-                // has support target
-                actionState == ActionState.Support &&
-                target != 0
-            ){
-                // get target player
-                followTarget = target;
-                followerText = <"following <0>", followTarget>;
-            }
-            else{
-                // get alive player near me
-                followTarget =
-                    FirstOf(
-                        SortedArray(
-                            FilteredArray(
-                                AllLivingPlayers(playerTeam),
-                                (
-                                    !IsDummyBot(ae) &&
-                                    HasSpawned(ae) &&
-                                    IsAlive(ae)
-                                )
-                            ), DistanceBetween(ae, ep)));
-                
-                // not find player
-                if(followTarget == null){
-                    // game in progress
-                    if(IsGameInProgress()){
-                        // get object
-                        followTarget = CurrentObjectPosition();
-                        followerText = <"following object">;
-                    }
-                    else{
-                        // get spawn point
-                        followTarget = SpawnPoints(playerTeam)[0];
-                        followerText = <"following spawn point">;
-                    }
-                }
-                else{
-                    followerText = <"following <0>", followTarget>;
-                }
-            }
+    // get alive player near me
+    followTarget =
+        FirstOf(
+            SortedArray(
+                FilteredArray(
+                    AllLivingPlayers(playerTeam),
+                    (
+                        !IsDummyBot(ae) &&
+                        HasSpawned(ae) &&
+                        IsAlive(ae)
+                    )
+                ), DistanceBetween(ae, ep)));
+    
+    // not find player
+    if(followTarget == null){
+        // game in progress
+        if(IsGameInProgress()){
+            // set object as followTarget
+            followTarget = CurrentObjectPosition();
+            followerText = <"following object">;
         }
+        else{
+            // set spawn point as followTarget
+            followTarget = SpawnPoints(playerTeam)[0];
+            followerText = <"following spawn point">;
+        }
+    }
+    else{
+        // set player as followTarget
+        followerText = <"following <0>", followTarget>;
+    }
 
-        // follow 
+    // try follow loop
+    define notHasLineSecond!;
+    for(notHasLineSecond = 0; notHasLineSecond < followTryMaxCount; notHasLineSecond ++){
+        // get distance to followTarget
         define dist! = DistanceBetween(ep, followTarget);
+        // is in follow range
         if(
             // near followTarget
             dist <= followRange &&
             // has line followTarget
             IsInLineOfSight(ep, followTarget)
         ){
+            // reset walk fast
             SetMoveSpeed(ep, 100);
             // stop follow
             StopMove();
             // reset try count
-            LoopIfConditionIsTrue();           
+            break;           
         }
+        // is out follow range
         else if(dist < followRange * 5){
-            // follow by walk
+            // set walk fast
+            SetMoveSpeed(ep, 100 + (dist * 15));
+            // walk to followTarget
             SetFacing(
                 ep,
                 DirectionTowards(ep, followTarget),
                 Relative.ToWorld);
-
-            SetMoveSpeed(ep, 100 + (dist * 15));
             moveDir = Forward();
             StartMove();
+            if(ProbabilityTrue(30)){
+                PressButton(ep, Button.Jump);
+            }
+            // wait
+            Wait(followTryIntervalSecond, WaitBehavior.AbortWhenFalse);
+            // count up try count
+            continue;
         }
+        // is more out follow range
         else{
-            // follow by teleport
+            // teleport
+            Teleport(ep,
+                NearestWalkablePosition(
+                    BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRange)
+                )
+            );
+            // reset try count
             break;
-        }
+        } 
     }
 
-    // try follow count over
-    Teleport(ep,
-        NearestWalkablePosition(
-            BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRange)
-        )
-    );
-    
+    // try count over
+    if(notHasLineSecond >= followTryMaxCount){
+        // teleport
+        Teleport(ep,
+            NearestWalkablePosition(
+                BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRange)
+            )
+        );
+    }
+
+    Wait(1, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
-rule: "Buddy/Teleport/followPlayer"
+rule: "Buddy/Teleport/unfollowPlayer"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
