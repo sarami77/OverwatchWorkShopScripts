@@ -1054,7 +1054,7 @@ rule: "EnemyBot/EnemyAbility/combatTeleport"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    (enemyType == EnemyType.GiantBoss || enemyType == EnemyType.Boss)&&
+    enemyType == EnemyType.GiantBoss &&
     IsAlive() &&
     actionState == ActionState.Attack &&
     IsGameInProgress()
@@ -1338,11 +1338,11 @@ if(
 // TAG Debug ----------
 rule: "Debug/defaultDebugMode"
 Event.OngoingGlobal
+Team.All
 if(
     initCompleted
 ){
     debugMode = DebugMode.SlowLevelOnly;
-    DisableInspectorRecording();
     ShowDebugHud(HostPlayer());
 }
 
@@ -1369,73 +1369,39 @@ if(
         debugMode = DebugMode.Non;
     }
 
-    if(debugMode == DebugMode.Non){
-        DisableInspectorRecording();
-        HideDebugHud();
-    }
-    else if(debugMode == DebugMode.SlowLevelOnly){
-        DisableInspectorRecording();
-        HideDebugHud();
-        ShowDebugHud(HostPlayer());
-    }
-    else if(debugMode == DebugMode.ShowParam){
-        DisableInspectorRecording();
-        HideDebugHud();
-        ShowDebugHud(HostPlayer());
-    }
-    else if(debugMode == DebugMode.WithRecord){
-        EnableInspectorRecording();
-        HideDebugHud();
-        ShowDebugHud(HostPlayer());
-    }
+    // reload hud
+    HideDebugHud();
+    ShowDebugHud(HostPlayer());
 }
 
 define End(): CountOf(debugHudEntitys);
-define botOfEnemyType(define enemyType!): FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == enemyType));
+define botOfEnemyType(define enemyType): FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == enemyType));
 globalvar define debugHudEntitys!;
 
 // show debug icon and hud
 void ShowDebugHud(define player!)"ShowDebugHud"{
     if(
+        debugMode == DebugMode.WithRecord
+    ){
+        EnableInspectorRecording();
+        CreateHudText(player,
+            null,
+            null,
+            "● Recording",
+            Location.Left, -1,
+            Color.White, Color.White, Color.Red,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
+    }
+    else{
+        DisableInspectorRecording();
+    }
+    
+    if(
+        debugMode == DebugMode.SlowLevelOnly ||
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
     ){
-        if(
-            debugMode == DebugMode.WithRecord
-        ){
-            CreateHudText(player,
-                null,
-                null,
-                "● Recording",
-                Location.Left, -1,
-                Color.White, Color.White, Color.Red,
-                HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-            debugHudEntitys[End()] = LastTextID();
-        }
-        
-        if(
-            debugMode == DebugMode.ShowParam ||
-            debugMode == DebugMode.WithRecord
-        ){
-            CreateHudText(player,
-                null,
-                <"<0> <1>", "Server Load Average", ServerLoadAverage()>,
-                null,
-                Location.Left, -1,
-                Color.White, Color.Orange, Color.White,
-                HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-            debugHudEntitys[End()] = LastTextID();
-
-            CreateHudText(player,
-                null,
-                <"<0> <1>", "Server Load Peak", ServerLoadPeak()>,
-                null,
-                Location.Left, -1,
-                Color.White, Color.Orange, Color.White,
-                HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-            debugHudEntitys[End()] = LastTextID();
-        }
-
         CreateHudText(player,
             null,
             <"<0> <1>", "Server Load", ServerLoad()>,
@@ -1448,6 +1414,29 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         CreateHudText(player,
             null,
             <"<0> <1>", "game Logic Speed", gameLogicSpeed>,
+            null,
+            Location.Left, -1,
+            Color.White, Color.Orange, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
+    }
+
+    if(
+        debugMode == DebugMode.ShowParam ||
+        debugMode == DebugMode.WithRecord
+    ){
+        CreateHudText(player,
+            null,
+            <"<0> <1>", "Server Load Average", ServerLoadAverage()>,
+            null,
+            Location.Left, -1,
+            Color.White, Color.Orange, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
+
+        CreateHudText(player,
+            null,
+            <"<0> <1>", "Server Load Peak", ServerLoadPeak()>,
             null,
             Location.Left, -1,
             Color.White, Color.Orange, Color.White,
