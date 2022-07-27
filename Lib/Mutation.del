@@ -1,0 +1,125 @@
+import "Utility.del";
+import "Perk/PerkCore.del";
+
+rule: "Mutation/buildLotteryMutationList"
+Event.OngoingGlobal
+{
+    lotteryMutationListOrder = 0;
+    lotteryMutationList = [];     // TAG lottery perk list
+    addLottelyMutation(MutaiotType.LowGravity,   WorkshopSettingInteger("Mutation Settings", "(Low Gravity) Lottery Rate",            1, 0, 100, 0));   lotteryMutationListOrder++;
+    addLottelyMutation(MutaiotType.NoCoolDown,   WorkshopSettingInteger("Mutation Settings", "(No Cool Down) Lottery Rate",           1, 0, 100, 1));   lotteryMutationListOrder++;
+    addLottelyMutation(MutaiotType.ShotCall,     WorkshopSettingInteger("Mutation Settings", "(Shot Call) Lottery Rate",              1, 0, 100, 2));   lotteryMutationListOrder++;
+    addLottelyMutation(MutaiotType.AllGenji,     WorkshopSettingInteger("Mutation Settings", "(All Ganji) Lottery Rate",              1, 0, 100, 3));   lotteryMutationListOrder++;
+}
+
+enum MutaiotType{
+    Non,
+    LowGravity,
+    NoCoolDown,
+    ShotCall,
+    AllGenji
+}
+
+globalvar define currentMutationType!;
+globalvar define lotteryMutationList!;
+globalvar define lotteryMutationListOrder!;
+
+void addLottelyMutation(define mutation!, define count!)"addLottelyMutation"{
+    for(define countIdx! = 0; countIdx < count; countIdx++)
+        lotteryMutationList[CountOf(lotteryMutationList)] = mutation;
+}
+
+
+rule: "Mutation/controlMutation"
+Event.OngoingGlobal
+if(
+    // initCompleted
+    true
+){
+    currentMutationType = MutaiotType.Non;
+    Wait(RandomReal(120, 180), WaitBehavior.AbortWhenFalse);
+    currentMutationType = RandomValueInArray(lotteryMutationList);
+    LoopIfConditionIsTrue();
+}
+
+globalvar define mutationTargets;
+
+// ----- LowGravity -----
+rule: "Mutation/LowGravity/activate"
+Event.OngoingGlobal
+if(
+    currentMutationType == MutaiotType.LowGravity
+){
+    mutationTargets = AllPlayers();
+    SetGravity(mutationTargets, 50);
+    WaitUpdateASecond();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Mutation/LowGravity/deactivate"
+Event.OngoingGlobal
+if(
+    currentMutationType != MutaiotType.LowGravity
+){
+    mutationTargets = AllPlayers();
+    SetGravity(mutationTargets, DefaultPercentage());
+}
+
+// ----- NoCoolDown -----
+rule: "Mutation/NoCoolDown/activate"
+Event.OngoingGlobal
+if(
+    currentMutationType == MutaiotType.NoCoolDown
+){
+    mutationTargets = AllPlayers();
+    SetAbilityCooldown(mutationTargets, Button.Ability1, 0);
+    SetAbilityCooldown(mutationTargets, Button.Ability2, 0);
+    SetAbilityCooldown(mutationTargets, Button.SecondaryFire, 0);
+    SetAbilityCooldown(mutationTargets, Button.PrimaryFire, 0);
+    SetAbilityCooldown(mutationTargets, Button.Jump, 0);
+    WaitUpdateASecond();
+    LoopIfConditionIsTrue();
+}
+
+// ----- ShotCall -----
+rule: "Mutation/NoCoolDown/activate"
+Event.OngoingGlobal
+if(
+    currentMutationType == MutaiotType.ShotCall
+){
+    mutationTargets = AllPlayers();
+    SetUltimateCharge(mutationTargets, 100);
+    Wait(RandomReal(30, 60), WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
+}
+
+// ----- AllGenji -----
+playervar define mu_originalHero;
+
+rule: "Mutation/AllGenji/activate"
+Event.OngoingGlobal
+if(
+    currentMutationType == MutaiotType.AllGenji
+){
+    mutationTargets = AllPlayers();
+    for(define mtIndex! = 0; mtIndex < CountOf(mutationTargets); mtIndex++){
+        mutationTargets[mtIndex].mu_originalHero = HeroOf(mutationTargets[mtIndex]);
+    }
+    ForcePlayerHero(mutationTargets, Hero.Genji);
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+
+    SetUltimateCharge(mutationTargets, 100);
+    PressButton(ep, Button.Ultimate);
+}
+
+rule: "Mutation/AllGenji/deactivate"
+Event.OngoingGlobal
+if(
+    currentMutationType != MutaiotType.AllGenji
+){
+    mutationTargets = AllPlayers();
+    for(define mtIndex! = 0; mtIndex < CountOf(mutationTargets); mtIndex++){
+        ForcePlayerHero(mutationTargets[mtIndex], mutationTargets[mtIndex].mu_originalHero);
+    }
+    StopForcingHero(mutationTargets);
+}
