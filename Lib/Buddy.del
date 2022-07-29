@@ -31,27 +31,48 @@ if(
                         IsAlive(ae)
                     )
                 ), DistanceBetween(ae, ep)));
-    
-    // not find player
-    if(followTarget == null){
-        // game in progress
-        if(IsGameInProgress()){
-            // set object as followTarget
-            followTarget = CurrentObjectPosition();
-            followerText = <"following object">;
-        }
-        else{
-            // set spawn point as followTarget
+
+    // not game in proress
+    if(!IsGameInProgress()){        
+        // not find player
+        if(followTarget == null){
+            // force set spawn point as followTarget
             followTarget = SpawnPoints(playerTeam)[0];
-            followerText = <"following spawn point">;
         }
     }
     else{
-        // set player as followTarget
-        followerText = <"following <0>", followTarget>;
+        if(
+            // near or has line to object
+            DistanceBetween(ep, CurrentObjectPosition()) <= 30 ||
+            IsInLineOfSight(ep, CurrentObjectPosition())
+        ){
+            // set object as followTarget
+            followTarget = CurrentObjectPosition();
+        }
+        else{            
+            // not find player
+            if(followTarget == null){
+                // force set object as followTarget
+                followTarget = CurrentObjectPosition();
+            }
+        }
     }
 
-    // try follow loop
+    // set text
+    if(followTarget == CurrentObjectPosition()){
+        followerText = <"following object">;
+    }
+    else if(followTarget == SpawnPoints(playerTeam)[0]){
+        followerText = <"following spawn point">;
+    }
+    else if(followTarget != null){
+        followerText = <"following <0>", followTarget>;
+    }
+    else{
+        followerText = <"No following">;
+    }
+
+    // try follow movement by loop
     define notHasLineSecond!;
     for(notHasLineSecond = 0; notHasLineSecond < followTryMaxCount; notHasLineSecond ++){
         // get distance to followTarget
@@ -125,6 +146,7 @@ if(
     IsAlive() &&
     actionState != ActionState.Non
 ){
+    followerText = <"in combat">;
     SetMoveSpeed(ep, 100);
 }
 
