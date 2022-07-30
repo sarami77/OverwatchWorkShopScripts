@@ -711,7 +711,7 @@ if(
             Color.White, portalPosition, MaxLength()
         );
         // show got life sound message
-        BigMessage(AllPlayers(), "We earned extra team lives!");
+        BigMessage(AllPlayers(), "We earned 1 team lives!");
         // add life
         teamLives += 1;
     }
@@ -947,21 +947,20 @@ if(
     define candidatePosition;
     for(define retryCount = 0; retryCount < 30; retryCount++){
         define basePosition! = Midpoint(SpawnPoints(playerTeam)[0], SpawnPoints(enemyTeam)[0]);
-        define distance! = DistanceBetween(SpawnPoints(playerTeam)[0], SpawnPoints(enemyTeam)[0]) / 2;
+        define baseDistance! = DistanceBetween(SpawnPoints(playerTeam)[0], SpawnPoints(enemyTeam)[0]) / 2;
         // select random positon from map
-        candidatePosition = NearestWalkablePosition(
+        candidatePosition =
             basePosition +
             RandomPosition(
-                distance * 1.2,
-                distance * 0.5,
-                distance * 1.2
-            )
-        );
+                baseDistance * 1.2,
+                baseDistance * 0.5,
+                baseDistance * 1.2
+            );
 
         // convert to walkble position
         candidatePosition = NearestWalkablePosition(candidatePosition);
         // move candidate postion in the direction of player for avoiding map edge
-        candidatePosition += DirectionTowards(candidatePosition, basePosition) * RandomReal(1, distance / 4);
+        candidatePosition += DirectionTowards(candidatePosition, basePosition) * RandomReal(1, baseDistance / 4);
         // convert to walkble position
         candidatePosition = NearestWalkablePosition(candidatePosition);
 
@@ -973,7 +972,7 @@ if(
         ){
             break;
         }
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
+        Wait(1, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     // confirm as portal position
@@ -1389,8 +1388,8 @@ if(
 
         eachDealtDamageScale = 3.0;
         eachChargeUltInterval = 5;
-        eachMaxSpawnInterval = 27;
-        eachMinSpawnInterval = 9;
+        eachMaxSpawnInterval = 30;
+        eachMinSpawnInterval = 10;
 
         eachNameText = "Big Boss";
         eachNameColor = Color.Purple;
@@ -1535,7 +1534,7 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
         ){
             break;
         }
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
+        Wait(1, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     return true;
@@ -1549,10 +1548,10 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
         return true;
     }
 
-    define telPosNearTarget! = ClosestPlayerToTelPos;
-    define distFromWP! = NearestWalkablePosition(telPosNearTarget);
-
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        define telPosNearTarget! = ClosestPlayerToTelPos;
+        define distFromWP! = NearestWalkablePosition(telPosNearTarget);
+
         // target on walkable position
         if(DistanceBetween(PositionOf(telPosNearTarget), distFromWP) <= 1){
             // select position and adjust NearestWalkablePosition;
@@ -1580,6 +1579,7 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
             // slide teleportPosition to targer for avoid map surface edge
             teleportPosition += DirectionTowards(teleportPosition, teleportToTarget);
         }
+
         // select random and adjust 
         if(
             // Not too close to telPosNearTarget
@@ -1600,7 +1600,7 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
         ){
             break;
         }
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
+        Wait(1, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     return true;
@@ -1826,11 +1826,12 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.UnderAttack
 ){
-    Wait(RandomReal(1, 60), WaitBehavior.AbortWhenFalse);
+    define shotCallInterval! = 60;
+    Wait(shotCallInterval, WaitBehavior.AbortWhenFalse);
 
     dbgMsg("shotCall start");
     define scList! = AllLivingPlayers(enemyTeam);
-    define scDelay! = RandomReal(0.1, 2);
+    define scDelay! = RandomReal(0, 1);
     for(define scLoopIndex! = 0; scLoopIndex < CountOf(scList); scLoopIndex ++){
         SetUltimateCharge(scList[scLoopIndex], 100);
         PressButton(scList[scLoopIndex], Button.Ultimate);
@@ -1846,10 +1847,12 @@ Event.OngoingGlobal
 if(
     portalState == PortalState.UnderAttack
 ){
-    Wait(RandomReal(1, 60), WaitBehavior.AbortWhenFalse);
+    define rushInterval! = 30;
+    Wait(rushInterval, WaitBehavior.AbortWhenFalse);
 
     dbgMsg("rush start");
-    for(define rushCount = RandomInteger(5, 20); rushCount > 0; rushCount--){
+    define rushCount! = RandomInteger(10, 30);
+    for(rushCount; rushCount > 0; rushCount--){
         Respawn(AllDeadPlayers(enemyTeam));
         Wait(1, WaitBehavior.AbortWhenFalse);
     }
@@ -1954,16 +1957,16 @@ globalvar define threatLevel!;
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
     confirmDealtDamage =
-        WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 5.0, 0, 1000, -9);
+        WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 6.0, 0, 1000, -9);
     // add team health balance
     confirmDealtDamage += GetTeamNormalizedHealth() * 
-        WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage By Player Team Total Health", 15.0, 0, 1000, -8);
+        WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage By Player Team Total Health", 20.0, 0, 1000, -8);
     // add round progress
     confirmDealtDamage += roundNo *
-        WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 1.0, 0, 1000, -7);
+        WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Round", 2.0, 0, 1000, -7);
     // add team lives balance
-    confirmDealtDamage += teamLives *
-        WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Team lives", 1.0, 0, 1000, -6);
+    // confirmDealtDamage += teamLives *
+    //     WorkshopSettingReal("Enemy Bot Settings", "Increase Deal Damage Per Team lives", 1.0, 0, 1000, -6);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(0.75, playerTeam);
     // set threat Level
