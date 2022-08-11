@@ -327,7 +327,6 @@ define assetList:
             [EnemyType.Minion,      RandomHero,         8]
         ],
 
-        /*
         [
             "clones",
             [EnemyType.Boss,        someHero, 		    1],
@@ -343,7 +342,6 @@ define assetList:
             "10 elites clones",
             [EnemyType.Elite,       someHero, 		    10]
         ],
-        */
         
         [
             "giant boss",
@@ -359,7 +357,9 @@ define assetList:
             "giant boss",
             [EnemyType.GiantBoss,   RandomSupportHero,  1],
             [EnemyType.Minion,      RandomSupportHero,  10]
-        ],
+        ]
+
+        /*
 
         // specificatied hero
         [
@@ -520,6 +520,7 @@ define assetList:
             [EnemyType.Elite,       Hero.Junkrat, 		5],
             [EnemyType.Minion,      Hero.Tracer, 		10]
         ]
+        */
     ];
 
 globalvar define someHero!;
@@ -910,6 +911,9 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
         PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, ep, eachEffectTextSize);
         // hide teleport beam effect
         DestroyEffect(telBeam);
+        // play teleport sound
+        PlayEffect(AllPlayers(), PlayEffect.RingExplosionSound, null,
+        ep, 75);
     }
 }
 
@@ -1023,7 +1027,7 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    define shotCallInterval! = (1 - (TotalObjectProgress() / 100)) * 50;
+    define shotCallInterval! = (1 - (TotalObjectProgress() / 100)) * 60;
     Wait(shotCallInterval + 20, WaitBehavior.AbortWhenFalse);
 
     dbgMsg("shotCall start");
@@ -1045,11 +1049,11 @@ if(
     IsGameInProgress() &&
     !IsOverTime()
 ){
-    define rushInterval! = (1 - (TotalObjectProgress() / 100)) * 50;
+    define rushInterval! = (1 - (TotalObjectProgress() / 100)) * 60;
     Wait(rushInterval + 20, WaitBehavior.AbortWhenFalse);
 
     dbgMsg("rush start");
-    define rushCount! = RandomInteger(10, 20);
+    define rushCount! = 10;
     for(rushCount; rushCount > 0; rushCount--){
         Respawn(AllDeadPlayers(enemyTeam));
         Wait(1, WaitBehavior.AbortWhenFalse);
@@ -1246,6 +1250,8 @@ globalvar define autoTuneDmgDlt!;
 
 globalvar define upTuneScale = WorkshopSettingReal("Enemy Bot Settings", "Difficult Scale", 1.0, 0, 1000, 0);
 
+define internalRate: 0.2;
+
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
 if(
@@ -1253,16 +1259,16 @@ if(
     Attacker() != ep
 ){
     if(enemyType == EnemyType.Minion){
-        autoTuneDmgDlt += 0.5 * 0.1 * upTuneScale;
+        autoTuneDmgDlt += 0.25 * internalRate * upTuneScale;
     }
     else if(enemyType == EnemyType.Elite){
-        autoTuneDmgDlt += 2.0 * 0.1 * upTuneScale;
+        autoTuneDmgDlt += 1.0 *  internalRate * upTuneScale;
     }
     else if(enemyType == EnemyType.Boss){
-        autoTuneDmgDlt += 10.0 * 0.1 * upTuneScale;
+        autoTuneDmgDlt += 10.0 * internalRate * upTuneScale;
     }
     else if(enemyType == EnemyType.GiantBoss){
-        autoTuneDmgDlt += 10.0 * 0.1 * upTuneScale;
+        autoTuneDmgDlt += 10.0 * internalRate * upTuneScale;
     }
 }
 
@@ -1342,6 +1348,51 @@ if(
         isBlink = !isBlink;
         Wait(0.15, WaitBehavior.AbortWhenFalse); 
     }
+}
+
+// TAG LastStand ----------
+rule: "LastStand/lastStand"
+Event.OngoingGlobal
+if(
+    IsGameInProgress() &&
+    MatchTime() <= 0
+){
+    BigMessage(AllPlayers(), "Final Stand !");
+    SetSlowMotion(10);
+    Wait(0.3, WaitBehavior.AbortWhenFalse);   // show slow
+
+    Resurrect(AllPlayers());
+    Heal(AllPlayers(), null, MaxValue());
+    SetUltimateCharge(AllPlayers(), DefaultPercentage());
+
+    Wait(0.2, WaitBehavior.AbortWhenFalse);   // show slow
+    SetSlowMotion(100);
+
+
+    /*
+    define buttons = [
+        Button.PrimaryFire,
+        Button.SecondaryFire,
+        Button.Ability1,
+        Button.Ability2, 
+        Button.Jump,
+        Button.Crouch
+    ];
+    for(define ls_idx! = 0; ls_idx < CountOf(buttons); ls_idx++){
+        SetAbilityCooldown(AllPlayers(), buttons[ls_idx], 0);
+        SetAbilityCharge(AllPlayers(), buttons[ls_idx], 3);
+        SetAbilityResource(AllPlayers(), buttons[ls_idx], 100);
+    }
+    */
+
+    define scList! = AllPlayers(enemyTeam);
+    define scDelay! = RandomReal(0, 1);
+    for(define scLoopIndex! = 0; scLoopIndex < CountOf(scList); scLoopIndex ++){
+        SetUltimateCharge(scList[scLoopIndex], 100);
+        PressButton(scList[scLoopIndex], Button.Ultimate);
+        Wait(scDelay, WaitBehavior.AbortWhenFalse);
+    }
+
 }
 
 // TAG Debug ----------
