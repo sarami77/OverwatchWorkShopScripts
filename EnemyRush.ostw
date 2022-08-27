@@ -96,7 +96,7 @@ if(
             Hero.Moira,
             Hero.Hanzo,
             Hero.Zarya,
-            Hero.Zenyatta,
+            Hero.Baptiste,
             Hero.Reaper
         ];
 
@@ -104,7 +104,7 @@ if(
     buddyList = ArraySlice(buddyList, 0,
         WorkshopSettingInteger(
             "Follower AI Settings(Join on behalf of absent player)",
-            "Follower Max Num", 5, 0, 8, 1)
+            "Follower Max Num", 8, 0, 8, 1)
     );
 
     define prevPlayerNum! = -1;
@@ -118,7 +118,7 @@ if(
                     AllPlayers(playerTeam),
                     !IsDummyBot(ae)));
 
-        define needBuddyNum = 
+        define needBuddyNum! = 
             Min(
                 maxSlotNum - playerNum,
                 maxBuddyNum);
@@ -293,20 +293,20 @@ define assetList:
             [EnemyType.Minion,      RandomHero,         15]
         ],
         [
-            "10 elites",
-            [EnemyType.Elite,       RandomHero,         3],
-            [EnemyType.Elite,       RandomHero,         3],
+            "12 elites",
+            [EnemyType.Elite,       RandomHero,         4],
+            [EnemyType.Elite,       RandomHero,         4],
             [EnemyType.Elite,       RandomHero,         4]
         ],
         [
-            "10 elites",
-            [EnemyType.Elite,       RandomHero,         3],
-            [EnemyType.Elite,       RandomHero,         3],
+            "12 elites",
+            [EnemyType.Elite,       RandomHero,         4],
+            [EnemyType.Elite,       RandomHero,         4],
             [EnemyType.Elite,       RandomHero,         4]
         ],        [
-            "10 elites",
-            [EnemyType.Elite,       RandomHero,         3],
-            [EnemyType.Elite,       RandomHero,         3],
+            "12 elites",
+            [EnemyType.Elite,       RandomHero,         4],
+            [EnemyType.Elite,       RandomHero,         4],
             [EnemyType.Elite,       RandomHero,         4]
         ],
         [
@@ -339,8 +339,8 @@ define assetList:
             [EnemyType.Elite,       someHero, 		    8]
         ],
         [
-            "10 elites clones",
-            [EnemyType.Elite,       someHero, 		    10]
+            "12 elites clones",
+            [EnemyType.Elite,       someHero, 		    12]
         ],
         
         [
@@ -504,7 +504,7 @@ define assetList:
         ],
         [
             "gunmans",
-            [EnemyType.Elite,       Hero.Cassidy, 		14]
+            [EnemyType.Elite,       Hero.Cassidy, 		12]
         ],
         [
             "Explodes",
@@ -539,7 +539,7 @@ if(
     define list! = AllPlayers(enemyTeam);
     for(gLoopIndex = 0; gLoopIndex < CountOf(list); gLoopIndex ++){
         PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor,
-            list[gLoopIndex], list[gLoopIndex].eachEffectTextSize);
+            PositionOf(list[gLoopIndex]), list[gLoopIndex].eachEffectTextSize);
     }
     Wait(showDeadEffectTime * 2, WaitBehavior.IgnoreCondition);
 
@@ -1242,10 +1242,9 @@ if(
 
 // TAG EnemyBot/DealtDamage ----------
 playervar define confirmDealtDamage!;
-globalvar define threatLevel!;
 globalvar define autoTuneDmgDlt!;
 
-globalvar define upTuneScale = WorkshopSettingReal("Enemy Bot Settings", "Difficult Scale", 1.0, 0, 1000, 0);
+globalvar define autoTuneScale = WorkshopSettingReal("Enemy Bot Settings", "Difficult Scale", 1.0, 0, 1000, 0);
 
 define internalRate: 0.2;
 
@@ -1256,16 +1255,16 @@ if(
     Attacker() != ep
 ){
     if(enemyType == EnemyType.Minion){
-        autoTuneDmgDlt += 0.25 * internalRate * upTuneScale;
+        autoTuneDmgDlt += 0.25 * internalRate * autoTuneScale;
     }
     else if(enemyType == EnemyType.Elite){
-        autoTuneDmgDlt += 1.0 *  internalRate * upTuneScale;
+        autoTuneDmgDlt += 1.0 *  internalRate * autoTuneScale;
     }
     else if(enemyType == EnemyType.Boss){
-        autoTuneDmgDlt += 10.0 * internalRate * upTuneScale;
+        autoTuneDmgDlt += 10.0 * internalRate * autoTuneScale;
     }
     else if(enemyType == EnemyType.GiantBoss){
-        autoTuneDmgDlt += 10.0 * internalRate * upTuneScale;
+        autoTuneDmgDlt += 10.0 * internalRate * autoTuneScale;
     }
 }
 
@@ -1277,6 +1276,8 @@ if(
 ){
     autoTuneDmgDlt -= 1.0;
 }
+
+globalvar define threatLevel!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
@@ -1476,6 +1477,15 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
             Color.White, Color.Orange, Color.White,
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
+
+        CreateHudText(player,
+            null,
+            <"<0> <1>", "auto Tune Dmg Dlt", autoTuneDmgDlt>,
+            null,
+            Location.Left, -1,
+            Color.White, Color.Red, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
     }
 
     if(
@@ -1497,15 +1507,6 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
             null,
             Location.Left, -1,
             Color.White, Color.Orange, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
-
-        CreateHudText(player,
-            null,
-            <"<0> <1>", "auto Tune Dmg Dlt", autoTuneDmgDlt>,
-            null,
-            Location.Left, -1,
-            Color.White, Color.Red, Color.White,
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
     }
