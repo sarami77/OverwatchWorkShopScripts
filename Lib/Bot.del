@@ -624,17 +624,20 @@ define FindSupportTarget():
 
 define changeTargetProbForAttack: 50;
 
+define WaitRandomForReduceServerLoad(){
+    if(isServerOverLoading()){
+        WaitUntilServerFree();
+        Wait(RandomReal(1, watchUpdateRate), WaitBehavior.AbortWhenFalse);
+    }
+}
+
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
     HasSpawned()
 ){
-    // distribute serverload
-    if(isServerOverLoading()){
-        Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
-    }
-
+    WaitRandomForReduceServerLoad();
     // get next state
     define nextActionState!;
     // is dead
@@ -749,7 +752,7 @@ if(
     }
 
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    WaitUntilServerFree();
+    WaitRandomForReduceServerLoad();
     LoopIfConditionIsTrue();
 }
 
@@ -785,17 +788,18 @@ if(
     if(
         actionState == ActionState.Non
     ){
+        // no wait
         // set attacker to target
         target = Attacker();
         actionState = ActionState.Attack;
     }
     // change target dependent on attack target helth & attack prob
     else{
-        Wait(0.25, WaitBehavior.RestartWhenTrue);
         if(ProbabilityTrue(NormalizedHealth(target) * changeTargetProbForAttack)){
             target = Attacker();
             actionState = ActionState.Attack;
         }
+        Wait(1.0, WaitBehavior.IgnoreCondition);
     }
 }
 
@@ -805,7 +809,6 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Attack
 ){
-    Wait(0.25, WaitBehavior.AbortWhenFalse);
     define nearFriends! = FilteredArray(
         PlayersWithinRadius(
             ep, 10, TeamOf(), RadiusLOS.Off
@@ -820,8 +823,8 @@ if(
     for(pLoopIndex = 0; pLoopIndex < CountOf(nearFriends); pLoopIndex ++){
         nearFriends[pLoopIndex].actionState = ep.actionState;
         nearFriends[pLoopIndex].target = ep.target;
+        Wait(0.25, WaitBehavior.AbortWhenFalse);
     }
-    dbgPlyEft(ep);
 }
 
 playervar define actionState;
@@ -1056,7 +1059,7 @@ if(
             Relative.ToWorld);
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-        WaitUntilServerFree();
+        WaitRandomForReduceServerLoad();
     }    // action loop
 }
 
@@ -1103,7 +1106,7 @@ if(
         checkAndBreakStuck();
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-        WaitUntilServerFree();
+        WaitRandomForReduceServerLoad();
     }    // action loop
 
 }
@@ -1146,7 +1149,7 @@ if(
         checkAndBreakStuck();
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-        WaitUntilServerFree();
+        WaitRandomForReduceServerLoad();
     }
 }
 
@@ -1174,6 +1177,20 @@ void heroAction(){
         (MaxAmmo(ep, 1) > 0 && Ammo(ep, 1) <= 0)
     ){
         PressButton(ep, Button.Reload);
+    }
+
+    // ashe's cancel fire when reloading
+    if(HeroOf() == Hero.Ashe){
+        if(
+            Ammo(ep, 0) <= MaxAmmo(ep, 0) / 2 ||
+            IsReloading()
+        ){
+                StopHoldingButton(ep, Button.PrimaryFire);
+                StopHoldingButton(ep, Button.SecondaryFire);
+                StopHoldingButton(ep, Button.Ability1);
+                StopHoldingButton(ep, Button.Ability2);
+                PressButton(ep, Button.Reload);
+        }
     }
 
     // hero unique action
