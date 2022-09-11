@@ -631,6 +631,20 @@ define WaitRandomForReduceServerLoad(){
     }
 }
 
+void ApplyNextActionState(define player!, define nextActionState!) playervar "ApplyNextActionState"{
+    // if state changed
+    if(nextActionState != player.actionState){
+        // next state is not Non state
+        if(nextActionState != ActionState.Non){
+            // set Non state for restart button control
+            player.actionState = ActionState.Changing;
+            WaitChangeState();
+        }
+        // set next state
+        player.actionState = nextActionState;
+    }
+}
+
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
 if(
@@ -640,12 +654,8 @@ if(
     WaitRandomForReduceServerLoad();
     // get next state
     define nextActionState!;
-    // is dead
-    if(IsDead()){
-        // Non state by dead
-        nextActionState = ActionState.Non; 
-    }
-    else
+    // is alive
+    if(IsAlive())
     { 
         // get targetSighted
         define targetSighted! =
@@ -738,22 +748,44 @@ if(
             nextActionState = ActionState.Non;
         }       
     }
-
-    // state changed
-    if(nextActionState != actionState){
-        // next state is not Non state
-        if(nextActionState != ActionState.Non){
-            // set Non state for restart button control
-            actionState = ActionState.Changing;
-            WaitChangeState();
-        }
-        // set next state
-        actionState = nextActionState;
+    else{
+        // Non state by dead
+        nextActionState = ActionState.Non; 
     }
+
+    // apply next state
+    ApplyNextActionState(ep, nextActionState);
 
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     WaitRandomForReduceServerLoad();
     LoopIfConditionIsTrue();
+}
+
+rule: "Bot/ActionState/ChangeTargetByDamageTaken"
+Event.OnDamageTaken
+if(
+    IsDummyBot() &&
+    Attacker() != target
+){
+    if(
+        actionState == ActionState.Non
+    ){
+        // no wait
+        // set attacker to target
+        target = Attacker();
+        // apply next state
+        ApplyNextActionState(ep, ActionState.Attack);
+    }
+    else{
+        // change target dependent on attack target helth & attack prob
+        if(ProbabilityTrue(NormalizedHealth(target) * changeTargetProbForAttack)){
+            // set attacker to target
+            target = Attacker();
+            // apply next state
+            ApplyNextActionState(ep, ActionState.Attack);
+        }
+        Wait(1.0, WaitBehavior.IgnoreCondition);
+    }
 }
 
 rule: "Bot/ActionState/ChangeTargetByTargetDead"
@@ -779,30 +811,6 @@ if(
     }
 }
 
-rule: "Bot/ActionState/ChangeTargetByDamageTaken"
-Event.OnDamageTaken
-if(
-    IsDummyBot() &&
-    Attacker() != target
-){
-    if(
-        actionState == ActionState.Non
-    ){
-        // no wait
-        // set attacker to target
-        target = Attacker();
-        actionState = ActionState.Attack;
-    }
-    // change target dependent on attack target helth & attack prob
-    else{
-        if(ProbabilityTrue(NormalizedHealth(target) * changeTargetProbForAttack)){
-            target = Attacker();
-            actionState = ActionState.Attack;
-        }
-        Wait(1.0, WaitBehavior.IgnoreCondition);
-    }
-}
-
 rule: "Bot/ActionState/NoticeAttackToNearFriends"
 Event.OngoingPlayer
 if(
@@ -821,9 +829,10 @@ if(
     );
     
     for(pLoopIndex = 0; pLoopIndex < CountOf(nearFriends); pLoopIndex ++){
-        nearFriends[pLoopIndex].actionState = ep.actionState;
         nearFriends[pLoopIndex].target = ep.target;
-        Wait(0.25, WaitBehavior.AbortWhenFalse);
+        ApplyNextActionState(nearFriends[pLoopIndex], ep.actionState);
+        // apply next state    
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
     }
 }
 
