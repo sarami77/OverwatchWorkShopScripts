@@ -411,6 +411,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Reaper:
         heroName = "Reaper";
         actionRange = ActionRange.Close;
+        primaryFireButtonPressMax = 20;
         ability2ButtonReleaseMax = 10;
         break;
 
@@ -592,7 +593,6 @@ define FindAttackTarget():
             FilteredArray(
                 AllPlayers(OppositeTeamOf(TeamOf())),
                 (
-                    HasSpawned(ae) &&
                     IsAlive(ae) &&
                     IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
                     !(
@@ -612,13 +612,14 @@ define FindSupportTarget():
                 AllPlayers(TeamOf()),
                 (
                     ae != ep &&
-                    ProbabilityTrue((1 - NormalizedHealth(ae)) * supportPrioloty) &&
-                    HasSpawned(ae) &&
                     IsAlive(ae) &&
-                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
+                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
+                    (
+                        ProbabilityTrue((1 - NormalizedHealth(ae)) * supportPrioloty)
+                    )
                 )
             ),
-            Health(ae) - MaxHealth(ae)
+            NormalizedHealth(ae)
         )
     );
 
@@ -847,18 +848,39 @@ void StopMove()"StopMove"{
     StopThrottleInDirection();
 } 
 
-void StartMove(){
-    if(moveDir != 0 && sideStepDir != 0){
-        StartMoveInDir(moveDir + sideStepDir);
-    }
-    else if(moveDir == 0 && sideStepDir != 0){
-        StartMoveInDir(sideStepDir);
-    }
-    else if(moveDir != 0 && sideStepDir == 0){
-        StartMoveInDir(moveDir);
+void StartMove() playervar "StartMove"{
+    define confirmMoveDir! = moveDir + sideStepDir;
+    define moveToPosition! = BlockedPositonByLocalVector(
+        confirmMoveDir,
+        walkMeterPerSec * watchUpdateRate
+    );
+    define isAbyss! = IsBelowAbyss(moveToPosition);
+
+    // dbgPlyBemEft(EyePosition(), moveToPosition);
+    // if(isAbyss) dbgPlyEft(moveToPosition);
+        
+    // move to position is abyss
+    if(
+        IsBelowAbyss(moveToPosition)
+    ){
+        StopMove();
     }
     else{
-        StopMove();
+        if(
+            confirmMoveDir != NoDirection()
+        ){
+            StartThrottleInDirection(
+                ep,
+                confirmMoveDir,
+                1,
+                Relative.ToPlayer,
+                ThrottleBehavior.ReplaceExistingThrottle,
+                ThrottleRev.DirectionAndMagnitude
+            );
+        }
+        else{
+            StopMove();
+        }
     }
 }
 
@@ -880,8 +902,8 @@ playervar define isInStuck;
 void checkAndBreakStuck() playervar "checkAndBreakStuck"{
     if(
         (   // has move
-            sideStepDir != 0 ||
-            moveDir != 0
+            sideStepDir != NoDirection() ||
+            moveDir != NoDirection()
         ) &&
         prevPosition != 0 &&
         DistanceBetween(ep, prevPosition) <= stuckRange    // not moved from prevPosition
@@ -908,7 +930,7 @@ void checkAndBreakStuck() playervar "checkAndBreakStuck"{
     }
 }
 
-void setMoveDir(define forwardIsAbyss!, define backwardIsAbyss!) playervar "setMoveDir"{
+void setMoveDir() playervar "setMoveDir"{
     // set move direction
     define distToTarget! = DistanceBetween(ep, target);
 
@@ -929,7 +951,7 @@ void setMoveDir(define forwardIsAbyss!, define backwardIsAbyss!) playervar "setM
         }
         else{
             // no moveDir
-            moveDir = 0;
+            moveDir = NoDirection();
         }
     }
     // support state
@@ -948,29 +970,19 @@ void setMoveDir(define forwardIsAbyss!, define backwardIsAbyss!) playervar "setM
         }
         else{
             // no moveDir
-            moveDir = 0;
+            moveDir = NoDirection();
         }
-    }
-
-    // check abyss
-    // can't forward
-    if(forwardIsAbyss && moveDir == Forward()){
-        moveDir = 0;
-    }
-    // can't backward
-    else if(backwardIsAbyss && moveDir == Backward()){
-        moveDir = 0;
     }
 }
 
-void setSideStep(define rightIsAbyss!, define leftIsAbyss!) playervar "setSideStep"{
-    // by own range or health
+void setSideStep() playervar "setSideStep"{
+    // by health
     if(
-        ProbabilityTrue(((1 - NormalizedHealth()) * 100) + 25)
+        ProbabilityTrue(((1 - NormalizedHealth()) * 100) + 50)
     ){
         // start sidestep
         // already has sidestep
-        if(sideStepDir != 0){
+        if(sideStepDir != NoDirection()){
             if(ProbabilityTrue(30)){
                 // reverse sidestep
                 sideStepDir = -sideStepDir;
@@ -988,32 +1000,17 @@ void setSideStep(define rightIsAbyss!, define leftIsAbyss!) playervar "setSideSt
             }
         }
 
-        // check abyss
         // first check right prob
         if(ProbabilityTrue(50)){
-            // can't right
-            if(rightIsAbyss && sideStepDir == Right()){
-                sideStepDir = Left();
-            }
-            // can't left too
-            if(leftIsAbyss && sideStepDir == Left()){
-                sideStepDir = 0;
-            }
+            sideStepDir = Left();
         }
         else{
-            // can't left
-            if(leftIsAbyss && sideStepDir == Left()){
-                sideStepDir = Right();
-            }
-            // can't right too
-            if(rightIsAbyss && sideStepDir == Right()){
-                sideStepDir = 0;
-            }
+            sideStepDir = Right();
         }
     }
     else{
         // stop sidestep
-        sideStepDir = 0;
+        sideStepDir = NoDirection();
     }
 }
 
@@ -1052,8 +1049,8 @@ if(
     // hero unique action
     heroAction();
 
-    moveDir = 0;
-    sideStepDir = 0;
+    moveDir = NoDirection();
+    sideStepDir = NoDirection();
     target = 0;
 
     StopMove();
@@ -1089,24 +1086,11 @@ if(
         // hero unique action
         heroAction();
 
-        // check abyss
-        define distance! = walkMeterPerSec * watchUpdateRate;
-        define fCheckPos! = BlockedPositonByLocalVector(Forward(), distance);
-        define fAbyss! = IsBelowAbyss(fCheckPos);
-        define bCheckPos! = BlockedPositonByLocalVector(Backward(), distance);
-        define bAbyss! = IsBelowAbyss(bCheckPos);
-
         // set moveDir direction
-        setMoveDir(fAbyss, bAbyss);
-
-        // check abyss
-        define rCheckPos! = BlockedPositonByLocalVector(Right(), distance);
-        define rAbyss! = IsBelowAbyss(rCheckPos);
-        define lCheckPos! = BlockedPositonByLocalVector(Left(), distance);
-        define lAbyss! = IsBelowAbyss(lCheckPos);
+        setMoveDir();
 
         // set sidestep direction
-        setSideStep(rAbyss, lAbyss);
+        setSideStep();
 
         // start move by moveDir and sideStepDir
         StartMove();
@@ -1138,18 +1122,11 @@ if(
         // hero unique action
         heroAction();
     
-        // check abyss
-        define distance! = walkMeterPerSec * watchUpdateRate;
-        define fCheckPos! = BlockedPositonByLocalVector(Forward(), distance);
-        define fAbyss! = IsBelowAbyss(fCheckPos);
-        define bCheckPos! = BlockedPositonByLocalVector(Backward(), distance);
-        define bAbyss! = IsBelowAbyss(bCheckPos);
-    
         // set moveDir direction
-        setMoveDir(fAbyss, bAbyss);
+        setMoveDir();
 
         // no sidestepDir
-        sideStepDir = 0;
+        sideStepDir = NoDirection();
 
         // start move by moveDir and sideStepDir
         StartMove();
