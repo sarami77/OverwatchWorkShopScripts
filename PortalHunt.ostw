@@ -289,11 +289,6 @@ if(
     IsDummyBot() &&
     HasSpawned()
 ){
-    CreateInWorldText(
-        AllPlayers(), followerText, 
-        ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
-        Color.SkyBlue, Spectators.DefaultVisibility);
-
     SetUltimateCharge(ep, 50);
 
     // teleport to player near object
@@ -301,6 +296,9 @@ if(
 }
 
 playervar define buddyOriginalHero!;
+
+globalvar define botPerkUseScale! =
+    WorkshopSettingReal("Follower AI Settings(Join on behalf of absent player)", "Perk Use Probability Scale", 1.0, 0, 1000, -102);
 
 rule: "Buddy/ActionControl"
 Event.OngoingPlayer
@@ -311,7 +309,13 @@ if(
 ){
     Wait(RandomReal(4, 6), WaitBehavior.AbortWhenFalse);
 
-    // Perk
+    // SetHeroActionRoutine
+    if(buddyOriginalHero != HeroOf()){
+        SetHeroActionRoutine();
+    }
+    buddyOriginalHero = HeroOf();
+
+    // perk action
     if(actionState != ActionState.Non){
         define enemyNum! = CountOf(
             PlayersWithinRadius(
@@ -320,7 +324,7 @@ if(
 
         // get perk
         if(
-            ProbabilityTrue(enemyNum * 1) &&
+            ProbabilityTrue((enemyNum * 1) * botPerkUseScale) &&
             perkState == PerkState.Non
         ){
             perkType = RandomValueInArray(lotteryPerkList);
@@ -329,7 +333,7 @@ if(
 
         // use perk
         if(
-            ProbabilityTrue(enemyNum * 4) &&
+            ProbabilityTrue((enemyNum * 3) * botPerkUseScale) &&
             perkState == PerkState.Ready
         ){
             StartHoldingButton(ep, Button.Interact);
@@ -339,20 +343,14 @@ if(
 
         // use perk ability
         if(
-            ProbabilityTrue(enemyNum * 6) &&
+            ProbabilityTrue((enemyNum * 6) * botPerkUseScale) &&
             perkState == PerkState.Using
         ){
             StartHoldingButton(ep, Button.Melee);
-            Wait(RandomReal(0.5, 1.5), WaitBehavior.IgnoreCondition);
+            Wait(RandomReal(0.5, 2), WaitBehavior.IgnoreCondition);
             StopHoldingButton(ep, Button.Melee);
         }
     }
-
-    // SetHeroActionRoutine
-    if(buddyOriginalHero != HeroOf()){
-        SetHeroActionRoutine();
-    }
-    buddyOriginalHero = HeroOf();
 
     // revive action
     define downPlayer! = RandomValueInArray(
@@ -363,8 +361,8 @@ if(
             )
         )
     );
-    // has down player
     if(downPlayer != null){
+        // has down player
         if(
             // has line to down player
             IsInLineOfSight(EyePosition(), downPlayer + PositionOffset()) &&
@@ -866,9 +864,9 @@ if(
     portalState == PortalState.UnderAttack
 ){
     portalColor = Color.White;
-    Wait(0.07, WaitBehavior.AbortWhenFalse);
+    Wait(0.05, WaitBehavior.AbortWhenFalse);
     portalColor = enemyColor;
-    Wait(0.1 + 1.9 * (1 - closingProgress / DefaultPercentage()), WaitBehavior.AbortWhenFalse);
+    Wait(0.1 + 1.5 * (1 - (closingProgress / DefaultPercentage())), WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -1444,8 +1442,8 @@ if(
 }
 
 // TAG EnemyBot/Teleport ----------
-define teleportAreaSize: 30;
-define teleportTooCloseDist: 4;
+define teleportAreaSize: 5;
+define teleportTooCloseDist: 5;
 define ClosestPlayerToTelPos: ClosestPlayerTo(teleportPosition, playerTeam);
 define ClosestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, playerTeam);
 define ClosestPlayerToMe: ClosestPlayerTo(ep, playerTeam);
@@ -1485,22 +1483,22 @@ globalvar define commonTeleportPosition!;
 Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlayerFront"{
     // dbgHudTxt("pf");
     
-    // set teleportToTarget at closest player from portal
-    define teleportToTarget! = ClosestPlayerFromPortal();
-    if(teleportToTarget == null){
+    // set teleportBase at closest player from portal
+    define teleportBase! = ClosestPlayerFromPortal();
+    if(teleportBase == null){
         teleportPosition = portalPosition;
         return true;
     }
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        // select teleportPosition from middle of portal and teleportToTarget
+        // select teleportPosition from middle of portal and teleportBase
         teleportPosition =
             NearestWalkablePosition(
-                PositionOf(teleportToTarget)
+                PositionOf(teleportBase)
                     + 
                 (
-                    DirectionTowards(teleportToTarget, portalPosition)
+                    DirectionTowards(teleportBase, portalPosition)
                         *
-                    DistanceBetween(teleportToTarget, portalPosition) * 0.5
+                    DistanceBetween(teleportBase, portalPosition) * 0.5
                 )
                     +
                 RandomPosition(teleportAreaSize, teleportAreaSize, teleportAreaSize)
@@ -1524,26 +1522,26 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
 Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlayerAround"{
     // dbgHudTxt("pa");
 
-    // set teleportToTarget at closest player from portal
-    define teleportToTarget! = ClosestPlayerFromPortal();
-    if(teleportToTarget == null){
+    // set teleportBase at closest player from portal
+    define teleportBase! = ClosestPlayerFromPortal();
+    if(teleportBase == null){
         teleportPosition = portalPosition;
         return true;
     }
 
     define distFromNWP! = DistanceBetween(
-        PositionOf(teleportToTarget),
-        NearestWalkablePosition(teleportToTarget));
+        PositionOf(teleportBase),
+        NearestWalkablePosition(teleportBase));
 
     // dbgHudTxt(<"distFromNWP <0>", distFromNWP>);
 
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         // target on walkable position
-        if(distFromNWP <= 2){
+        if(distFromNWP <= 1){
             // select position and adjust NearestWalkablePosition;
             teleportPosition = 
                 NearestWalkablePosition(
-                    PositionOf(teleportToTarget) +
+                    PositionOf(teleportBase) +
                     RandomPosition(
                         teleportAreaSize,
                         teleportAreaSize,
@@ -1555,7 +1553,7 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
             // select position and not adjust NearestWalkablePosition;
             teleportPosition =
                 BlockedPositon(
-                    teleportToTarget,
+                    teleportBase,
                     DirectionFromAngles(
                         RandomReal(0, 360),
                         RandomReal(30, -30),
@@ -1563,7 +1561,7 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
                     teleportAreaSize
                 );
             // slide teleportPosition to targer for avoid map surface edge
-            teleportPosition += DirectionTowards(teleportPosition, teleportToTarget) * 1.5;
+            teleportPosition += DirectionTowards(teleportPosition, teleportBase) * 1.5;
         }
 
         // select random and adjust 
@@ -1762,10 +1760,11 @@ if(
 void HybridTeleport(){
     if(
         // during portal attacks
-        portalState == PortalState.UnderAttack ||
+        portalState == PortalState.UnderAttack &&
         // force active teleport Probprobability
         ProbabilityTrue(40 / NumberOfPlayers(enemyTeam))
     ){
+        // active teleport
         if(
             // teleport to common position Probprobability
             ProbabilityTrue(90)
@@ -1785,6 +1784,7 @@ void HybridTeleport(){
         }
     }
     else{
+        // passive teleport
         // set teleport position to player front
         if(SetTeleportPositionToPlayerFront()){
             // teleport

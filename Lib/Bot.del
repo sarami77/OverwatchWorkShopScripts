@@ -197,7 +197,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
             Button.Ability2
         ];
 
-        canFireButtonCombination = true;
+        canFireButtonCombination = false;
 
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         primaryFireButtonReleaseMin = 0;
@@ -214,22 +214,23 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ability1ButtonReleaseMin = 0;
         ability1ButtonReleaseMax = 5;
         ability1ButtonPressMin = 0;
-        ability1ButtonPressMax = 1;
+        ability1ButtonPressMax = 0.1;
 
         ability2ButtonReleaseMin = 0;
         ability2ButtonReleaseMax = 5;
         ability2ButtonPressMin = 0;
-        ability2ButtonPressMax = 1;
+        ability2ButtonPressMax = 0.1;
 
-        ultimateButtonReleaseMin = 0;
-        ultimateButtonReleaseMax = 5;
+        ultimateButtonReleaseMin = 10;
+        ultimateButtonReleaseMax = 15;
         ultimateButtonPressMin = 0;
-        ultimateButtonPressMax = 1;
+        ultimateButtonPressMax = 0.1;
 
     switch(HeroOf()){
         case Hero.Ana:
         heroName = "Ana";
         actionRange = ActionRange.Far;
+        canFireButtonCombination = true;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 10;
         secondaryFireButtonPressMax = 15;
@@ -244,6 +245,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Ashe:
         heroName = "Ashe";
         actionRange = ActionRange.Far;
+        canFireButtonCombination = true;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleaseRepeat;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 10;
@@ -253,6 +255,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Baptiste:
         heroName = "Baptiste";
         actionRange = ActionRange.Far;
+        canFireButtonCombination = true;
         supportPrioloty = 100;
         supportButtons = [
             Button.SecondaryFire,
@@ -280,6 +283,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Brigitte:
         heroName = "Brigitte";
         actionRange = ActionRange.Melee;
+        canFireButtonCombination = true;
         secondaryFireButtonReleaseMax = 10;
         secondaryFireButtonPressMin = 3;
         secondaryFireButtonPressMax = 6;
@@ -298,7 +302,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Doomfist:
         heroName = "Doomfist";
         actionRange = ActionRange.Melee;
-        canFireButtonCombination = false;
         primaryFireButtonReleaseMax = 3;
         secondaryFireButtonPressMin = 2;
         secondaryFireButtonPressMax = 2.5;
@@ -323,7 +326,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Hanzo:
         heroName = "Hanzo";
         actionRange = ActionRange.Far;
-        canFireButtonCombination = false;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         primaryFireButtonReleaseMax = 1;
         primaryFireButtonPressMin = 0.75;
@@ -478,6 +480,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Widowmaker:
         heroName = "Widowmaker";
         actionRange = ActionRange.Far;
+        canFireButtonCombination = true;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         primaryFireButtonReleaseMin = 1;
         primaryFireButtonReleaseMax = 1.5;
@@ -976,14 +979,16 @@ void setMoveDir() playervar "setMoveDir"{
 }
 
 void setSideStep() playervar "setSideStep"{
-    // by health
+    // start sidestep by distance to target
     if(
-        ProbabilityTrue(((1 - NormalizedHealth()) * 100) + 50)
+        ProbabilityTrue((1 - NormalizedHealth(ep)) * 100)
+        // ProbabilityTrue((1 - (DistanceBetween(ep, target) / 30)) * 100)
+        // ProbabilityTrue((NormalizedHealth(target) - NormalizedHealth(ep)) * 100)
     ){
         // start sidestep
         // already has sidestep
         if(sideStepDir != NoDirection()){
-            if(ProbabilityTrue(30)){
+            if(ProbabilityTrue(50)){
                 // reverse sidestep
                 sideStepDir = -sideStepDir;
             }
@@ -998,14 +1003,6 @@ void setSideStep() playervar "setSideStep"{
                 // left sidestep
                 sideStepDir = Left();
             }
-        }
-
-        // first check right prob
-        if(ProbabilityTrue(50)){
-            sideStepDir = Left();
-        }
-        else{
-            sideStepDir = Right();
         }
     }
     else{
@@ -1058,12 +1055,17 @@ if(
     Wait(0.1, WaitBehavior.AbortWhenFalse);
 
     while(actionState == ActionState.Non){
-        // set initial face direction
-        SetFacing(
-            ep,
-            DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf())),
-            Relative.ToWorld);
-
+        define nearEnemy! = ClosestPlayerTo(ep, EnemyTeamOf());
+        if(
+            nearEnemy != null &&
+            DistanceBetween(ep, nearEnemy) <= 30
+        ){
+            // set initial face direction
+            SetFacing(
+                ep,
+                DirectionTowards(ep, nearEnemy),
+                Relative.ToWorld);
+        }
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
         WaitRandomForReduceServerLoad();
     }    // action loop
@@ -1250,8 +1252,8 @@ void StartButtonControl(define bc){
         )
     );
 
-    define startButton = false;
-    define fireAndAbilityButtons = [Button.PrimaryFire, Button.SecondaryFire, Button.Ability1, Button.Ability2];
+    define startButton! = false;
+    define fireAndAbilityButtons! = [Button.PrimaryFire, Button.SecondaryFire, Button.Ability1, Button.Ability2];
     // if fire or ability button
     if(
         isMatchButton(bc[ButtonControl.button], fireAndAbilityButtons)

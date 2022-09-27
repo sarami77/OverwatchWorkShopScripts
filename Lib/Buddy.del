@@ -2,14 +2,47 @@ import "Utility.del";
 import "Bot.del";
 
 // TAG Buddy ----------
-define followRange: (actionRangeMax / 4) + 2;
+define followRange: 5;
 define followTryIntervalSecond: 0.5;
-define followTryMaxCount: 6;
+define followTryCountMax: 6;
 define followHopEmpluseScale: 2.2;
 playervar define followTarget!;
 playervar define followerText!;
+playervar define followTargetOffset!;
 
-rule: "Buddy/Teleport/followPlayer"
+rule: "Buddy/Teleport/initilaize"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned() &&
+    actionRange != 0
+){
+    CreateInWorldText(
+        AllPlayers(), followerText, 
+        ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        Color.SkyBlue, Spectators.DefaultVisibility);
+
+    StartForcingDummyBotName(ep, GetDummyName());
+
+    /*
+    // get offset
+    switch(actionRange){
+        case ActionRange.Melee:
+        case ActionRange.Close:
+        followTargetOffset = 10;
+        break;
+        case ActionRange.Middle:
+        followTargetOffset = 0;
+        break;
+        case ActionRange.Far:
+        followTargetOffset = -10;
+        break;
+    }
+    */
+}
+
+rule: "Buddy/Teleport/following"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
@@ -66,64 +99,78 @@ if(
     }
 
     // try follow movement by loop
-    define notHasLineSecond!;
-    for(notHasLineSecond = 0; notHasLineSecond < followTryMaxCount; notHasLineSecond ++){
+    define followTryCount! = 0;
+    while(followTryCount < followTryCountMax){
         // get distance to followTarget
         define dist! = DistanceBetween(ep, followTarget);
+        define hasLine! = IsInLineOfSight(ep, followTarget);
         // is in follow range
         if(
             // near followTarget
             dist <= followRange &&
             // has line followTarget
-            IsInLineOfSight(ep, followTarget)
+            hasLine
         ){
+            // stop following
             // reset walk fast
             SetMoveSpeed(ep, 100);
             // stop follow
             StopMove();
-            // reset try count
+            // exit loop
             break;           
         }
         // is out follow range
-        else if(dist < followRange * 5){
-            // set walk fast
+        else if(
+            dist < followRange * 2
+        ){
+            // start following
+            // set walk fast by dist
             SetMoveSpeed(ep, 100 + (dist * 15));
             // walk to followTarget
             SetFacing(
                 ep,
-                DirectionTowards(ep, followTarget),
+                DirectionTowards(
+                    ep, followTarget
+                ),
                 Relative.ToWorld);
+            // start move
             moveDir = Forward();
             sideStepDir = NoDirection();
             StartMove();
-            if(ProbabilityTrue(30)){
+            // with jump by followTryCount
+            if(ProbabilityTrue(40)){
                 PressButton(ep, Button.Jump);
             }
-            // wait
+            // wait for next loop
             Wait(followTryIntervalSecond, WaitBehavior.AbortWhenFalse);
             // count up try count
-            continue;
+            followTryCount ++;
         }
         // is more out follow range
         else{
-            // teleport
-            Teleport(ep,
-                NearestWalkablePosition(
-                    BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRange)
-                )
-            );
-            // reset try count
+            // follow by teleport
+            // reset walk fast
+            SetMoveSpeed(ep, 100);
+            // stop follow
+            StopMove();
+            // need teleport
+            followTryCount = followTryCountMax;
+            // exit loop
             break;
         } 
     }
 
-    // try count over
-    if(notHasLineSecond >= followTryMaxCount){
-        // teleport
+    if(
+        // try count over
+        followTryCount >= followTryCountMax
+    ){
+        // reset walk fast
+        SetMoveSpeed(ep, 100);
+        // stop follow
+        StopMove();
+        // teleport to range edge
         Teleport(ep,
-            NearestWalkablePosition(
-                BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRange)
-            )
+            BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRange)
         );
     }
 
@@ -146,6 +193,9 @@ if(
 
 playervar define prevNorHealth = 1.0;
 playervar define waitSecondNextComm = 5;
+
+define RVIA(define array): RandomValueInArray(array);
+
 rule: "Buddy/communicate"
 Event.OngoingPlayer
 if(
@@ -157,34 +207,69 @@ if(
     
     Wait(RandomReal(4, 6), WaitBehavior.AbortWhenFalse);
 
-    // Wait(RandomReal(waitSecondNextComm, waitSecondNextComm + 5), WaitBehavior.AbortWhenFalse);
-
     if(
-        IsInSpawnRoom()
+        // in spanwn room 
+        IsInSpawnRoom() ||
+        // team kill
+        (
+            // NumberOfPlayers(enemyTeam) > 0 &&
+            NumberOfLivingPlayers(enemyTeam) <= 0
+        )
     ){
         if(
             ProbabilityTrue(40)
         ){
-            // hello
-            Communicate(ep, Communication.Hello);
-            if(!IsMoving()){
-                define sayTarget! = 
+            define helloTarget!;
+
+            // get not dummy player
+            helloTarget = 
+                RandomValueInArray(
+                    FilteredArray(
+                        AllPlayers(playerTeam),
+                        (
+                            !IsDummyBot(ae)
+                        )));
+            if(helloTarget == null){
+                // get any one from all
+                helloTarget = 
                     RandomValueInArray(
-                        FilteredArray(
-                            AllPlayers(playerTeam),
-                            DistanceBetween(ae, ep) <= 10));
-                
-                if(sayTarget != null){
-                    SetFacing(
-                        ep,
-                        DirectionTowards(ep, sayTarget),
+                        AllPlayers(playerTeam)
+                    );
+            }
+            AbortIf(helloTarget == null);
+
+            // facing
+            SetFacing(ep,
+                DirectionTowards(ep, helloTarget),
+                Relative.ToWorld);
+            Wait(RandomReal(0.5, 1), WaitBehavior.AbortWhenFalse);
+             // hello
+            Communicate(ep, Communication.Hello);
+
+            // and body action
+            if(
+                ProbabilityTrue(50)
+            ){
+                // and T-bagging or jumping
+                define pressButton! = RandomValueInArray([Button.Jump, Button.Crouch]);
+                define tbagInterval! = RandomReal(0.1, 0.3);
+                while(
+                    ProbabilityTrue(90)
+                ){
+                    SetFacing(ep,
+                        DirectionTowards(ep, helloTarget),
                         Relative.ToWorld);
+                    StartHoldingButton(ep, pressButton);
+                    Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
+                    StopHoldingButton(ep, pressButton);
+                    Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
                 }
             }
         }
     }
     else{
         // status message
+        // say thanks
         if(
             (
                 // 1/4 healed
@@ -200,35 +285,55 @@ if(
         ){
             Communicate(ep, Communication.Thanks);
         }
+        // say sorry
         else if(
+            ProbabilityTrue(50) &&
             // dead
             NormalizedHealth() <= 0.0
         ){
-            if(ProbabilityTrue(50)){
-                Communicate(ep, Communication.Sorry);
-            }
-            else{
-                Communicate(ep, Communication.NeedHelp);
-            }
+            Communicate(ep, Communication.Sorry);
         }
+        // say need heal
         else if(
             // 30% health
             NormalizedHealth() <= 0.3
         ){
             Communicate(ep, Communication.NeedHealing);
         }
+        // say help
         else if(
             ProbabilityTrue(50) &&
             // 60% health
             NormalizedHealth() <= 0.6
         ){
-            if(ProbabilityTrue(50)){
-                Communicate(ep, Communication.GroupUp);
-            }
-            else{
-                Communicate(ep, Communication.NeedHelp);
+            Communicate(ep, Communication.NeedHelp);
+        }
+        // say countdown and use ult
+        else if(
+            ProbabilityTrue(50) &&
+            IsAlive() &&
+            UltimateChargePercent() >= 100 &&
+            actionState != ActionState.Non
+        ){
+            define rdyUltNearPlayers! = FilteredArray(
+                AllLivingPlayers(playerTeam),
+                (
+                    IsDummyBot(ae) &&
+                    UltimateChargePercent(ae) >= 100 &&
+                    DistanceBetween(ep, ae) <= 10
+                )
+            );
+            Communicate(ep, Communication.UltimateStatus);
+            Wait(3, WaitBehavior.IgnoreCondition);
+            Communicate(ep, Communication.Countdown);
+            Wait(3, WaitBehavior.IgnoreCondition);
+            PressButton(rdyUltNearPlayers, Button.Ultimate);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+            if(!IsUsingUltimate(ep)){
+                PressButton(ep, Button.PrimaryFire);
             }
         }
+        // say fallback
         else if(
             ProbabilityTrue(50) &&
             // player member half dead
@@ -236,6 +341,7 @@ if(
         ){
             Communicate(ep, Communication.FallBack);
         }
+        // say push
         else if(
             ProbabilityTrue(25) &&
             // enemy member half dead
@@ -243,7 +349,7 @@ if(
         ){
             Communicate(ep, Communication.PushForward);
         }
-
+        // say ult charge progress
         else if(
             ProbabilityTrue(25) &&
             // according ult charge
@@ -254,10 +360,11 @@ if(
 
         // situation message
         else if(ProbabilityTrue(10)){
-
             if(IsOnObjective()){
+                // say objective action
                 if(ProbabilityTrue(40)){
                     Communicate(ep, Communication.GroupUp);
+                    RandomValueInArray([Communication.GroupUp,Communication.GroupUp]);
                 }
                 else if(ProbabilityTrue(40)){
                     Communicate(ep, Communication.Go);
@@ -270,39 +377,36 @@ if(
                 if(
                     actionState == ActionState.Non
                 ){
-                    if(ProbabilityTrue(40)){
+                    // say follow/move action
+                    if(ProbabilityTrue(35)){
                         Communicate(ep, Communication.Go);
                     }
-                    else if(ProbabilityTrue(40)){
-                        Communicate(ep, Communication.GoingIn);
+                    else if(ProbabilityTrue(35)){
+                        Communicate(ep, Communication.WithYou);
                     }
                     else{
-                        Communicate(ep, Communication.WithYou);
+                        Communicate(ep, Communication.GoingIn);
                     }
                 }
                 else if(
                     actionState == ActionState.Attack
                 ){
-                    if(ProbabilityTrue(40)){
+                    // say attack action
+                    if(ProbabilityTrue(35)){
                         Communicate(ep, Communication.Attacking);
                     }
-                    else if(ProbabilityTrue(40)){
+                    else if(ProbabilityTrue(35)){
                         Communicate(ep, Communication.Incoming);
-                    }
-                    else if(ProbabilityTrue(40)){
-                        Communicate(ep, Communication.PushForward);
-                    }
-                    else{
-                        Communicate(ep, Communication.Go);
                     }
                 }
                 else if(
                     actionState == ActionState.Support
                 ){
-                    if(ProbabilityTrue(40)){
+                    // say support action
+                    if(ProbabilityTrue(35)){
                         Communicate(ep, Communication.WithYou);
                     }
-                    else if(ProbabilityTrue(40)){
+                    else if(ProbabilityTrue(35)){
                         Communicate(ep, Communication.NeedHealing);
                     }
                     else{
