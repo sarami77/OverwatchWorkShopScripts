@@ -95,11 +95,11 @@ if(
             Hero.Mercy,
             Hero.Genji,
             Hero.Reinhardt,
-            Hero.Moira,
+            Hero.Ana,
             Hero.Hanzo,
             Hero.Orisa,
-            Hero.Baptiste,
-            Hero.Reaper
+            Hero.Brigitte,
+            Hero.Soldier76
         ];
 
     // slice buddy list by setting
@@ -844,7 +844,8 @@ Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjec
     return true;
 }
 
-define forceUpdateCommonPositionProb: 5;
+define forceUpdateCommonPositionProb: 0;
+define forceUpdateCommonPositionDist: 5;
 
 Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCommonPosition"{
     // set telPosNearTarget at closest player from commonTeleportPosition
@@ -857,10 +858,10 @@ Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCo
         commonTeleportPosition ==  0 ||
         // Probability
         ProbabilityTrue(forceUpdateCommonPositionProb) ||
-        // has not line closest player from commonTeleportPosition
-        !IsInLineOfSight(commonTeleportPosition, telPosNearTarget) ||                      
-        // target inside teleport area
-        DistanceBetween(commonTeleportPosition, telPosNearTarget) < teleportAreaSize 
+        // target near to commonTeleportPosition
+        DistanceBetween(commonTeleportPosition, telPosNearTarget) < forceUpdateCommonPositionDist ||
+        // has not line commonTeleportPosition to closest player
+        !IsInLineOfSight(commonTeleportPosition, telPosNearTarget)
     ){
         // new select common position
         // set teleport position to player around
@@ -1025,7 +1026,10 @@ if(
     Wait(shotCallInterval + 20, WaitBehavior.AbortWhenFalse);
 
     dbgMsg("shotCall start");
-    define scList! = AllLivingPlayers(enemyTeam);
+    define scList! = FilteredArray(
+        AllLivingPlayers(enemyTeam),
+        ae.actionState != ActionState.Non
+    );
     define scDelay! = RandomReal(0, 1);
     for(define scLoopIndex! = 0; scLoopIndex < CountOf(scList); scLoopIndex ++){
         SetUltimateCharge(scList[scLoopIndex], 100);
@@ -1303,7 +1307,7 @@ if(
 
 // TAG EnemyBot/ObstIcon ----------
 playervar define obstIcon;
-define color: isBlink ? Color.Orange : Color.Yellow;
+define color: isBlink ? Color.Red : Color.Yellow;
 
 rule: "EnemyBot/ObstIcon/show"
 Event.OngoingPlayer
@@ -1341,7 +1345,7 @@ if(
 ){
     while(true){
         isBlink = !isBlink;
-        Wait(0.15, WaitBehavior.AbortWhenFalse); 
+        Wait(0.1, WaitBehavior.AbortWhenFalse); 
     }
 }
 
@@ -1397,6 +1401,11 @@ Team.All
 if(
     initCompleted
 ){
+    CreateEffect(HostPlayer(), Effect.Orb, enemyColor,
+        commonTeleportPosition + PositionOffset(), 1, EffectRev.VisibleToPositionAndRadius);
+    CreateIcon(HostPlayer(), commonTeleportPosition, Icon.Spiral,
+        IconRev.PositionAndColor, enemyColor, true);
+
     debugMode = DebugMode.SlowLevelOnly;
     ShowDebugHud(HostPlayer());
 }
