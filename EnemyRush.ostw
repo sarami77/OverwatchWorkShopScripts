@@ -701,9 +701,13 @@ if(
 
 // TAG EnemyBot/Teleport ----------
 globalvar define prvPayloadPos;
+playervar define teleportPosition!;
+globalvar define commonTeleportPosition!;
 define ClosestPlayerToTelPos: ClosestPlayerTo(teleportPosition, playerTeam);
 define ClosestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, playerTeam);
 define ClosestPlayerToMe: ClosestPlayerTo(ep, playerTeam);
+define teleportAreaSize: 10;
+define minSpaceDistTeleport: 5;
 
 Player ClosestPlayerFromObject()"ClosestPlayerFromObject"{
     return FirstOf(
@@ -721,9 +725,7 @@ Player ClosestPlayerFromObject()"ClosestPlayerFromObject"{
     );
 }
 
-playervar define teleportPosition!;
-globalvar define commonTeleportPosition!;
-define teleportAreaSize: 10;
+
 
 Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlayerFront"{
     // set teleportToTarget at closest player from Object
@@ -753,7 +755,7 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
 
         if(
             // not close to object
-            DistanceBetween(ep, CurrentObjectPosition()) > 6   
+            DistanceBetween(ep, CurrentObjectPosition()) > minSpaceDistTeleport
         ){
             break;
         }
@@ -764,6 +766,8 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
 }
 
 Boolean SetTeleportPositionToObjectArround() playervar "SetTeleportPositionToObjectArround"{
+    define telPosNearTarget! = ClosestPlayerToTelPos;
+
     for(pLoopIndex = 0; pLoopIndex < 30; pLoopIndex++){
         // select teleportPosition from current object around
         teleportPosition = 
@@ -778,7 +782,13 @@ Boolean SetTeleportPositionToObjectArround() playervar "SetTeleportPositionToObj
 
         if(
             // not close to object
-            DistanceBetween(ep, CurrentObjectPosition()) > 8    
+            DistanceBetween(ep, CurrentObjectPosition()) > minSpaceDistTeleport
+                &&
+            // Has line to target
+            IsInLineOfSight(
+                telPosNearTarget + PositionOffsetY1(),
+                teleportPosition + PositionOffsetY1(),
+                BarrierLOS.NoBarriersBlock)  
         ){
             break;
         }
@@ -827,7 +837,7 @@ Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjec
     
         if(
             // not close to object
-            DistanceBetween(ep, CurrentObjectPosition()) > 8
+            DistanceBetween(ep, CurrentObjectPosition()) > minSpaceDistTeleport
                 &&
             // Has line to target
             IsInLineOfSight(
@@ -861,7 +871,7 @@ Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCo
         // target near to commonTeleportPosition
         DistanceBetween(commonTeleportPosition, telPosNearTarget) < forceUpdateCommonPositionDist ||
         // has not line commonTeleportPosition to closest player
-        !IsInLineOfSight(commonTeleportPosition, telPosNearTarget)
+        !IsInLineOfSight(commonTeleportPosition + PositionOffsetY1(), telPosNearTarget + PositionOffsetY1())
     ){
         // new select common position
         // set teleport position to player around
@@ -908,7 +918,7 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
         DestroyEffect(telBeam);
         // play teleport sound
         PlayEffect(AllPlayers(), PlayEffect.RingExplosionSound, null,
-        ep, 75);
+        ep, 70);
     }
 }
 
