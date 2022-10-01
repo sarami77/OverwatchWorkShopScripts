@@ -18,12 +18,12 @@ if(
     HasSpawned() &&
     actionRange != 0
 ){
-    CreateInWorldText(
-        AllPlayers(), followerText, 
-        ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
-        Color.SkyBlue, Spectators.DefaultVisibility);
-
     StartForcingDummyBotName(ep, GetDummyName());
+
+    // CreateInWorldText(
+    //     AllPlayers(), followerText, 
+    //     ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+    //     Color.SkyBlue, Spectators.DefaultVisibility);
 
     /*
     // get offset
@@ -88,7 +88,7 @@ if(
             followTarget = CurrentObjectPosition();
             followerText = <"following object">;
         }
-        else{            
+        else{
             // not find player
             if(followTarget == null){
                 // force set object as followTarget
@@ -103,13 +103,13 @@ if(
     while(followTryCount < followTryCountMax){
         // get distance to followTarget
         define dist! = DistanceBetween(ep, followTarget);
-        define hasLine! = IsInLineOfSight(ep, followTarget);
+        define hasLine1! = IsInLineOfSight(ep, followTarget);
         // is in follow range
         if(
             // near followTarget
             dist <= followRange &&
             // has line followTarget
-            hasLine
+            hasLine1
         ){
             // stop following
             // reset walk fast
@@ -315,6 +315,17 @@ if(
             UltimateChargePercent() >= 100 &&
             actionState != ActionState.Non
         ){
+            Communicate(ep, Communication.UltimateStatus);
+            Wait(3, WaitBehavior.AbortWhenFalse);
+            Communicate(ep, Communication.Countdown);
+            Wait(3, WaitBehavior.AbortWhenFalse);
+            while(UltimateChargePercent() >= 100){
+                PressButton(ep, Button.Ultimate);
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
+                PressButton(ep, Button.PrimaryFire);
+                Wait(0.5, WaitBehavior.AbortWhenFalse);
+            }
+            // sync attack
             define rdyUltNearPlayers! = FilteredArray(
                 AllLivingPlayers(playerTeam),
                 (
@@ -323,15 +334,9 @@ if(
                     DistanceBetween(ep, ae) <= 10
                 )
             );
-            Communicate(ep, Communication.UltimateStatus);
-            Wait(3, WaitBehavior.IgnoreCondition);
-            Communicate(ep, Communication.Countdown);
-            Wait(3, WaitBehavior.IgnoreCondition);
             PressButton(rdyUltNearPlayers, Button.Ultimate);
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-            if(!IsUsingUltimate(ep)){
-                PressButton(ep, Button.PrimaryFire);
-            }
+            Wait(0.1, WaitBehavior.AbortWhenFalse);
+            PressButton(rdyUltNearPlayers, Button.PrimaryFire);
         }
         // say fallback
         else if(
