@@ -2,6 +2,7 @@ import "SkirmishWithBotHorde.setting.json";
 import "Lib/Bot.del";
 import "Lib/Regeneration.del";
 import "Lib/Utility.del";
+import "Lib/ServerOverLoadMeasures.del";
 
 // TAG Signature and infomation ----------
 disabled rule: "Skirmish With 24 Bot Horde [ver 1.0] Share code [4B9NY]"-1{}
@@ -41,7 +42,10 @@ Event.OngoingGlobal
         // SetAbilityResource(AllPlayers(), Button.SecondaryFire, 100);
         // SetAmmo(AllPlayers(), 0, 10000);
         // SetAmmo(AllPlayers(), 1, 10000);
-        Wait(1.0, WaitBehavior.AbortWhenFalse);
+        // SetUltimateCharge(AllPlayers(), 100);
+        // SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
+        // PressButton(AllPlayers(), Button.Ultimate);
+        Wait(15.0, WaitBehavior.AbortWhenFalse);
     }
 }
 
@@ -79,7 +83,7 @@ Event.OngoingGlobal
     Wait(5, WaitBehavior.AbortWhenFalse);
 
     // set bot num
-    botNum = WorkshopSettingInteger("Enemy Bot Settings", "Bot Count", 24, 0, 24, 1);
+    botNum = WorkshopSettingInteger("Enemy Bot Settings", "Bot Count", 4, 0, 24, 1);
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
@@ -160,8 +164,8 @@ if(
     // TAG BotList
     dbgMsg("Reload Bot List");
     
-    define teamAsset = AllHeroes();
-    // define teamAsset = [Hero.Ashe];
+    // define teamAsset = AllHeroes();
+    define teamAsset = [Hero.Bastion];
     parallelCount = 0;
     CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team1);
     CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team2);
@@ -184,7 +188,7 @@ if(
     HasSpawned()
 ){
     StartForcingDummyBotName(ep, GetDummyName());
-    watchUpdateRate = 3;
+    watchUpdateRate = 6;
 }
 
 rule: "FastRespaw"
@@ -218,7 +222,7 @@ if(
     ExecTeleport();
 }
 
-globalvar define combatAreaRange = WorkshopSettingReal("Game Settings", "Combat Area Range", 50, 0, 1000, 1);
+globalvar define combatAreaRange = WorkshopSettingReal("Game Settings", "Combat Area Range", 55, 0, 1000, 1);
 
 globalvar define teleportAreaPos;
 
@@ -326,8 +330,8 @@ globalvar define parallelCount;
 
 void ExecTeleport()"ExecTeleport"{
     if(IsDummyBot()){
-        while(parallelCount >= 2){
-            Wait(RandomReal(0.1, 1), WaitBehavior.AbortWhenFalse);
+        while(parallelCount >= 1){
+            Wait(RandomReal(0.5, 1), WaitBehavior.AbortWhenFalse);
         }
     }
 
@@ -377,11 +381,9 @@ void ExecTeleport()"ExecTeleport"{
         ){
             break;
         }
-        Wait(0.25, WaitBehavior.IgnoreCondition);
+        Wait(0.2, WaitBehavior.IgnoreCondition);
         WaitUntilServerFree();
     }
-
-    parallelCount --;
 
     Teleport(ep, teleportPos);
     PlayEffect(
@@ -400,6 +402,8 @@ void ExecTeleport()"ExecTeleport"{
         ep,
         DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf())),
         Relative.ToWorld);
+
+    parallelCount --;
 }
 
 rule: "hideGuardEffect"

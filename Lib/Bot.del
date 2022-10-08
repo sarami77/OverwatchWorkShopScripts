@@ -394,7 +394,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
         case Hero.Orisa:
         heroName = "Orisa";
-        actionRange = ActionRange.Middle;
+        actionRange = ActionRange.Close;
+        primaryFireButtonPressMax = 15;        
         break;
 
         case Hero.Pharah:
@@ -548,18 +549,18 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
     switch(actionRange){
         case ActionRange.Melee:
             actionRangeMin = 0;
-            actionRangeMax = 4;
+            actionRangeMax = 5;
             break;
         case ActionRange.Close:
             actionRangeMin = 0;
-            actionRangeMax = 8;
+            actionRangeMax = 10;
             break;
         case ActionRange.Middle:
-            actionRangeMin = 8;
-            actionRangeMax = 16;
+            actionRangeMin = 10;
+            actionRangeMax = 20;
             break;
         case ActionRange.Far:
-            actionRangeMin = 16;
+            actionRangeMin = 20;
             actionRangeMax = 30;
             break;
     }
@@ -598,7 +599,7 @@ define FindAttackTarget():
                     IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
                     !(
                         IsStealth(ae) &&
-                        DistanceBetween(ae, ep) >= 3
+                        DistanceBetween(ae, ep) >= 4
                     )
                 )
             ),
@@ -643,6 +644,8 @@ void ApplyNextActionState(define player!, define nextActionState!) playervar "Ap
         }
         // set next state
         player.actionState = nextActionState;
+
+        dbgPlyEft(ep);
     }
 }
 
@@ -661,12 +664,11 @@ if(
         // get targetSighted
         define targetSighted! =
             target != 0 &&          // has not target
-            HasSpawned(target) &&   // target spawned
             IsAlive(target) &&      // target alive
-            IsInLineOfSight(ep, target, BarrierLOS.NoBarriersBlock) &&  // hasline to target
+            IsInLineOfSight(ep, target, BarrierLOS.NoBarriersBlock) &&  // in line
             !(
                 IsStealth(target) &&
-                DistanceBetween(target, ep) >= 3
+                DistanceBetween(target, ep) >= 4
             );
 
         define tryGetTarget! = false;
@@ -789,6 +791,34 @@ if(
     }
 }
 
+rule: "Bot/ActionState/CallAttackToNearFriends"
+Event.OnDamageTaken
+if(
+    IsDummyBot() &&
+    Attacker() != ep
+){
+    define nearFriends! = FilteredArray(
+        PlayersWithinRadius(
+            ep, 10, TeamOf(), RadiusLOS.Off
+        ),
+        (
+            IsDummyBot() &&
+            IsAlive(ae) &&
+            ae.actionState == ActionState.Non
+        )
+    );
+    
+    for(define nearFriendsIndex = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
+        nearFriends[nearFriendsIndex].target = ep.target;
+        ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
+
+        // apply next state    
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
+    }
+    Wait(3.0, WaitBehavior.IgnoreCondition);
+}
+
+
 rule: "Bot/ActionState/ChangeTargetByTargetDead"
 Event.OnElimination
 if(
@@ -810,31 +840,6 @@ if(
         // find attack target
         target = FindAttackTarget();
     }
-}
-
-rule: "Bot/ActionState/NoticeAttackToNearFriends"
-Event.OnDamageTaken
-if(
-    IsDummyBot()
-){
-    define nearFriends! = FilteredArray(
-        PlayersWithinRadius(
-            ep, 10, TeamOf(), RadiusLOS.Off
-        ),
-        (
-            IsDummyBot() &&
-            IsAlive(ae) &&
-            ae.actionState == ActionState.Non
-        )
-    );
-    
-    for(pLoopIndex = 0; pLoopIndex < CountOf(nearFriends); pLoopIndex ++){
-        nearFriends[pLoopIndex].target = ep.target;
-        ApplyNextActionState(nearFriends[pLoopIndex], ActionState.Attack);
-        // apply next state    
-        Wait(0.2, WaitBehavior.AbortWhenFalse);
-    }
-    Wait(3.0, WaitBehavior.IgnoreCondition);
 }
 
 playervar define actionState;
@@ -982,7 +987,7 @@ void setSideStep() playervar "setSideStep"{
         // start sidestep
         // already has sidestep
         if(sideStepDir != NoDirection()){
-            if(ProbabilityTrue(75){
+            if(ProbabilityTrue(75)){
                 // reverse sidestep
                 sideStepDir = -sideStepDir;
             }
@@ -1208,6 +1213,30 @@ void heroAction(){
                 Wait(0.5, WaitBehavior.AbortWhenFalse);
             }
         }
+    }
+}
+
+rule: "Bot/HeroUniqueAction/WhenUlt"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    IsUsingUltimate()
+){
+    // postion select when ult
+    if(
+        HeroOf() == Hero.Doomfist ||
+        HeroOf() == Hero.Bastion
+    ){
+        StartMoveInDir(Forward());
+        Wait(RandomReal(1.25, 2.0), WaitBehavior.AbortWhenFalse);
+        if(ProbabilityTrue(50)){
+            StopMove();
+        }
+        define shotInterval! = RandomReal(0.1, 0.5);
+        for(define shotCount! = 3; shotCount > 0; shotCount--){
+            PressButton(ep, Button.PrimaryFire);
+            Wait(shotInterval, WaitBehavior.AbortWhenFalse);
+        }        
     }
 }
 
