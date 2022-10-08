@@ -191,10 +191,8 @@ if(
     SetMoveSpeed(ep, 100);
 }
 
-playervar define prevNorHealth = 1.0;
-playervar define waitSecondNextComm = 5;
-
-define RVIA(define array): RandomValueInArray(array);
+playervar define prevNorHealth! = 1.0;
+playervar define prevMatchTime! = 0;
 
 rule: "Buddy/communicate"
 Event.OngoingPlayer
@@ -203,16 +201,19 @@ if(
     IsDummyBot() &&
     HasSpawned()
 ){
+    prevMatchTime = IsGameInProgress() ? MatchTime() : MaxValue();
     prevNorHealth = NormalizedHealth();
     
     Wait(RandomReal(4, 6), WaitBehavior.AbortWhenFalse);
 
     if(
+        // in setup
+        IsInSetup() ||
         // in spanwn room 
         IsInSpawnRoom() ||
-        // team kill
         (
-            // NumberOfPlayers(enemyTeam) > 0 &&
+            // team kill
+            NumberOfPlayers(enemyTeam) > 0 &&
             NumberOfLivingPlayers(enemyTeam) <= 0
         )
     ){
@@ -277,17 +278,23 @@ if(
                 NormalizedHealth() - prevNorHealth >= 0.25
             ) ||
             (
+                // check point reached (remain time added.)
+                MatchTime() - prevMatchTime >= 60
+            ) ||
+            (
                 // team kill
                 NumberOfPlayers(enemyTeam) > 0 &&
                 NumberOfLivingPlayers(enemyTeam) <= 0
             )
-            
+            ||
+            // match finished
+            PayloadProgressPercentage() >= 100
         ){
             Communicate(ep, Communication.Thanks);
         }
         // say sorry
         else if(
-            ProbabilityTrue(50) &&
+            ProbabilityTrue(30) &&
             // dead
             NormalizedHealth() <= 0.0
         ){
@@ -295,25 +302,25 @@ if(
         }
         // say need heal
         else if(
-            // 30% health
-            NormalizedHealth() <= 0.3
+            // health under 40% 
+            NormalizedHealth() <= 0.4
         ){
             Communicate(ep, Communication.NeedHealing);
         }
         // say help
         else if(
             ProbabilityTrue(50) &&
-            // 60% health
-            NormalizedHealth() <= 0.6
+            // health under 70% 
+            NormalizedHealth() <= 0.7
         ){
             Communicate(ep, Communication.NeedHelp);
         }
         // say countdown and use ult
         else if(
             ProbabilityTrue(50) &&
+            actionState != ActionState.Non &&
             IsAlive() &&
-            UltimateChargePercent() >= 100 &&
-            actionState != ActionState.Non
+            UltimateChargePercent() >= 100
         ){
             Communicate(ep, Communication.UltimateStatus);
             Wait(3, WaitBehavior.AbortWhenFalse);
@@ -412,10 +419,10 @@ if(
                         Communicate(ep, Communication.WithYou);
                     }
                     else if(ProbabilityTrue(35)){
-                        Communicate(ep, Communication.NeedHealing);
+                        Communicate(ep, Communication.YouAreWelcome);
                     }
                     else{
-                        Communicate(ep, Communication.YouAreWelcome);
+                        Communicate(ep, Communication.NeedHealing);
                     }
                 }
             }

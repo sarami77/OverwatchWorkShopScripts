@@ -58,7 +58,7 @@ if(
     IsAssemblingHeroes()
 ){
     // SetMatchTime(15);
-   SetMatchTime(5);
+   SetMatchTime(25);
 }
 
 rule: "Initialize/shortenSetup"
@@ -67,7 +67,7 @@ if(
     IsInSetup()
 ){
     // SetMatchTime(20);
-    SetMatchTime(30);
+    SetMatchTime(20);
 }
 
 // TAG Buddy ----------
@@ -77,7 +77,7 @@ if(
     initCompleted
 ){
     define buddyList! = 
-    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", false) ?
+    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", true) ?
         // random list
         [
             RandomSupportHero,
@@ -98,7 +98,7 @@ if(
             Hero.Ana,
             Hero.Hanzo,
             Hero.Orisa,
-            Hero.Brigitte,
+            Hero.Baptiste,
             Hero.Soldier76
         ];
 
@@ -353,9 +353,10 @@ define assetList:
             "giant boss",
             [EnemyType.GiantBoss,   RandomSupportHero,  1],
             [EnemyType.Minion,      RandomSupportHero,  10]
-        ],
+        ]
 
         // specificatied hero
+        /*
         [
             "giant boss",
             [EnemyType.GiantBoss,   Hero.Reinhardt,     1],
@@ -514,6 +515,7 @@ define assetList:
             [EnemyType.Elite,       Hero.Junkrat, 		5],
             [EnemyType.Minion,      Hero.Tracer, 		10]
         ]
+        */
     ];
 
 globalvar define someHero!;
@@ -535,7 +537,7 @@ if(
     define list! = AllPlayers(enemyTeam);
     for(gLoopIndex = 0; gLoopIndex < CountOf(list); gLoopIndex ++){
         PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor,
-            PositionOf(list[gLoopIndex]), list[gLoopIndex].eachEffectTextSize);
+            PositionOf(list[gLoopIndex]), list[gLoopIndex].eachTextSize);
     }
     Wait(showDeadEffectTime * 2, WaitBehavior.IgnoreCondition);
 
@@ -552,14 +554,18 @@ playervar define eachDealtDamageScale!;
 playervar define eachMaxSpawnInterval!;
 playervar define eachMinSpawnInterval!;
 playervar define eachChargeUltInterval!;
-playervar define eachEffectTextSize!;
+
+playervar define eachTextOffset!;
+playervar define eachTextSize!;
 playervar define eachNameText!;
 playervar define eachNameColor!;
 
 playervar define eachPerkDropProbability;   // dummy
 
-define baseMaxSpawn: 12;
-define baseMinSpawn: 6;
+define minionSpawnTimeMin: 8;
+define eliteSpawnTimeMin: 16;
+define bossSpawnTimeMin: 48;
+define spawnTimeMinToMaxMulti: 1.5;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
@@ -570,83 +576,85 @@ if(
     if(enemyType == EnemyType.Minion){
         watchUpdateRate = 7;
 
+        eachTextOffset = 0.75;
         StartScalingPlayer(ep, 0.75, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
 
         SetMaxHealth(ep, 25);
-
-        SetHealingDealt(ep, 50);
-        SetHealingReceived(ep, 50);
+        SetHealingDealt(ep, 25);
+        SetHealingReceived(ep, 25);
         
         eachDealtDamageScale = 0.5;
         eachChargeUltInterval = 90;
-        eachMaxSpawnInterval = 10;
-        eachMinSpawnInterval = 5;
+        eachMinSpawnInterval = minionSpawnTimeMin;
+        eachMaxSpawnInterval = minionSpawnTimeMin * spawnTimeMinToMaxMulti;
 
         eachNameText = "Minion";
         eachNameColor = Color.White;
-        eachEffectTextSize = basicInWorldTextSize;
+        eachTextSize = basicInWorldTextSize;
 
         eachPerkDropProbability = 3;
     }
     else if(enemyType == EnemyType.Elite){
         watchUpdateRate = 5;
 
+        eachTextOffset = 1.0;
         StartScalingPlayer(ep, 1.0, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
 
         SetMaxHealth(ep, 100);
-
-        SetHealingDealt(ep, 200);
-        SetHealingReceived(ep, 200);
+        SetHealingDealt(ep, 100);
+        SetHealingReceived(ep, 100);
 
         eachDealtDamageScale = 1.0;
         eachChargeUltInterval = 30;
-        eachMaxSpawnInterval = 20;
-        eachMinSpawnInterval = 10;
+        eachMinSpawnInterval = eliteSpawnTimeMin;
+        eachMaxSpawnInterval = eliteSpawnTimeMin * spawnTimeMinToMaxMulti;
 
         eachNameText = "Elite";
         eachNameColor = Color.Yellow;
-        eachEffectTextSize = basicInWorldTextSize + 1;
+        eachTextSize = basicInWorldTextSize + 0.5;
     }
     else if(enemyType == EnemyType.Boss){
         watchUpdateRate = 3;
         
+        eachTextOffset = 1.5;
         StartScalingPlayer(ep, 1.5, false);
         StartModifyingHeroVoiceLines(ep, 0.5, false);
 
         SetMaxHealth(ep, 1000);
-
-        SetHealingDealt(ep, 250);
-        SetHealingReceived(ep, 250);
+        SetHealingDealt(ep, 200);
+        SetHealingReceived(ep, 200);
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
-        eachMaxSpawnInterval = 40;
-        eachMinSpawnInterval = 20;
+        eachMinSpawnInterval = bossSpawnTimeMin;
+        eachMaxSpawnInterval = bossSpawnTimeMin * spawnTimeMinToMaxMulti;
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
-        eachEffectTextSize = basicInWorldTextSize + 2;
+        eachTextSize = basicInWorldTextSize + 1;
     }
     else if(enemyType == EnemyType.GiantBoss){
         watchUpdateRate = 3;
+
+        eachTextOffset = 2.5;
         StartScalingPlayer(ep, 2.5, false);
         StartModifyingHeroVoiceLines(ep, 0.1, false);
 
         SetMaxHealth(ep, 1000);
-
-        SetHealingDealt(ep, 250);
-        SetHealingReceived(ep, 250);
+        SetHealingDealt(ep, 200);
+        SetHealingReceived(ep, 200);
 
         eachDealtDamageScale = 4.0;
         eachChargeUltInterval = 10;
-        eachMaxSpawnInterval = 40;
-        eachMinSpawnInterval = 20;
+        eachMinSpawnInterval = bossSpawnTimeMin;
+        eachMaxSpawnInterval = bossSpawnTimeMin * spawnTimeMinToMaxMulti;
+
 
         eachNameText = "Big Boss";
         eachNameColor = Color.Purple;
-        eachEffectTextSize = basicInWorldTextSize + 3;
+        eachTextSize = basicInWorldTextSize + 1.5;
 
         // set addtinal health
         Wait(0.1, WaitBehavior.AbortWhenFalse);
@@ -680,12 +688,12 @@ if(
     // show evil aura
     botAppearanceEntitys[0] = 
         CreateEffect(AllPlayers(), Effect.Cloud, enemyColor,
-            ep, eachEffectTextSize, EffectRev.VisibleToPositionAndRadius);
+            ep, eachTextSize, EffectRev.VisibleToPositionAndRadius);
     // show name text
     botAppearanceEntitys[1] = 
         CreateInWorldText(
             AllPlayers(), eachNameText, 
-            ep, eachEffectTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        ep + Vector(0, eachTextOffset * 2.55, 0), eachTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             eachNameColor, Spectators.DefaultVisibility);
 }
 
@@ -702,18 +710,18 @@ if(
     DestroyInWorldText(botAppearanceEntitys[1]);
     // play dead effect
     PlayContinuousBlast(Color.Red, PositionOf(),
-        eachEffectTextSize * 1.5, eachEffectTextSize, 0);
+        eachTextSize * 1.5, eachTextSize, 0);
 }
 
 // TAG EnemyBot/Teleport ----------
-globalvar define prvPayloadPos;
+globalvar define prvPayloadPos!;
 playervar define teleportPosition!;
 globalvar define commonTeleportPosition!;
 define ClosestPlayerToTelPos: ClosestPlayerTo(teleportPosition, playerTeam);
 define ClosestPlayerToComTelPos: ClosestPlayerTo(commonTeleportPosition, playerTeam);
 define ClosestPlayerToMe: ClosestPlayerTo(ep, playerTeam);
 define teleportAreaSize: 10;
-define minSpaceDistTeleport: 5;
+define minSpaceDistTeleport: 10;
 
 Player ClosestPlayerFromObject()"ClosestPlayerFromObject"{
     return FirstOf(
@@ -805,7 +813,7 @@ Boolean SetTeleportPositionToObjectArround() playervar "SetTeleportPositionToObj
 }
 
 globalvar define additinalTeleportAreaSize;
-define teleportAreaSizeOffset: 25;
+define teleportAreaSizeOffset: 30;
 
 Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
     // set teleportToTarget at Object
@@ -860,7 +868,7 @@ Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjec
     return true;
 }
 
-define forceUpdateCommonPositionProb: 0;
+define forceUpdateCommonPositionProb: 3;
 define forceUpdateCommonPositionDist: 5;
 
 Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCommonPosition"{
@@ -919,7 +927,7 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
     }
     else{
         // play teleport blast
-        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, ep, eachEffectTextSize);
+        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, ep, eachTextSize);
         // hide teleport beam effect
         DestroyEffect(telBeam);
         // play teleport sound
@@ -1033,13 +1041,16 @@ if(
 }
 
 // TAG EnemyBot/EnemyAbility ----------
+define enemyAbilityMin: 20;
+define enemyAbilityAcording: 60;
+
 rule: "EnemyBot/EnemyAbility/shotCall"
 Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    define shotCallInterval! = (1 - (TotalObjectProgress() / 100)) * 60;
-    Wait(shotCallInterval + 20, WaitBehavior.AbortWhenFalse);
+    define shotCallInterval! = (1 - (TotalObjectProgress() / 100)) * enemyAbilityAcording;
+    Wait(shotCallInterval + enemyAbilityMin, WaitBehavior.AbortWhenFalse);
 
     dbgMsg("shotCall start");
     define scList! = FilteredArray(
@@ -1063,8 +1074,8 @@ if(
     IsGameInProgress() &&
     !IsOverTime()
 ){
-    define rushInterval! = (1 - (TotalObjectProgress() / 100)) * 60;
-    Wait(rushInterval + 20, WaitBehavior.AbortWhenFalse);
+    define rushInterval! = (1 - (TotalObjectProgress() / 100)) * enemyAbilityAcording;
+    Wait(rushInterval + enemyAbilityMin, WaitBehavior.AbortWhenFalse);
 
     dbgMsg("rush start");
     define rushCount! = RandomInteger(5, 15);
@@ -1182,7 +1193,7 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     
     define diff = GameProgressDiff();
     if(70 <= diff){
-        spawnTimeScale = 0.01;
+        spawnTimeScale = 0.001;
     }
     else if(40 <= diff && diff < 70){
         spawnTimeScale = 0.25;
@@ -1197,10 +1208,10 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
         spawnTimeScale = 1.5;
     }
     else if(-70 <= diff && diff < -40){
-        spawnTimeScale = 2.5;
+        spawnTimeScale = 3.0;
     }
     else if(diff < -70){
-        spawnTimeScale = 3.0;
+        spawnTimeScale = 5.0;
     }
     confirmSpawnInterval *= spawnTimeScale;
     SetRespawnMaxTime(ep, confirmSpawnInterval + showDeadEffectTime);
@@ -1260,9 +1271,9 @@ if(
 // TAG EnemyBot/DealtDamage ----------
 playervar define confirmDealtDamage!;
 globalvar define autoTuneDmgDlt!;
-globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Difficult Scale", 1.0, 0, 1000, 0);
+globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Dynamic Difficult Scale", 1.0, 0, 1000, 0);
 
-define internalRate: 0.2;
+define internalRate: 0.4;
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1280,7 +1291,7 @@ if(
         autoTuneDmgDlt += 10.0 * internalRate * autoTuneScale;
     }
     else if(enemyType == EnemyType.GiantBoss){
-        autoTuneDmgDlt += 10.0 * internalRate * autoTuneScale;
+        autoTuneDmgDlt += 20.0 * internalRate * autoTuneScale;
     }
 }
 
@@ -1557,7 +1568,7 @@ if(
     define list! = AllPlayers(enemyTeam);
     for(gLoopIndex = 0; gLoopIndex < CountOf(list); gLoopIndex ++){
         PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor,
-            list[gLoopIndex], list[gLoopIndex].eachEffectTextSize);
+            list[gLoopIndex], list[gLoopIndex].eachTextSize);
     }
     Wait(showDeadEffectTime * 2, WaitBehavior.IgnoreCondition);
 
