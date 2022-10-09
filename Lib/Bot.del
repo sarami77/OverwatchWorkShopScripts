@@ -29,7 +29,6 @@ define RandomSupportHero: RandomValueInArray(AllSupportHeroes());
 globalvar define enemyTeamName! = "";
 
 void CreateBotsByAssetList(define assetList, define team)"CreateBotsByAssetList"{
-    DestroyBots(team);
     define asset = ValueInArray(assetList, RandomInteger(0, CountOf(assetList) - 1));
     // set team name
     enemyTeamName = asset[0];
@@ -58,11 +57,8 @@ void CreateBotsByAssetList(define assetList, define team)"CreateBotsByAssetList"
 }
 
 void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsByHeroList"{
-    DestroyBots(team);
-    Wait(0.1, WaitBehavior.IgnoreCondition);
-
     // create bot by asset
-    for(define slotIdx = 0; slotIdx < num; slotIdx++){
+    for(define slotIdx! = 0; slotIdx < num; slotIdx++){
         // get empty slot
         define slot! = getEmptySlotNo(team);
         while(!HasSpawned(PlayersInSlot(slot, team))){
@@ -82,7 +78,7 @@ void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsBy
 
 void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHeroInput"{
     // create bot by asset
-    for(define slotIdx = 0; slotIdx < num; slotIdx++){
+    for(define slotIdx! = 0; slotIdx < num; slotIdx++){
         // get empty slot
         define slot! = getEmptySlotNo(team);
         // create bot
@@ -101,7 +97,7 @@ void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHer
 define builtinMaxSlotNum: 24;
 
 void DestroyBots(define team!)"DestroyBots"{
-    for(define slotIdx = 0; slotIdx < builtinMaxSlotNum; slotIdx ++){
+    for(define slotIdx! = 0; slotIdx < builtinMaxSlotNum; slotIdx ++){
         DestroyDummyBot(
             team, slotIdx);
         Wait(0.01, WaitBehavior.IgnoreCondition);
@@ -207,7 +203,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ability2ButtonPressMin = 0;
         ability2ButtonPressMax = 1;
 
-        ultimateButtonReleaseMin = 10;
+        ultimateButtonReleaseMin = 0;
         ultimateButtonReleaseMax = 15;
         ultimateButtonPressMin = 0;
         ultimateButtonPressMax = 1;
@@ -279,12 +275,9 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Brigitte";
         actionRange = ActionRange.Melee;
         canFireButtonCombination = true;
-        secondaryFireButtonReleaseMax = 10;
+        secondaryFireButtonReleaseMax = 15;
         secondaryFireButtonPressMin = 3;
         secondaryFireButtonPressMax = 6;
-        primaryFireButtonPressMax = 10;
-        primaryFireButtonReleaseMax = 1;
-        ability2ButtonPressMax = 1;
         ability2ButtonReleaseMax = 1;
         ultimateButtonReleaseMax = 30;
         supportPrioloty = 75;
@@ -303,9 +296,10 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Doomfist:
         heroName = "Doomfist";
         actionRange = ActionRange.Melee;
-        primaryFireButtonReleaseMin = 2;
+        primaryFireButtonReleaseMax = 10;
         secondaryFireButtonPressMin = 2;
-        secondaryFireButtonPressMax = 2.5;
+        secondaryFireButtonPressMax = 2;
+        secondaryFireButtonReleaseMax = 10;
         break;
 
         case Hero.Dva:
@@ -421,8 +415,9 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         break;
 
         case Hero.Roadhog:
-        heroName = "Reaper";
+        heroName = "Roadhog";
         actionRange = ActionRange.Close;
+        primaryFireButtonPressMax = 10;
         break;
 
         case Hero.Sigma:
@@ -629,7 +624,7 @@ define changeTargetProbForAttack: 50;
 define WaitRandomForReduceServerLoad(){
     if(isServerOverLoading()){
         WaitUntilServerFree();
-        Wait(RandomReal(1, watchUpdateRate), WaitBehavior.AbortWhenFalse);
+        Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
     }
 }
 
@@ -641,11 +636,9 @@ void ApplyNextActionState(define player!, define nextActionState!) playervar "Ap
             // set Non state for restart button control
             player.actionState = ActionState.Changing;
             WaitChangeState();
-        }
+        }       
         // set next state
         player.actionState = nextActionState;
-
-        dbgPlyEft(ep);
     }
 }
 
@@ -655,7 +648,6 @@ if(
     IsDummyBot() &&
     HasSpawned()
 ){
-    WaitRandomForReduceServerLoad();
     // get next state
     define nextActionState!;
     // is alive
@@ -739,7 +731,7 @@ if(
             // target is enemy
             if(TeamOf() != TeamOf(target)){
                 // Attack state
-                nextActionState = ActionState.Attack; 
+                nextActionState = ActionState.Attack;
             }
             else{
                 // Support state
@@ -756,6 +748,14 @@ if(
         nextActionState = ActionState.Non; 
     }
 
+    if(
+        actionState != ActionState.Attack &&
+        nextActionState == ActionState.Attack
+    ){
+        // call attack by trans to attack state
+        CallAttackNearBot();
+    }
+
     // apply next state
     ApplyNextActionState(ep, nextActionState);
 
@@ -764,42 +764,20 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Bot/ActionState/ChangeTargetByDamageTaken"
+rule: "Bot/ActionState/CallAttackByDamageTaken"
 Event.OnDamageTaken
 if(
-    IsDummyBot() &&
-    Attacker() != target
+    IsDummyBot()
 ){
-    if(
-        actionState == ActionState.Non
-    ){
-        // no wait
-        // set attacker to target
-        target = Attacker();
-        // apply next state
-        ApplyNextActionState(ep, ActionState.Attack);
-    }
-    else{
-        // change target dependent on attack target helth & attack prob
-        if(ProbabilityTrue(NormalizedHealth(target) * changeTargetProbForAttack)){
-            // set attacker to target
-            target = Attacker();
-            // apply next state
-            ApplyNextActionState(ep, ActionState.Attack);
-        }
-        Wait(3.0, WaitBehavior.IgnoreCondition);
-    }
+    // call attack by damage taken
+    CallAttackNearBot();
+    Wait(3.0, WaitBehavior.IgnoreCondition);
 }
 
-rule: "Bot/ActionState/CallAttackToNearFriends"
-Event.OnDamageTaken
-if(
-    IsDummyBot() &&
-    Attacker() != ep
-){
+void CallAttackNearBot()"CallAttackNearBot"{
     define nearFriends! = FilteredArray(
         PlayersWithinRadius(
-            ep, 10, TeamOf(), RadiusLOS.Off
+            ep, 30, TeamOf(), RadiusLOS.Off
         ),
         (
             IsDummyBot() &&
@@ -808,23 +786,40 @@ if(
         )
     );
     
-    for(define nearFriendsIndex = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
+    for(define nearFriendsIndex! = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
+        // set some target
         nearFriends[nearFriendsIndex].target = ep.target;
-        ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
-
-        // apply next state    
+        // apply next state  
+        ApplyNextActionState(nearFriends[nearFriendsIndex], ep.actionState);
         Wait(0.2, WaitBehavior.AbortWhenFalse);
+        WaitRandomForReduceServerLoad();
+    }
+}
+
+rule: "Bot/ActionState/ChangeTargetByDamageTaken"
+Event.OnDamageTaken
+if(
+    IsDummyBot() &&
+    actionState == ActionState.Attack
+){
+    // change target dependent on attack target helth & attack prob
+    if(ProbabilityTrue(NormalizedHealth(target) * changeTargetProbForAttack)){
+        // set attacker to target
+        target = Attacker();
+        // apply next state
+        ApplyNextActionState(ep, ActionState.Attack);
     }
     Wait(3.0, WaitBehavior.IgnoreCondition);
 }
-
 
 rule: "Bot/ActionState/ChangeTargetByTargetDead"
 Event.OnElimination
 if(
     IsDummyBot() &&
+    actionState != ActionState.Non &&
     Victim() == target
 ){
+    WaitRandomForReduceServerLoad();
     // is support role hero
     if(0 < supportPrioloty)
     {
@@ -1220,10 +1215,12 @@ if(
     IsDummyBot() &&
     IsUsingUltimate()
 ){
-    // postion select when ult
+    // postion selecting when ult
     if(
         HeroOf() == Hero.Doomfist ||
-        HeroOf() == Hero.Bastion
+        HeroOf() == Hero.Bastion ||
+        HeroBeingDuplicated(ep) == Hero.Doomfist ||
+        HeroBeingDuplicated(ep) == Hero.Bastion
     ){
         StartMoveInDir(Forward());
         Wait(RandomReal(1.25, 2.0), WaitBehavior.AbortWhenFalse);

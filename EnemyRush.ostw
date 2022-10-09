@@ -205,7 +205,7 @@ if(
     prevPayloadPosition = PayloadPosition();
 
     while(true){
-        define nowPayloadPosition = PayloadPosition();
+        define nowPayloadPosition! = PayloadPosition();
         if(
             IsPlayerOnObject &&
             DistanceBetween(nowPayloadPosition, prevPayloadPosition) > 0.01
@@ -215,7 +215,6 @@ if(
         }
         Wait(1, WaitBehavior.IgnoreCondition);
     }
-    LoopIfConditionIsTrue();
 }
 
 // TAG Player ----------
@@ -352,11 +351,10 @@ define assetList:
         [
             "giant boss",
             [EnemyType.GiantBoss,   RandomSupportHero,  1],
-            [EnemyType.Minion,      RandomSupportHero,  10]
-        ]
+            [EnemyType.Minion,      RandomTankHero,     10]
+        ],
 
-        // specificatied hero
-        /*
+        // specificatied hero asset
         [
             "giant boss",
             [EnemyType.GiantBoss,   Hero.Reinhardt,     1],
@@ -515,7 +513,6 @@ define assetList:
             [EnemyType.Elite,       Hero.Junkrat, 		5],
             [EnemyType.Minion,      Hero.Tracer, 		10]
         ]
-        */
     ];
 
 globalvar define someHero!;
@@ -533,20 +530,29 @@ if(
     dbgMsg("reloadBotAsset");
     WaitUntil(!(IsEnemyOnObject && IsPlayerOnObject), 60);
 
-    // play effect each enemy
-    define list! = AllPlayers(enemyTeam);
-    for(gLoopIndex = 0; gLoopIndex < CountOf(list); gLoopIndex ++){
-        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor,
-            PositionOf(list[gLoopIndex]), list[gLoopIndex].eachTextSize);
-    }
-    Wait(showDeadEffectTime * 2, WaitBehavior.IgnoreCondition);
-
-    // create all bot
     someHero = RandomHero;
+    // create all bot
+    PlayEffectsToTeam(enemyTeam);
+    DestroyBots(enemyTeam);
     CreateBotsByAssetList(assetList, enemyTeam);
-    
     Wait(RandomInteger(90, 150), WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
+}
+
+void PlayEffectsToTeam(define team!) "PlayEffectsToTeam"{
+    define players! = AllPlayers(team);
+    for(define playersIndex! = 0; playersIndex < CountOf(players); playersIndex ++){
+        // play blast
+        PlayEffect(AllPlayers(), PlayEffect.BadExplosion,
+            TeamOf(players[playersIndex]) == enemyTeam ?
+                enemyColor :
+                Color.Yellow,
+            PositionOf(players[playersIndex]),
+            TeamOf(players[playersIndex]) == enemyTeam ?
+                players[playersIndex].eachTextSize : 
+                basicInWorldTextSize + 0.5);
+    }
+    Wait(0.1, WaitBehavior.IgnoreCondition);
 }
 
 // TAG EnemyBot/EnemyType ----------
@@ -564,7 +570,7 @@ playervar define eachPerkDropProbability;   // dummy
 
 define minionSpawnTimeMin: 8;
 define eliteSpawnTimeMin: 16;
-define bossSpawnTimeMin: 48;
+define bossSpawnTimeMin: 32;
 define spawnTimeMinToMaxMulti: 1.5;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
@@ -574,7 +580,7 @@ if(
     enemyType != EnemyType.None
 ){
     if(enemyType == EnemyType.Minion){
-        watchUpdateRate = 12;
+        watchUpdateRate = 20;
         eachTextOffset = 0.75;
         StartScalingPlayer(ep, 0.75, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
@@ -593,7 +599,7 @@ if(
         eachTextSize = basicInWorldTextSize;
     }
     else if(enemyType == EnemyType.Elite){
-        watchUpdateRate = 6;
+        watchUpdateRate = 10;
         eachTextOffset = 1.0;
         StartScalingPlayer(ep, 1.0, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
@@ -612,14 +618,14 @@ if(
         eachTextSize = basicInWorldTextSize + 0.5;
     }
     else if(enemyType == EnemyType.Boss){
-        watchUpdateRate = 3;
+        watchUpdateRate = 5;
         eachTextOffset = 1.5;
         StartScalingPlayer(ep, 1.5, false);
         StartModifyingHeroVoiceLines(ep, 0.5, false);
 
         SetMaxHealth(ep, 1000);
-        SetHealingDealt(ep, 200);
-        SetHealingReceived(ep, 200);
+        SetHealingDealt(ep, 250);
+        SetHealingReceived(ep, 250);
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
@@ -631,14 +637,14 @@ if(
         eachTextSize = basicInWorldTextSize + 1;
     }
     else if(enemyType == EnemyType.GiantBoss){
-        watchUpdateRate = 3;
+        watchUpdateRate = 5;
         eachTextOffset = 2.5;
         StartScalingPlayer(ep, 2.5, false);
         StartModifyingHeroVoiceLines(ep, 0.1, false);
 
         SetMaxHealth(ep, 1000);
-        SetHealingDealt(ep, 200);
-        SetHealingReceived(ep, 200);
+        SetHealingDealt(ep, 250);
+        SetHealingReceived(ep, 250);
 
         eachDealtDamageScale = 4.0;
         eachChargeUltInterval = 10;
@@ -660,16 +666,18 @@ if(
     UpdateEachSpawnInterval();
 }
 
-rule: "EnemyBot/EnemyType/setFullHealth"
+rule: "EnemyBot/Effect/setFullHealth"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    IsInSpawnRoom()
+    enemyType != EnemyType.None &&
+    IsAlive()
 ){
     // heal to max health
+    Wait(0.5, WaitBehavior.IgnoreCondition);
     while(Health() < MaxHealth()){
         Heal(ep, null, MaxValue());
-        Wait(0.1, WaitBehavior.IgnoreCondition);
+        Wait(0.5, WaitBehavior.IgnoreCondition);
     }
 }
 
@@ -738,8 +746,6 @@ Player ClosestPlayerFromObject()"ClosestPlayerFromObject"{
         )
     );
 }
-
-
 
 Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlayerFront"{
     // set teleportToTarget at closest player from Object
@@ -905,6 +911,7 @@ Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCo
     return true;
 }
 
+define showTeleportBeamTime: 0.4;
 void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
     // if before teleport
     if(isBefore){
@@ -919,11 +926,11 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
             BeamType.BadBeam,
             fromSky ? 
                 teleportPosition + Vector(0, 30, 0) :
-                PositionOf() + PositionOffset(),
+                BodyPosition(ep),
             teleportPosition + PositionOffset(),
             Color.Purple, EffectRev.VisibleToPositionAndRadius);
         // wait for show teleport shadow of before
-        Wait(0.4, WaitBehavior.IgnoreCondition);
+        Wait(showTeleportBeamTime, WaitBehavior.IgnoreCondition);
     }
     else{
         // play teleport blast
@@ -935,6 +942,8 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
         ep, 70);
     }
 }
+
+
 
 playervar define telBeam!;
 
@@ -1040,32 +1049,8 @@ if(
 }
 
 // TAG EnemyBot/EnemyAbility ----------
-define enemyAbilityMin: 20;
-define enemyAbilityAcording: 60;
-
-rule: "EnemyBot/EnemyAbility/shotCall"
-Event.OngoingGlobal
-if(
-    IsGameInProgress()
-){
-    define shotCallInterval! = (1 - (TotalObjectProgress() / DefaultPercentage())) * enemyAbilityAcording;
-    Wait(shotCallInterval + enemyAbilityMin, WaitBehavior.AbortWhenFalse);
-
-    dbgMsg("shotCall start");
-    define scList! = FilteredArray(
-        AllLivingPlayers(enemyTeam),
-        ae.actionState != ActionState.Non
-    );
-    define scDelay! = RandomReal(0, 1);
-    for(define scLoopIndex! = 0; scLoopIndex < CountOf(scList); scLoopIndex ++){
-        SetUltimateCharge(scList[scLoopIndex], DefaultPercentage());
-        PressButton(scList[scLoopIndex], Button.Ultimate);
-        Wait(scDelay, WaitBehavior.AbortWhenFalse);
-    }
-    dbgMsg("shotCall end");
-
-    LoopIfConditionIsTrue();
-}
+define enemyAbilityIntervalMin: 20;
+define enemyAbilityIntervalAcordingProgress: 40;
 
 rule: "EnemyBot/EnemyAbility/rush"
 Event.OngoingGlobal
@@ -1073,16 +1058,40 @@ if(
     IsGameInProgress() &&
     !IsOverTime()
 ){
-    define rushInterval! = (1 - (TotalObjectProgress() / DefaultPercentage())) * enemyAbilityAcording;
-    Wait(rushInterval + enemyAbilityMin, WaitBehavior.AbortWhenFalse);
+    define interval! = (1 - (TotalObjectProgress() / DefaultPercentage())) * enemyAbilityIntervalAcordingProgress;
+    Wait(RandomReal(enemyAbilityIntervalMin, enemyAbilityIntervalMin + interval), WaitBehavior.AbortWhenFalse);
 
     dbgMsg("rush start");
-    define rushCount! = RandomInteger(5, 15);
-    for(rushCount; rushCount > 0; rushCount--){
+    define rushDurling! = RandomInteger(5, 15);
+    for(rushCount; rushDurling > 0; rushDurling--){
         Respawn(AllDeadPlayers(enemyTeam));
         Wait(1, WaitBehavior.AbortWhenFalse);
     }
     dbgMsg("rush end");
+
+    LoopIfConditionIsTrue();
+}
+
+rule: "EnemyBot/EnemyAbility/shotCall"
+Event.OngoingGlobal
+if(
+    IsGameInProgress()
+){
+    define interval! = (1 - (TotalObjectProgress() / DefaultPercentage())) * enemyAbilityIntervalAcordingProgress;
+    Wait(RandomReal(enemyAbilityIntervalMin, enemyAbilityIntervalMin + interval), WaitBehavior.AbortWhenFalse);
+
+    dbgMsg("shotCall start");
+    define deployedEnemys! = FilteredArray(
+        AllLivingPlayers(enemyTeam),
+        !IsInSpawnRoom(ae)
+    );
+    define shotCallDelay! = RandomReal(0, 1);
+    for(define scLoopIndex! = 0; scLoopIndex < CountOf(deployedEnemys); scLoopIndex ++){
+        SetUltimateCharge(deployedEnemys[scLoopIndex], DefaultPercentage());
+        PressButton(deployedEnemys[scLoopIndex], Button.Ultimate);
+        Wait(shotCallDelay, WaitBehavior.AbortWhenFalse);
+    }
+    dbgMsg("shotCall end");
 
     LoopIfConditionIsTrue();
 }
@@ -1272,7 +1281,7 @@ playervar define confirmDealtDamage!;
 globalvar define autoTuneDmgDlt!;
 globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Dynamic Difficult Scale", 1.0, 0, 1000, 0);
 
-define internalRate: 0.4;
+define internalRate: 0.3;
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1375,8 +1384,8 @@ if(
     }
 }
 
-// TAG LastStand ----------
-rule: "LastStand/lastStand"
+// TAG FinalStand ----------
+rule: "FinalStand/FinalStand"
 Event.OngoingGlobal
 if(
     IsGameInProgress() &&
@@ -1387,6 +1396,7 @@ if(
     SetSlowMotion(10);
     Wait(0.3, WaitBehavior.AbortWhenFalse);   // show slow
 
+    PlayEffectsToTeam(Team.All);
     Resurrect(AllPlayers());
     Heal(AllPlayers(), null, MaxValue());
     SetUltimateCharge(AllPlayers(), DefaultPercentage());
@@ -1548,16 +1558,10 @@ if(
     // Recalculate portal
     WaitLongPressConfirm();
 
-    // play effect each enemy
-    define list! = AllPlayers(enemyTeam);
-    for(gLoopIndex = 0; gLoopIndex < CountOf(list); gLoopIndex ++){
-        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor,
-            list[gLoopIndex], list[gLoopIndex].eachTextSize);
-    }
-    Wait(showDeadEffectTime * 2, WaitBehavior.IgnoreCondition);
-
-    // create all bot
     someHero = RandomHero;
+    // create all bot
+    PlayEffectsToTeam(enemyTeam);
+    DestroyBots(enemyTeam);
     CreateBotsByAssetList(assetList, enemyTeam);
 }
 
