@@ -269,6 +269,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Bastion";
         actionRange = ActionRange.Far;
         primaryFireButtonReleaseMax = 1;
+        ability1ButtonReleaseMin = 8;
+        ability1ButtonReleaseMax = 8;
         break;
 
         case Hero.Brigitte:
@@ -591,6 +593,7 @@ define FindAttackTarget():
             FilteredArray(
                 AllLivingPlayers(EnemyTeamOf()),
                 (
+                    ae != ep &&
                     IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
                     !(
                         IsStealth(ae) &&
@@ -638,7 +641,7 @@ void ApplyNextActionState(define player!, define nextActionState!) playervar "Ap
             WaitChangeState();
         }       
         // set next state
-        player.actionState = nextActionState;
+        player.actionState = nextActionState;        
     }
 }
 
@@ -655,7 +658,8 @@ if(
     { 
         // get targetSighted
         define targetSighted! =
-            target != 0 &&          // has not target
+            target != 0 &&          // targe valid
+            target != ep &&         // not own
             IsAlive(target) &&      // target alive
             IsInLineOfSight(ep, target, BarrierLOS.NoBarriersBlock) &&  // in line
             !(
@@ -751,7 +755,7 @@ if(
         nextActionState == ActionState.Attack
     ){
         // call attack by trans to attack state
-        CallAttackNearBot();
+        CallAttackNearBot(target);
     }
 
     // apply next state
@@ -765,23 +769,22 @@ if(
 rule: "Bot/ActionState/CallAttackByDamageTaken"
 Event.OnDamageTaken
 if(
-    IsDummyBot()
+    IsDummyBot() &&
+    Attacker() != ep
 ){
     // call attack by damage taken
-    CallAttackNearBot();
+    CallAttackNearBot(Attacker());
 }
 
 globalvar define isCallAttackCoolDown! = false;
 
-void CallAttackNearBot()"CallAttackNearBot"{
-    if(isCallAttackCoolDown) return;
+void CallAttackNearBot(define attackTarget!)"CallAttackNearBot"{
+    AbortIf(isCallAttackCoolDown);
+
     isCallAttackCoolDown = true;
-
-    WaitRandomForReduceServerLoad();
-
     define nearFriends! = FilteredArray(
         PlayersWithinRadius(
-            ep, 10, TeamOf(), RadiusLOS.Off
+            ep, 30, TeamOf(ep), RadiusLOS.Off
         ),
         (
             IsDummyBot() &&
@@ -790,11 +793,12 @@ void CallAttackNearBot()"CallAttackNearBot"{
         )
     );
     for(define nearFriendsIndex! = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
-        // set some target
-        nearFriends[nearFriendsIndex].target = ep.target;
-        // apply next state  
-        ApplyNextActionState(nearFriends[nearFriendsIndex], ep.actionState);
-        Wait(0.2, WaitBehavior.AbortWhenFalse);
+        // set target
+        nearFriends[nearFriendsIndex].target = attackTarget;
+        // set attack 
+        ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        WaitRandomForReduceServerLoad();
     }
 }
 
@@ -803,7 +807,7 @@ Event.OngoingGlobal
 if(
     isCallAttackCoolDown
 ){
-    Wait(3, WaitBehavior.IgnoreCondition);
+    Wait(1, WaitBehavior.IgnoreCondition);
     isCallAttackCoolDown = false;
     LoopIfConditionIsTrue();
 }
@@ -854,11 +858,17 @@ playervar define target;
 playervar define moveDir;
 playervar define sideStepDir;
 
+define noMoving: false;   // for debug
+
 void StopMove()"StopMove"{
+    AbortIf(noMoving);
+
     StopThrottleInDirection();
 } 
 
 void StartMove() playervar "StartMove"{
+    AbortIf(noMoving);
+
     define confirmMoveDir! = moveDir + sideStepDir;
     define moveToPosition! = BlockedPositonByLocalVector(
         confirmMoveDir,
@@ -1231,15 +1241,19 @@ if(
         HeroBeingDuplicated(ep) == Hero.Doomfist ||
         HeroBeingDuplicated(ep) == Hero.Bastion
     ){
+        StopMove();
+        Wait(1, WaitBehavior.AbortWhenFalse);
         StartMoveInDir(Forward());
-        Wait(RandomReal(1.25, 2.0), WaitBehavior.AbortWhenFalse);
         if(ProbabilityTrue(50)){
+            Wait(DistanceBetween(ep, target) * 0.05, WaitBehavior.AbortWhenFalse);
             StopMove();
         }
-        define shotInterval! = RandomReal(0.1, 0.5);
-        for(define shotCount! = 3; shotCount > 0; shotCount--){
-            PressButton(ep, Button.PrimaryFire);
-            Wait(shotInterval, WaitBehavior.AbortWhenFalse);
+        else{
+            Wait(DistanceBetween(ep, target) * 0.04, WaitBehavior.AbortWhenFalse);
+        }
+        while(IsUsingUltimate()){
+            PressButton(ep, Button.PrimaryFire);            dbgPlyEft(ep);
+            Wait(RandomReal(0.1, 0.3), WaitBehavior.AbortWhenFalse);
         }        
     }
 }
@@ -1255,7 +1269,8 @@ enum ButtonControl{
     pressMax
 }
 
-define noShooting: false;   // for debug
+
+
 
 playervar define isRepeating;
 playervar define repeatMin;
@@ -1267,17 +1282,10 @@ Boolean isMatchButton(define matchButton!, define butttons!){
 
 define buttonControlTimeScale: 1;
 
+define noShooting: false;   // for debug
+
 void StartButtonControl(define bc){
-    AbortIf(
-        noShooting &&
-        (
-            bc[ButtonControl.button] == Button.PrimaryFire ||   
-            bc[ButtonControl.button] == Button.SecondaryFire ||
-            bc[ButtonControl.button] == Button.Ability1 ||
-            bc[ButtonControl.button] == Button.Ability2 ||
-            bc[ButtonControl.button] == Button.Ultimate
-        )
-    );
+    AbortIf(noShooting);
 
     define startButton! = false;
     define fireAndAbilityButtons! = [Button.PrimaryFire, Button.SecondaryFire, Button.Ability1, Button.Ability2];
