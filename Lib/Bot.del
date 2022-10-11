@@ -86,7 +86,7 @@ void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHer
             hero,
             team,
             slot,
-            SpawnPoints(team)[0],
+            SpawnPoints(team)[0] + RandomPosition(3, 0, 3),
             RandomDirection()
         );
         Wait(0.1, WaitBehavior.IgnoreCondition);
@@ -627,7 +627,7 @@ define changeTargetProbForAttack: 50;
 define WaitRandomForReduceServerLoad(){
     if(isServerOverLoading()){
         WaitUntilServerFree();
-        Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);
+        Wait(RandomReal(0, 3), WaitBehavior.AbortWhenFalse);
     }
 }
 
@@ -782,21 +782,24 @@ void CallAttackNearBot(define attackTarget!)"CallAttackNearBot"{
     AbortIf(isCallAttackCoolDown);
 
     isCallAttackCoolDown = true;
-    define nearFriends! = FilteredArray(
+    define nearFriends = FilteredArray(
         PlayersWithinRadius(
             ep, 30, TeamOf(ep), RadiusLOS.Off
         ),
         (
+            // ae != ep &&
             IsDummyBot() &&
             IsAlive(ae) &&
             ae.actionState == ActionState.Non
         )
     );
-    for(define nearFriendsIndex! = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
+    
+    for(define nearFriendsIndex = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
         // set target
         nearFriends[nearFriendsIndex].target = attackTarget;
         // set attack 
         ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
+                                                                    dbgPlyEft(nearFriends[nearFriendsIndex]);
         Wait(0.1, WaitBehavior.AbortWhenFalse);
         WaitRandomForReduceServerLoad();
     }
@@ -807,9 +810,9 @@ Event.OngoingGlobal
 if(
     isCallAttackCoolDown
 ){
-    Wait(1, WaitBehavior.IgnoreCondition);
+    Wait(3, WaitBehavior.IgnoreCondition);
     isCallAttackCoolDown = false;
-    LoopIfConditionIsTrue();
+    Loop();
 }
 
 rule: "Bot/ActionState/ChangeTargetByDamageTaken"
@@ -861,8 +864,6 @@ playervar define sideStepDir;
 define noMoving: false;   // for debug
 
 void StopMove()"StopMove"{
-    AbortIf(noMoving);
-
     StopThrottleInDirection();
 } 
 
@@ -1234,27 +1235,58 @@ if(
     IsDummyBot() &&
     IsUsingUltimate()
 ){
-    // postion selecting when ult
+    # postion selecter
     if(
         HeroOf() == Hero.Doomfist ||
         HeroOf() == Hero.Bastion ||
         HeroBeingDuplicated(ep) == Hero.Doomfist ||
         HeroBeingDuplicated(ep) == Hero.Bastion
     ){
+        define isDoomFist = false;
+        if(
+            HeroOf() == Hero.Doomfist ||
+            HeroBeingDuplicated(ep) == Hero.Doomfist
+        ){
+            isDoomFist = true;
+        }
+
+        # stop current moving input
         StopMove();
-        Wait(1, WaitBehavior.AbortWhenFalse);
+        # wait transform
+        Wait(1.5, WaitBehavior.AbortWhenFalse);
+        # move postion selecter to foward
         StartMoveInDir(Forward());
-        if(ProbabilityTrue(50)){
-            Wait(DistanceBetween(ep, target) * 0.05, WaitBehavior.AbortWhenFalse);
-            StopMove();
+        
+        define strikeCount;
+        if(isDoomFist){
+            strikeCount = 1;
+                Wait(DistanceBetween(ep, target) * 0.06, WaitBehavior.AbortWhenFalse);
         }
         else{
-            Wait(DistanceBetween(ep, target) * 0.04, WaitBehavior.AbortWhenFalse);
-        }
-        while(IsUsingUltimate()){
-            PressButton(ep, Button.PrimaryFire);            dbgPlyEft(ep);
-            Wait(RandomReal(0.1, 0.3), WaitBehavior.AbortWhenFalse);
+            strikeCount = 3;
+            # random strike pattern
+            if(
+                ProbabilityTrue(50)
+            ){
+                # 1 point strike
+                Wait(DistanceBetween(ep, target) * 0.05, WaitBehavior.AbortWhenFalse);
+                StopMove();
+            }
+            else{
+                # 3 point strike
+                Wait(DistanceBetween(ep, target) * 0.04, WaitBehavior.AbortWhenFalse);
+            }
         }        
+
+        for(; 0 < strikeCount; strikeCount--){
+        PressButton(ep, Button.PrimaryFire);
+            if(0 < strikeCount){
+                # button press with random interval
+                Wait(RandomReal(0.2, 0.4), WaitBehavior.IgnoreCondition);
+            }
+        }
+        # stop moving for no walking
+        StopMove();
     }
 }
 
