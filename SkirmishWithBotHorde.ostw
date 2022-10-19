@@ -66,7 +66,7 @@ Event.OngoingGlobal
     Wait(5, WaitBehavior.AbortWhenFalse);
 
     // set bot num
-    botNum = WorkshopSettingInteger("Enemy Bot Settings", "Bot Count", 4, 0, 24, 1);
+    botNum = WorkshopSettingInteger("Enemy Bot Settings", "Bot Count", 24, 0, 24, 1);
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
@@ -108,13 +108,13 @@ if(
     HasSpawned()
 ){
     CreateHudText(ep,
-        <"<0> Kills", killCount>, null, null,
+        <"[Your Score] <0> <1> : <2> Kills", ep, HeroIconString(HeroOf(ep)), ep.killCount>, null, null,
         Location.Top, 3,
         Color.White, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
 
     CreateHudText(ep,
-        <"[Top Scorer] <0> <1> : <2> Kills", topPlayer, HeroIconString(HeroOf(topPlayer)), topPlayer.killCount>, null, null,
+        <"[Top Score] <0> <1> : <2> Kills", topPlayer, HeroIconString(HeroOf(topPlayer)), topPlayer.killCount>, null, null,
         Location.Top, 2,
         Color.White, Color.White, Color.White,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
@@ -148,13 +148,13 @@ if(
     dbgMsg("Reload Bot List");
     
     // define teamAsset = AllHeroes();
-    define teamAsset = [Hero.Bastion];
+    define teamAsset = [Hero.Kiriko, Hero.JunkerQueen, Hero.Sojourn];
     parallelCount = 0;
-    CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team1);
     DestroyBots(Team.Team1);
-    CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team2);
+    CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team1);
     DestroyBots(Team.Team2);
-
+    CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team2);
+    
     Wait(180, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
@@ -170,7 +170,7 @@ Event.OngoingGlobal
 rule: "SetDummyBotSetting"
 Event.OngoingPlayer
 if(
-    HasSpawned()
+    true
 ){
     StartForcingDummyBotName(ep, GetDummyName());
     watchUpdateRate = 6;
@@ -284,10 +284,6 @@ void SetTeleportAreaPositionAtRandom()"SetTeleportAreaPositionAtRandom"{
             temp_teleportAreaPos +
             RandomPosition(selectionAreaRange, selectionAreaRange, selectionAreaRange));
 
-        temp_teleportAreaPos += DirectionTowards(temp_teleportAreaPos, RandomValueInArray(AllLivingPlayers())) * RandomReal(1, 5);
-
-        temp_teleportAreaPos = NearestWalkablePosition(temp_teleportAreaPos);
-
         if(
             // not inside ours spwan room
             !IsInSpawnRoomPosition(temp_teleportAreaPos, Team.Team1) 
@@ -302,7 +298,7 @@ void SetTeleportAreaPositionAtRandom()"SetTeleportAreaPositionAtRandom"{
         ){
             break;
         }
-        Wait(0.25, WaitBehavior.AbortWhenFalse);
+        Wait(0.5, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     teleportAreaPos = temp_teleportAreaPos;
@@ -329,10 +325,6 @@ void ExecTeleport()"ExecTeleport"{
             teleportAreaPos +
             RandomPosition(combatAreaRange, combatAreaRange, combatAreaRange));
 
-        teleportPos += DirectionTowards(teleportPos, RandomValueInArray(AllLivingPlayers())) * RandomReal(1, 5);
-
-        teleportPos = NearestWalkablePosition(teleportPos);
-
         if(
             // not inside ours spwan room
             !IsInSpawnRoomPosition(teleportPos, TeamOf()) 
@@ -340,17 +332,9 @@ void ExecTeleport()"ExecTeleport"{
             // not inside enemy spwan room
             !IsInSpawnRoomPosition(teleportPos, EnemyTeamOf())
                 &&
-            // not too close to enemy
-            DistanceBetween(
-                teleportPos, 
-                ClosestPlayerTo(
-                    teleportPos,
-                    EnemyTeamOf()))
-            >= 5
-                &&
             (
                 // ignore has line to enemy for seeding
-                ProbabilityTrue(25)
+                ProbabilityTrue(50)
                     ||
                 // has line to enemy
                 IsInLineOfSight(
@@ -366,7 +350,7 @@ void ExecTeleport()"ExecTeleport"{
         ){
             break;
         }
-        Wait(0.2, WaitBehavior.IgnoreCondition);
+        Wait(0.5, WaitBehavior.IgnoreCondition);
         WaitUntilServerFree();
     }
 
@@ -423,8 +407,8 @@ if(
     IsButtonHeld(ep, Button.Reload)
 ){
     WaitLongPressConfirm();
-    CreateBotsByHeroList(AllHeroes(), botNum / 2, Team.Team1);
     DestroyBots(Team.Team1);
-    CreateBotsByHeroList(AllHeroes(), botNum / 2, Team.Team2);
+    CreateBotsByHeroList(AllHeroes(), botNum / 2, Team.Team1);
     DestroyBots(Team.Team2);
+    CreateBotsByHeroList(AllHeroes(), botNum / 2, Team.Team2);
 }

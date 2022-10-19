@@ -1296,7 +1296,7 @@ playervar define eachDealtDamageScale!;
 playervar define eachMaxSpawnInterval!;
 playervar define eachMinSpawnInterval!;
 playervar define eachChargeUltInterval!;
-playervar define eachEffectTextSize!;
+playervar define eachTextSize!;
 playervar define eachNameText!;
 playervar define eachNameColor!;
 
@@ -1324,7 +1324,7 @@ if(
 
         eachNameText = "Minion";
         eachNameColor = Color.White;
-        eachEffectTextSize = basicInWorldTextSize;
+        eachTextSize = basicInWorldTextSize;
 
         eachPerkDropProbability = eachMaxSpawnInterval;
     }
@@ -1346,7 +1346,7 @@ if(
 
         eachNameText = "Elite";
         eachNameColor = Color.Yellow;
-        eachEffectTextSize = basicInWorldTextSize + 1;
+        eachTextSize = basicInWorldTextSize + 1;
 
         eachPerkDropProbability = eachMaxSpawnInterval;
     }
@@ -1368,7 +1368,7 @@ if(
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
-        eachEffectTextSize = basicInWorldTextSize + 2;
+        eachTextSize = basicInWorldTextSize + 2;
 
         eachPerkDropProbability = eachMaxSpawnInterval;
     }
@@ -1390,7 +1390,7 @@ if(
 
         eachNameText = "Big Boss";
         eachNameColor = Color.Purple;
-        eachEffectTextSize = basicInWorldTextSize + 3;
+        eachTextSize = basicInWorldTextSize + 3;
 
         eachPerkDropProbability = eachMaxSpawnInterval;
 
@@ -1426,12 +1426,12 @@ if(
     // show evil aura
     botAppearanceEntitys[0] = 
         CreateEffect(AllPlayers(), Effect.Cloud, enemyColor,
-            ep, eachEffectTextSize, EffectRev.VisibleToPositionAndRadius);
+            ep, eachTextSize, EffectRev.VisibleToPositionAndRadius);
     // show name text
     botAppearanceEntitys[1] = 
         CreateInWorldText(
             AllPlayers(), eachNameText, 
-            ep, eachEffectTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            ep, eachTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             eachNameColor, Spectators.DefaultVisibility);
 }
 
@@ -1448,7 +1448,7 @@ if(
     DestroyInWorldText(botAppearanceEntitys[1]);
     // play dead effect
     PlayContinuousBlast(Color.Red, PositionOf(),
-        eachEffectTextSize * 1.5, eachEffectTextSize, 0);
+        eachTextSize * 1.5, eachTextSize, 0);
 }
 
 // TAG EnemyBot/Teleport ----------
@@ -1491,54 +1491,37 @@ playervar define teleportPosition!;
 globalvar define commonTeleportPosition!;
 
 Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlayerFront"{
-    // dbgHudTxt("pf");
-    
-    // set teleportBase at closest player from portal
-    define teleportBase! = ClosestPlayerFromPortal();
-    if(teleportBase == null){
-        teleportPosition = portalPosition;
-        return true;
-    }
+    // set teleportToTarget at closest player from Object
+    define teleportToTarget! = ClosestPlayerFromPortal();
+
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        // select teleportPosition from middle of portal and teleportBase
+        WaitRandomForDistributeServerLoad();
+    
+        // select teleportPosition from middle of Object and teleportToTarget
         teleportPosition =
             NearestWalkablePosition(
-                PositionOf(teleportBase)
+                PositionOf(teleportToTarget)
                     + 
                 (
-                    DirectionTowards(teleportBase, portalPosition)
+                    DirectionTowards(teleportToTarget, CurrentObjectPosition())
                         *
-                    DistanceBetween(teleportBase, portalPosition) * 0.5
+                    DistanceBetween(teleportToTarget, CurrentObjectPosition()) * 0.35
                 )
                     +
-                RandomPosition(teleportAreaSize, teleportAreaSize, teleportAreaSize)
+                RandomPosition(
+                    (teleportAreaSize),
+                    (teleportAreaSize),
+                    (teleportAreaSize)
+                )
             );
-
-        define telPosNearTarget! = ClosestPlayerToTelPos;
-        if(
-            // Has ground of teleport position
-            IsBlockedBetween(
-                teleportPosition,
-                ShiftedPosition(teleportPosition, Down(), 6))
-        ){
-            break;
-        }
-        Wait(1, WaitBehavior.AbortWhenFalse);
-        WaitUntilServerFree();
+        break;
     }
     return true;
 }
 
 Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlayerAround"{
-    // dbgHudTxt("pa");
-
     // set teleportBase at closest player from portal
     define teleportBase! = ClosestPlayerFromPortal();
-    if(teleportBase == null){
-        teleportPosition = portalPosition;
-        return true;
-    }
-
     define distFromNWP! = DistanceBetween(
         PositionOf(teleportBase),
         NearestWalkablePosition(teleportBase));
@@ -1596,23 +1579,21 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
 }
 
 Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCommonPosition"{
-    // dbgHudTxt("cp");
-
     // set telPosNearTarget at closest player from commonTeleportPosition
-    define telPosNearTarget! = ClosestPlayerToComTelPos;
-    if(telPosNearTarget == null){
-        teleportPosition = portalPosition;
-        return true;
-    }
     if(
+        // update commonTeleportPosition conditions
         // invalid commonTeleportPosition
         commonTeleportPosition ==  0 ||
-        // has not line to target from common teleport position
-        !IsInLineOfSight(commonTeleportPosition, telPosNearTarget) ||
-        // target too close common teleport position
-        DistanceBetween(commonTeleportPosition, telPosNearTarget) < teleportTooCloseDist ||
-        // force update common teleport position Probability
-        ProbabilityTrue(5)
+        // Probability
+        ProbabilityTrue(3) ||
+        // player too close from commonTeleportPosition
+        DistanceBetween(commonTeleportPosition, ClosestPlayerTo(commonTeleportPosition, playerTeam)) < 5 ||
+        // has not line commonTeleportPosition to current object 
+        !IsInLineOfSight(
+            PositionOffsetY1() + CurrentObjectPosition(),
+            PositionOffsetY1() + commonTeleportPosition,
+            BarrierLOS.NoBarriersBlock
+        )
     ){
         // new select common position
         // set teleport position to player around
@@ -1632,6 +1613,7 @@ Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCo
     return true;
 }
 
+define showTeleportBeamTime: 0.4;
 void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
     // if before teleport
     if(isBefore){
@@ -1641,28 +1623,33 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
         PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, teleportPosition, 1);
         // show teleport beam effect
         DestroyEffect(telBeam);
-        define fromSky! = actionState == ActionState.Non;
+        define fromSky! = IsInSpawnRoom();
         telBeam = CreateBeamEffect(AllPlayers(),
             BeamType.BadBeam,
             fromSky ? 
                 teleportPosition + Vector(0, 30, 0) :
-                PositionOf() + PositionOffset(),
+                BodyPosition(ep),
             teleportPosition + PositionOffset(),
             Color.Purple, EffectRev.VisibleToPositionAndRadius);
         // wait for show teleport shadow of before
-        Wait(0.4, WaitBehavior.IgnoreCondition);
+        Wait(showTeleportBeamTime, WaitBehavior.IgnoreCondition);
     }
     else{
         // play teleport blast
-        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, ep, eachEffectTextSize);
+        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, ep, eachTextSize);
         // hide teleport beam effect
         DestroyEffect(telBeam);
+        // play teleport sound
+        PlayEffect(AllPlayers(), PlayEffect.RingExplosionSound, null,
+        ep, 70);
     }
 }
 
 playervar define telBeam!;
 
 void TeleportWithEffect() playervar "TeleportWithEffect"{
+    WaitRandomForDistributeServerLoad();
+    
     Wait(SlotOf(ep) * 0.1, WaitBehavior.AbortWhenFalse);
     // show pre teleport effect
     PlayTeleportEffect(true);
@@ -1672,6 +1659,42 @@ void TeleportWithEffect() playervar "TeleportWithEffect"{
     PlayTeleportEffect(false);
     // hide teleport beam effect
     DestroyEffect(telBeam);
+}
+
+void HybridTeleport(){
+    if(
+        // during portal attacks
+        portalState == PortalState.UnderAttack &&
+        // force active teleport Probprobability
+        ProbabilityTrue(40 / NumberOfPlayers(enemyTeam))
+    ){
+        // active teleport
+        if(
+            // teleport to common position Probprobability
+            ProbabilityTrue(90)
+        ){
+            // set teleport position to common position
+            if(SetTeleportPositionToCommonPosition()){
+                // teleport
+                TeleportWithEffect();
+            }
+        }
+        else{
+            // set teleport position to player around
+            if(SetTeleportPositionToPlayerAround()){
+                // teleport
+                TeleportWithEffect();
+            }
+        }
+    }
+    else{
+        // passive teleport
+        // set teleport position to player front
+        if(SetTeleportPositionToPlayerFront()){
+            // teleport
+            TeleportWithEffect();
+        }
+    }
 }
 
 rule: "EnemyBot/Teleport/teleportByPortalDisabled"
@@ -1734,7 +1757,6 @@ rule: "EnemyBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    IsAlive() &&
     portalEnable &&
     IsInSpawnRoom()
 ){
@@ -1767,85 +1789,28 @@ if(
     LoopIfConditionIsTrue();
 }
 
-void HybridTeleport(){
-    if(
-        // during portal attacks
-        portalState == PortalState.UnderAttack &&
-        // force active teleport Probprobability
-        ProbabilityTrue(40 / NumberOfPlayers(enemyTeam))
-    ){
-        // active teleport
-        if(
-            // teleport to common position Probprobability
-            ProbabilityTrue(90)
-        ){
-            // set teleport position to common position
-            if(SetTeleportPositionToCommonPosition()){
-                // teleport
-                TeleportWithEffect();
-            }
-        }
-        else{
-            // set teleport position to player around
-            if(SetTeleportPositionToPlayerAround()){
-                // teleport
-                TeleportWithEffect();
-            }
-        }
-    }
-    else{
-        // passive teleport
-        // set teleport position to player front
-        if(SetTeleportPositionToPlayerFront()){
-            // teleport
-            TeleportWithEffect();
-        }
-    }
-}
 
 rule: "EnemyBot/Teleport/clearCommonTeleportPosition"
 Event.OnDeath
 if(
     TeamOf() == enemyTeam &&
-    Attacker() == ep &&
-    portalEnable
+    Attacker() == ep
 ){
     commonTeleportPosition = 0;
 }
 
 // TAG EnemyBot/EnemyAbility
-rule: "EnemyBot/EnemyAbility/shotCall"
-Event.OngoingGlobal
-if(
-    portalState == PortalState.UnderAttack
-){
-    define shotCallInterval! = 60;
-    Wait(shotCallInterval, WaitBehavior.AbortWhenFalse);
-
-    dbgMsg("shotCall start");
-    define scList! = AllLivingPlayers(enemyTeam);
-    define scDelay! = RandomReal(0, 1);
-    for(define scLoopIndex! = 0; scLoopIndex < CountOf(scList); scLoopIndex ++){
-        SetUltimateCharge(scList[scLoopIndex], DefaultPercentage());
-        PressButton(scList[scLoopIndex], Button.Ultimate);
-        Wait(scDelay, WaitBehavior.AbortWhenFalse);
-    }
-    dbgMsg("shotCall end");
-
-    LoopIfConditionIsTrue();
-}
-
 rule: "EnemyBot/EnemyAbility/rush"
 Event.OngoingGlobal
 if(
     portalState == PortalState.UnderAttack
 ){
-    define rushInterval! = 30;
-    Wait(rushInterval, WaitBehavior.AbortWhenFalse);
+    define interval! = 30;
+    Wait(interval, WaitBehavior.AbortWhenFalse);
 
     dbgMsg("rush start");
-    define rushCount! = RandomInteger(10, 30);
-    for(rushCount; rushCount > 0; rushCount--){
+    define rushDurling! = RandomInteger(5, 15);
+    for(rushCount; rushDurling > 0; rushDurling--){
         Respawn(AllDeadPlayers(enemyTeam));
         Wait(1, WaitBehavior.AbortWhenFalse);
     }
@@ -1853,6 +1818,31 @@ if(
 
     LoopIfConditionIsTrue();
 }
+
+rule: "EnemyBot/EnemyAbility/shotCall"
+Event.OngoingGlobal
+if(
+    portalState == PortalState.UnderAttack
+){
+    define interval! = 60;
+    Wait(interval, WaitBehavior.AbortWhenFalse);
+
+    dbgMsg("shotCall start");
+    define deployedEnemys! = FilteredArray(
+        AllLivingPlayers(enemyTeam),
+        !IsInSpawnRoom(ae)
+    );
+    define shotCallDelay! = RandomReal(0, 1);
+    for(define scLoopIndex! = 0; scLoopIndex < CountOf(deployedEnemys); scLoopIndex ++){
+        SetUltimateCharge(deployedEnemys[scLoopIndex], DefaultPercentage());
+        PressButton(deployedEnemys[scLoopIndex], Button.Ultimate);
+        Wait(shotCallDelay, WaitBehavior.AbortWhenFalse);
+    }
+    dbgMsg("shotCall end");
+
+    LoopIfConditionIsTrue();
+}
+
 
 rule: "EnemyBot/EnemyAbility/combatTeleport"
 Event.OngoingPlayer

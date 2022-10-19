@@ -57,8 +57,8 @@ Event.OngoingGlobal
 if(
     IsAssemblingHeroes()
 ){
-    // SetMatchTime(0);
-    SetMatchTime(25);
+    SetMatchTime(0);
+    // SetMatchTime(25);
 }
 
 rule: "Initialize/shortenSetup"
@@ -66,7 +66,7 @@ Event.OngoingGlobal
 if(
     IsInSetup()
 ){
-    SetMatchTime(20);
+    SetMatchTime(25);
 }
 
 // TAG Buddy ----------
@@ -423,12 +423,12 @@ define assetList:
         [
             "long range",
             [EnemyType.Boss,        Hero.Orisa, 		1],
-            [EnemyType.Elite,       Hero.Bastion, 		5],
+            [EnemyType.Elite,       Hero.Sojourn, 		5],
             [EnemyType.Minion,      Hero.Ana, 	        10]
         ],
         [
             "long range",
-            [EnemyType.Boss,        Hero.Bastion, 		1],
+            [EnemyType.Boss,        Hero.Sojourn, 		1],
             [EnemyType.Elite,       Hero.Orisa, 		5],
             [EnemyType.Minion,      Hero.Ana, 	        10]
         ],
@@ -470,14 +470,16 @@ define assetList:
         [
             "machines",
             [EnemyType.Boss,        Hero.Orisa, 		1],
-            [EnemyType.Elite,       Hero.Bastion, 		5],
+            [EnemyType.Elite,       Hero.Sojourn, 		5],
+            // [EnemyType.Elite,       Hero.Bastion, 		5],
             [EnemyType.Minion,      Hero.Zenyatta,      10]
         ],
         [
             "machines",
             [EnemyType.Boss,        Hero.Zenyatta, 		1],
             [EnemyType.Elite,       Hero.Orisa, 		5],
-            [EnemyType.Minion,      Hero.Bastion,       10]
+            [EnemyType.Minion,      Hero.Sojourn,       10]
+            // [EnemyType.Minion,      Hero.Bastion,       10]
         ],
         [
             "Steel waves",
@@ -568,9 +570,9 @@ playervar define eachNameColor!;
 
 playervar define eachPerkDropProbability;   // dummy
 
-define minionSpawnTimeMin: 8;
-define eliteSpawnTimeMin: 16;
-define bossSpawnTimeMin: 32;
+define minionSpawnTimeMin: 10;
+define eliteSpawnTimeMin: 20;
+define bossSpawnTimeMin: 30;
 define spawnTimeMinToMaxMulti: 1.5;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
@@ -747,6 +749,8 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
     define teleportToTarget! = ClosestPlayerFromObject();
 
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        WaitRandomForDistributeServerLoad();
+    
         // select teleportPosition from middle of Object and teleportToTarget
         teleportPosition =
             NearestWalkablePosition(
@@ -764,21 +768,6 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
                     (teleportAreaSize)
                 )
             );
-
-        /*
-        define telPosNearTarget! = ClosestPlayerToTelPos;
-        if(
-            // Has line to target
-            IsInLineOfSight(
-                telPosNearTarget + PositionOffsetY1(),
-                teleportPosition + PositionOffsetY1(),
-                BarrierLOS.NoBarriersBlock)  
-        ){
-            break;
-        }
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
-        WaitUntilServerFree();
-        */
         break;
     }
     return true;
@@ -788,6 +777,8 @@ Boolean SetTeleportPositionToObjectArround() playervar "SetTeleportPositionToObj
     define teleportToTarget! = CurrentObjectPosition();
 
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        WaitRandomForDistributeServerLoad();
+
         // select teleportPosition from current object around
         teleportPosition = 
             NearestWalkablePosition(
@@ -811,7 +802,6 @@ Boolean SetTeleportPositionToObjectArround() playervar "SetTeleportPositionToObj
             break;
         }
         Wait(0.5, WaitBehavior.AbortWhenFalse);
-        WaitUntilServerFree();
     }
     return true;
 }
@@ -840,6 +830,8 @@ Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjec
     }
 
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        WaitRandomForDistributeServerLoad();
+
         // select teleportPosition from teleportToTarget around
         teleportPosition = 
             NearestWalkablePosition(
@@ -863,7 +855,6 @@ Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjec
             break;
         }
         Wait(0.5, WaitBehavior.AbortWhenFalse);
-        WaitUntilServerFree();
     }
     teleportPosition -= PositionOffset();
     return true;
@@ -876,7 +867,7 @@ Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCo
         // invalid commonTeleportPosition
         commonTeleportPosition ==  0 ||
         // Probability
-        ProbabilityTrue(5) ||
+        ProbabilityTrue(3) ||
         // player too close from commonTeleportPosition
         DistanceBetween(commonTeleportPosition, ClosestPlayerTo(commonTeleportPosition, playerTeam)) < 5 ||
         // has not line commonTeleportPosition to current object 
@@ -936,11 +927,11 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
     }
 }
 
-
-
 playervar define telBeam!;
 
 void TeleportWithEffect() playervar "TeleportWithEffect"{
+    WaitRandomForDistributeServerLoad();
+    
     Wait(SlotOf(ep) * 0.1, WaitBehavior.AbortWhenFalse);
     // show pre teleport effect
     PlayTeleportEffect(true);
@@ -1017,7 +1008,7 @@ if(
     for(define notHasLineSecond! = 0; notHasLineSecond < watchUpdateRate; notHasLineSecond ++){
         Wait(1, WaitBehavior.AbortWhenFalse);
         define hasTarget! = (actionState != ActionState.Non);
-        define nearObject! = (DistanceBetween(ep, CurrentObjectPosition()) <= 20);
+        define nearObject! = (DistanceBetween(ep, CurrentObjectPosition()) <= 15);
         if(
             !(      // not
                 !hasTarget ||                       // not has target
@@ -1052,7 +1043,7 @@ if(
     !IsOverTime()
 ){
     define interval! = (1 - (TotalObjectProgress() / DefaultPercentage())) * enemyAbilityIntervalAcordingProgress;
-    Wait(enemyAbilityIntervalMin + interval + RandomInteger(0, 5), WaitBehavior.AbortWhenFalse);
+    Wait(enemyAbilityIntervalMin + interval, WaitBehavior.AbortWhenFalse);
 
     dbgMsg("rush start");
     define rushDurling! = RandomInteger(5, 15);
@@ -1071,7 +1062,7 @@ if(
     IsGameInProgress()
 ){
     define interval! = (1 - (TotalObjectProgress() / DefaultPercentage())) * enemyAbilityIntervalAcordingProgress;
-    Wait(enemyAbilityIntervalMin + interval + RandomInteger(0, 5), WaitBehavior.AbortWhenFalse);
+    Wait(enemyAbilityIntervalMin + interval, WaitBehavior.AbortWhenFalse);
 
     dbgMsg("shotCall start");
     define deployedEnemys! = FilteredArray(
@@ -1093,21 +1084,18 @@ rule: "EnemyBot/EnemyAbility/combatTeleport"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    enemyType == EnemyType.GiantBoss &&
+    enemyType == EnemyType.GiantBoss&&
     IsAlive() &&
-    actionState == ActionState.Attack &&
-    IsGameInProgress()
+    actionState == ActionState.Attack
 ){
-    define interval! = NormalizedHealth() * enemyAbilityIntervalMin;
-    Wait(interval + RandomInteger(5, 10), WaitBehavior.AbortWhenFalse);
+    define interval! = NormalizedHealth() * 20 + RandomInteger(1, 5);
+    Wait(interval, WaitBehavior.AbortWhenFalse);
     // set teleport position to object around
     if(SetTeleportPositionToObjectArround()){
         TeleportWithEffect();
     }
     LoopIfConditionIsTrue();
 }
-
-
 
 rule: "EnemyBot/EnemyAbility/closeHopToObject"
 Event.OngoingPlayer

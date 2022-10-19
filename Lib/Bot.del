@@ -47,7 +47,6 @@ void CreateBotsByAssetList(define assetList, define team)"CreateBotsByAssetList"
                     RandomDirection()
                 );
                 Wait(0.1, WaitBehavior.IgnoreCondition);
-                WaitUntilServerFree();
             }
             // set Bot type as enemy type
             define bot! = PlayersInSlot(slot, team);
@@ -71,7 +70,6 @@ void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsBy
                 RandomDirection()
             );
             Wait(0.1, WaitBehavior.IgnoreCondition);
-            WaitUntilServerFree();
         }
     }
 }
@@ -90,7 +88,6 @@ void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHer
             RandomDirection()
         );
         Wait(0.1, WaitBehavior.IgnoreCondition);
-        WaitUntilServerFree();
     }
 }
 
@@ -291,7 +288,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
         case Hero.Cassidy:
         heroName = "Cassidy";
-        actionRange = ActionRange.Close;
+        actionRange = ActionRange.Middle;
         secondaryFireButtonReleaseMax = 20;
         break;
 
@@ -330,9 +327,30 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         secondaryFireButtonBehaivor = ButtonBehaivor.Non;
         break;
 
+        case Hero.JunkerQueen:
+        heroName = "JunkerQueen";
+        actionRange = ActionRange.Close;
+        break;
+
         case Hero.Junkrat:
         heroName = "Junkrat";
         actionRange = ActionRange.Middle;
+        break;
+
+        case Hero.Kiriko:
+        heroName = "Kiriko";
+        actionRange = ActionRange.Middle;
+        supportPrioloty = 75;
+        supportButtons = [
+            Button.PrimaryFire,
+            Button.Ability1,
+            Button.Ability2
+        ];
+        attackButtons = [
+            Button.SecondaryFire,
+            Button.Ability1,
+            Button.Ability2
+        ];
         break;
 
         case Hero.Lucio:
@@ -431,6 +449,12 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ultimateButtonReleaseMax = 15;
         break;
 
+        case Hero.Sojourn:
+        heroName = "Sojourn";
+        actionRange = ActionRange.Middle;
+        secondaryFireButtonReleaseMax = 10;
+        break;
+        
         case Hero.Soldier76:
         heroName = "Soldier76";
         actionRange = ActionRange.Middle;
@@ -593,7 +617,6 @@ define FindAttackTarget():
             FilteredArray(
                 AllLivingPlayers(EnemyTeamOf()),
                 (
-                    ae != ep &&
                     IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
                     !(
                         IsStealth(ae) &&
@@ -601,7 +624,7 @@ define FindAttackTarget():
                     )
                 )
             ),
-            DistanceBetween(ae, ep)
+            NormalizedHealth(ae)
         )
     );
 
@@ -624,13 +647,6 @@ define FindSupportTarget():
 
 define changeTargetProbForAttack: 50;
 
-define WaitRandomForReduceServerLoad(){
-    if(isServerOverLoading()){
-        WaitUntilServerFree();
-        Wait(RandomReal(0, 3), WaitBehavior.AbortWhenFalse);
-    }
-}
-
 void ApplyNextActionState(define player!, define nextActionState!) playervar "ApplyNextActionState"{
     // if state changed
     if(nextActionState != player.actionState){
@@ -651,6 +667,7 @@ if(
     IsDummyBot() &&
     HasSpawned()
 ){
+    WaitRandomForDistributeServerLoad();
     // get next state
     define nextActionState!;
     // is alive
@@ -762,7 +779,6 @@ if(
     ApplyNextActionState(ep, nextActionState);
 
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    WaitRandomForReduceServerLoad();
     LoopIfConditionIsTrue();
 }
 
@@ -799,9 +815,8 @@ void CallAttackNearBot(define attackTarget!)"CallAttackNearBot"{
         nearFriends[nearFriendsIndex].target = attackTarget;
         // set attack 
         ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
-                                                                    dbgPlyEft(nearFriends[nearFriendsIndex]);
         Wait(0.1, WaitBehavior.AbortWhenFalse);
-        WaitRandomForReduceServerLoad();
+        WaitRandomForDistributeServerLoad();
     }
 }
 
@@ -810,7 +825,7 @@ Event.OngoingGlobal
 if(
     isCallAttackCoolDown
 ){
-    Wait(3, WaitBehavior.IgnoreCondition);
+    Wait(1, WaitBehavior.IgnoreCondition);
     isCallAttackCoolDown = false;
     Loop();
 }
@@ -836,7 +851,6 @@ if(
     actionState != ActionState.Non &&
     Victim() == target
 ){
-    WaitRandomForReduceServerLoad();
     // is support role hero
     if(0 < supportPrioloty)
     {
@@ -1066,6 +1080,7 @@ if(
     StopFacing();
     Wait(0.1, WaitBehavior.AbortWhenFalse);
 
+    // action loop
     while(actionState == ActionState.Non){
         define nearEnemy! = ClosestPlayerTo(ep, EnemyTeamOf());
         if(
@@ -1079,8 +1094,8 @@ if(
                 Relative.ToWorld);
         }
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-        WaitRandomForReduceServerLoad();
-    }    // action loop
+        WaitRandomForDistributeServerLoad();
+    }
 }
 
 // TAG Bot/ActionState/Attack ----------
@@ -1095,7 +1110,8 @@ if(
     // start facing direction
     StartFacingTarget();
     Wait(0.1, WaitBehavior.AbortWhenFalse);
-    
+
+    // action loop
     while(actionState == ActionState.Attack){
         // hero unique action
         heroAction();
@@ -1113,9 +1129,8 @@ if(
         checkAndBreakStuck();
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-        WaitRandomForReduceServerLoad();
-    }    // action loop
-
+        WaitRandomForDistributeServerLoad();
+    }
 }
 
 // TAG Bot/ActionState/Support ----------
@@ -1149,7 +1164,7 @@ if(
         checkAndBreakStuck();
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-        WaitRandomForReduceServerLoad();
+        WaitRandomForDistributeServerLoad();
     }
 }
 
@@ -1279,7 +1294,7 @@ if(
         }        
 
         for(; 0 < strikeCount; strikeCount--){
-        PressButton(ep, Button.PrimaryFire);
+            PressButton(ep, Button.PrimaryFire);
             if(0 < strikeCount){
                 # button press with random interval
                 Wait(RandomReal(0.2, 0.4), WaitBehavior.IgnoreCondition);
