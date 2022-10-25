@@ -2,7 +2,7 @@ import "Utility.del";
 import "Debug.del";
 
 // TAG public property
-globalvar define botAimScat = WorkshopSettingReal("Enemy Bot Settings", "Aim Scattering (0 is head shot)",              0.2, 0, 1000, 3);
+globalvar define botAimScat = WorkshopSettingReal("Enemy Bot Settings", "Aim Scattering (0 is head shot)",              0.3, 0, 1000, 3);
 
 // TAG Bot/Spawn ----------
 enum BotAsset{
@@ -180,15 +180,15 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         primaryFireButtonReleaseMin = 0;
-        primaryFireButtonReleaseMax = 2.5;
+        primaryFireButtonReleaseMax = 5;
         primaryFireButtonPressMin = 0;
-        primaryFireButtonPressMax = 5;
+        primaryFireButtonPressMax = 10;
 
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonReleaseMin = 0;
-        secondaryFireButtonReleaseMax = 2.5;
+        secondaryFireButtonReleaseMax = 5;
         secondaryFireButtonPressMin = 0;
-        secondaryFireButtonPressMax = 5;
+        secondaryFireButtonPressMax = 10;
 
         ability1ButtonReleaseMin = 0;
         ability1ButtonReleaseMax = 5;
@@ -226,8 +226,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRange = ActionRange.Far;
         canFireButtonCombination = true;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        secondaryFireButtonPressMin = 10;
-        secondaryFireButtonPressMax = 15;
+        secondaryFireButtonPressMin = 20;
+        secondaryFireButtonPressMax = 40;
         supportPrioloty = 100;
         supportButtons = [
             Button.PrimaryFire,
@@ -242,8 +242,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         canFireButtonCombination = true;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleaseRepeat;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        secondaryFireButtonPressMin = 10;
-        secondaryFireButtonPressMax = 10;
+        secondaryFireButtonPressMin = 20;
+        secondaryFireButtonPressMax = 40;
         break;
 
         case Hero.Baptiste:
@@ -497,14 +497,14 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         canFireButtonCombination = true;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         primaryFireButtonReleaseMin = 1;
-        primaryFireButtonReleaseMax = 1.5;
+        primaryFireButtonReleaseMax = 1.25;
         primaryFireButtonPressMin = 0;
         primaryFireButtonPressMax = 1;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 20;
-        secondaryFireButtonPressMax = 30;
-        ability1ButtonReleaseMin = 20;
-        ability1ButtonReleaseMax = 30;
+        secondaryFireButtonPressMax = 40;
+        ability1ButtonReleaseMin = 40;
+        ability1ButtonReleaseMax = 60;
         ability2ButtonReleaseMin = 20;
         ability2ButtonReleaseMax = 30;
         break;
@@ -964,9 +964,13 @@ void setMoveDir() playervar "setMoveDir"{
     // set move direction
     define distToTarget! = DistanceBetween(ep, target);
 
-    // select dir
+    // select dir    
+    // low health
+    if(NormalizedHealth() <= 0.4){
+        moveDir = Backward();
+    }
     // attack state
-    if(actionState == ActionState.Attack){
+    else if(actionState == ActionState.Attack){
         // target is far
         if(
             distToTarget > actionRangeMax
@@ -1038,10 +1042,15 @@ void setSideStep() playervar "setSideStep"{
 
 define aimingPosition:
     IsInAlternateForm(target) ?
-    EyePosition(target) - Vector(0, 0.7, 0):
-    EyePosition(target) + Vector(0, 0.2, 0);
+        EyePosition(target) - Vector(0, 0.6, 0)     // body position
+    :
+        EyePosition(target) + Vector(0, 0.2, 0)     // head position
+            +
+    RandomPosition(botAimScat, botAimScat, botAimScat)  // aim scattet
+            +
+    Vector(0, -(botAimScat / 2), 0);    // vertical offset
 
-void StartFacingTarget(){
+void StartFacingTarget()"StartFacingTarget"{
     if(
         target != 0 &&
         target != null &&
@@ -1051,7 +1060,7 @@ void StartFacingTarget(){
             ep,
             DirectionTowards(
                 EyePosition(),
-                aimingPosition + RandomPosition(botAimScat, botAimScat, botAimScat)
+                aimingPosition
             ),
             300,
             Relative.ToWorld, FacingRev.DirectionAndTurnRate
