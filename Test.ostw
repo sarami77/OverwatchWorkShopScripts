@@ -12,7 +12,6 @@ Event.OngoingGlobal
 {
     Wait(3, WaitBehavior.AbortWhenFalse);
 
-
     while(true){
         if(TeamOf(HostPlayer()) == Team.Team1){
             playerTeam = Team.Team1;
@@ -73,14 +72,18 @@ if(
 // TAG Buddy ----------
 import "Lib/Buddy.del";
 
+// TAG Buddy ----------
+define IDX_ROLE_TANK: 0;
+define IDX_ROLE_DAMAGE: 1;
+define IDX_ROLE_SUPPORT: 2;
+
 rule: "Buddy/BuddyContorl"
 Event.OngoingGlobal
 if(
     initCompleted
 ){
-    
-    define buddyList! = 
-    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", false) ?
+    define buddyAssetList! = 
+    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", true) ?
         // random list
         [
             RandomSupportHero,
@@ -95,16 +98,70 @@ if(
     :
         // fix list
         [
-            Hero.Doomfist,
-            Hero.Bastion
+            Hero.Mercy,
+            Hero.Genji,
+            Hero.Reinhardt,
+            Hero.Ana,
+            Hero.Hanzo,
+            Hero.Orisa,
+            Hero.Baptiste,
+            Hero.Soldier76
         ];
 
-    for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(buddyList); buddyAddIndex++){
-        // CreateBotsByHeroInput(buddyList[buddyAddIndex], 1, playerTeam);
-        CreateBotsByHeroInput(buddyList[buddyAddIndex], 1, enemyTeam);
+    // slice buddy list by setting
+    buddyAssetList = ArraySlice(buddyAssetList, 0,
+        WorkshopSettingInteger(
+            "Follower AI Settings(Join on behalf of absent player)",
+            "Follower Max Num", 8, 0, 8, 1)
+    );
+
+    define prevPlayerNum! = -1;
+    define maxSlotNum! = NumberOfSlots(playerTeam);
+    define maxBuddyNum! = CountOf(buddyAssetList);
+
+    while(true){
+        define playerNum! =
+            CountOf(
+                FilteredArray(
+                    AllPlayers(playerTeam),
+                    !IsDummyBot(ae)
+                )
+            );
+        define buddyNum! =
+            CountOf(
+                FilteredArray(
+                    AllPlayers(playerTeam),
+                    IsDummyBot(ae)
+                )
+            );
+        define needBuddyNum! = 
+            Min(
+                maxSlotNum - playerNum,
+                maxBuddyNum
+            );
+
+        if(
+            // not filed by need buddy number
+            buddyNum != needBuddyNum ||
+            // player number changed
+            prevPlayerNum != playerNum
+        ){
+            // save player num
+            prevPlayerNum = playerNum;
+            // relaod buddy list
+            DestroyBots(playerTeam);
+            // get empty slot num
+            define emptySlotNum! = maxSlotNum - playerNum;
+            // build add hero list
+            define addList! = ArraySlice(buddyAssetList, 0, emptySlotNum);
+            for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(addList); buddyAddIndex++){
+                CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
+            }
+        }
+    
+        Wait(10, WaitBehavior.IgnoreCondition);
     }
 }
-
 
 // Debug/Slow -----------------------------------------------
 globalvar define slow = DefaultPercentage();
