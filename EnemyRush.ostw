@@ -335,8 +335,13 @@ rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
+    HasSpawned() &&
     enemyType != EnemyType.None
 ){
+    // set no back when Low Health
+    backWhenLowHealth = false;
+
+    // setEnemyType
     if(enemyType == EnemyType.Minion){
         watchUpdateRate = 12;
         eachTextOffset = 0.75;
@@ -420,6 +425,7 @@ if(
         AddHealthPoolToPlayer(ep, HealthType.Shields, health, true, false);
     }
 
+    // update param
     UpdateEachDealtDamage();
     UpdateEachSpawnInterval();
 }
@@ -506,6 +512,8 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
 
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
         WaitRandomForDistributeServerLoad();
+
+        define currentObjectPosition! = CurrentObjectPosition();
     
         // select teleportPosition from middle of Object and teleportToTarget
         teleportPosition =
@@ -513,9 +521,9 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
                 PositionOf(teleportToTarget)
                     + 
                 (
-                    DirectionTowards(teleportToTarget, CurrentObjectPosition())
+                    DirectionTowards(teleportToTarget, currentObjectPosition)
                         *
-                    DistanceBetween(teleportToTarget, CurrentObjectPosition()) * 0.35
+                    DistanceBetween(teleportToTarget, currentObjectPosition) * 0.35
                 )
                     +
                 RandomPosition(
@@ -564,10 +572,10 @@ Boolean SetTeleportPositionToObjectArround() playervar "SetTeleportPositionToObj
 
 globalvar define additinalTeleportAreaSize;
 define teleportAreaSizeOffset: 30;
-define onObjectPosition: CurrentObjectPosition() + Vector(0, 4, 0); // not collision in payload object position
+define OnCurrentObjectPosition(): CurrentObjectPosition() + Vector(0, 5, 0); // not collision in payload object position
 
 Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
-    define teleportToTarget! = onObjectPosition;
+    define teleportToTarget! = OnCurrentObjectPosition();
     
     if(
         payloadDirection != 0 &&
@@ -864,12 +872,12 @@ if(
     if(
         IsPlayerOnObject &&
         IsOnGround() &&
-        DistanceBetween(ep, onObjectPosition) >= 4.0 &&
+        DistanceBetween(ep, OnCurrentObjectPosition()) >= 4.0 &&
         CountOf(AllPlayersOnObjective(enemyTeam)) <= 1
     ){
         PressButton(ep, Button.Jump);
         ApplyImpulse(ep, 
-            VectorTowards(ep, onObjectPosition), 10,
+            VectorTowards(ep, OnCurrentObjectPosition()), 10,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     
