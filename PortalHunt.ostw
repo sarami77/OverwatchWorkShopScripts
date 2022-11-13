@@ -43,8 +43,8 @@ Event.OngoingGlobal
     PauseMatchTime();
 
     // Set team lives property
-    initialTeamLives =                      WorkshopSettingInteger("Player Settings", "Initial team lives",                     6, 0, 1000, 0);
-    maxTeamLives =                          WorkshopSettingInteger("Player Settings", "Max stock team lives",                   12, 0, 1000, 1);
+    initialTeamLives =                      WorkshopSettingInteger("Player Settings", "Initial team lives",                     5, 0, 1000, 0);
+    maxTeamLives =                          WorkshopSettingInteger("Player Settings", "Max stock team lives",                   10, 0, 1000, 1);
 
     // Set imported functions public property for user tuning
     // Regeneration.del
@@ -195,7 +195,7 @@ if(
     initCompleted
 ){
     define buddyList! = 
-    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", false, -101) ?
+    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", true, -101) ?
         // random list
         [
             RandomSupportHero,
@@ -278,7 +278,7 @@ if(
             }
         }
     
-        Wait(5, WaitBehavior.IgnoreCondition);
+        Wait(10, WaitBehavior.IgnoreCondition);
     }
 }
 
@@ -622,25 +622,23 @@ if(
     closingCount = RoundToInteger(closingCount, Rounding.Up);
     closingCount = Min(maxClosingCount, closingCount);
 
-    dbgMsg(<"closing count <0>", closingCount>);
+    dbgMsg(<"closing count <0> <1> <2>", closingCount, closingProgress, playerNumInsidePortal>);
 
-    closingProgress = 0;
-    ChaseVariableOverTime(closingProgress, DefaultPercentage(), closingCount, TimeChaseReevaluation.DestinationAndDuration);
     // show progress hud
-    if(closingProgressHudEntity == null){
-        CreateProgressBarHudText(
+    ChaseVariableOverTime(closingProgress, DefaultPercentage(), closingCount, TimeChaseReevaluation.DestinationAndDuration);
+    DestroyProgressBarHudText(closingProgressHudEntity);
+    closingProgressHudEntity = CreateProgressBarHudText(
             AllPlayers(),
             closingProgress,
-            <"<0> players attacking portal. Until portal closes...", playerNumInsidePortal >,
+            <"<0> players attacking portal. Until portal closes <1>", playerNumInsidePortal,
+                RoundToInteger((100 - closingProgress) * closingCount / 100, Rounding.Down)>,
             Location.Top, 4,
             Color.White,
             Color.White,
             ProgressBarHudEvaluation.Values,
-            Spectators.DefaultVisibility );
-        closingProgressHudEntity = LastTextID();
-    }
-    define closestPlayerPortal! = ClosestPlayerFromPortal();
+            Spectators.DefaultVisibility);
     // show big message
+    define closestPlayerPortal! = ClosestPlayerFromPortal();
     BigMessage(
         closestPlayerPortal,
         <"You are attacking portal. Stay inside and Survive!">);
@@ -676,7 +674,7 @@ if(
     !enableClosingProgress
 ){
     StopChasingVariable(closingProgress);
-    // wait hide hud when progress completed
+    // delay hide hud when progress completed
     if(closingProgress == DefaultPercentage()){
         Wait(1.5, WaitBehavior.AbortWhenFalse);
     }
@@ -836,6 +834,7 @@ if(
     portalColor = enemyColor;
 
     // Start growing portal with warning message
+    UpdateEveryFrame(portalSize);
     ChaseVariableAtRate(
         portalSize, maxPortalSize, 1 + (roundNo / 10),
         RateChaseReevaluation.DestinationAndRate);  // startGrowing
@@ -1182,69 +1181,27 @@ if(
 define assetList:
     [
         [
-            "tank boss",
-            [EnemyType.Boss,        RandomTankHero,     1],
-            [EnemyType.Elite,       RandomDamageHero,   2],
-            [EnemyType.Minion,      RandomSupportHero,  3]
-        ],
-        [
-            "support boss",
-            [EnemyType.Boss,        RandomSupportHero,  1],
-            [EnemyType.Elite,       RandomTankHero,     2],
-            [EnemyType.Minion,      RandomDamageHero,   3]
-        ],
-        [
-            "damage boss",
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Elite,       RandomSupportHero,  2],
-            [EnemyType.Minion,      RandomTankHero,     3]
-        ],
-        [
-            "damage boss",
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Elite,       RandomTankHero,     2],
-            [EnemyType.Minion,      RandomSupportHero,  3]
+            "basic",
+            [EnemyType.Boss,        RandomHero,         1],
+            [EnemyType.Elite,       RandomHero,         2],
+            [EnemyType.Minion,      RandomHero,         3]
         ],
         [
             "boss and minions",
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomDamageHero,   5]
+            [EnemyType.Boss,        RandomHero,         1],
+            [EnemyType.Minion,      RandomHero,         5]
         ],
         [
             "four elites",
-            [EnemyType.Elite,       RandomDamageHero,   2],
-            [EnemyType.Elite,       RandomSupportHero,  2],
-            [EnemyType.Minion,      RandomTankHero,     2]
-        ],
-        [
-            "four elites",
-            [EnemyType.Elite,       RandomSupportHero,  2],
-            [EnemyType.Elite,       RandomTankHero,     2],
-            [EnemyType.Minion,      RandomDamageHero,   2]
-        ],
-        [
-            "four elites",
-            [EnemyType.Elite,       RandomTankHero,     2],
-            [EnemyType.Elite,       RandomDamageHero,   2],
-            [EnemyType.Minion,      RandomSupportHero,  2]
-        ],        
-        [
+            [EnemyType.Elite,       RandomHero,         2],
+            [EnemyType.Elite,       RandomHero,         2],
+            [EnemyType.Minion,      RandomHero,         2]
+        ],      
+        [       
             "double bosses",
-            [EnemyType.Boss,        RandomTankHero,     1],
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Minion,      RandomSupportHero,  4]
-        ],
-        [
-            "double bosses",
-            [EnemyType.Boss,        RandomSupportHero,  1],
-            [EnemyType.Boss,        RandomTankHero,     1],
-            [EnemyType.Minion,      RandomDamageHero,   4]
-        ],
-        [
-            "double bosses",
-            [EnemyType.Boss,        RandomDamageHero,   1],
-            [EnemyType.Boss,        RandomSupportHero,  1],
-            [EnemyType.Minion,      RandomTankHero,     4]
+            [EnemyType.Boss,        RandomHero,         1],
+            [EnemyType.Boss,        RandomHero,         1],
+            [EnemyType.Minion,      RandomHero,         4]
         ],
 
         [
@@ -1264,11 +1221,10 @@ define assetList:
             [EnemyType.Elite,       someHero, 		    4],
             [EnemyType.Minion,      someHero, 		    2]
         ],
-
         [
-            "giant boss",
+            "big boss",
             [EnemyType.GiantBoss,   RandomHero,         1],
-            [EnemyType.Minion,      RandomSupportHero,  5]
+            [EnemyType.Minion,      RandomHero,         2]
         ]
     ];
 
@@ -1296,6 +1252,8 @@ playervar define eachDealtDamageScale!;
 playervar define eachMaxSpawnInterval!;
 playervar define eachMinSpawnInterval!;
 playervar define eachChargeUltInterval!;
+
+playervar define eachTextOffset!;
 playervar define eachTextSize!;
 playervar define eachNameText!;
 playervar define eachNameColor!;
@@ -1308,12 +1266,11 @@ if(
 ){
     if(enemyType == EnemyType.Minion){
         watchUpdateRate = 12;
-
+        eachTextOffset = 0.75;
         StartScalingPlayer(ep, 0.75, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
 
         SetMaxHealth(ep, 50);
-
         SetHealingDealt(ep, 50);
         SetHealingReceived(ep, 50);
         
@@ -1330,12 +1287,11 @@ if(
     }
     else if(enemyType == EnemyType.Elite){
         watchUpdateRate = 6;
-
+        eachTextOffset = 1.0;
         StartScalingPlayer(ep, 1.0, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
 
         SetMaxHealth(ep, 200);
-
         SetHealingDealt(ep, 200);
         SetHealingReceived(ep, 200);
 
@@ -1352,12 +1308,11 @@ if(
     }
     else if(enemyType == EnemyType.Boss){
         watchUpdateRate = 3;
-
+        eachTextOffset = 1.5;
         StartScalingPlayer(ep, 1.5, false);
         StartModifyingHeroVoiceLines(ep, 0.5, false);
 
         SetMaxHealth(ep, 1000);
-
         SetHealingDealt(ep, 250);
         SetHealingReceived(ep, 250);
 
@@ -1374,16 +1329,15 @@ if(
     }
     else if(enemyType == EnemyType.GiantBoss){
         watchUpdateRate = 3;
-        
+        eachTextOffset = 1.5;
         StartScalingPlayer(ep, 2.5, false);
         StartModifyingHeroVoiceLines(ep, 0.1, false);
 
         SetMaxHealth(ep, 1000);
-
         SetHealingDealt(ep, 250);
         SetHealingReceived(ep, 250);
 
-        eachDealtDamageScale = 3.0;
+        eachDealtDamageScale = 4.0;
         eachChargeUltInterval = 5;
         eachMaxSpawnInterval = 27;
         eachMinSpawnInterval = 9;
@@ -1431,7 +1385,7 @@ if(
     botAppearanceEntitys[1] = 
         CreateInWorldText(
             AllPlayers(), eachNameText, 
-            ep, eachTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+            ep + Vector(0, eachTextOffset * 2.55, 0), eachTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
             eachNameColor, Spectators.DefaultVisibility);
 }
 
@@ -1503,9 +1457,9 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
                 PositionOf(teleportToTarget)
                     + 
                 (
-                    DirectionTowards(teleportToTarget, CurrentObjectPosition())
+                    DirectionTowards(teleportToTarget, portalPosition)
                         *
-                    DistanceBetween(teleportToTarget, CurrentObjectPosition()) * 0.35
+                    DistanceBetween(teleportToTarget, portalPosition) * 0.5
                 )
                     +
                 RandomPosition(
@@ -1572,7 +1526,7 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
         ){
             break;
         }
-        Wait(1, WaitBehavior.AbortWhenFalse);
+        Wait(0.5, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
     return true;
@@ -1640,8 +1594,7 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
         // hide teleport beam effect
         DestroyEffect(telBeam);
         // play teleport sound
-        PlayEffect(AllPlayers(), PlayEffect.RingExplosionSound, null,
-        ep, 70);
+        PlayEffect(AllPlayers(), PlayEffect.RingExplosionSound, null, ep, 40);
     }
 }
 
@@ -1777,6 +1730,7 @@ if(
     !IsInSpawnRoom()
 ){
     for(define notHasLineSecond! = 0; notHasLineSecond < 3; notHasLineSecond ++){
+        WaitRandomForDistributeServerLoad();
         Wait(1, WaitBehavior.AbortWhenFalse);
         if(
             actionState != ActionState.Non
@@ -2055,6 +2009,15 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
             Color.White, Color.Orange, Color.White,
             HudTextRev.VisibleToAndString, Spectators.VisibleNever);
         debugHudEntitys[End()] = LastTextID();
+
+        CreateHudText(player,
+            null,
+            <"<0> <1>", "count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad>,
+            null,
+            Location.Left, -1,
+            Color.White, Color.Orange, Color.White,
+            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+        debugHudEntitys[End()] = LastTextID();
     }
 
     if(
@@ -2166,66 +2129,3 @@ if(
     WaitLongPressConfirm();
     portalSize = maxPortalSize;
 }
-
-// rule: "Debug/debugAction"
-// Event.OngoingPlayer
-// Team.All
-// if(
-//     HostPlayer() == ep &&
-//     IsButtonHeld(ep, Button.Interact) &&
-//     IsButtonHeld(ep, Button.PrimaryFire) &&
-//     IsButtonHeld(ep, Button.SecondaryFire) &&
-//     IsButtonHeld(ep, Button.Ability1) &&
-//     IsButtonHeld(ep, Button.Ability2)
-// ){
-//     define dPlayer = PlayerClosestToReticle(ep, TeamOf());
-
-//     while(true){
-//         define teas = AllPlayers(playerTeam);
-//         for(gLoopIndex = 0; gLoopIndex < CountOf(teas); gLoopIndex++){
-//             if(
-//                 teas[gLoopIndex] != ep &&
-//                 teas[gLoopIndex] != dPlayer
-//             ){
-//                 Teleport(teas[gLoopIndex], Vector(0, 1000, 0));
-//             }
-//         }
-
-//         SetStatus(dPlayer, null, Status.Invincible, MaxValue());
-//         SetStatus(ep, null, Status.Unkillable, MaxValue());
-
-//         Damage(ep, null, MaxValue());
-
-//         dPlayer.perkState = PerkState.Using;
-//         dPlayer.perkType = PerkType.MedicSyringe;
-//         if(!IsInLineOfSight(dPlayer, ep)){
-//             Teleport(dPlayer, ep);
-//         }
-        
-//         Wait(5);
-//     }
-// }
-
-define comTelPosBeamColor:
-    Color.White;
-    // IsInLineOfSight(commonTeleportPosition, ClosestPlayerToTelPos) &&
-    // DistanceBetween(ClosestPlayerToTelPos, teleportPosition) >= teleportAreaSize / 2 
-    // ? Color.White : Color.Yellow;
-
-// rule: "Debug/showCommonTeleportPosition"
-// Event.OngoingPlayer
-// Team.All
-// if(
-//     HostPlayer() == ep &&
-//     initCompleted
-// ){
-//     CreateBeamEffect(isInDebugMode ? HostPlayer() :,
-//         BeamType.BadBeam, ClosestPlayerTo(commonTeleportPosition, playerTeam), commonTeleportPosition,
-//         comTelPosBeamColor, EffectRev.PositionRadiusAndColor);
-//     CreateEffect(HostPlayer(),
-//         Effect.Sphere, comTelPosBeamColor, commonTeleportPosition,
-//         teleportAreaSize, EffectRev.PositionRadiusAndColor);
-//     CreateEffect(HostPlayer(),
-//         Effect.Sphere, comTelPosBeamColor, commonTeleportPosition,
-//         teleportTooCloseDist, EffectRev.PositionRadiusAndColor);
-// }
