@@ -24,7 +24,7 @@ Event.OngoingGlobal
         Color.White, Color.Orange, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
 
-    CreateIcon(HostPlayer(), teleportAreaPos, Icon.ArrowDown,
+    CreateIcon(HostPlayer(), combatAreaPos, Icon.ArrowDown,
             IconRev.VisibleToAndPosition, Color.White, true);
 
     while(true){
@@ -51,7 +51,7 @@ Event.OngoingGlobal
     regenerationHealthPerSecondTeam1 = regRate;
     regenerationHealthPerSecondTeam2 = regRate;
 
-    CreateEffect(AllPlayers(), Effect.Sphere, Color.White, teleportAreaPos,
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.White, combatAreaPos,
         combatAreaRange, EffectRev.VisibleToPositionRadiusAndColor);
 
     // set game HUD
@@ -122,7 +122,7 @@ if(
     CreateInWorldText(
         AllPlayers(),
         <"<0> Kills", killCount>,
-        ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        ep + PositionOffset(), basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
 }
 
@@ -147,8 +147,8 @@ if(
     // TAG BotList
     dbgMsg("Reload Bot List");
     
-    // define teamAsset = AllHeroes();
-    define teamAsset = [Hero.Kiriko, Hero.JunkerQueen, Hero.Sojourn];
+    define teamAsset = AllHeroes();
+    // define teamAsset = [Hero.Kiriko, Hero.JunkerQueen, Hero.Sojourn];
     parallelCount = 0;
     DestroyBots(Team.Team1);
     CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team1);
@@ -161,19 +161,19 @@ if(
 
 rule: "ReloadTeleportPosition"
 Event.OngoingGlobal
-{
-    SetTeleportAreaPositionAtRandom();
+if(
+    initCompleted
+){
+    SetCombatAreaPositionAtRandom();
     Wait(120, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
 rule: "SetDummyBotSetting"
 Event.OngoingPlayer
-if(
-    true
-){
+{
     StartForcingDummyBotName(ep, GetDummyName());
-    watchUpdateRate = 6;
+    watchUpdateRate = 5;
 }
 
 rule: "FastRespaw"
@@ -209,22 +209,22 @@ if(
 
 globalvar define combatAreaRange = WorkshopSettingReal("Game Settings", "Combat Area Range", 55, 0, 1000, 1);
 
-globalvar define teleportAreaPos;
+globalvar define combatAreaPos;
 
 rule: "PullCenterByOutBound"
 Event.OngoingPlayer
 if(
     !IsInSpawnRoom(ep) &&
-    DistanceBetween(ep, teleportAreaPos) > combatAreaRange
+    DistanceBetween(ep, combatAreaPos) > combatAreaRange
 ){
-    if(DistanceBetween(ep, teleportAreaPos) > combatAreaRange + 3){
+    if(DistanceBetween(ep, combatAreaPos) > combatAreaRange + 3){
         Wait(keepMovingSecondOfTeleportPlayer, WaitBehavior.AbortWhenFalse);
         ExecTeleport();
     }
     else{
         while(true){
-            ApplyImpulse(ep, VectorTowards(ep, teleportAreaPos),
-                DistanceBetween(ep, teleportAreaPos) * 0.5,
+            ApplyImpulse(ep, VectorTowards(ep, combatAreaPos),
+                DistanceBetween(ep, combatAreaPos) * 0.5,
                 Relative.ToWorld, ContraryMotion.Cancel);
             Wait(0.1, WaitBehavior.AbortWhenFalse);
             WaitUntilServerFree();
@@ -265,7 +265,7 @@ if(
         ProbabilityTrue(25)
     ){
         dbgMsg("Shift Teleport Position By Spawn Room Kill");
-        SetTeleportAreaPositionAtRandom();
+        SetCombatAreaPositionAtRandom();
         ForceSpawnRoom(Team.Team1, RandomInteger(0, 2));
         ForceSpawnRoom(Team.Team2, RandomInteger(0, 2));
     }
@@ -273,16 +273,17 @@ if(
 
 globalvar define prev_teleportPos;
 
-void SetTeleportAreaPositionAtRandom()"SetTeleportAreaPositionAtRandom"{
-    prev_teleportPos = teleportAreaPos;
-    define temp_teleportAreaPos = teleportAreaPos;
+void SetCombatAreaPositionAtRandom()"SetCombatAreaPositionAtRandom"{
+    prev_teleportPos = combatAreaPos;
+    define temp_teleportAreaPos = combatAreaPos;
     define selectionAreaRange = combatAreaRange * 2.5;
 
     for(gLoopIndex = 0; gLoopIndex < 10; gLoopIndex++){
 
         temp_teleportAreaPos = NearestWalkablePosition(
             temp_teleportAreaPos +
-            RandomPosition(selectionAreaRange, selectionAreaRange, selectionAreaRange));
+            RandomPosition(selectionAreaRange, selectionAreaRange, selectionAreaRange)
+        );
 
         if(
             // not inside ours spwan room
@@ -301,7 +302,7 @@ void SetTeleportAreaPositionAtRandom()"SetTeleportAreaPositionAtRandom"{
         Wait(0.5, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
-    teleportAreaPos = temp_teleportAreaPos;
+    combatAreaPos = temp_teleportAreaPos;
 }
 
 
@@ -319,11 +320,12 @@ void ExecTeleport()"ExecTeleport"{
     parallelCount ++;
 
     define teleportPos;
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){ 
+    for(define telLoopIndex = 0; telLoopIndex < 5; telLoopIndex++){ 
 
         teleportPos = NearestWalkablePosition(
-            teleportAreaPos +
-            RandomPosition(combatAreaRange, combatAreaRange, combatAreaRange));
+            combatAreaPos +
+            RandomPosition(combatAreaRange, combatAreaRange / 2, combatAreaRange)
+        );
 
         if(
             // not inside ours spwan room
@@ -333,7 +335,7 @@ void ExecTeleport()"ExecTeleport"{
             !IsInSpawnRoomPosition(teleportPos, EnemyTeamOf())
                 &&
             (
-                // ignore has line to enemy for seeding
+                // ignore has line for seeding
                 ProbabilityTrue(50)
                     ||
                 // has line to enemy
@@ -395,7 +397,7 @@ if(
     IsButtonHeld(ep, Button.Jump)
 ){
     WaitLongPressConfirm();
-    SetTeleportAreaPositionAtRandom();
+    SetCombatAreaPositionAtRandom();
 }
 
 rule: "Debug/reloadBotList"
