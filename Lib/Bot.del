@@ -222,7 +222,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 20;
         secondaryFireButtonPressMax = 40;
-        supportPrioloty = 100;
+        supportPrioloty = 1;
         supportButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
@@ -244,7 +244,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Baptiste";
         actionRange = ActionRange.Far;
         canFireButtonCombination = true;
-        supportPrioloty = 100;
+        supportPrioloty = 1;
         supportButtons = [
             Button.SecondaryFire,
             Button.Ability1,
@@ -273,7 +273,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         secondaryFireButtonPressMax = 6;
         ability2ButtonReleaseMax = 1;
         ultimateButtonReleaseMax = 30;
-        supportPrioloty = 75;
+        supportPrioloty = 0.75;
         supportButtons = [
             Button.SecondaryFire,
             Button.Ability2
@@ -334,7 +334,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Kiriko:
         heroName = "Kiriko";
         actionRange = ActionRange.Middle;
-        supportPrioloty = 75;
+        supportPrioloty = 0.75;
         supportButtons = [
             Button.PrimaryFire,
             Button.Ability1,
@@ -351,7 +351,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Lucio";
         actionRange = ActionRange.Middle;
         ultimateButtonReleaseMax = 15;
-        supportPrioloty = 25;
+        supportPrioloty = 0.25;
         supportButtons = [
             Button.Ability1,
             Button.Ability2
@@ -373,7 +373,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ability1ButtonReleaseMax = 2;
         ability2ButtonPressMax = 10;
         ability2ButtonReleaseMax = 1;
-        supportPrioloty = 100;
+        supportPrioloty = 1;
         supportButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
@@ -387,7 +387,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRange = ActionRange.Middle;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        supportPrioloty = 100;
+        supportPrioloty = 1;
         supportButtons = [
             Button.PrimaryFire,
             Button.Ability1,
@@ -530,7 +530,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ability2ButtonPressMax = 0.5;
         ability2ButtonReleaseMin = 0.5;
         ability2ButtonReleaseMax = 0.5;
-        supportPrioloty = 25;
+        supportPrioloty = 0.25;
         supportButtons = [
             Button.Ability1,
             Button.Ability2
@@ -552,7 +552,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ability2ButtonReleaseMin = 0.5;
         ability2ButtonReleaseMax = 0.5;
         ultimateButtonReleaseMax = 30;
-        supportPrioloty = 25;
+        supportPrioloty = 0.25;
         supportButtons = [
             Button.Ability1,
             Button.Ability2
@@ -603,7 +603,7 @@ enum ButtonBehaivor{
 }
 
 // TAG Bot/ActionState/StateControl ----------
-playervar define watchUpdateRate = 1;
+playervar define watchUpdateRate = 2;
 
 define FindAttackTarget():
     FirstOf(
@@ -618,8 +618,9 @@ define FindAttackTarget():
                     )
                 )
             ),
-            // NormalizedHealth(ae)
-            DistanceBetween(ep, ae)
+            // Health(ae)
+            NormalizedHealth(ae)
+            // DistanceBetween(ep, ae)
         )
     );
 
@@ -630,17 +631,16 @@ define FindSupportTarget():
                 AllLivingPlayers(TeamOf()),
                 (
                     ae != ep &&
-                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
-                    (
-                        ProbabilityTrue((1 - NormalizedHealth(ae)) * supportPrioloty)
-                    )
+                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
                 )
             ),
+            // Health(ae)
             NormalizedHealth(ae)
+            // DistanceBetween(ep, ae)
         )
     );
 
-define changeTargetProbForAttack: 50;
+define changeTargetProbForAttack: 0.5;
 
 void ApplyNextActionState(define player!, define nextActionState!) playervar "ApplyNextActionState"{
     // if state changed
@@ -665,16 +665,19 @@ if(
     WaitRandomForDistributeServerLoad();
     // get next state
     define nextActionState!;
+
     // is alive
-    if(IsAlive())
-    { 
+    if(
+        IsAlive()
+    ){ 
         // get targetSighted
         define targetSighted! =
             target != 0 &&          // targe valid
             target != ep &&         // not own
             IsAlive(target) &&      // target alive
-            IsInLineOfSight(ep, target, BarrierLOS.NoBarriersBlock) &&  // in line
+            IsInLineOfSight(ep, target, BarrierLOS.NoBarriersBlock) &&  // in line            
             !(
+                TeamOf(ep) != TeamOf(target) &&
                 IsStealth(target) &&
                 DistanceBetween(target, ep) >= 4
             );
@@ -689,7 +692,7 @@ if(
             if(actionState == ActionState.Attack){
                 // change target dependent on attack target helth & high healing prioloty
                 if(
-                    ProbabilityTrue(NormalizedHealth(target) * supportPrioloty * 2.0)
+                    ProbabilityTrue(200 * NormalizedHealth(target) * supportPrioloty)
                 ){
                     tryGetTarget = true;
                 }
@@ -697,7 +700,7 @@ if(
             else if(actionState == ActionState.Support){
                 // change target dependent on support target helth & low healing prioloty
                 if(
-                    ProbabilityTrue(NormalizedHealth(target) * supportPrioloty * 0.5)
+                    ProbabilityTrue(50 * NormalizedHealth(target) * supportPrioloty)
                 ){
                     tryGetTarget = true;
                 }
@@ -713,7 +716,7 @@ if(
         else{
             // change target dependent on attack target helth & attack prob
             if(
-                ProbabilityTrue(NormalizedHealth(target) * changeTargetProbForAttack)
+                ProbabilityTrue(100 * NormalizedHealth(target) * changeTargetProbForAttack)
             ){
                 tryGetTarget = true;
             }
@@ -831,7 +834,9 @@ if(
     actionState == ActionState.Attack
 ){
     // change target dependent on attack target helth & attack prob
-    if(ProbabilityTrue(NormalizedHealth(target) * changeTargetProbForAttack)){
+    if(
+        ProbabilityTrue(100 * NormalizedHealth(target) * changeTargetProbForAttack)
+    ){
         // set attacker to target
         target = Attacker();
     }
@@ -1012,7 +1017,7 @@ void setMoveDir() playervar "setMoveDir"{
 void setSideStep() playervar "setSideStep"{
     // start sidestep by distance to target
     if(
-        ProbabilityTrue((1 - (DistanceBetween(ep, target) / 30)) * DefaultPercentage())
+        ProbabilityTrue(100 * (1 - (DistanceBetween(ep, target) / 30)))
     ){
         // start sidestep
         // already has sidestep
@@ -1381,6 +1386,7 @@ void StartButtonControl(define bc){
                 IsButtonHeld(ep, Button.SecondaryFire)
             ){
                 StopHoldingButton(ep, Button.SecondaryFire);
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
             }
             // if start secondary button, release primary button
             else if(
@@ -1388,6 +1394,7 @@ void StartButtonControl(define bc){
                 IsButtonHeld(ep, Button.PrimaryFire)
             ){
                 StopHoldingButton(ep, Button.PrimaryFire);
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
             }
         }
 
