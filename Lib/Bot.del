@@ -334,7 +334,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Kiriko:
         heroName = "Kiriko";
         actionRange = ActionRange.Middle;
-        supportPrioloty = 0.75;
+        supportPrioloty = 1;
         supportButtons = [
             Button.PrimaryFire,
             Button.Ability1,
@@ -628,10 +628,15 @@ define FindSupportTarget():
     FirstOf(
         SortedArray(
             FilteredArray(
-                AllLivingPlayers(TeamOf()),
+                !CanResurrect(ep) ?
+                    AllLivingPlayers(TeamOf()) :
+                    AllPlayers(TeamOf()),
                 (
                     ae != ep &&
-                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
+                    !CanPhantom(ep) ?
+                        IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) :
+                        true &&
+                    NormalizedHealth(ae) < 1
                 )
             ),
             // Health(ae)
@@ -639,8 +644,6 @@ define FindSupportTarget():
             // DistanceBetween(ep, ae)
         )
     );
-
-define changeTargetProbForAttack: 0.5;
 
 void ApplyNextActionState(define player!, define nextActionState!) playervar "ApplyNextActionState"{
     // if state changed
@@ -683,52 +686,47 @@ if(
             );
 
         define tryGetTarget! = false;
+        
         // target not Sighted
         if(!targetSighted){
             tryGetTarget = true;
         }
         // is support role hero
         else if(0 < supportPrioloty){
-            if(actionState == ActionState.Attack){
-                // change target dependent on attack target helth & high healing prioloty
-                if(
-                    ProbabilityTrue(200 * NormalizedHealth(target) * supportPrioloty)
-                ){
-                    tryGetTarget = true;
-                }
+            // heal completed
+            if(
+                NormalizedHealth(target) >= 1
+            ){
+                tryGetTarget = true;
             }
-            else if(actionState == ActionState.Support){
-                // change target dependent on support target helth & low healing prioloty
-                if(
-                    ProbabilityTrue(50 * NormalizedHealth(target) * supportPrioloty)
-                ){
-                    tryGetTarget = true;
-                }
-                // heal completed
-                else if(
-                    NormalizedHealth(target) >= 1
-                ){
-                    tryGetTarget = true;
-                }
+            // change target dependent on support target health
+            else if(
+                ProbabilityTrue(100 * NormalizedHealth(target) * supportPrioloty)
+            ){
+                tryGetTarget = true;
             }
         }
         // is not support role hero
         else{
             // change target dependent on attack target helth & attack prob
             if(
-                ProbabilityTrue(100 * NormalizedHealth(target) * changeTargetProbForAttack)
+                ProbabilityTrue(50 * NormalizedHealth(target))
             ){
                 tryGetTarget = true;
             }
         }
 
+
+
         // get new target
         if(tryGetTarget){
+            
             // is support role hero
-            if(0 < supportPrioloty)
+            if(ProbabilityTrue(100 * supportPrioloty))
             {
                 // find support target
                 target = FindSupportTarget();
+
                 // not found heal target
                 if(target == 0){
                     // find attack target
@@ -741,9 +739,11 @@ if(
             }
         }
 
+        dbgHudTxt(<"ep = <0> target = <1>", ep, target>);
+
         // has target
         if(
-            target != 0 && target != null
+            HasSpawned(target)
         ){
             // target is enemy
             if(TeamOf() != TeamOf(target)){
@@ -835,7 +835,7 @@ if(
 ){
     // change target dependent on attack target helth & attack prob
     if(
-        ProbabilityTrue(100 * NormalizedHealth(target) * changeTargetProbForAttack)
+        ProbabilityTrue(50 * NormalizedHealth(target))
     ){
         // set attacker to target
         target = Attacker();
@@ -851,7 +851,7 @@ if(
     Victim() == target
 ){
     // is support role hero
-    if(0 < supportPrioloty)
+    if(ProbabilityTrue(100 * supportPrioloty))
     {
         // find support target
         target = FindSupportTarget();
