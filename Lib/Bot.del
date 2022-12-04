@@ -195,7 +195,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ability2ButtonPressMax = 1;
 
         ultimateButtonReleaseMin = 0;
-        ultimateButtonReleaseMax = 15;
+        ultimateButtonReleaseMax = 10;
         ultimateButtonPressMin = 0;
         ultimateButtonPressMax = 1;
 
@@ -275,7 +275,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ultimateButtonReleaseMax = 30;
         supportPrioloty = 0.75;
         supportButtons = [
-            Button.SecondaryFire,
             Button.Ability2
         ];
         break;
@@ -334,6 +333,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Kiriko:
         heroName = "Kiriko";
         actionRange = ActionRange.Middle;
+        primaryFireButtonReleaseMax = 1;
+        ability1ButtonReleaseMax = 5;
         supportPrioloty = 1;
         supportButtons = [
             Button.PrimaryFire,
@@ -341,9 +342,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
             Button.Ability2
         ];
         attackButtons = [
-            Button.SecondaryFire,
-            Button.Ability1,
-            Button.Ability2
+            Button.SecondaryFire
         ];
         break;
 
@@ -370,9 +369,9 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRange = ActionRange.Far;
         primaryFireButtonReleaseMax = 1;
         secondaryFireButtonReleaseMax = 10;
-        ability1ButtonReleaseMax = 2;
+        ability1ButtonReleaseMax = 3;
         ability2ButtonPressMax = 10;
-        ability2ButtonReleaseMax = 1;
+        ability2ButtonReleaseMax = 0.1;
         supportPrioloty = 1;
         supportButtons = [
             Button.PrimaryFire,
@@ -490,17 +489,17 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRange = ActionRange.Far;
         canFireButtonCombination = true;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        primaryFireButtonReleaseMin = 1;
-        primaryFireButtonReleaseMax = 1.25;
+        primaryFireButtonReleaseMin = 0.9;
+        primaryFireButtonReleaseMax = 1.1;
         primaryFireButtonPressMin = 0;
         primaryFireButtonPressMax = 1;
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        secondaryFireButtonPressMin = 20;
-        secondaryFireButtonPressMax = 40;
-        ability1ButtonReleaseMin = 40;
+        secondaryFireButtonPressMin = 30;
+        secondaryFireButtonPressMax = 60;
+        ability1ButtonReleaseMin = 15;
         ability1ButtonReleaseMax = 60;
-        ability2ButtonReleaseMin = 20;
-        ability2ButtonReleaseMax = 30;
+        ability2ButtonReleaseMin = 15;
+        ability2ButtonReleaseMax = 60;
         break;
 
         case Hero.Winston:
@@ -526,14 +525,18 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Zarya";
         actionRange = ActionRange.Middle;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        ability2ButtonPressMin = 0.5;
-        ability2ButtonPressMax = 0.5;
-        ability2ButtonReleaseMin = 0.5;
+        ability1ButtonReleaseMax = 10;
+        ability1ButtonPressMax = 0.5;
         ability2ButtonReleaseMax = 0.5;
+        ability2ButtonPressMax = 0.5;
         supportPrioloty = 0.25;
         supportButtons = [
-            Button.Ability1,
             Button.Ability2
+        ];
+        attackButtons = [
+            Button.PrimaryFire,
+            Button.SecondaryFire,
+            Button.Ability1
         ];
         break;
 
@@ -604,6 +607,8 @@ enum ButtonBehaivor{
 
 // TAG Bot/ActionState/StateControl ----------
 playervar define watchUpdateRate = 2;
+playervar define actionState;
+playervar define target;
 
 define FindAttackTarget():
     FirstOf(
@@ -618,9 +623,12 @@ define FindAttackTarget():
                     )
                 )
             ),
-            // Health(ae)
+            (   
+                actionRange == ActionRange.Melee
+            ) ?
+            DistanceBetween(ep, ae) :
             NormalizedHealth(ae)
-            // DistanceBetween(ep, ae)
+            // Health(ae)
         )
     );
 
@@ -628,20 +636,31 @@ define FindSupportTarget():
     FirstOf(
         SortedArray(
             FilteredArray(
-                !CanResurrect(ep) ?
-                    AllLivingPlayers(TeamOf()) :
-                    AllPlayers(TeamOf()),
+                (
+                    CanResurrect(ep) ?
+                        AllPlayers(TeamOf()) :
+                        AllLivingPlayers(TeamOf())),
                 (
                     ae != ep &&
-                    !CanPhantom(ep) ?
-                        IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) :
-                        true &&
-                    NormalizedHealth(ae) < 1
+                    (
+                        CanPhantom(ep) ?
+                        true :
+                        IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
+                    ) &&
+                    // ProbabilityTrue(
+                    //     100 *
+                    //     (1 - NormalizedHealth(ae)) *
+                    //     supportPrioloty
+                    // )                    &&
+                    NormalizedHealth(ae) < 1.0
                 )
             ),
-            // Health(ae)
+            // (   
+            //     actionRange == ActionRange.Melee
+            // ) ?
+            // DistanceBetween(ep, ae) :
             NormalizedHealth(ae)
-            // DistanceBetween(ep, ae)
+            // Health(ae)
         )
     );
 
@@ -680,7 +699,7 @@ if(
             IsAlive(target) &&      // target alive
             IsInLineOfSight(ep, target, BarrierLOS.NoBarriersBlock) &&  // in line            
             !(
-                TeamOf(ep) != TeamOf(target) &&
+                TeamOf() != TeamOf(target) &&
                 IsStealth(target) &&
                 DistanceBetween(target, ep) >= 4
             );
@@ -691,11 +710,15 @@ if(
         if(!targetSighted){
             tryGetTarget = true;
         }
-        // is support role hero
-        else if(0 < supportPrioloty){
-            // heal completed
+        // is support role hero and do support
+        else if(
+            0 < supportPrioloty &&
+            actionState == ActionState.Support
+        ){
+            // heal completed or target dead
             if(
-                NormalizedHealth(target) >= 1
+                NormalizedHealth(target) >= 1 ||
+                NormalizedHealth(target) <= 0
             ){
                 tryGetTarget = true;
             }
@@ -716,11 +739,8 @@ if(
             }
         }
 
-
-
         // get new target
         if(tryGetTarget){
-            
             // is support role hero
             if(ProbabilityTrue(100 * supportPrioloty))
             {
@@ -738,8 +758,6 @@ if(
                 target = FindAttackTarget();
             }
         }
-
-        dbgHudTxt(<"ep = <0> target = <1>", ep, target>);
 
         // has target
         if(
@@ -780,69 +798,6 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "Bot/ActionState/CallAttackByDamageTaken"
-Event.OnDamageTaken
-if(
-    IsDummyBot() &&
-    Attacker() != ep
-){
-    // call attack by damage taken
-    CallAttackNearBot(Attacker());
-}
-
-globalvar define isCallAttackCoolDown! = false;
-
-void CallAttackNearBot(define attackTarget!)"CallAttackNearBot"{
-    AbortIf(isCallAttackCoolDown);
-
-    isCallAttackCoolDown = true;
-    define nearFriends = FilteredArray(
-        PlayersWithinRadius(
-            ep, 30, TeamOf(ep), RadiusLOS.Off
-        ),
-        (
-            // ae != ep &&
-            IsDummyBot() &&
-            IsAlive(ae) &&
-            ae.actionState == ActionState.Non
-        )
-    );
-    
-    for(define nearFriendsIndex = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
-        // set target
-        nearFriends[nearFriendsIndex].target = attackTarget;
-        // set attack 
-        ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
-    }
-}
-
-rule: "Bot/ActionState/callAttackCoolDown"
-Event.OngoingGlobal
-if(
-    isCallAttackCoolDown
-){
-    Wait(1, WaitBehavior.IgnoreCondition);
-    isCallAttackCoolDown = false;
-    Loop();
-}
-
-rule: "Bot/ActionState/ChangeTargetByDamageTaken"
-Event.OnDamageTaken
-if(
-    IsDummyBot() &&
-    actionState == ActionState.Attack
-){
-    // change target dependent on attack target helth & attack prob
-    if(
-        ProbabilityTrue(50 * NormalizedHealth(target))
-    ){
-        // set attacker to target
-        target = Attacker();
-    }
-    Wait(3, WaitBehavior.IgnoreCondition);
-}
-
 rule: "Bot/ActionState/ChangeTargetByTargetDead"
 Event.OnElimination
 if(
@@ -867,10 +822,70 @@ if(
     }
 }
 
-playervar define actionState;
-playervar define prevActionState;
+rule: "Bot/ActionState/ChangeTargetByDamageTaken"
+Event.OnDamageTaken
+if(
+    IsDummyBot() &&
+    actionState == ActionState.Attack
+){
+    // change target dependent on attack target helth & attack prob
+    if(
+        ProbabilityTrue(50 * NormalizedHealth(target))
+    ){
+        // set attacker to target
+        target = Attacker();
+    }
+    Wait(3.0, WaitBehavior.IgnoreCondition);
+}
+
+rule: "Bot/ActionState/CallAttackByDamageTaken"
+Event.OnDamageTaken
+if(
+    IsDummyBot() &&
+    Attacker() != ep
+){
+    // call attack by damage taken
+    CallAttackNearBot(Attacker());
+}
+
+globalvar define isCallAttackCoolingDown! = false;
+
+void CallAttackNearBot(define attackTarget!)"CallAttackNearBot"{
+    AbortIf(isCallAttackCoolingDown);
+
+    isCallAttackCoolingDown = true;
+    define nearFriends = FilteredArray(
+        PlayersWithinRadius(
+            ep, 30, TeamOf(ep), RadiusLOS.Off
+        ),
+        (
+            // ae != ep &&
+            IsDummyBot() &&
+            IsAlive(ae) &&
+            ae.actionState == ActionState.Non
+        )
+    );
+    
+    for(define nearFriendsIndex = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
+        // set target
+        nearFriends[nearFriendsIndex].target = attackTarget;
+        // set attack 
+        ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+rule: "Bot/ActionState/callAttackCoolDown"
+Event.OngoingGlobal
+if(
+    isCallAttackCoolingDown
+){
+    Wait(1.0, WaitBehavior.IgnoreCondition);
+    isCallAttackCoolingDown = false;
+    Loop();
+}
+
 playervar define statusText;
-playervar define target;
 playervar define moveDir;
 playervar define sideStepDir;
 
@@ -1017,7 +1032,11 @@ void setMoveDir() playervar "setMoveDir"{
 void setSideStep() playervar "setSideStep"{
     // start sidestep by distance to target
     if(
-        ProbabilityTrue(100 * (1 - (DistanceBetween(ep, target) / 30)))
+        ProbabilityTrue(
+            100 *
+            (1 - NormalizedHealth()) *                  // by health
+            (1 - (DistanceBetween(ep, target) / 30))    // by target distance
+        )
     ){
         // start sidestep
         // already has sidestep
@@ -1026,7 +1045,10 @@ void setSideStep() playervar "setSideStep"{
                 // reverse sidestep
                 sideStepDir = -sideStepDir;
             }
-            //else
+            else{
+                // stop sidestep
+                sideStepDir = NoDirection();
+            }
         }
         else{
             if(ProbabilityTrue(50)){
@@ -1398,6 +1420,14 @@ void StartButtonControl(define bc){
             }
         }
 
+        // ajust max to min when over
+        if(bc[ButtonControl.releaseMax] < bc[ButtonControl.releaseMin]){
+            bc[ButtonControl.releaseMax] = bc[ButtonControl.releaseMin];
+        }
+        if(bc[ButtonControl.pressMax] < bc[ButtonControl.pressMin]){
+            bc[ButtonControl.pressMax] = bc[ButtonControl.pressMin];
+        }
+
         // release-press action
         if(bc[ButtonControl.buttonOperation] == ButtonBehaivor.ReleasePress){
             while(true){
@@ -1549,7 +1579,7 @@ if(
             Button.Jump,
             ButtonBehaivor.ReleasePress,
             0,
-            7.5,
+            8,
             0.5,
             5
         ]
