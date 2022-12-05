@@ -941,42 +941,6 @@ void StartMoveInDir(define dir){
     );
 }
 
-define stuckRange: 0.25;
-
-playervar define prevPosition;
-
-playervar define isInStuck;
-
-void checkAndBreakStuck() playervar "checkAndBreakStuck"{
-    if(
-        (   // has move
-            sideStepDir != NoDirection() ||
-            moveDir != NoDirection()
-        ) &&
-        prevPosition != 0 &&
-        DistanceBetween(ep, prevPosition) <= stuckRange    // not moved from prevPosition
-    ){
-        statusText = <"checkAndBreakStuck">;
-        while(
-            // keep try break stuck prob
-            ProbabilityTrue(75) &&
-            // not moved from prevPosition yet
-            DistanceBetween(ep, prevPosition) <= stuckRange
-        ){
-            isInStuck = true;
-            // try jump or croch
-            define breakStuckButton! = RandomValueInArray([Button.Jump, Button.Crouch]);
-            StartHoldingButton(ep, breakStuckButton);
-            Wait(RandomReal(0.5, 1.0), WaitBehavior.IgnoreCondition);   // keep hold button
-            StopHoldingButton(ep, breakStuckButton);
-        }
-    }
-    else{
-        isInStuck = false;
-        prevPosition = PositionOf();
-    }
-}
-
 playervar define backWhenLowHealth = true;
 
 void setMoveDir() playervar "setMoveDir"{
@@ -1032,18 +996,25 @@ void setMoveDir() playervar "setMoveDir"{
 }
 
 void setSideStep() playervar "setSideStep"{
+    define distance! = DistanceBetween(ep, target);
     // start sidestep by distance to target
     if(
         ProbabilityTrue(
             100 *
-            (1 - NormalizedHealth()) *                  // by health
-            (1 - (DistanceBetween(ep, target) / 30))    // by target distance
+            (1 - NormalizedHealth()) *  // by health
+            (1 - (distance / 30))       // by target distance
         )
     ){
         // start sidestep
         // already has sidestep
         if(sideStepDir != NoDirection()){
-            if(ProbabilityTrue(75)){
+            if(
+                ProbabilityTrue(
+                    100 *
+                    (1 - NormalizedHealth()) *  // by health
+                    (1 - (distance / 30))       // by target distance
+                )
+            ){
                 // reverse sidestep
                 sideStepDir = -sideStepDir;
             }
@@ -1164,9 +1135,6 @@ if(
         // start move by moveDir and sideStepDir
         StartMove();
 
-        // check stuck
-        checkAndBreakStuck();
-
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
 }
@@ -1200,9 +1168,6 @@ if(
         // start move by moveDir and sideStepDir
         StartMove();
         
-        // check stuck
-        checkAndBreakStuck();
-
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
 }

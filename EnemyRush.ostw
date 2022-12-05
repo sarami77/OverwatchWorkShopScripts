@@ -85,20 +85,20 @@ if(
             RandomSupportHero,
             RandomTankHero,
             RandomDamageHero,
-            RandomSupportHero,
-            RandomDamageHero
+            RandomHero,
+            RandomHero
         ]
     :
         // fix list
         [
             Hero.Mercy,
-            Hero.Genji,
+            Hero.Reaper,
             Hero.Reinhardt,
-            Hero.Ana,
-            Hero.Hanzo,
-            Hero.Orisa,
-            Hero.Baptiste,
-            Hero.Soldier76
+            Hero.Kiriko,
+            Hero.Soldier76,
+            Hero.Doomfist,
+            Hero.Zenyatta,
+            Hero.Widowmaker
         ];
 
     // slice buddy list by setting
@@ -148,9 +148,23 @@ if(
             // build add hero list
             define addList! = ArraySlice(buddyAssetList, 0, emptySlotNum);
             for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(addList); buddyAddIndex++){
+                if(
+                    IsAssemblingHeroes()
+                ){
+                    Wait(RandomReal(0, 3));
+                }
                 CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
             }
         }
+
+        // show human player outline
+        StartForcingPlayerOutlines(
+            FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae)),
+            HostPlayer(),
+            true,
+            Color.SkyBlue,
+            OutlineType.Always
+        );
     
         Wait(10, WaitBehavior.IgnoreCondition);
     }
@@ -174,7 +188,7 @@ if(
     }
 }
 
-rule: "Buddy/fastRespawnByKilled"
+disabled rule: "Buddy/fastRespawnByKilled"
 Event.OnDeath
 if(
     TeamOf() == playerTeam &&
@@ -194,7 +208,6 @@ if(
 ){
     Respawn();
 }
-
 
 // TAG Payload ----------
 globalvar define prevPayloadPosition!;
@@ -757,7 +770,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define teleportConditionCountLimit: 3;
+define checkTeleportConditionMaxCount: 3;
 
 rule: "EnemyBot/Teleport/teleportForDefend"
 Event.OngoingPlayer
@@ -767,13 +780,13 @@ if(
     IsAlive() &&
     !IsInSpawnRoom()
 ){
-    for(define teleportConditionCount! = 0; teleportConditionCount < teleportConditionCountLimit; teleportConditionCount ++){
+    for(define checkTeleportConditionCount! = 0; checkTeleportConditionCount < checkTeleportConditionMaxCount; checkTeleportConditionCount ++){
         WaitRandomForDistributeServerLoad();
 
         Wait(1, WaitBehavior.AbortWhenFalse);
         define inCombat! = (actionState != ActionState.Non);
         define nearObject! = (DistanceBetween(ep, CurrentObjectPosition()) <= 15);
-        // check none teleport condition
+        // check not teleport condition
         if(
                 inCombat &&        // in combat
                 (
@@ -800,8 +813,15 @@ if(
 }
 
 // TAG EnemyBot/EnemyAbility ----------
-define enemyAbilityIntervalMin: 20;
-define enemyAbilityIntervalAcordingProgress: 40;
+globalvar define enemyAbilityStatus;
+
+void WaitEnemyAbility()"WaitEnemyAbility"{
+    Wait(
+        10 +
+        (30 * 1 - (TotalObjectProgress() / DefaultPercentage())),
+        WaitBehavior.AbortWhenFalse
+    );
+}
 
 rule: "EnemyBot/EnemyAbility/rush"
 Event.OngoingGlobal
@@ -809,16 +829,15 @@ if(
     IsGameInProgress() &&
     !IsOverTime()
 ){
-    define interval! = (1 - (TotalObjectProgress() / DefaultPercentage())) * enemyAbilityIntervalAcordingProgress;
-    Wait(enemyAbilityIntervalMin + interval, WaitBehavior.AbortWhenFalse);
-
-    dbgMsg("rush start");
+    enemyAbilityStatus[0] = false;
+    WaitEnemyAbility();
     define rushDurling! = RandomInteger(5, 15);
     for(rushCount; rushDurling > 0; rushDurling--){
         Respawn(AllDeadPlayers(enemyTeam));
+
+        enemyAbilityStatus[0] = rushDurling;
         Wait(1, WaitBehavior.AbortWhenFalse);
     }
-    dbgMsg("rush end");
 
     LoopIfConditionIsTrue();
 }
@@ -828,10 +847,8 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    define interval! = (1 - (TotalObjectProgress() / DefaultPercentage())) * enemyAbilityIntervalAcordingProgress;
-    Wait(enemyAbilityIntervalMin + interval, WaitBehavior.AbortWhenFalse);
-
-    dbgMsg("shotCall start");
+    enemyAbilityStatus[1] = false;
+    WaitEnemyAbility();
     define deployedEnemys! = FilteredArray(
         AllLivingPlayers(enemyTeam),
         !IsInSpawnRoom(ae)
@@ -840,9 +857,10 @@ if(
     for(define scLoopIndex! = 0; scLoopIndex < CountOf(deployedEnemys); scLoopIndex ++){
         SetUltimateCharge(deployedEnemys[scLoopIndex], DefaultPercentage());
         PressButton(deployedEnemys[scLoopIndex], Button.Ultimate);
+
+        enemyAbilityStatus[1] = CountOf(deployedEnemys) - scLoopIndex;
         Wait(shotCallDelay, WaitBehavior.AbortWhenFalse);
     }
-    dbgMsg("shotCall end");
 
     LoopIfConditionIsTrue();
 }
@@ -851,7 +869,7 @@ rule: "EnemyBot/EnemyAbility/combatTeleport"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    enemyType == EnemyType.GiantBoss&&
+    enemyType == EnemyType.GiantBoss &&
     IsAlive() &&
     actionState == ActionState.Attack
 ){
@@ -884,7 +902,7 @@ if(
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     
-    Wait(RandomReal(1.0, 1.5), WaitBehavior.AbortWhenFalse);
+    Wait(1.0, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -964,10 +982,10 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
         spawnTimeScale = 1.5;
     }
     else if(-70 <= diff && diff < -40){
-        spawnTimeScale = 3.0;
+        spawnTimeScale = 2.5;
     }
     else if(diff < -70){
-        spawnTimeScale = 5.0;
+        spawnTimeScale = 4.0;
     }
     confirmSpawnInterval *= spawnTimeScale;
     SetRespawnMaxTime(ep, confirmSpawnInterval + showDeadEffectTime);
@@ -1065,7 +1083,7 @@ globalvar define threatLevel!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 40, 0, 1000, 1);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 30, 0, 1000, 1);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
     // apply auto tune
@@ -1170,18 +1188,8 @@ Team.All
 if(
     initCompleted
 ){
-    // CreateEffect(HostPlayer(), Effect.Orb, enemyColor,
-    //     commonTeleportPosition + PositionOffset(), 1, EffectRev.VisibleToPositionAndRadius);
-    // CreateIcon(HostPlayer(), commonTeleportPosition, Icon.Spiral,
-    //     IconRev.PositionAndColor, enemyColor, true);
-
     debugMode = DebugMode.SlowLevelOnly;
     ShowDebugHud(HostPlayer());
-
-    // while(true){
-    //     SetUltimateCharge(AllPlayers(playerTeam), 100);
-    //     Wait(1);
-    // }
 
 }
 
@@ -1213,9 +1221,20 @@ if(
     ShowDebugHud(HostPlayer());
 }
 
-define End(): CountOf(debugHudEntitys);
-define botOfEnemyType(define enemyType): FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == enemyType));
-globalvar define debugHudEntitys!;
+globalvar define debugHuds!;
+
+define Last():
+    CountOf(debugHuds);
+
+define CreateDebugHud(define caption, define value, define color):
+        CreateHudText(HostPlayer(),
+            null,
+            <"<0> = <1>", caption, value>,
+            null,
+            Location.Left, -1,
+            Color.White, color, Color.White,
+            HudTextRev.VisibleToStringAndColor, Spectators.VisibleNever);
+
 
 // show debug icon and hud
 void ShowDebugHud(define player!)"ShowDebugHud"{
@@ -1223,14 +1242,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugMode == DebugMode.WithRecord
     ){
         EnableInspectorRecording();
-        CreateHudText(player,
-            null,
-            null,
-            "● Recording",
-            Location.Left, -1,
-            Color.White, Color.White, Color.Red,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
+        debugHuds[Last()] = CreateDebugHud("●Recording", true, Color.Red);
     }
     else{
         DisableInspectorRecording();
@@ -1241,80 +1253,34 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
     ){
-        CreateHudText(player,
-            null,
-            <"<0> <1>", "Server Load", ServerLoad()>,
-            null,
-            Location.Left, -1,
-            Color.White, Color.Orange, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
-
-        CreateHudText(player,
-            null,
-            <"<0> <1>", "game Logic Speed", gameLogicSpeed>,
-            null,
-            Location.Left, -1,
-            Color.White, Color.Orange, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
-
-        CreateHudText(player,
-            null,
-            <"<0> <1>", "count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad>,
-            null,
-            Location.Left, -1,
-            Color.White, Color.Orange, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
-
-        CreateHudText(player,
-            null,
-            <"<0> <1>", "human player num", CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae)))>,
-            null,
-            Location.Left, -1,
-            Color.White, Color.Blue, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
-
-        CreateHudText(player,
-            null,
-            <"<0> <1>", "auto Tune Dmg Dlt", autoTuneDmgDlt>,
-            null,
-            Location.Left, -1,
-            Color.White, Color.Red, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
+        debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Red);
+        debugHuds[Last()] = CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Red);
     }
-
     if(
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
-    ){
-        CreateHudText(player,
-            null,
-            <"<0> <1>", "Server Load Average", ServerLoadAverage()>,
-            null,
-            Location.Left, -1,
-            Color.White, Color.Orange, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
-
-        CreateHudText(player,
-            null,
-            <"<0> <1>", "Server Load Peak", ServerLoadPeak()>,
-            null,
-            Location.Left, -1,
-            Color.White, Color.Orange, Color.White,
-            HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-        debugHudEntitys[End()] = LastTextID();
+    ){  
+        debugHuds[Last()] = CreateDebugHud("count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad, Color.Orange);
+        debugHuds[Last()] = CreateDebugHud("human player num", CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae))), Color.Team2);
+        debugHuds[Last()] = CreateDebugHud("player team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, Color.Team2);
+        debugHuds[Last()] = CreateDebugHud("enemy team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("enemy spawn interval", <"scale = <0> | M = <1> / E = <2> / B = <3> / BB = <4>",
+            spawnTimeScale,
+            FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Minion)).confirmSpawnInterval,
+            FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Elite)).confirmSpawnInterval,
+            FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Boss)).confirmSpawnInterval,
+            FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.GiantBoss)).confirmSpawnInterval
+        >, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("enemy rush status", enemyAbilityStatus[0], Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("enemy shot call", enemyAbilityStatus[1], Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
     }
 }
 
 // Hide debug icon and hud
 void HideDebugHud()"HideDebugHud"{
-    for(gLoopIndex = 0; gLoopIndex < CountOf(debugHudEntitys); gLoopIndex ++){
-        DestroyHudText(debugHudEntitys[gLoopIndex]);
+    for(gLoopIndex = 0; gLoopIndex < CountOf(debugHuds); gLoopIndex ++){
+        DestroyHudText(debugHuds[gLoopIndex]);
     }
 }
 
@@ -1335,6 +1301,10 @@ if(
     PlayEffectsToTeam(enemyTeam);
     DestroyBots(enemyTeam);
     CreateBotsByAssetList(assetList, enemyTeam);
+
+    Wait(0.5, WaitBehavior.AbortWhenFalse);    // wait release ult button 
+    DestroyBots(playerTeam);
+    CreateBotsByAssetList(assetList, playerTeam);
 }
 
 rule: "Debug/increaseMatchTime"
