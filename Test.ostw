@@ -83,84 +83,17 @@ if(
     initCompleted
 ){
     define buddyAssetList! = 
-    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", true) ?
-        // random list
-        [
-            RandomSupportHero,
-            RandomTankHero,
-            RandomDamageHero,
-            RandomSupportHero,
-            RandomTankHero,
-            RandomDamageHero,
-            RandomSupportHero,
-            RandomDamageHero
-        ]
-    :
         // fix list
         [
-            Hero.Mercy,
-            Hero.Genji,
-            Hero.Reinhardt,
-            Hero.Ana,
-            Hero.Hanzo,
-            Hero.Orisa,
-            Hero.Baptiste,
-            Hero.Soldier76
+            Hero.Junkrat
         ];
 
-    // slice buddy list by setting
-    buddyAssetList = ArraySlice(buddyAssetList, 0,
-        WorkshopSettingInteger(
-            "Follower AI Settings(Join on behalf of absent player)",
-            "Follower Max Num", 8, 0, 8, 1)
-    );
-
-    define prevPlayerNum! = -1;
-    define maxSlotNum! = NumberOfSlots(playerTeam);
-    define maxBuddyNum! = CountOf(buddyAssetList);
-
-    while(true){
-        define playerNum! =
-            CountOf(
-                FilteredArray(
-                    AllPlayers(playerTeam),
-                    !IsDummyBot(ae)
-                )
-            );
-        define buddyNum! =
-            CountOf(
-                FilteredArray(
-                    AllPlayers(playerTeam),
-                    IsDummyBot(ae)
-                )
-            );
-        define needBuddyNum! = 
-            Min(
-                maxSlotNum - playerNum,
-                maxBuddyNum
-            );
-
-        if(
-            // not filed by need buddy number
-            buddyNum != needBuddyNum ||
-            // player number changed
-            prevPlayerNum != playerNum
-        ){
-            // save player num
-            prevPlayerNum = playerNum;
-            // relaod buddy list
-            DestroyBots(playerTeam);
-            // get empty slot num
-            define emptySlotNum! = maxSlotNum - playerNum;
-            // build add hero list
-            define addList! = ArraySlice(buddyAssetList, 0, emptySlotNum);
-            for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(addList); buddyAddIndex++){
-                CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
-            }
+        for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(buddyAssetList); buddyAddIndex++){
+            CreateBotsByHeroInput(buddyAssetList[buddyAddIndex], 24, enemyTeam);
         }
-    
-        Wait(10, WaitBehavior.IgnoreCondition);
-    }
+
+    SetStatus(HostPlayer(), null, Status.PhasedOut, MaxValue());
+    SetMoveSpeed(HostPlayer(), 400);
 }
 
 // Debug/Slow -----------------------------------------------
@@ -285,4 +218,17 @@ void changeTuneUnit(){
         tuneUnit = initialTuneUnit * 100;
     else
         tuneUnit = initialTuneUnit * 1000;
+}
+
+rule: "Debug/TuneVal/debugTrigger"
+Event.OngoingPlayer
+if(
+    HostPlayer() &&
+    !(
+        IsButtonHeld(ep, Button.Interact) &&
+        IsButtonHeld(ep, Button.PrimaryFire)
+    )
+){
+    SetUltimateCharge(AllPlayers(enemyTeam), 100);
+    PressButton(AllPlayers(enemyTeam), Button.Ultimate);
 }

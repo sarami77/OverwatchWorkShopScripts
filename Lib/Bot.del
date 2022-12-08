@@ -144,31 +144,53 @@ playervar define actionRange!;
 playervar define actionRangeMin!;
 playervar define actionRangeMax!;
 
-rule: "Bot/SetActionRoutine"
+rule: "Bot/SetActionRoutineBySpawned"
 Event.OngoingPlayer
 if(
-    IsDummyBot() &&
+    // IsDummyBot() &&
     HasSpawned()
 ){
     SetHeroActionRoutine();
 }
 
-rule: "Bot/SetActionRoutine"
+rule: "Bot/SetActionRoutineByHeroUniqueAction"
 Event.OngoingPlayer
 if(
-    IsDummyBot() &&
-    HasSpawned() &&
-    HeroOf() == Hero.Echo &&
-    IsUsingUltimate()
+    // IsDummyBot() &&
+    (
+        (
+            // Duplicated of Echo
+            HeroOf() == Hero.Echo &&
+            IsDuplicating()
+        )
+        ||
+        (
+            // Nemesis form of Ramattra
+            isRamattra &&
+            IsInAlternateForm()
+        )
+    )
 ){
-    Wait(1, WaitBehavior.AbortWhenFalse);
     SetHeroActionRoutine();
+    //dbgHudTxt(<"<0> is change routin to <1>", ep, heroName>);
+
+    if(HeroOf() == Hero.Echo){
+        WaitUntil(!IsDuplicating(), MaxValue());
+    }
+    else if(isRamattra){
+        WaitUntil(!IsInAlternateForm(), MaxValue());
+    }
+
+    SetHeroActionRoutine();
+    //dbgHudTxt(<"<0> is change routin to <1>", ep, heroName>);
 }
+
+playervar define isRamattra = false;
 
 void SetHeroActionRoutine()"SetHeroActionRoutine"{
         target = 0;
         
-        heroName = "Default";
+        heroName = "";
         actionRange = ActionRange.Middle;
         canFireButtonCombination = false;
 
@@ -213,13 +235,19 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
             Button.Ability2
         ];
 
-
-    switch(HeroOf()){
+    define hero! = HeroOf();
+    if(
+        hero == Hero.Echo &&
+        IsDuplicating()
+    ){
+        hero = HeroBeingDuplicated();
+    }
+    
+    switch(hero){
         case Hero.Ana:
         heroName = "Ana";
         actionRange = ActionRange.Far;
         canFireButtonCombination = true;
-        secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 20;
         secondaryFireButtonPressMax = 40;
         supportPrioloty = 1;
@@ -235,7 +263,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRange = ActionRange.Far;
         canFireButtonCombination = true;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleaseRepeat;
-        secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 20;
         secondaryFireButtonPressMax = 40;
         break;
@@ -313,7 +340,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Hanzo:
         heroName = "Hanzo";
         actionRange = ActionRange.Far;
-        primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         primaryFireButtonReleaseMax = 1;
         primaryFireButtonPressMin = 0.75;
         primaryFireButtonPressMax = 1.25;
@@ -360,7 +386,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Mei:
         heroName = "Mei";
         actionRange = ActionRange.Close;
-        primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         ultimateButtonReleaseMax = 30;
         break;
 
@@ -384,8 +409,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Moira:
         heroName = "Moira";
         actionRange = ActionRange.Middle;
-        primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
-        secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         supportPrioloty = 1;
         supportButtons = [
             Button.PrimaryFire,
@@ -464,7 +487,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Symmetra:
         heroName = "Symmetra";
         actionRange = ActionRange.Middle;
-        primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 1;
         secondaryFireButtonPressMax = 3;
         ability1ButtonReleaseMin = 1;
@@ -488,12 +510,10 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Widowmaker";
         actionRange = ActionRange.Far;
         canFireButtonCombination = true;
-        primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         primaryFireButtonReleaseMin = 0.9;
         primaryFireButtonReleaseMax = 1.1;
         primaryFireButtonPressMin = 0;
         primaryFireButtonPressMax = 1;
-        secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 30;
         secondaryFireButtonPressMax = 60;
         ability1ButtonReleaseMin = 15;
@@ -511,10 +531,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.WreckingBall:
         heroName = "WreckingBall";
         actionRange = ActionRange.Close;
-        primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         primaryFireButtonReleaseMax = 15;
         primaryFireButtonPressMax = 20;
-        secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonPressMin = 6;
         secondaryFireButtonPressMax = 15;
         ability1ButtonReleaseMin = 5;
@@ -524,7 +542,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Zarya:
         heroName = "Zarya";
         actionRange = ActionRange.Middle;
-        primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         ability1ButtonReleaseMax = 10;
         ability1ButtonPressMax = 0.5;
         ability2ButtonReleaseMax = 0.5;
@@ -543,7 +560,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Zenyatta:
         heroName = "Zenyatta";
         actionRange = ActionRange.Far;
-        primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         primaryFireButtonReleaseMin = 1;
         secondaryFireButtonReleaseMin = 1;
         ability1ButtonPressMin = 0.5;
@@ -560,6 +576,29 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
             Button.Ability1,
             Button.Ability2
         ];
+        break;
+
+        default:
+        // case Hero.Ramattra:
+        isRamattra = true;
+        dbgHudTxt(<"<0> is isRamattra", ep>);
+        if(IsInAlternateForm()){
+            // nemesis form
+            heroName = "Ramattra nemesis form";
+            actionRange = ActionRange.Melee;
+            secondaryFireButtonReleaseMax = 15;
+            secondaryFireButtonPressMin = 3;
+            secondaryFireButtonPressMax = 6;
+            primaryFireButtonPressMax = 20;
+            primaryFireButtonReleaseMax = 1;
+            ability1ButtonReleaseMin = 120;
+            ability1ButtonReleaseMax = 120;
+        }
+        else{
+            // omnic form
+            heroName = "Ramattra omnic form";
+            actionRange = ActionRange.Middle;
+        }
         break;
     }
 
@@ -606,7 +645,7 @@ enum ButtonBehaivor{
 }
 
 // TAG Bot/ActionState/StateControl ----------
-playervar define watchUpdateRate = 2;
+playervar define watchUpdateRate = 1;
 playervar define actionState;
 playervar define target;
 
@@ -624,10 +663,10 @@ define FindAttackTarget()"FindAttackTarget"{
                 )
             ),
             (   
-                NormalizedHealth() <= 0.5
+                ProbabilityTrue(100 * NormalizedHealth())
             ) ?
-            DistanceBetween(ep, ae) :
-            NormalizedHealth(ae)
+            NormalizedHealth(ae) :
+            DistanceBetween(ep, ae)
             // Health(ae)
         )
     );
@@ -648,19 +687,14 @@ define FindSupportTarget()"FindSupportTarget"{
                         true :
                         IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
                     ) &&
-                    // ProbabilityTrue(
-                    //     100 *
-                    //     (1 - NormalizedHealth(ae)) *
-                    //     supportPrioloty
-                    // )                    &&
                     NormalizedHealth(ae) < 1.0
                 )
             ),
-            // (   
-            //     actionRange == ActionRange.Melee
-            // ) ?
-            // DistanceBetween(ep, ae) :
-            NormalizedHealth(ae)
+            (   
+                ProbabilityTrue(100 * NormalizedHealth())
+            ) ?
+            NormalizedHealth(ae) :
+            DistanceBetween(ep, ae)
             // Health(ae)
         )
     );
@@ -1208,6 +1242,7 @@ void heroAction(){
                 StopHoldingButton(ep, Button.SecondaryFire);
                 StopHoldingButton(ep, Button.Ability1);
                 StopHoldingButton(ep, Button.Ability2);
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
                 PressButton(ep, Button.Reload);
         }
     }
@@ -1254,57 +1289,71 @@ if(
     IsDummyBot() &&
     IsUsingUltimate()
 ){
-    # postion selecter
+    define isPositionSelectorUlt! = false;
+    define usingHero!;
+    define waitForStartSelectorMove!;
+    define selecorMoveSpeed!;
+    define attackCount!;
+    define multiPositionAttack!;
+
+    // postion selecter ult hero
     if(
         HeroOf() == Hero.Doomfist ||
-        HeroOf() == Hero.Bastion ||
-        HeroBeingDuplicated(ep) == Hero.Doomfist ||
-        HeroBeingDuplicated(ep) == Hero.Bastion
+        HeroBeingDuplicated() == Hero.Doomfist
     ){
-        define isDoomFist = false;
-        if(
-            HeroOf() == Hero.Doomfist ||
-            HeroBeingDuplicated(ep) == Hero.Doomfist
-        ){
-            isDoomFist = true;
-        }
+        isPositionSelectorUlt = true;
+        usingHero = Hero.Doomfist;
+        waitForStartSelectorMove = 0.5;
+        selecorMoveSpeed = 0.06;
+        attackCount = 1;
+        multiPositionAttack = false;
+    }
+    else if(
+        HeroOf() == Hero.Bastion ||
+        HeroBeingDuplicated() == Hero.Bastion
+    ){
+        isPositionSelectorUlt = true;
+        usingHero = Hero.Bastion;
+        waitForStartSelectorMove = 1.0;
+        selecorMoveSpeed = 0.05;
+        attackCount = 3;
+        multiPositionAttack = ProbabilityTrue(50);
+    }
+    else if(
+        HeroOf() == Hero.Junkrat ||
+        HeroBeingDuplicated() == Hero.Junkrat
+    ){
+        isPositionSelectorUlt = true;
+        usingHero = Hero.Junkrat;
+        waitForStartSelectorMove = 1.5;
+        selecorMoveSpeed = 0.075;
+        attackCount = 1;
+        multiPositionAttack = false;
+    }
 
-        # stop current moving input
+    // postion selecter ult
+    if(isPositionSelectorUlt){
+        // stop current moving input
         StopMove();
-        # wait transform
-        Wait(isDoomFist ? 0.5: 1.5, WaitBehavior.AbortWhenFalse);
-        # move postion selecter to foward
+        // wait for selector mode
+        Wait(waitForStartSelectorMove, WaitBehavior.AbortWhenFalse);
+        // start move postion selecter to foward
         StartMoveInDir(Forward());
-        
-        define strikeCount;
-        if(isDoomFist){
-            strikeCount = 1;
-                Wait(DistanceBetween(ep, target) * 0.06, WaitBehavior.AbortWhenFalse);
-        }
-        else{
-            strikeCount = 3;
-            # random strike pattern
-            if(
-                ProbabilityTrue(50)
-            ){
-                # 1 point strike
-                Wait(DistanceBetween(ep, target) * 0.05, WaitBehavior.AbortWhenFalse);
-                StopMove();
-            }
-            else{
-                # 3 point strike
-                Wait(DistanceBetween(ep, target) * 0.04, WaitBehavior.AbortWhenFalse);
-            }
-        }        
-
-        for(; 0 < strikeCount; strikeCount--){
+        // decrease selector move speed if multi position attack mode
+        if(multiPositionAttack) selecorMoveSpeed -= 0.01;
+        // wait for selector arrival target
+        Wait(DistanceBetween(ep, target) * (selecorMoveSpeed), WaitBehavior.AbortWhenFalse);
+        // stop selector move if not multi position attack mode
+        if(!multiPositionAttack) StopMove();
+        // trigger attack by attackCount
+        for(; 0 < attackCount; attackCount--){
             PressButton(ep, Button.PrimaryFire);
-            if(0 < strikeCount){
-                # button press with random interval
-                Wait(RandomReal(0.2, 0.4), WaitBehavior.IgnoreCondition);
+            if(0 < attackCount){
+                // button press with random interval
+                Wait(RandomReal(0.2, 0.5), WaitBehavior.IgnoreCondition);
             }
         }
-        # stop moving for no walking
+        // reduce walking after ult
         StopMove();
     }
 }
@@ -1402,8 +1451,19 @@ void StartButtonControl(define bc){
 
                 StartHoldingButton(ep, bc[ButtonControl.button]);
                 Wait(buttonControlTimeScale * RandomReal(bc[ButtonControl.pressMin], bc[ButtonControl.pressMax]), WaitBehavior.AbortWhenFalse);
-
                 StopHoldingButton(ep, bc[ButtonControl.button]);
+
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
+                if(
+                    // not any attack
+                    !IsFiringPrimary() &&
+                    !IsFiringSecondary() &&
+                    !IsUsingAbility1() &&
+                    !IsUsingAbility2()
+                ){
+                    // restart primary fire for reduce idle
+                    StartHoldingButton(ep, Button.PrimaryFire);
+                }
             }
         }
         // release-repeat action
