@@ -34,7 +34,7 @@ if(
     IsAlive() &&
     actionState == ActionState.Non
 ){
-    define objectPosition! = CurrentObjectPosition();
+    define objectPosition! = CurrentObjectPosition() + Vector(0, 2, 0);
 
     // get alive player near me
     followTarget =
@@ -104,6 +104,7 @@ if(
             // reset walk fast
             SetMoveSpeed(ep, DefaultPercentage());
             // stop follow
+            StopFacing();
             StopMove();
             // exit loop
             break;           
@@ -116,16 +117,14 @@ if(
             // set walk fast by dist
             SetMoveSpeed(ep, DefaultPercentage() + (dist * 15));
             // walk to followTarget
-            SetFacing(
-                ep,
-                DirectionTowards(
-                    ep, followTarget
-                ),
-                Relative.ToWorld);
-            // start move
-            define hasLine! = IsInLineOfSight(ep, followTarget);
+            StartFacing(
+                ep, DirectionTowards(EyePosition(), followTarget),
+                300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+            // start follow
             moveDir = Forward();
-            sideStepDir = hasLine ? NoDirection() : RandomValueInArray([NoDirection(), Right(), Left()]);
+            sideStepDir = IsInLineOfSight(ep, followTarget) ?
+                NoDirection() :
+                RandomValueInArray([NoDirection(), Right(), Left()]);
             StartMove();
             // with jump by followTryCount
             if(ProbabilityTrue(30)){
@@ -225,12 +224,13 @@ if(
             }
             AbortIf(helloTarget == null);
 
-            // facing
-            SetFacing(ep,
-                DirectionTowards(ep, helloTarget),
-                Relative.ToWorld);
+            // facing to communicat target eyes
+            StartFacing(
+                ep, DirectionTowards(EyePosition(), EyePosition(followTarget)),
+                300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+            // wait
             Wait(RandomReal(0.5, 1), WaitBehavior.AbortWhenFalse);
-             // hello
+            // hello
             Communicate(ep, Communication.Hello);
 
             // and body action
@@ -243,15 +243,15 @@ if(
                 while(
                     ProbabilityTrue(90)
                 ){
-                    SetFacing(ep,
-                        DirectionTowards(ep, helloTarget),
-                        Relative.ToWorld);
                     StartHoldingButton(ep, pressButton);
                     Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
                     StopHoldingButton(ep, pressButton);
                     Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
                 }
             }
+            // wait
+            Wait(RandomReal(0.5, 1), WaitBehavior.AbortWhenFalse);
+            StopFacing();
         }
     }
     else{

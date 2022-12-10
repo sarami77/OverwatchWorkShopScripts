@@ -361,7 +361,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Kiriko";
         actionRange = ActionRange.Middle;
         primaryFireButtonReleaseMax = 1;
-        ability1ButtonReleaseMax = 5;
+        ability1ButtonPressMax = 1;
+        ability1ButtonReleaseMax = 1;
         supportPrioloty = 1;
         supportButtons = [
             Button.PrimaryFire,
@@ -584,9 +585,9 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         isRamattra = true;
         ability1ButtonReleaseMin = 120;
         ability1ButtonReleaseMax = 120;
-        secondaryFireButtonReleaseMax = 15;
-        secondaryFireButtonPressMin = 3;
-        secondaryFireButtonPressMax = 6;
+        // secondaryFireButtonReleaseMax = 15;
+        // secondaryFireButtonPressMin = 3;
+        // secondaryFireButtonPressMax = 6;
         primaryFireButtonPressMax = 20;
         primaryFireButtonReleaseMax = 1;
         if(IsUsingAbility1()){
@@ -1034,9 +1035,12 @@ void setSideStep() playervar "setSideStep"{
     // start sidestep by distance to target
     if(
         ProbabilityTrue(
-            100 *
-            (1 - NormalizedHealth()) *  // by health
-            (1 - (distance / 30))       // by target distance
+            25 +
+            (
+                100 *
+                (1 - NormalizedHealth()) *  // by health
+                (1 - (distance / 30))       // by target distance
+            )
         )
     ){
         // start sidestep
@@ -1044,9 +1048,12 @@ void setSideStep() playervar "setSideStep"{
         if(sideStepDir != NoDirection()){
             if(
                 ProbabilityTrue(
-                    100 *
-                    (1 - NormalizedHealth()) *  // by health
-                    (1 - (distance / 30))       // by target distance
+                    25 +
+                    (
+                        100 *
+                        (1 - NormalizedHealth()) *  // by health
+                        (1 - (distance / 30))       // by target distance
+                    )
                 )
             ){
                 // reverse sidestep
@@ -1091,14 +1098,8 @@ void StartFacingTarget()"StartFacingTarget"{
         IsAlive(target)
     ){
         StartFacing(
-            ep,
-            DirectionTowards(
-                EyePosition(),
-                aimingPosition
-            ),
-            300,
-            Relative.ToWorld, FacingRev.DirectionAndTurnRate
-        );
+            ep, DirectionTowards(EyePosition(), aimingPosition),
+            300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
     }
 }
 
@@ -1112,7 +1113,7 @@ if(
     statusText = <"Non">;
 
     // hero unique action
-    heroAction();
+    polingHeroUniqueAction();
 
     moveDir = NoDirection();
     sideStepDir = NoDirection();
@@ -1131,10 +1132,9 @@ if(
             DistanceBetween(ep, nearEnemy) <= 30
         ){
             // set initial face direction
-            SetFacing(
-                ep,
-                DirectionTowards(ep, nearEnemy),
-                Relative.ToWorld);
+            StartFacing(
+                ep, DirectionTowards(EyePosition(), ClosestPlayerTo(ep, EnemyTeamOf())),
+                300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
         }
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
@@ -1158,7 +1158,7 @@ if(
         WaitRandomForDistributeServerLoad();
 
         // hero unique action
-        heroAction();
+        polingHeroUniqueAction();
 
         // set moveDir direction
         setMoveDir();
@@ -1191,7 +1191,7 @@ if(
         WaitRandomForDistributeServerLoad();
 
         // hero unique action
-        heroAction();
+        polingHeroUniqueAction();
     
         // set moveDir direction
         setMoveDir();
@@ -1210,7 +1210,7 @@ if(
 define MercyStaff: 1;
 define MercyPistol: 2;
 
-void heroAction(){
+void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
     // common action
     // melee
     while(
@@ -1232,27 +1232,26 @@ void heroAction(){
         PressButton(ep, Button.Reload);
     }
 
-    // ashe's cancel fire when reloading
-    if(HeroOf() == Hero.Ashe){
-        if(
-            Ammo(ep, 0) <= MaxAmmo(ep, 0) / 2 ||
-            IsReloading()
-        ){
-                StopHoldingButton(ep, Button.PrimaryFire);
-                StopHoldingButton(ep, Button.SecondaryFire);
-                StopHoldingButton(ep, Button.Ability1);
-                StopHoldingButton(ep, Button.Ability2);
-                Wait(0.1, WaitBehavior.AbortWhenFalse);
-                PressButton(ep, Button.Reload);
-        }
-    }
-
     // hero unique action
     else if(
         actionState != ActionState.Non
     ){
+        // ashe's cancel fire when reloading
+        if(HeroOf() == Hero.Ashe){
+            if(
+                Ammo(ep, 0) <= MaxAmmo(ep, 0) / 2 ||
+                IsReloading()
+            ){
+                    StopHoldingButton(ep, Button.PrimaryFire);
+                    StopHoldingButton(ep, Button.SecondaryFire);
+                    StopHoldingButton(ep, Button.Ability1);
+                    StopHoldingButton(ep, Button.Ability2);
+                    Wait(0.1, WaitBehavior.AbortWhenFalse);
+                    PressButton(ep, Button.Reload);
+            }
+        }
         // Mercy's change weapon
-        if(HeroOf() == Hero.Mercy){
+        else if(HeroOf() == Hero.Mercy){
             if(actionState == ActionState.Attack){
                 SetWeapon(ep, MercyPistol);
             }
@@ -1265,8 +1264,7 @@ void heroAction(){
             // jump for pile driver
             if(
                 AbilityCooldown(ep, Button.Crouch) <= 0 &&
-                IsButtonHeld(ep, Button.Crouch) &&
-                IsOnGround(ep)
+                IsButtonHeld(ep, Button.Crouch)
             ){
                 ApplyImpulse(ep, Up(),
                     10, Relative.ToWorld, ContraryMotion.Cancel);
@@ -1274,10 +1272,40 @@ void heroAction(){
             // accsell for ball tackle
             while(IsFiringSecondary(ep)){
                 // for ball charge
-                define boostDir! = RandomValueInArray([Right(), Forward(), Backward(), Left()]);
+                define boostDir! = RandomValueInArray([Right(), Right(), Left(), Left(), Forward(), Backward()]);
                 ApplyImpulse(ep, boostDir,
                     30, Relative.ToWorld, ContraryMotion.Cancel);
                 Wait(0.5, WaitBehavior.AbortWhenFalse);
+            }
+        }
+        // Ramattra's deploy barrier
+        else if(isRamattra){
+            if(
+                !IsUsingAbility1(ep) &&
+                AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
+                IsButtonHeld(ep, Button.SecondaryFire)
+            ){
+                while(
+                    IsAlive() &&
+                    !IsUsingAbility1(ep) &&
+                    AbilityCooldown(ep, Button.SecondaryFire) <= 0
+                ){
+                    StopHoldingButton(ep, Button.PrimaryFire);
+                    Wait(0.25, WaitBehavior.IgnoreCondition);
+                    StartHoldingButton(ep, Button.SecondaryFire);
+                    StartFacing(
+                        ep, DirectionTowards(EyePosition(),
+                            PositionOf(ep) +
+                            DirectionTowards(ep, target) *
+                            DistanceBetween(ep, target) * 0.3),
+                        300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+                    
+                    Wait(0.5, WaitBehavior.IgnoreCondition);
+                    StopHoldingButton(ep, Button.SecondaryFire);
+                    Wait(0.25, WaitBehavior.IgnoreCondition);
+                }
+
+                StartFacingTarget();
             }
         }
     }

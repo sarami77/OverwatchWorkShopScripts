@@ -16,20 +16,9 @@ disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopS
 rule: "SetDebugSetting"
 Event.OngoingGlobal
 {
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "Server Load", ServerLoad()>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-
-    CreateIcon(HostPlayer(), combatAreaPos, Icon.ArrowDown,
-            IconRev.VisibleToAndPosition, Color.White, true);
-
-    while(true){
-        Wait(15.0, WaitBehavior.AbortWhenFalse);
-    }
+    CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Red);
+    CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Red);
+    CreateDebugHud("count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad, Color.Orange);
 }
 
 globalvar define initCompleted!;
@@ -66,7 +55,7 @@ Event.OngoingGlobal
     Wait(5, WaitBehavior.AbortWhenFalse);
 
     // set bot num
-    botNum = WorkshopSettingInteger("Enemy Bot Settings", "Bot Count", 24, 0, 24, 1);
+    botNum = WorkshopSettingInteger("Enemy Bot Settings", "Bot Count", 12, 0, 24, 1);
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
@@ -148,7 +137,23 @@ if(
     dbgMsg("Reload Bot List");
     
     // define teamAsset = AllHeroes();
-    define teamAsset = [Hero.Moira];
+    define teamAsset;
+
+    while(true){
+        teamAsset = [RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero];
+        DestroyBots(Team.Team1);
+        CreateBotsByHeroList(teamAsset, CountOf(teamAsset), Team.Team1);
+        Wait(NumberOfPlayers(Team.Team1) == CountOf(teamAsset));
+        define ramList = FilteredArray(AllPlayers(Team.Team1), ae.isRamattra);
+        if(
+            ramList != []
+        ){
+            teamAsset = [HeroOf(FirstOf(ramList))];
+            dbgHudTxt(FirstOf(teamAsset));
+            break;
+        }
+    }
+
     parallelCount = 0;
     DestroyBots(Team.Team1);
     CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team1);
