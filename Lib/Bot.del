@@ -167,7 +167,7 @@ if(
         (
             // Nemesis form of Ramattra
             isRamattra &&
-            IsInAlternateForm()
+            IsUsingAbility1()
         )
     )
 ){
@@ -178,7 +178,7 @@ if(
         WaitUntil(!IsDuplicating(), MaxValue());
     }
     else if(isRamattra){
-        WaitUntil(!IsInAlternateForm(), MaxValue());
+        WaitUntil(!IsUsingAbility1(), MaxValue());
     }
 
     SetHeroActionRoutine();
@@ -302,6 +302,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ultimateButtonReleaseMax = 30;
         supportPrioloty = 0.75;
         supportButtons = [
+            Button.SecondaryFire,
             Button.Ability2
         ];
         break;
@@ -581,18 +582,17 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         default:
         // case Hero.Ramattra:
         isRamattra = true;
-        dbgHudTxt(<"<0> is isRamattra", ep>);
-        if(IsInAlternateForm()){
+        ability1ButtonReleaseMin = 120;
+        ability1ButtonReleaseMax = 120;
+        secondaryFireButtonReleaseMax = 15;
+        secondaryFireButtonPressMin = 3;
+        secondaryFireButtonPressMax = 6;
+        primaryFireButtonPressMax = 20;
+        primaryFireButtonReleaseMax = 1;
+        if(IsUsingAbility1()){
             // nemesis form
             heroName = "Ramattra nemesis form";
             actionRange = ActionRange.Melee;
-            secondaryFireButtonReleaseMax = 15;
-            secondaryFireButtonPressMin = 3;
-            secondaryFireButtonPressMax = 6;
-            primaryFireButtonPressMax = 20;
-            primaryFireButtonReleaseMax = 1;
-            ability1ButtonReleaseMin = 120;
-            ability1ButtonReleaseMax = 120;
         }
         else{
             // omnic form
@@ -662,10 +662,10 @@ define FindAttackTarget()"FindAttackTarget"{
                     )
                 )
             ),
-            (   
-                ProbabilityTrue(100 * NormalizedHealth())
-            ) ?
-            NormalizedHealth(ae) :
+            // (   
+            //     ProbabilityTrue(100 * NormalizedHealth())
+            // ) ?
+            // NormalizedHealth(ae) :
             DistanceBetween(ep, ae)
             // Health(ae)
         )
@@ -690,11 +690,11 @@ define FindSupportTarget()"FindSupportTarget"{
                     NormalizedHealth(ae) < 1.0
                 )
             ),
-            (   
-                ProbabilityTrue(100 * NormalizedHealth())
-            ) ?
-            NormalizedHealth(ae) :
-            DistanceBetween(ep, ae)
+            // (   
+            //     ProbabilityTrue(100 * NormalizedHealth())
+            // ) ?
+            NormalizedHealth(ae) //:
+            // DistanceBetween(ep, ae)
             // Health(ae)
         )
     );
@@ -1362,16 +1362,16 @@ if(
 // TAG Bot/ButtonControl ----------
 enum ButtonControl{
     button,
-    buttonOperation,
+    buttonBehaivor,
     releaseMin,
     releaseMax,
     pressMin,
     pressMax
 }
 
-playervar define isRepeating;
-playervar define repeatMin;
-playervar define repeatMax;
+playervar define isRepeaFiring;
+playervar define repeatDuring;
+
 
 Boolean isMatchButton(define matchButton!, define butttons!){
     return IsTrueForAny(butttons, ae == matchButton);
@@ -1445,53 +1445,66 @@ void StartButtonControl(define bc){
         }
 
         // release-press action
-        if(bc[ButtonControl.buttonOperation] == ButtonBehaivor.ReleasePress){
+        if(bc[ButtonControl.buttonBehaivor] == ButtonBehaivor.ReleasePress){
             while(true){
-                Wait(buttonControlTimeScale * RandomReal(bc[ButtonControl.releaseMin], bc[ButtonControl.releaseMax]), WaitBehavior.AbortWhenFalse);
+                WaitRandomForDistributeServerLoad();
+                Wait(RandomReal(bc[ButtonControl.releaseMin], bc[ButtonControl.releaseMax]) * buttonControlTimeScale, WaitBehavior.AbortWhenFalse);
 
                 StartHoldingButton(ep, bc[ButtonControl.button]);
-                Wait(buttonControlTimeScale * RandomReal(bc[ButtonControl.pressMin], bc[ButtonControl.pressMax]), WaitBehavior.AbortWhenFalse);
+                Wait(RandomReal(bc[ButtonControl.pressMin], bc[ButtonControl.pressMax]) * buttonControlTimeScale, WaitBehavior.AbortWhenFalse);
                 StopHoldingButton(ep, bc[ButtonControl.button]);
 
-                Wait(0.1, WaitBehavior.AbortWhenFalse);
-                if(
-                    // not any attack
-                    !IsFiringPrimary() &&
-                    !IsFiringSecondary() &&
-                    !IsUsingAbility1() &&
-                    !IsUsingAbility2()
-                ){
-                    // restart primary fire for reduce idle
-                    StartHoldingButton(ep, Button.PrimaryFire);
-                }
+                PressFirstButtonWhenIdle();
             }
         }
         // release-repeat action
-        else if(bc[ButtonControl.buttonOperation] == ButtonBehaivor.ReleaseRepeat){
-            repeatMin = bc[ButtonControl.pressMin];
-            repeatMax = bc[ButtonControl.pressMax];
+        else if(bc[ButtonControl.buttonBehaivor] == ButtonBehaivor.ReleaseRepeat){
             while(true){
-                Wait(buttonControlTimeScale * RandomReal(bc[ButtonControl.releaseMin], bc[ButtonControl.releaseMax]), WaitBehavior.AbortWhenFalse);
+                WaitRandomForDistributeServerLoad();
+                Wait(RandomReal(bc[ButtonControl.releaseMin], bc[ButtonControl.releaseMax] * buttonControlTimeScale), WaitBehavior.AbortWhenFalse);
 
-                isRepeating = true;
-                while(isRepeating){
+                repeatDuring = RandomReal(bc[ButtonControl.pressMin], bc[ButtonControl.pressMax] * buttonControlTimeScale);
+                isRepeaFiring = true;
+                while(isRepeaFiring){
                     PressButton(ep, bc[ButtonControl.button]); 
                     Wait(0.2, WaitBehavior.AbortWhenFalse);
                 }
+
+                PressFirstButtonWhenIdle();
             }
         }
         // else
     }
 }
 
-rule: "Bot/ButtonControl/releaseIsRepeating"
+rule: "Bot/ButtonControl/releaseIsRepeaFiring"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    isRepeating
+    isRepeaFiring
 ){
-    Wait(RandomReal(repeatMin, repeatMax), WaitBehavior.AbortWhenFalse);
-    isRepeating = false;
+    Wait(repeatDuring, WaitBehavior.AbortWhenFalse);
+    isRepeaFiring = false;
+}
+
+void PressFirstButtonWhenIdle()"PressFirstButtonWhenIdle"{
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
+    if(
+        !IsFiringPrimary() &&
+        !IsFiringSecondary() &&
+        !IsUsingAbility1() &&
+        !IsUsingAbility2()
+    ){
+        define button!;
+        if(actionState == ActionState.Attack){
+            button = FirstOf(attackButtons);
+        }
+        else if(actionState == ActionState.Support){
+            button = FirstOf(supportButtons);
+        }
+        StartHoldingButton(ep, button);
+    }
+
 }
 
 // TAG Bot/ButtonControl/PrimaryFire ----------
