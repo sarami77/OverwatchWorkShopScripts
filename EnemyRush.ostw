@@ -243,38 +243,70 @@ globalvar define someHero!;
 define assetList:
     [
         // random hero
-        [
+        [   // assetNo 0
             "basic",
             [EnemyType.Boss,        RandomHero,         1],
             [EnemyType.Elite,       RandomHero,         4],
             [EnemyType.Minion,      RandomHero,         7]
         ],
-        [
-            "boss and minions",
+        [   // assetNo 1
+            "General and minions",
             [EnemyType.Boss,        RandomHero,         1],
             [EnemyType.Minion,      RandomHero,         11]
         ],
-        [
+        [   // assetNo 2
             "all elites",
             [EnemyType.Elite,       RandomHero,         4],
             [EnemyType.Elite,       RandomHero,         4],
             [EnemyType.Elite,       RandomHero,         4]
         ],
-        [
-            "double bosses",
+        [   // assetNo 3
+            "double General",
             [EnemyType.Boss,        RandomHero,         1],
             [EnemyType.Boss,        RandomHero,         1],
             [EnemyType.Minion,      RandomHero,         10]
         ],
-        [
-            "big boss",
-            [EnemyType.GiantBoss,   RandomHero,         1],
+        [   // assetNo 4
+            "the boss",
+            [EnemyType.GiantBoss,   RandomValueInArray([
+                Hero.Genji, Hero.Tracer, Hero.Soldier76, Hero.Bastion
+            ]),         1],
             [EnemyType.Minion,      RandomHero,         7]
-        ] 
+        ],
+        [   // assetNo 5
+            "minion horde",
+            [EnemyType.Minion,   RandomValueInArray([
+                Hero.Reinhardt, Hero.Soldier76, Hero.Widowmaker, Hero.Tracer
+            ]),        12]
+        ],
+        [   // assetNo 6
+            "the dps boss",
+            [EnemyType.GiantBoss,   RandomValueInArray([
+                Hero.Genji, Hero.Tracer, Hero.Soldier76, Hero.Bastion
+            ]),         1],
+            [EnemyType.Minion,      RandomHero,         7]
+        ],
+        [   // assetNo 7
+            "finale",
+            [EnemyType.GiantBoss,   RandomValueInArray([
+                Hero.Reinhardt, Hero.Sigma, Hero.Doomfist, Hero.Roadhog
+            ]),     1],
+            [EnemyType.Minion,      RandomHero,         7]
+        ]
     ];
 
+define assetLotteryList: [
+    0, 0, 0,
+    1, 1, 1,
+    2, 2, 2,
+    3, 3,
+    4
+];
+
 // TAG EnemyBot/BotAsset ----------
-rule: "EnemyBot/reloadBotAsset"
+globalvar define reloadAssetTimer = -1;
+
+rule: "EnemyBot/initeloadAssetTimer"
 Event.OngoingGlobal
 if(
     initCompleted &&
@@ -283,16 +315,79 @@ if(
         (IsGameInProgress())
     )
 ){
+    reloadAssetTimer = 0;
+}
+
+rule: "EnemyBot/coutndownReloadAssetTimer"
+Event.OngoingGlobal
+if(
+    0 < reloadAssetTimer
+){
+    reloadAssetTimer --;
+    Wait(1, WaitBehavior.IgnoreCondition);
+    LoopIfConditionIsTrue();
+}
+
+rule: "EnemyBot/reloadBotAsset"
+Event.OngoingGlobal
+if(
+    reloadAssetTimer == 0
+){
     dbgMsg("reloadBotAsset start");
-    WaitUntil(!(IsEnemyOnObject && IsPlayerOnObject), 60);
-    someHero = RandomHero;
+
     // create all bot
+    someHero = RandomHero;
     PlayEffectsToTeam(enemyTeam);
     DestroyBots(enemyTeam);
-    CreateBotsByAssetList(assetList, enemyTeam);
-    dbgMsg("reloadBotAsset end");
+    CreateBotsByAsset(assetList[RandomValueInArray([assetLotteryList])], enemyTeam);
+    // set next timer
+    reloadAssetTimer = RandomInteger(90, 180);
+}
 
-    Wait(RandomInteger(120, 180), WaitBehavior.AbortWhenFalse);
+globalvar define progressStage;
+
+rule: "EnemyBot/reloadBotAssetByProgress"
+Event.OngoingGlobal
+if(
+    initCompleted &&
+    IsGameInProgress()
+){
+    define progress! = TotalObjectProgress();
+    define assetNo! = -1;
+    define assetTimer;
+
+    if(
+        progressStage == 0 && progress >= 30
+    ){
+        progressStage ++;
+        assetNo = 5;
+        assetTimer = 120;
+    }
+    else if(
+        progressStage == 1 && progress >= 60
+    ){
+        progressStage ++;
+        assetNo = 6;
+        assetTimer = 120;
+    }
+    else if(
+        progressStage == 2 && progress >= 90
+    ){
+        progressStage ++;
+        assetNo = 7;
+        assetTimer = -1;
+    }
+
+    if(assetNo != -1){
+        // create all bot
+        PlayEffectsToTeam(enemyTeam);
+        DestroyBots(enemyTeam);
+        CreateBotsByAsset(assetList[assetNo], enemyTeam);
+        // set next timer
+        reloadAssetTimer = assetTimer;
+    }
+
+    Wait(2, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -394,8 +489,8 @@ if(
         eachMinSpawnInterval = bossSpawnTimeMin;
         eachMaxSpawnInterval = bossSpawnTimeMin * spawnTimeMinToMaxMulti;
 
-        eachNameText = "Boss";
-        eachNameColor = Color.Red;
+        eachNameText = "General";
+        eachNameColor = Color.Orange;
         eachTextSize = basicInWorldTextSize + 1;
     }
     else if(enemyType == EnemyType.GiantBoss){
@@ -413,8 +508,8 @@ if(
         eachMinSpawnInterval = bossSpawnTimeMin;
         eachMaxSpawnInterval = bossSpawnTimeMin * spawnTimeMinToMaxMulti;
 
-        eachNameText = "Big Boss";
-        eachNameColor = Color.Purple;
+        eachNameText = "Boss";
+        eachNameColor = Color.Red;
         eachTextSize = basicInWorldTextSize + 1.5;
 
         // set addtinal health
@@ -816,7 +911,7 @@ if(
 ){
     enemyAbilityStatus[0] = false;
     WaitEnemyAbility();
-    define rushDurling! = RandomInteger(5, 15);
+    define rushDurling! = RandomInteger(10, 20);
     for(rushCount; rushDurling > 0; rushDurling--){
         Respawn(AllDeadPlayers(enemyTeam));
 
@@ -867,7 +962,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "EnemyBot/EnemyAbility/closeHopToObject"
+rule: "EnemyBot/EnemyAbility/hopToObject"
 Event.OngoingPlayer
 if(
     initCompleted &&
@@ -878,8 +973,8 @@ if(
     if(
         IsPlayerOnObject &&
         IsOnGround() &&
-        CountOf(AllPlayersOnObjective(enemyTeam)) <= 1 &&
-        DistanceBetween(ep, OnCurrentObjectPosition()) >= 5.5
+        CountOf(AllPlayersOnObjective(enemyTeam)) <= (NumberOfPlayers(enemyTeam) / 4) &&
+        DistanceBetween(ep, OnCurrentObjectPosition()) >= 5
     ){
         PressButton(ep, Button.Jump);
         ApplyImpulse(ep, 
@@ -1032,7 +1127,7 @@ playervar define confirmDealtDamage!;
 globalvar define autoTuneDmgDlt!;
 globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Dynamic Difficult Scale", 1.0, 0, 1000, 0);
 
-define internalRate: 0.4;
+define internalRate: 0.3;
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1234,16 +1329,18 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("human player num", CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae))), Color.Team2);
         debugHuds[Last()] = CreateDebugHud("player team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, Color.Team2);
         debugHuds[Last()] = CreateDebugHud("enemy team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("enemy spawn interval", <"scale = <0> | M = <1> / E = <2> / B = <3> / BB = <4>",
+        debugHuds[Last()] = CreateDebugHud("enemy spawn interval", <"scale = <0> / M = <1> / E = <2> / B = <3> / BB = <4>",
             spawnTimeScale,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Minion)).confirmSpawnInterval,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Elite)).confirmSpawnInterval,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Boss)).confirmSpawnInterval,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.GiantBoss)).confirmSpawnInterval
         >, Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("enemy rush status", enemyAbilityStatus[0], Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("enemy shot call", enemyAbilityStatus[1], Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("enemy rush status", enemyAbilityStatus[0], enemyAbilityStatus[0] == false ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("enemy shot call status", enemyAbilityStatus[1], enemyAbilityStatus[1] == false ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("reload Asset Timer", reloadAssetTimer, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
+        
     }
 }
 
@@ -1265,16 +1362,13 @@ if(
 ){
     // Recalculate portal
     WaitLongPressConfirm();
-
-    someHero = RandomHero;
     // create all bot
+    someHero = RandomHero;
     PlayEffectsToTeam(enemyTeam);
     DestroyBots(enemyTeam);
-    CreateBotsByAssetList(assetList, enemyTeam);
-
-    Wait(0.5, WaitBehavior.AbortWhenFalse);    // wait release ult button 
-    DestroyBots(playerTeam);
-    CreateBotsByAssetList(assetList, playerTeam);
+    CreateBotsByAsset(assetList[RandomValueInArray([assetLotteryList])], enemyTeam);
+    // set next timer
+    reloadAssetTimer = RandomInteger(90, 180);
 }
 
 rule: "Debug/increaseMatchTime"

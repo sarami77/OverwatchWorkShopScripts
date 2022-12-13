@@ -1,6 +1,9 @@
 import "Utility.del";
 import "Debug.del";
 
+// TODO
+// bot nead healing state
+
 // TAG public property
 globalvar define botAimScat = WorkshopSettingReal("Enemy Bot Settings", "Aim Scattering (0 is head shot)",              0.3, 0, 1000, 3);
 
@@ -25,11 +28,18 @@ enum EnemyType{
 globalvar define enemyTeamName! = "";
 
 void CreateBotsByAssetList(define assetList, define team)"CreateBotsByAssetList"{
+    // select asset in assetList
     define asset = ValueInArray(assetList, RandomInteger(0, CountOf(assetList) - 1));
+    // make bot by asset
+    CreateBotsByAsset(asset, team);
+}
+
+void CreateBotsByAsset(define asset, define team)"CreateBotsByAsset"{
     // set team name
     enemyTeamName = asset[0];
-    // create bot by asset
+    // run asset items
     for(define assetIdx! = 1; assetIdx < CountOf(asset); assetIdx++){
+        // run bot count in asset
         for(define botCount! = 0; botCount < asset[assetIdx][BotAsset.Count]; botCount++){
             // get empty slot
             define slot! = getEmptySlotNo(team);
@@ -596,7 +606,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         else{
             // omnic form
             heroName = "Ramattra omnic form";
-            actionRange = ActionRange.Middle;
+            actionRange = ActionRange.Close;
         }
         break;
     }
@@ -984,7 +994,7 @@ void setMoveDir() playervar "setMoveDir"{
     // low health
     if(
         backWhenLowHealth &&
-        NormalizedHealth() <= 0.5
+        ProbabilityTrue(100 * (0.75 - NormalizedHealth()))
     ){
         moveDir = Backward();
     }
@@ -1129,10 +1139,13 @@ if(
             nearEnemy != null &&
             DistanceBetween(ep, nearEnemy) <= 30
         ){
-            // set initial face direction
+            // set face to near enemy
             StartFacing(
-                ep, DirectionTowards(EyePosition(), ClosestPlayerTo(ep, EnemyTeamOf())),
+                ep, DirectionTowards(ep, nearEnemy),
                 300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+        }
+        else{
+            StopFacing();
         }
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
@@ -1234,8 +1247,9 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
     else if(
         actionState != ActionState.Non
     ){
-        // ashe's cancel fire when reloading
+        // ashe
         if(HeroOf() == Hero.Ashe){
+            // reduce fire when reloading
             if(
                 Ammo(ep, 0) <= MaxAmmo(ep, 0) / 2 ||
                 IsReloading()
@@ -1248,16 +1262,33 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
                     PressButton(ep, Button.Reload);
             }
         }
-        // Mercy's change weapon
+        // Mercy
         else if(HeroOf() == Hero.Mercy){
+            // change weapon
             if(actionState == ActionState.Attack){
                 SetWeapon(ep, MercyPistol);
             }
             else{
                 SetWeapon(ep, MercyStaff);
+                if(
+                    TeamOf() == TeamOf(target)
+                ){
+                    if(
+                        ProbabilityTrue(75 * NormalizedHealth(target))
+                    ){
+                        // damage boost
+                        StopHoldingButton(ep, Button.PrimaryFire);
+                        StartHoldingButton(ep, Button.SecondaryFire);
+                    }
+                    else{
+                        // heal
+                        StopHoldingButton(ep, Button.SecondaryFire);
+                        StartHoldingButton(ep, Button.PrimaryFire);
+                    }
+                }
             }
         }
-        // WreckingBall's jump for pile driver and accsell for ball tackle
+        // WreckingBall
         else if(HeroOf() == Hero.WreckingBall){
             // jump for pile driver
             if(
