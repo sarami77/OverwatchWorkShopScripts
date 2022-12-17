@@ -674,9 +674,10 @@ define FindAttackTarget()"FindAttackTarget"{
             // (   
             //     ProbabilityTrue(100 * NormalizedHealth())
             // ) ?
-            // NormalizedHealth(ae) :
+            // Health(ae) :
+            ProbabilityTrue(100 * NormalizedHealth()) ?
+            NormalizedHealth(ae) :
             DistanceBetween(ep, ae)
-            // Health(ae)
         )
     );
 }
@@ -696,7 +697,7 @@ define FindSupportTarget()"FindSupportTarget"{
                         true :
                         IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
                     ) &&
-                    NormalizedHealth(ae) < 1.0
+                    NormalizedHealth(ae) < 0.9
                 )
             ),
             // (   
@@ -875,7 +876,7 @@ if(
 ){
     // change target dependent on attack target helth & attack prob
     if(
-        ProbabilityTrue(50 * NormalizedHealth(target))
+        ProbabilityTrue(100 * NormalizedHealth(target))
     ){
         // set attacker to target
         target = Attacker();
@@ -897,6 +898,7 @@ globalvar define isCallAttackCoolingDown! = false;
 
 void CallAttackNearBot(define attackTarget!)"CallAttackNearBot"{
     AbortIf(isCallAttackCoolingDown);
+    // dbgHudTxt("CallAttackNearBot");
 
     isCallAttackCoolingDown = true;
     define nearFriends = FilteredArray(
@@ -944,14 +946,14 @@ void StartMove() playervar "StartMove"{
     AbortIf(noMoving);
 
     define confirmMoveDir! = moveDir + sideStepDir;
-    define moveToPosition! = BlockedPositonByLocalVector(
-        confirmMoveDir,
-        walkMeterPerSec * watchUpdateRate
-    );
-        
     // move to position is abyss
     if(
-        IsBelowAbyss(moveToPosition)
+        IsBelowAbyss(
+            BlockedPositonByLocalVector(
+                confirmMoveDir,
+                walkMeterPerSec * watchUpdateRate
+            )
+        )
         // false
     ){
         StopMove();
@@ -975,59 +977,29 @@ void StartMove() playervar "StartMove"{
     }
 }
 
-void StartMoveInDir(define dir){
-    StartThrottleInDirection(
-        ep, dir, 1,
-        Relative.ToPlayer,
-        ThrottleBehavior.ReplaceExistingThrottle,
-        ThrottleRev.DirectionAndMagnitude
-    );
-}
-
 playervar define backWhenLowHealth = true;
 
 void setMoveDir() playervar "setMoveDir"{
-    // set move direction
-    define distToTarget! = DistanceBetween(ep, target);
-
-    // select dir    
     // low health
     if(
         backWhenLowHealth &&
-        ProbabilityTrue(100 * (0.75 - NormalizedHealth()))
+        ProbabilityTrue(100 * (1 - NormalizedHealth()))
     ){
         moveDir = Backward();
     }
     // attack state
-    else if(actionState == ActionState.Attack){
+    else{
+        define distToTarget! = DistanceBetween(ep, target);
+        define distRate! = actionState == ActionState.Attack ? 1 : 0.7;
         // target is far
         if(
-            distToTarget > actionRangeMax
+            distToTarget > (actionRangeMax * distRate)
         ){
             moveDir = Forward();
         }
         // target is close
         else if(
-            distToTarget < actionRangeMin
-        ){
-            moveDir = Backward();
-        }
-        else{
-            // no moveDir
-            moveDir = NoDirection();
-        }
-    }
-    // support state
-    else if(actionState == ActionState.Support){
-        // target is far
-        if(
-            distToTarget > (actionRangeMax * 0.75)
-        ){
-            moveDir = Forward();
-        }
-        // target is close
-        else if(
-            distToTarget < (actionRangeMin * 0.75)
+            distToTarget < (actionRangeMin * distRate)
         ){
             moveDir = Backward();
         }
@@ -1039,52 +1011,57 @@ void setMoveDir() playervar "setMoveDir"{
 }
 
 void setSideStep() playervar "setSideStep"{
-    define distance! = DistanceBetween(ep, target);
-    // start sidestep by distance to target
-    if(
-        ProbabilityTrue(
-            25 +
-            (
-                100 *
-                (1 - NormalizedHealth()) *  // by health
-                (1 - (distance / 30))       // by target distance
-            )
-        )
-    ){
-        // start sidestep
-        // already has sidestep
-        if(sideStepDir != NoDirection()){
-            if(
-                ProbabilityTrue(
-                    25 +
-                    (
-                        100 *
-                        (1 - NormalizedHealth()) *  // by health
-                        (1 - (distance / 30))       // by target distance
-                    )
+    if(actionState == ActionState.Attack){
+        define distance! = DistanceBetween(ep, target);
+        // start sidestep by distance to target
+        if(
+            ProbabilityTrue(
+                25 +
+                (
+                    100 *
+                    (1 - NormalizedHealth()) *  // by health
+                    (1 - (distance / 30))       // by target distance
                 )
-            ){
-                // reverse sidestep
-                sideStepDir = -sideStepDir;
+            )
+        ){
+            // start sidestep
+            // already has sidestep
+            if(sideStepDir != NoDirection()){
+                if(
+                    ProbabilityTrue(
+                        25 +
+                        (
+                            100 *
+                            (1 - NormalizedHealth()) *  // by health
+                            (1 - (distance / 30))       // by target distance
+                        )
+                    )
+                ){
+                    // reverse sidestep
+                    sideStepDir = -sideStepDir;
+                }
+                else{
+                    // stop sidestep
+                    sideStepDir = NoDirection();
+                }
             }
             else{
-                // stop sidestep
-                sideStepDir = NoDirection();
+                if(ProbabilityTrue(50)){
+                    // right sidestep
+                    sideStepDir = Right();
+                }
+                else{
+                    // left sidestep
+                    sideStepDir = Left();
+                }
             }
         }
         else{
-            if(ProbabilityTrue(50)){
-                // right sidestep
-                sideStepDir = Right();
-            }
-            else{
-                // left sidestep
-                sideStepDir = Left();
-            }
+            // stop sidestep
+            sideStepDir = NoDirection();
         }
     }
     else{
-        // stop sidestep
         sideStepDir = NoDirection();
     }
 }
@@ -1120,29 +1097,33 @@ if(
 ){
     statusText = <"Non">;
 
-    // hero unique action
-    polingHeroUniqueAction();
-
     moveDir = NoDirection();
     sideStepDir = NoDirection();
     target = 0;
-
     StopMove();
-    StopFacing();
     Wait(0.1, WaitBehavior.AbortWhenFalse);
+
+    // hero unique action
+    polingHeroUniqueAction();
 
     // action loop
     while(actionState == ActionState.Non){
         WaitRandomForDistributeServerLoad();
-        define nearEnemy! = ClosestPlayerTo(ep, EnemyTeamOf());
-        if(
-            nearEnemy != null &&
-            DistanceBetween(ep, nearEnemy) <= 30
-        ){
-            // set face to near enemy
-            StartFacing(
-                ep, DirectionTowards(ep, nearEnemy),
-                300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+        if(IsAlive()){
+            define nearEnemy! = ClosestPlayerTo(ep, EnemyTeamOf());
+            if(
+                nearEnemy != null &&
+                DistanceBetween(ep, nearEnemy) <= 30
+            ){
+                // set facing to near enemy
+                StartFacing(
+                    ep, DirectionTowards(ep, nearEnemy),
+                    300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+            }
+            else{
+                // stop facing
+                StopFacing();
+            }
         }
         else{
             StopFacing();
@@ -1151,21 +1132,25 @@ if(
     }
 }
 
-// TAG Bot/ActionState/Attack ----------
-rule: "Bot/ActionState/Attack"
+// TAG Bot/ActionState/AttackOrSupport ----------
+rule: "Bot/ActionState/AttackOrSupport"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    actionState == ActionState.Attack
+    (
+        actionState == ActionState.Attack ||
+        actionState == ActionState.Support
+    )
 ){
-    statusText = <"Attack">;
-
     // start facing direction
     StartFacingTarget();
     Wait(0.1, WaitBehavior.AbortWhenFalse);
 
     // action loop
-    while(actionState == ActionState.Attack){
+    while(
+        actionState == ActionState.Attack ||
+        actionState == ActionState.Support
+    ){
         WaitRandomForDistributeServerLoad();
 
         // hero unique action
@@ -1180,39 +1165,6 @@ if(
         // start move by moveDir and sideStepDir
         StartMove();
 
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    }
-}
-
-// TAG Bot/ActionState/Support ----------
-rule: "Bot/ActionState/Support"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    actionState == ActionState.Support
-){
-    statusText = <"Support">;
-
-    // start facing direction
-    StartFacingTarget();
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
-
-    // action loop
-    while(actionState == ActionState.Support){
-        WaitRandomForDistributeServerLoad();
-
-        // hero unique action
-        polingHeroUniqueAction();
-    
-        // set moveDir direction
-        setMoveDir();
-
-        // no sidestepDir
-        sideStepDir = NoDirection();
-
-        // start move by moveDir and sideStepDir
-        StartMove();
-        
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
 }
@@ -1274,7 +1226,7 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
                     TeamOf() == TeamOf(target)
                 ){
                     if(
-                        ProbabilityTrue(75 * NormalizedHealth(target))
+                        ProbabilityTrue(100 * NormalizedHealth(target))
                     ){
                         // damage boost
                         StopHoldingButton(ep, Button.PrimaryFire);
@@ -1305,6 +1257,42 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
                 ApplyImpulse(ep, boostDir,
                     30, Relative.ToWorld, ContraryMotion.Cancel);
                 Wait(0.5, WaitBehavior.AbortWhenFalse);
+            }
+        }
+        // Baptiste's deploy matrix
+        else if(HeroOf() == Hero.Baptiste){
+            if(
+                !IsUsingUltimate(ep) &&
+                UltimateChargePercent() >= DefaultPercentage() &&
+                IsButtonHeld(ep, Button.Ultimate)
+            ){
+                define tryCount! = 0;                
+                while(
+                    IsAlive() &&
+                    !IsUsingUltimate(ep) &&
+                    UltimateChargePercent() >= DefaultPercentage()
+                ){
+                    dbgHudTxt("Baptiste's deploy matrix");
+                    StopHoldingButton(ep, Button.SecondaryFire);
+                    StopHoldingButton(ep, Button.PrimaryFire);
+                    Wait(0.2, WaitBehavior.IgnoreCondition);
+                    StartFacing(
+                        ep, DirectionTowards(EyePosition(),
+                            PositionOf(ep) +
+                            DirectionTowards(ep, target) *
+                            DistanceBetween(ep, target) * 0.3),
+                        300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+                    Wait(0.2, WaitBehavior.IgnoreCondition);
+                    PressButton(ep, Button.PrimaryFire);
+                    Wait(0.1, WaitBehavior.IgnoreCondition);
+                    if(tryCount >= 3){
+                        break;
+                    }
+                    else{
+                        tryCount += 1;
+                    }
+                }
+                StartFacingTarget();
             }
         }
         // Ramattra's deploy barrier
@@ -1345,13 +1333,13 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
     }
 }
 
-rule: "Bot/HeroUniqueAction/WhenUlt"
+rule: "Bot/HeroUniqueAction/positionSelectByUbility"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
     IsUsingUltimate()
 ){
-    define isPositionSelectorUlt! = false;
+    define isPositionSelectorAbility! = false;
     define usingHero!;
     define waitForStartSelectorMove!;
     define selecorMoveSpeed!;
@@ -1363,7 +1351,7 @@ if(
         HeroOf() == Hero.Doomfist ||
         HeroBeingDuplicated() == Hero.Doomfist
     ){
-        isPositionSelectorUlt = true;
+        isPositionSelectorAbility = true;
         usingHero = Hero.Doomfist;
         waitForStartSelectorMove = 0.5;
         selecorMoveSpeed = 0.06;
@@ -1374,7 +1362,7 @@ if(
         HeroOf() == Hero.Bastion ||
         HeroBeingDuplicated() == Hero.Bastion
     ){
-        isPositionSelectorUlt = true;
+        isPositionSelectorAbility = true;
         usingHero = Hero.Bastion;
         waitForStartSelectorMove = 1.0;
         selecorMoveSpeed = 0.05;
@@ -1385,7 +1373,7 @@ if(
         HeroOf() == Hero.Junkrat ||
         HeroBeingDuplicated() == Hero.Junkrat
     ){
-        isPositionSelectorUlt = true;
+        isPositionSelectorAbility = true;
         usingHero = Hero.Junkrat;
         waitForStartSelectorMove = 1.5;
         selecorMoveSpeed = 0.075;
@@ -1394,13 +1382,15 @@ if(
     }
 
     // postion selecter ult
-    if(isPositionSelectorUlt){
+    if(isPositionSelectorAbility){
         // stop current moving input
         StopMove();
         // wait for selector mode
         Wait(waitForStartSelectorMove, WaitBehavior.AbortWhenFalse);
         // start move postion selecter to foward
-        StartMoveInDir(Forward());
+        moveDir = Forward();
+        sideStepDir = NoDirection();
+        StartMove();
         // decrease selector move speed if multi position attack mode
         if(multiPositionAttack) selecorMoveSpeed -= 0.01;
         // wait for selector arrival target

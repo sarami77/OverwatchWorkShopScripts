@@ -54,8 +54,8 @@ Event.OngoingGlobal
 if(
     IsAssemblingHeroes()
 ){
-    // SetMatchTime(0);
-    SetMatchTime(25);
+    SetMatchTime(0);
+    // SetMatchTime(25);
 }
 
 rule: "Initialize/shortenSetup"
@@ -76,7 +76,7 @@ if(
     WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", true) ?
         // random list
         [
-            RandomSupportHero,
+            Hero.Baptiste,
             RandomTankHero,
             RandomDamageHero,
             RandomSupportHero,
@@ -136,6 +136,8 @@ if(
             // player number changed
             prevPlayerNum != playerNum
         ){
+            // get avg ult charge of bots
+            define ultCharge! = GetAvgUltChgOfDummyBot(playerTeam);
             // save player num
             prevPlayerNum = playerNum;
             // relaod buddy list
@@ -152,6 +154,8 @@ if(
                 }
                 CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
             }
+            // set avg ult charge of bots
+            SetAvgUltChgOfDummyBot(playerTeam, ultCharge);
         }
 
         // show human player outline
@@ -176,7 +180,6 @@ if(
 ){
     watchUpdateRate = 2;
     if(IsGameInProgress()){
-        SetUltimateCharge(ep, 50);
         // teleport to player near object
         Teleport(ep, ClosestPlayerTo(CurrentObjectPosition(), playerTeam));
     }
@@ -271,7 +274,7 @@ define assetList:
             [EnemyType.Boss,   RandomValueInArray([
                 Hero.Genji, Hero.Tracer, Hero.Soldier76, Hero.Bastion
             ]),         1],
-            [EnemyType.Minion,      RandomHero,         7]
+            [EnemyType.Minion,      RandomHero,         11]
         ],
         [   // assetNo 5
             "minion horde",
@@ -284,14 +287,14 @@ define assetList:
             [EnemyType.Boss,   RandomValueInArray([
                 Hero.Reaper, Hero.Genji, Hero.Soldier76, Hero.Bastion, Hero.Tracer, Hero.Pharah, Hero.Echo
             ]),         1],
-            [EnemyType.Minion,      RandomHero,         7]
+            [EnemyType.Minion,      RandomHero,         11]
         ],
         [   // assetNo 7
             "finale",
             [EnemyType.Boss,   RandomValueInArray([
                 Hero.Reinhardt, Hero.Sigma, Hero.Doomfist, Hero.Roadhog, Hero.Orisa, Hero.Zarya
             ]),     1],
-            [EnemyType.Minion,      RandomHero,         7]
+            [EnemyType.Minion,      RandomHero,         11]
         ]
     ];
 
@@ -341,7 +344,7 @@ if(
     DestroyBots(enemyTeam);
     CreateBotsByAsset(assetList[RandomValueInArray([assetLotteryList])], enemyTeam);
     // set next timer
-    reloadAssetTimer = RandomInteger(90, 180);
+    reloadAssetTimer = RandomInteger(90, 150);
 }
 
 globalvar define progressStage;
@@ -361,14 +364,14 @@ if(
     ){
         progressStage ++;
         assetNo = 5;
-        assetTimer = 120;
+        assetTimer = 90;
     }
     else if(
         progressStage == 1 && progress >= 60
     ){
         progressStage ++;
         assetNo = 6;
-        assetTimer = 120;
+        assetTimer = 90;
     }
     else if(
         progressStage == 2 && progress >= 90
@@ -727,7 +730,7 @@ Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCo
         // Probability
         ProbabilityTrue(3) ||
         // player too close from commonTeleportPosition
-        DistanceBetween(commonTeleportPosition, ClosestPlayerTo(commonTeleportPosition, playerTeam)) < 5 ||
+        DistanceBetween(commonTeleportPosition, ClosestPlayerTo(commonTeleportPosition, playerTeam)) < 3 ||
         // has not line commonTeleportPosition to current object 
         !IsInLineOfSight(
             PositionOffsetY1() + CurrentObjectPosition(),
@@ -973,7 +976,7 @@ if(
     if(
         IsPlayerOnObject &&
         IsOnGround() &&
-        CountOf(AllPlayersOnObjective(enemyTeam)) <= (NumberOfPlayers(enemyTeam) / 4) &&
+        CountOf(AllPlayersOnObjective(enemyTeam)) <= (NumberOfPlayers(enemyTeam) / 3) &&
         DistanceBetween(ep, OnCurrentObjectPosition()) >= 5
     ){
         PressButton(ep, Button.Jump);
@@ -982,7 +985,7 @@ if(
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     
-    Wait(1.0, WaitBehavior.AbortWhenFalse);
+    Wait(0.8, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -1127,7 +1130,7 @@ playervar define confirmDealtDamage!;
 globalvar define autoTuneDmgDlt!;
 globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Dynamic Difficult Scale", 1.0, 0, 1000, 0);
 
-define internalRate: 0.3;
+define internalRate: 0.5;
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1266,6 +1269,15 @@ if(
 ){
     debugMode = DebugMode.ShowParam;
     ShowDebugHud(HostPlayer());
+
+    // CreateIcon(commonTeleportPosition != 0 ? AllPlayers(): null,
+    //     commonTeleportPosition + PositionOffsetY1(), Icon.Spiral,
+    //     IconRev.VisibleToAndPosition, enemyColor, true);
+    // CreateEffect(commonTeleportPosition != 0 ? AllPlayers(): null, Effect.Cloud, enemyColor,
+    //     commonTeleportPosition + PositionOffsetY1(), 3, EffectRev.VisibleToPositionRadiusAndColor);
+    // CreateBeamEffect(commonTeleportPosition != 0 ? AllPlayers(): null,
+    //     BeamType.BadBeam, HostPlayer(), commonTeleportPosition + PositionOffsetY1(),
+    //     enemyColor, EffectRev.VisibleToPositionAndRadius);
 }
 
 rule: "Debug/changeDebugMode"
