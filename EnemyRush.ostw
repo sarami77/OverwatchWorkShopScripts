@@ -54,8 +54,8 @@ Event.OngoingGlobal
 if(
     IsAssemblingHeroes()
 ){
-    SetMatchTime(0);
-    // SetMatchTime(25);
+    // SetMatchTime(0);
+    SetMatchTime(25);
 }
 
 rule: "Initialize/shortenSetup"
@@ -506,7 +506,7 @@ if(
         SetHealingDealt(ep, 400);
         SetHealingReceived(ep, 200);
 
-        eachDealtDamageScale = 4.0;
+        eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
         eachMinSpawnInterval = bossSpawnTimeMin;
         eachMaxSpawnInterval = bossSpawnTimeMin * spawnTimeMinToMaxMulti;
@@ -790,7 +790,16 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
 playervar define telBeam!;
 
 void TeleportWithEffect() playervar "TeleportWithEffect"{
-    Wait(SlotOf(ep) * 0.1, WaitBehavior.AbortWhenFalse);
+    define waitTeleportTimer! = 
+        IndexOfArrayValue(
+            FilteredArray(
+                AllPlayers(enemyTeam), IsInSpawnRoom(ae)
+            ),
+            ep
+        ) *
+        0.1;
+    waitTeleportTimer = waitTeleportTimer < 0 ? 0 : waitTeleportTimer;
+    Wait(waitTeleportTimer, WaitBehavior.AbortWhenFalse);
     // show pre teleport effect
     PlayTeleportEffect(true);
     // Teleport
@@ -974,18 +983,19 @@ if(
     TotalObjectProgress() >= 95
 ){
     if(
-        IsPlayerOnObject &&
+        !IsInSpawnRoom() &&
         IsOnGround() &&
+        IsPlayerOnObject &&
         CountOf(AllPlayersOnObjective(enemyTeam)) <= (NumberOfPlayers(enemyTeam) / 3) &&
         DistanceBetween(ep, OnCurrentObjectPosition()) >= 5
     ){
         PressButton(ep, Button.Jump);
         ApplyImpulse(ep, 
-            VectorTowards(ep, OnCurrentObjectPosition()), 10,
+            VectorTowards(ep, OnCurrentObjectPosition()), 12,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     
-    Wait(0.8, WaitBehavior.AbortWhenFalse);
+    Wait(1.0, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 

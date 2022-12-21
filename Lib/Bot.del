@@ -166,12 +166,11 @@ if(
 rule: "Bot/SetActionRoutineByHeroUniqueAction"
 Event.OngoingPlayer
 if(
-    // IsDummyBot() &&
+    IsDummyBot() &&
     (
         (
             // Duplicated of Echo
-            HeroOf() == Hero.Echo &&
-            IsDuplicating()
+            IsDuplicated(ep)
         )
         ||
         (
@@ -326,10 +325,9 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Doomfist:
         heroName = "Doomfist";
         actionRange = ActionRange.Melee;
-        ability2ButtonPressMin = 3;
         ability2ButtonReleaseMin = 3;
         secondaryFireButtonPressMin = 1.3;
-        secondaryFireButtonPressMax = 1.3;
+        secondaryFireButtonPressMax = 1.5;
         break;
 
         case Hero.Dva:
@@ -844,6 +842,17 @@ if(
     LoopIfConditionIsTrue();
 }
 
+rule: "Bot/ActionState/SetNonStateByDead"
+Event.OnDeath
+if(
+    IsDummyBot() &&
+    actionState != ActionState.Non &&
+    Victim() == ep
+){
+    // apply next state
+    ApplyNextActionState(ep, ActionState.Non);
+}
+
 rule: "Bot/ActionState/ChangeTargetByTargetDead"
 Event.OnElimination
 if(
@@ -1259,144 +1268,78 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
                 Wait(0.5, WaitBehavior.AbortWhenFalse);
             }
         }
-        // Baptiste's deploy matrix
-        else if(HeroOf() == Hero.Baptiste){
-            if(
-                !IsUsingUltimate(ep) &&
-                UltimateChargePercent() >= DefaultPercentage() &&
-                IsButtonHeld(ep, Button.Ultimate)
-            ){
-                define tryCount! = 0;                
-                while(
-                    IsAlive() &&
-                    !IsUsingUltimate(ep) &&
-                    UltimateChargePercent() >= DefaultPercentage()
-                ){
-                    dbgHudTxt("Baptiste's deploy matrix");
-                    StopHoldingButton(ep, Button.SecondaryFire);
-                    StopHoldingButton(ep, Button.PrimaryFire);
-                    Wait(0.2, WaitBehavior.IgnoreCondition);
-                    StartFacing(
-                        ep, DirectionTowards(EyePosition(),
-                            PositionOf(ep) +
-                            DirectionTowards(ep, target) *
-                            DistanceBetween(ep, target) * 0.3),
-                        300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
-                    Wait(0.2, WaitBehavior.IgnoreCondition);
-                    PressButton(ep, Button.PrimaryFire);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                    if(tryCount >= 3){
-                        break;
-                    }
-                    else{
-                        tryCount += 1;
-                    }
-                }
-                StartFacingTarget();
-            }
-        }
-        // Ramattra's deploy barrier
-        else if(isRamattra){
-            if(
-                !IsUsingAbility1(ep) &&
-                AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
-                IsButtonHeld(ep, Button.SecondaryFire)
-            ){
-                define tryCount! = 0;                
-                while(
-                    IsAlive() &&
-                    !IsUsingAbility1(ep) &&
-                    AbilityCooldown(ep, Button.SecondaryFire) <= 0
-                ){
-                    StopHoldingButton(ep, Button.PrimaryFire);
-                    Wait(0.2, WaitBehavior.IgnoreCondition);
-                    StartHoldingButton(ep, Button.SecondaryFire);
-                    StartFacing(
-                        ep, DirectionTowards(EyePosition(),
-                            PositionOf(ep) +
-                            DirectionTowards(ep, target) *
-                            DistanceBetween(ep, target) * 0.3),
-                        300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
-                    Wait(0.2, WaitBehavior.IgnoreCondition);
-                    StopHoldingButton(ep, Button.SecondaryFire);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                    if(tryCount >= 3){
-                        break;
-                    }
-                    else{
-                        tryCount += 1;
-                    }
-                }
-                StartFacingTarget();
-            }
-        }
     }
 }
 
-rule: "Bot/HeroUniqueAction/positionSelectByUbility"
+define AbortIfNotDepEcho()"AbortIfNotDepEcho"{
+    if(HeroOf() == Hero.Echo){
+        AbortIf(!IsDuplicating());
+    }
+}
+
+rule: "Bot/HeroUniqueAction/positionMoveUltmate"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
     IsUsingUltimate()
 ){
-    define isPositionSelectorAbility! = false;
-    define usingHero!;
-    define waitForStartSelectorMove!;
-    define selecorMoveSpeed!;
-    define attackCount!;
-    define multiPositionAttack!;
+    AbortIfNotDepEcho();
 
-    // postion selecter ult hero
+    define isPositionMoveUltmate;
+    define waitForStartMove!;
+    define moveSpeed!;
+    define attackCount!;
+    define multiPosAttack!;
+
+    // postion move hero
     if(
         HeroOf() == Hero.Doomfist ||
         HeroBeingDuplicated() == Hero.Doomfist
     ){
-        isPositionSelectorAbility = true;
-        usingHero = Hero.Doomfist;
-        waitForStartSelectorMove = 0.5;
-        selecorMoveSpeed = 0.06;
+        isPositionMoveUltmate = true;
+        waitForStartMove = 0.5;
+        moveSpeed = 0.06;
         attackCount = 1;
-        multiPositionAttack = false;
+        multiPosAttack = false;
     }
     else if(
         HeroOf() == Hero.Bastion ||
         HeroBeingDuplicated() == Hero.Bastion
     ){
-        isPositionSelectorAbility = true;
-        usingHero = Hero.Bastion;
-        waitForStartSelectorMove = 1.0;
-        selecorMoveSpeed = 0.05;
+        isPositionMoveUltmate = true;
+        waitForStartMove = 1.0;
+        moveSpeed = 0.05;
         attackCount = 3;
-        multiPositionAttack = ProbabilityTrue(50);
+        multiPosAttack = ProbabilityTrue(50);
     }
     else if(
         HeroOf() == Hero.Junkrat ||
         HeroBeingDuplicated() == Hero.Junkrat
     ){
-        isPositionSelectorAbility = true;
-        usingHero = Hero.Junkrat;
-        waitForStartSelectorMove = 1.5;
-        selecorMoveSpeed = 0.075;
+        isPositionMoveUltmate = true;
+        waitForStartMove = 1.5;
+        moveSpeed = 0.075;
         attackCount = 1;
-        multiPositionAttack = false;
+        multiPosAttack = false;
     }
 
-    // postion selecter ult
-    if(isPositionSelectorAbility){
+    if(isPositionMoveUltmate){
         // stop current moving input
         StopMove();
-        // wait for selector mode
-        Wait(waitForStartSelectorMove, WaitBehavior.AbortWhenFalse);
+        StopHoldingButton(ep, Button.PrimaryFire);
+        StopHoldingButton(ep, Button.SecondaryFire);
+        // wait for start mode
+        Wait(waitForStartMove, WaitBehavior.AbortWhenFalse);
         // start move postion selecter to foward
         moveDir = Forward();
         sideStepDir = NoDirection();
         StartMove();
-        // decrease selector move speed if multi position attack mode
-        if(multiPositionAttack) selecorMoveSpeed -= 0.01;
-        // wait for selector arrival target
-        Wait(DistanceBetween(ep, target) * (selecorMoveSpeed), WaitBehavior.AbortWhenFalse);
-        // stop selector move if not multi position attack mode
-        if(!multiPositionAttack) StopMove();
+        // decrease move speed if multi position attack mode
+        if(multiPosAttack) moveSpeed -= 0.01;
+        // wait for arrival target
+        Wait(DistanceBetween(ep, target) * (moveSpeed), WaitBehavior.AbortWhenFalse);
+        // stop move if not multi position attack mode
+        if(!multiPosAttack) StopMove();
         // trigger attack by attackCount
         for(; 0 < attackCount; attackCount--){
             PressButton(ep, Button.PrimaryFire);
@@ -1410,6 +1353,89 @@ if(
     }
 }
 
+define FacingTargetBetween(define distRate!)"FacingTargetBetween"{
+        StartFacing(
+        ep, DirectionTowards(
+                EyePosition(),
+                PositionOf(ep) +
+                DirectionTowards(ep, target) *
+                DistanceBetween(ep, target) * distRate
+            ),
+            300, Relative.ToWorld, FacingRev.DirectionAndTurnRate
+        );
+        Wait(0.5, WaitBehavior.IgnoreCondition);
+}
+
+rule: "Bot/HeroUniqueAction/positionAimUltmate"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    UltimateChargePercent() >= DefaultPercentage() &&
+    IsButtonHeld(ep, Button.Ultimate)
+){
+    AbortIfNotDepEcho();
+
+    define isPositionAimUltmate;
+    
+    // postion aim hero
+    if(
+        HeroOf() == Hero.Baptiste ||
+        HeroBeingDuplicated() == Hero.Baptiste
+    ){
+        isPositionAimUltmate = true;
+    }
+    else if(
+        HeroOf() == Hero.Symmetra ||
+        HeroBeingDuplicated() == Hero.Symmetra
+    ){
+        isPositionAimUltmate = true;
+    }
+
+    if(isPositionAimUltmate){
+        StopHoldingButton(ep, Button.PrimaryFire);
+        StopHoldingButton(ep, Button.SecondaryFire);
+        for(define tryCount!; tryCount < 6; tryCount++){
+            FacingTargetBetween(0.5);
+            PressButton(ep, Button.PrimaryFire);
+            if(UltimateChargePercent() < DefaultPercentage()){
+                break;
+            }
+        }
+        StartFacingTarget();
+    }
+}
+
+rule: "Bot/HeroUniqueAction/positionAimSecondary"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
+    IsButtonHeld(ep, Button.SecondaryFire)
+){
+    AbortIfNotDepEcho();
+
+    define isPositionAimSecondary;
+
+    if(
+        isRamattra
+        // HeroBeingDuplicated() == Hero.isRamattra
+    ){
+        isPositionAimSecondary = true;
+    }
+
+    if(isPositionAimSecondary){
+        StopHoldingButton(ep, Button.PrimaryFire);
+        StopHoldingButton(ep, Button.SecondaryFire);
+        for(define tryCount!; tryCount < 6; tryCount++){
+            FacingTargetBetween(0.3);
+            PressButton(ep, Button.SecondaryFire);
+            if(AbilityCooldown(ep, Button.SecondaryFire) > 0){
+                break;
+            }
+        }
+        StartFacingTarget();
+    }
+}
 
 // TAG Bot/ButtonControl ----------
 enum ButtonControl{
