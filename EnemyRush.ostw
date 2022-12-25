@@ -249,25 +249,25 @@ define assetList:
         [   // assetNo 0
             "basic",
             [EnemyType.General,     RandomHero,         1],
-            [EnemyType.Elite,       RandomHero,         4],
-            [EnemyType.Minion,      RandomHero,         7]
+            [EnemyType.Elite,       RandomHero,         5],
+            [EnemyType.Minion,      RandomHero,         10]
         ],
         [   // assetNo 1
             "General and minions",
             [EnemyType.General,     RandomHero,         1],
-            [EnemyType.Minion,      RandomHero,         11]
+            [EnemyType.Minion,      RandomHero,         15]
         ],
         [   // assetNo 2
             "all elites",
-            [EnemyType.Elite,       RandomHero,         4],
-            [EnemyType.Elite,       RandomHero,         4],
-            [EnemyType.Elite,       RandomHero,         4]
+            [EnemyType.Elite,       RandomHero,         5],
+            [EnemyType.Elite,       RandomHero,         5],
+            [EnemyType.Elite,       RandomHero,         6]
         ],
         [   // assetNo 3
             "double General",
             [EnemyType.General,     RandomHero,         1],
             [EnemyType.General,     RandomHero,         1],
-            [EnemyType.Minion,      RandomHero,         10]
+            [EnemyType.Minion,      RandomHero,         14]
         ],
         [   // assetNo 4
             "the boss",
@@ -280,7 +280,7 @@ define assetList:
             "minion horde",
             [EnemyType.Minion,   RandomValueInArray([
                 Hero.Reinhardt, Hero.Roadhog, Hero.Genji, Hero.Soldier76, Hero.Bastion, Hero.Tracer, Hero.Pharah, Hero.Echo
-            ]),        12]
+            ]),        16]
         ],
         [   // assetNo 6
             "the dps boss",
@@ -295,10 +295,17 @@ define assetList:
                 Hero.Reinhardt, Hero.Sigma, Hero.Doomfist, Hero.Roadhog, Hero.Orisa, Hero.Zarya
                                             ]),         1],
             [EnemyType.Minion,      RandomHero,         11]
+        ],
+        [   // assetNo 8
+            "many turrets",
+            [EnemyType.Elite,      RandomValueInArray([
+                Hero.Symmetra, Hero.Torbjorn, Hero.WreckingBall
+                                            ]),         16]
         ]
     ];
 
 define assetLotteryList: [
+    // 8
     0, 0, 0,
     1, 1, 1,
     2, 2, 2,
@@ -425,7 +432,7 @@ playervar define eachPerkDropProbability;   // dummy
 
 define minionSpawnTimeMin: 10 * 1;
 define eliteSpawnTimeMin: 10 * 2;
-define bossSpawnTimeMin: 10 * 4;
+define generalBossSpawnTimeMin: 10 * 4;
 define spawnTimeMinToMaxMulti: 1.5;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
@@ -489,8 +496,8 @@ if(
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
-        eachMinSpawnInterval = bossSpawnTimeMin;
-        eachMaxSpawnInterval = bossSpawnTimeMin * spawnTimeMinToMaxMulti;
+        eachMinSpawnInterval = generalBossSpawnTimeMin;
+        eachMaxSpawnInterval = generalBossSpawnTimeMin * spawnTimeMinToMaxMulti;
 
         eachNameText = "General";
         eachNameColor = Color.Orange;
@@ -508,8 +515,8 @@ if(
 
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 10;
-        eachMinSpawnInterval = bossSpawnTimeMin;
-        eachMaxSpawnInterval = bossSpawnTimeMin * spawnTimeMinToMaxMulti;
+        eachMinSpawnInterval = generalBossSpawnTimeMin;
+        eachMaxSpawnInterval = generalBossSpawnTimeMin * spawnTimeMinToMaxMulti;
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
@@ -910,7 +917,8 @@ globalvar define enemyAbilityStatus;
 void WaitEnemyAbility()"WaitEnemyAbility"{
     Wait(
         10 +
-        (30 * 1 - (TotalObjectProgress() / DefaultPercentage())),
+        RandomInteger(0, 10) +
+        (20 * 1 - (TotalObjectProgress() / DefaultPercentage())),
         WaitBehavior.AbortWhenFalse
     );
 }
@@ -945,7 +953,7 @@ if(
         AllLivingPlayers(enemyTeam),
         !IsInSpawnRoom(ae)
     );
-    define shotCallDelay! = RandomReal(0, 1);
+    define shotCallDelay! = RandomReal(0.1, 1);
     for(define scLoopIndex! = 0; scLoopIndex < CountOf(deployedEnemys); scLoopIndex ++){
         SetUltimateCharge(deployedEnemys[scLoopIndex], DefaultPercentage());
         PressButton(deployedEnemys[scLoopIndex], Button.Ultimate);
@@ -961,11 +969,14 @@ rule: "EnemyBot/EnemyAbility/combatTeleport"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    enemyType == EnemyType.Boss &&
+    (
+        enemyType == EnemyType.Boss ||
+        enemyType == EnemyType.General
+    ) &&
     IsAlive() &&
-    actionState == ActionState.Attack
+    actionState != ActionState.Non
 ){
-    define interval! = NormalizedHealth() * 20 + RandomInteger(1, 5);
+    define interval! = NormalizedHealth() * 10 + RandomInteger(1, 5);
     Wait(interval, WaitBehavior.AbortWhenFalse);
     // set teleport position to object around
     if(SetTeleportPositionToPlayerAround()){
@@ -1140,7 +1151,7 @@ playervar define confirmDealtDamage!;
 globalvar define autoTuneDmgDlt!;
 globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Dynamic Difficult Scale", 1.0, 0, 1000, 0);
 
-define internalRate: 0.5;
+define internalRate: 0.4;
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1347,6 +1358,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
     ){  
+        debugHuds[Last()] = CreateDebugHud("watch Time Speed Increase", watchTimeSpeedIncrease, watchTimeSpeedIncrease >= watchTimeSpeedDecrease ? Color.Orange : Color.Red);
         debugHuds[Last()] = CreateDebugHud("count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("human player num", CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae))), Color.Team2);
         debugHuds[Last()] = CreateDebugHud("player team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, Color.Team2);
@@ -1360,9 +1372,8 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         >, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("enemy rush status", enemyAbilityStatus[0], enemyAbilityStatus[0] == false ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("enemy shot call status", enemyAbilityStatus[1], enemyAbilityStatus[1] == false ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("reload Asset Timer", reloadAssetTimer, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("reload Asset Timer", reloadAssetTimer, reloadAssetTimer > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
-        
     }
 }
 

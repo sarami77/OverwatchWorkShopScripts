@@ -11,10 +11,10 @@ enum SlowControlHandler{
 }
 
 globalvar define gameLogicSpeed = maxGameLogicSpeed;
-
-define watchServerOverTime: 1.0;
-define changeGameSpeedUnit: watchServerOverTime * 10;
-
+define watchTimeSpeedDecrease: 1.0;
+globalvar define watchTimeSpeedIncrease = (watchTimeSpeedDecrease);
+define changeUnitSpeedDecrease: 10;
+define changeUnitSpeedIncrease: 10;
 rule: "ServerOverLoadMeasures/increaseGameLogicSpeed"
 Event.OngoingGlobal
 if(
@@ -22,12 +22,19 @@ if(
     !isServerOverLoading() &&
     gameLogicSpeed < maxGameLogicSpeed
 ){
-    Wait(watchServerOverTime * (gameLogicSpeed / DefaultPercentage()), WaitBehavior.AbortWhenFalse);
+    Wait(
+        watchTimeSpeedDecrease *
+        (gameLogicSpeed / DefaultPercentage()),
+        WaitBehavior.AbortWhenFalse);
+    
     // increase slow level
-    gameLogicSpeed += changeGameSpeedUnit;
+    gameLogicSpeed += changeUnitSpeedDecrease;
     gameLogicSpeed = Min(gameLogicSpeed, maxGameLogicSpeed);
     // apply slow level
     SetSlowMotion(gameLogicSpeed);
+
+    // reset watchTimeSpeedIncrease
+    watchTimeSpeedIncrease = (watchTimeSpeedDecrease);
     LoopIfConditionIsTrue();
 }
 
@@ -38,9 +45,17 @@ if(
     isServerOverLoading() &&
     gameLogicSpeed > 0
 ){
-    Wait(watchServerOverTime * (gameLogicSpeed / DefaultPercentage()), WaitBehavior.AbortWhenFalse);
+    // decrease watchTimeSpeedIncrease
+    if(gameLogicSpeed < maxGameLogicSpeed){
+        watchTimeSpeedIncrease -= 0.01;
+    }
+
+    Wait(watchTimeSpeedIncrease *
+        (gameLogicSpeed / DefaultPercentage()),
+        WaitBehavior.AbortWhenFalse);
+    
     // decrease slow level
-    gameLogicSpeed -= changeGameSpeedUnit;
+    gameLogicSpeed -= changeUnitSpeedIncrease;
     gameLogicSpeed = Max(gameLogicSpeed, 0);
     // apply slow level
     SetSlowMotion(gameLogicSpeed);

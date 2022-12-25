@@ -179,7 +179,7 @@ if(
         ||
         (
             // Nemesis form of Ramattra
-            isRamattra &&
+            HeroOf() == Hero.Ramattra &&
             IsUsingAbility1()
         )
     )
@@ -190,15 +190,13 @@ if(
     if(HeroOf() == Hero.Echo){
         WaitUntil(!IsDuplicating(), MaxValue());
     }
-    else if(isRamattra){
+    else if(HeroOf() == Hero.Ramattra){
         WaitUntil(!IsUsingAbility1(), MaxValue());
     }
 
     SetHeroActionRoutine();
     //dbgHudTxt(<"<0> is change routin to <1>", ep, heroName>);
 }
-
-playervar define isRamattra = false;
 
 void SetHeroActionRoutine()"SetHeroActionRoutine"{
         target = 0;
@@ -628,18 +626,20 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ];
         break;
 
-        default:
-        // case Hero.Ramattra:
-        isRamattra = true;
+        case Hero.Ramattra:
         heroName = "Ramattra";
         actionRangeMin = ActionRange_Melee;
         actionRangeMax = ActionRange_Close;
-        ability1ButtonReleaseMin = 8;
+        ability1ButtonReleaseMin = 12;
         ability1ButtonReleaseMax = 16;
+        ability1ButtonPressMin = 1;
+        ability1ButtonPressMax = 1;
         secondaryFireButtonReleaseMax = 10;
         secondaryFireButtonPressMin = 2;
         secondaryFireButtonPressMax = 4;
         break;
+
+        default:
     }
 }
 
@@ -739,15 +739,17 @@ rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    HasSpawned()
+    HasSpawned() &&
+    IsAlive()
 ){
     WaitRandomForDistributeServerLoad();
+
     // get next state
     define nextActionState!;
-
     // is alive
     if(
-        IsAlive()
+        
+        !IsInSpawnRoom()
     ){ 
         // get targetSighted
         define targetSighted! =
@@ -859,8 +861,8 @@ rule: "Bot/ActionState/SetNonStateByDead"
 Event.OnDeath
 if(
     IsDummyBot() &&
-    actionState != ActionState.Non &&
-    Victim() == ep
+    Victim() == ep &&
+    actionState != ActionState.Non
 ){
     // apply next state
     ApplyNextActionState(ep, ActionState.Non);
@@ -870,8 +872,8 @@ rule: "Bot/ActionState/ChangeTargetByTargetDead"
 Event.OnElimination
 if(
     IsDummyBot() &&
-    actionState != ActionState.Non &&
-    Victim() == target
+    Victim() == target &&
+    actionState != ActionState.Non
 ){
     // is support role hero
     if(ProbabilityTrue(100 * supportPrioloty))
@@ -1431,8 +1433,8 @@ if(
     define isPositionAimSecondary;
 
     if(
-        isRamattra
-        // HeroBeingDuplicated() == Hero.isRamattra
+        HeroOf() == Hero.Ramattra ||
+        HeroBeingDuplicated() == Hero.Ramattra
     ){
         isPositionAimSecondary = true;
     }
