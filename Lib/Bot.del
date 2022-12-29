@@ -43,7 +43,7 @@ void CreateBotsByAsset(define asset, define team)"CreateBotsByAsset"{
         for(define botCount! = 0; botCount < asset[assetIdx][BotAsset.Count]; botCount++){
             // get empty slot
             define slot! = getEmptySlotNo(team);
-            while(!HasSpawned(PlayersInSlot(slot, team))){
+            while(PlayersInSlot(slot, team) == null){
                 // create bot
                 CreateDummyBot(
                     asset[assetIdx][BotAsset.Hero],
@@ -57,6 +57,9 @@ void CreateBotsByAsset(define asset, define team)"CreateBotsByAsset"{
             // set Bot type as enemy type
             define bot! = PlayersInSlot(slot, team);
             bot.enemyType = asset[assetIdx][BotAsset.EnemyType];
+            if(IsAssemblingHeroes()){
+                Wait(RandomReal(0, 4), WaitBehavior.IgnoreCondition);
+            }
         }
     }
 }
@@ -66,7 +69,7 @@ void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsBy
     for(define slotIdx! = 0; slotIdx < num; slotIdx++){
         // get empty slot
         define slot! = getEmptySlotNo(team);
-        while(!HasSpawned(PlayersInSlot(slot, team))){
+        while(PlayersInSlot(slot, team) == null){
             // create bot
             CreateDummyBot(
                 RandomValueInArray(heroList),
@@ -85,15 +88,17 @@ void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHer
     for(define slotIdx! = 0; slotIdx < num; slotIdx++){
         // get empty slot
         define slot! = getEmptySlotNo(team);
-        // create bot
-        CreateDummyBot(
-            hero,
-            team,
-            slot,
-            SpawnPoints(team)[0] + RandomPosition(3, 0, 3),
-            RandomDirection()
-        );
-        Wait(0.1, WaitBehavior.IgnoreCondition);
+        while(PlayersInSlot(slot, team) == null){
+            // create bot
+            CreateDummyBot(
+                hero,
+                team,
+                slot,
+                SpawnPoints(team)[0] + RandomPosition(3, 0, 3),
+                RandomDirection()
+            );
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+        }
     }
 }
 
@@ -675,7 +680,7 @@ define FindAttackTarget()"FindAttackTarget"{
             FilteredArray(
                 AllLivingPlayers(EnemyTeamOf()),
                 (
-                    IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock) &&
+                    IsInLineOfSight(EyePosition(ep), EyePosition(ae), BarrierLOS.NoBarriersBlock) &&
                     !(
                         IsStealth(ae) &&
                         DistanceBetween(ae, ep) >= 4
@@ -706,7 +711,7 @@ define FindSupportTarget()"FindSupportTarget"{
                     (
                         CanPhantom(ep) ?
                         true :
-                        IsInLineOfSight(ep, ae, BarrierLOS.NoBarriersBlock)
+                        IsInLineOfSight(EyePosition(ep), EyePosition(ae), BarrierLOS.NoBarriersBlock)
                     ) &&
                     NormalizedHealth(ae) < 0.9
                 )
@@ -922,8 +927,6 @@ globalvar define isCallAttackCoolingDown! = false;
 
 void CallAttackNearBot(define attackTarget!)"CallAttackNearBot"{
     AbortIf(isCallAttackCoolingDown);
-    // dbgHudTxt("CallAttackNearBot");
-
     isCallAttackCoolingDown = true;
     define nearFriends = FilteredArray(
         PlayersWithinRadius(
@@ -936,8 +939,10 @@ void CallAttackNearBot(define attackTarget!)"CallAttackNearBot"{
             ae.actionState == ActionState.Non
         )
     );
+
+    // dbgHudTxt(<"CallAttackNearBot <0>", CountOf(nearFriends)>);
     
-    for(define nearFriendsIndex = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
+    for(define nearFriendsIndex! = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
         // set target
         nearFriends[nearFriendsIndex].target = attackTarget;
         // set attack 
