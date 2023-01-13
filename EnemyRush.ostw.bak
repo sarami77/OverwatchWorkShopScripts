@@ -24,7 +24,7 @@ Event.OngoingGlobal
     DisableInspectorRecording();
 
     // If run it right after loading the server, some scripts fail, so wait 3 seconds
-    Wait(5, WaitBehavior.AbortWhenFalse);
+    Wait(3, WaitBehavior.AbortWhenFalse);
 
     // Start watch over load
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
@@ -34,6 +34,15 @@ Event.OngoingGlobal
         null, "ENEMY RUSH -HORDE PVE [ver.3.0] Share code [V7PEF]", null,
         Location.Left, -999,
         Color.White, Color.White, Color.White,
+        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+
+    // show HUD of enemy team assembly
+    CreateHudText(AllPlayers(),
+        null,
+        null,
+        <"Enemy Team Assembly \"<0>\"", enemyTeamName>,
+        Location.Left, -998,
+        Color.White, Color.White, Color.Purple,
         HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
 
     // Notify completion of init game setting and start game main logic
@@ -58,128 +67,93 @@ if(
 }
 
 // TAG Buddy ----------
-define buddyAssetList:
-    [
-        // random hero
-        [   // assetNo 0
-            "recommend",
-            [EnemyType.None,    Hero.Mercy, 1],
-            [EnemyType.None,    Hero.Genji, 1],
-            [EnemyType.None,    Hero.Reinhardt, 1],
-            [EnemyType.None,    Hero.Kiriko, 1],
-            [EnemyType.None,    Hero.Hanzo, 1],
-            [EnemyType.None,    Hero.Zarya, 1],
-            [EnemyType.None,    Hero.Zenyatta, 1],
-            [EnemyType.None,    Hero.Soldier76, 1]
-        ],
-        [
-            // assetNo 1
-            "random with fix role",
-            [EnemyType.None,    RandomSupportHero, 1],
-            [EnemyType.None,    RandomTankHero, 1],
-            [EnemyType.None,    RandomDamageHero, 1],
-            [EnemyType.None,    RandomSupportHero, 1],
-            [EnemyType.None,    RandomTankHero, 1],
-            [EnemyType.None,    RandomDamageHero, 1],
-            [EnemyType.None,    RandomSupportHero, 1],
-            [EnemyType.None,    RandomDamageHero, 1]
-        ],
-        [
-            // assetNo 2
-            "many hero",
-            [EnemyType.None,    favSupport, 1],
-            [EnemyType.None,    RandomValueInArray(
-                [Hero.Genji, Hero.Soldier76, Hero.Pharah, Hero.Reinhardt]), addableBotsCount]
-        ]
-    ];
-
-define buddyAssetLotteryList: [
-    0,0,0,
-    1,1,1,
-    2
-];
-
-globalvar define isLockedCreateBotsByAsset = false;
-
-
-void CreateBotsByAssetWithMutexLock(define asset!, define team!){ 
-    // can't implement as subroutin for mutex  
-    define forceReleaseCount = 0;
-    while(isLockedCreateBotsByAsset){
-        dbgHudTxt(<"isLockedCreateBotsByAsset <0>", team>);
-        if(forceReleaseCount < 5){
-            forceReleaseCount ++;
-        }
-        else{
-            break;
-        }
-        Wait(1, WaitBehavior.IgnoreCondition);
-    }
-    isLockedCreateBotsByAsset = true;
-    CreateBotsByAsset(asset, team);
-    isLockedCreateBotsByAsset = false;
-}
-
-globalvar define buddyAssetNo!;
-
 rule: "Buddy/BuddyContorl"
 Event.OngoingGlobal
 if(
     initCompleted
 ){
-    define settingBuddyMaxNum! = WorkshopSettingInteger(
+    define buddyAssetList! = 
+    WorkshopSettingToggle("Follower AI Settings(Join on behalf of absent player)", "Random Hero", true) ?
+        // random list
+        [
+            Hero.Baptiste,
+            RandomTankHero,
+            RandomDamageHero,
+            RandomSupportHero,
+            RandomTankHero,
+            RandomDamageHero,
+            RandomSupportHero,
+            RandomDamageHero
+        ]
+    :
+        // fix list
+        [
+            Hero.Mercy,
+            Hero.Reaper,
+            Hero.Reinhardt,
+            Hero.Kiriko,
+            Hero.Soldier76,
+            Hero.Doomfist,
+            Hero.Zenyatta,
+            Hero.Widowmaker
+        ];
+
+    // slice buddy list by setting
+    buddyAssetList = ArraySlice(buddyAssetList, 0,
+        WorkshopSettingInteger(
             "Follower AI Settings(Join on behalf of absent player)",
-            "Follower Max Num", 8, 0, 8, 1);
+            "Follower Max Num", 8, 0, 8, 1)
+    );
+
     define prevPlayerNum! = -1;
-    define prevAssetNo! = -1;
-    // set initial asset no
-    buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
+    define maxSlotNum! = NumberOfSlots(playerTeam);
+    define maxBuddyNum! = CountOf(buddyAssetList);
 
     while(true){
-        define buddyAsset! = buddyAssetList[buddyAssetNo];
-        define teamName! = buddyAsset[0];
-        // slice buddy list by setting and remove asset name of first
-        buddyAsset = ArraySlice(buddyAsset, 1, settingBuddyMaxNum);
-        define playerNum! = CountOf(
-            FilteredArray(
-                AllPlayers(playerTeam),
-                !IsDummyBot(ae)
-            )
-        );
-        define buddyNum! = CountOf(
-            FilteredArray(
-                AllPlayers(playerTeam),
-                IsDummyBot(ae)
-            )
-        );
-        define needBuddyNum! = settingBuddyMaxNum - playerNum;
+        define playerNum! =
+            CountOf(
+                FilteredArray(
+                    AllPlayers(playerTeam),
+                    !IsDummyBot(ae)
+                )
+            );
+        define buddyNum! =
+            CountOf(
+                FilteredArray(
+                    AllPlayers(playerTeam),
+                    IsDummyBot(ae)
+                )
+            );
+        define needBuddyNum! = 
+            Min(
+                maxSlotNum - playerNum,
+                maxBuddyNum
+            );
 
         if(
-            // choicedAssetNo changed
-            prevAssetNo != buddyAssetNo ||
             // not filed by need buddy number
             buddyNum != needBuddyNum ||
-            // playerNum changed
-            prevPlayerNum != playerNum ||
-            // entity num than over slot num
-            playerNum + buddyNum > NumberOfSlots(playerTeam)
+            // player number changed
+            prevPlayerNum != playerNum
         ){
-            // save prev value
-            prevPlayerNum = playerNum;
-            prevAssetNo = buddyAssetNo;
             // get avg ult charge of bots
             define ultCharge! = GetAvgUltChgOfDummyBot(playerTeam);
-            // reload buddy list
+            // save player num
+            prevPlayerNum = playerNum;
+            // relaod buddy list
             DestroyBots(playerTeam);
+            // get empty slot num
+            define emptySlotNum! = maxSlotNum - playerNum;
             // build add hero list
-            buddyAsset = ArraySlice(buddyAsset, 0, needBuddyNum);
-            // add teamName to asset as first item
-            define addAsset! = [teamName];
-            for(define idx = 0; idx < CountOf(buddyAsset); idx++){
-                addAsset[1 + idx] = buddyAsset[idx];
+            define addList! = ArraySlice(buddyAssetList, 0, emptySlotNum);
+            for(define buddyAddIndex! = 0; buddyAddIndex < CountOf(addList); buddyAddIndex++){
+                if(
+                    IsAssemblingHeroes()
+                ){
+                    Wait(RandomReal(0, 3));
+                }
+                CreateBotsByHeroInput(addList[buddyAddIndex], 1, playerTeam);
             }
-            // create bots by addAsset
-            CreateBotsByAssetWithMutexLock(addAsset, playerTeam);
             // set avg ult charge of bots
             SetAvgUltChgOfDummyBot(playerTeam, ultCharge);
         }
@@ -192,22 +166,9 @@ if(
             Color.Green,
             OutlineType.Always
         );
-
-        // check timer
+    
         Wait(10, WaitBehavior.IgnoreCondition);
     }
-}
-
-rule: "Buddy/changeBuddyAssetNo"
-Event.OngoingGlobal
-if(
-    initCompleted &&
-    IsGameInProgress()
-){
-    // force reload buddy list timer
-    Wait(RandomInteger(90, 120), WaitBehavior.IgnoreCondition);
-    buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
-    LoopIfConditionIsTrue();
 }
 
 rule: "Buddy/Teleport/init"
@@ -217,9 +178,7 @@ if(
     IsDummyBot() &&
     HasSpawned()
 ){
-    // set bot option
     watchUpdateRate = 2;
-
     if(IsGameInProgress()){
         // teleport to player near object
         Teleport(ep, ClosestPlayerTo(CurrentObjectPosition(), playerTeam));
@@ -281,17 +240,10 @@ if(
     SetMoveSpeed(ep, DefaultPercentage());
 }
 
-// TAG EnemyBot ----------
+// TAG EnemBot ----------
 globalvar define someHero!;
 
-define rva(define array): RandomValueInArray(array);
-
-define favDamage: rva([Hero.Reaper, Hero.Genji, Hero.Soldier76, Hero.Bastion, Hero.Tracer, Hero.Pharah, Hero.Echo, Hero.Hanzo, Hero.Widowmaker]);
-define favTank: rva([Hero.Reinhardt, Hero.Roadhog, Hero.Sigma, Hero.Doomfist, Hero.Orisa, Hero.Zarya, Hero.Ramattra]);
-
-define favSupport: rva([Hero.Mercy, Hero.Ana, Hero.Baptiste, Hero.Moira]);
-
-define enemyBotAssetList:
+define assetList:
     [
         // random hero
         [   // assetNo 0
@@ -319,31 +271,40 @@ define enemyBotAssetList:
         ],
         [   // assetNo 4
             "the boss",
-            [EnemyType.Boss,        favDamage,          1],
+            [EnemyType.Boss,   RandomValueInArray([
+                Hero.Genji, Hero.Tracer, Hero.Soldier76, Hero.Bastion
+            ]),         1],
             [EnemyType.Minion,      RandomHero,         11]
         ],
         [   // assetNo 5
             "minion horde",
-            [EnemyType.Minion,      rva([favDamage, favTank]),   16]
+            [EnemyType.Minion,   RandomValueInArray([
+                Hero.Reinhardt, Hero.Roadhog, Hero.Genji, Hero.Soldier76, Hero.Bastion, Hero.Tracer, Hero.Pharah, Hero.Echo
+            ]),        16]
         ],
         [   // assetNo 6
             "the dps boss",
-            [EnemyType.Boss,        favDamage,          1],
+            [EnemyType.Boss,   RandomValueInArray([
+                Hero.Reaper, Hero.Genji, Hero.Soldier76, Hero.Bastion, Hero.Tracer, Hero.Pharah, Hero.Echo
+                                            ]),         1],
             [EnemyType.Minion,      RandomHero,         11]
         ],
         [   // assetNo 7
             "finale",
-            [EnemyType.Boss,        favTank,            1],
-            [EnemyType.Elite,       favDamage,          5],
-            [EnemyType.Minion,      RandomHero,         10]
+            [EnemyType.Boss,   RandomValueInArray([
+                Hero.Reinhardt, Hero.Sigma, Hero.Doomfist, Hero.Roadhog, Hero.Orisa, Hero.Zarya
+                                            ]),         1],
+            [EnemyType.Minion,      RandomHero,         11]
         ],
         [   // assetNo 8
             "many turrets",
-            [EnemyType.Elite,       rva([Hero.Symmetra, Hero.Torbjorn, Hero.WreckingBall]),         16]
+            [EnemyType.Elite,      RandomValueInArray([
+                Hero.Symmetra, Hero.Torbjorn, Hero.WreckingBall
+                                            ]),         16]
         ]
     ];
 
-define enemyBotAssetLotteryList: [
+define assetLotteryList: [
     // 8
     0, 0, 0,
     1, 1, 1,
@@ -353,9 +314,9 @@ define enemyBotAssetLotteryList: [
 ];
 
 // TAG EnemyBot/BotAsset ----------
-globalvar define reloadEnemyAssetTimer = -1;
+globalvar define reloadAssetTimer = -1;
 
-rule: "EnemyBot/initReloadEnemyAssetTimer"
+rule: "EnemyBot/initeloadAssetTimer"
 Event.OngoingGlobal
 if(
     initCompleted &&
@@ -364,31 +325,33 @@ if(
         (IsGameInProgress())
     )
 ){
-    reloadEnemyAssetTimer = 0;
+    reloadAssetTimer = 0;
 }
 
-rule: "EnemyBot/coutnDownReloadEnemyAssetTimer"
+rule: "EnemyBot/coutndownReloadAssetTimer"
 Event.OngoingGlobal
 if(
-    0 < reloadEnemyAssetTimer
+    0 < reloadAssetTimer
 ){
-    reloadEnemyAssetTimer --;
+    reloadAssetTimer --;
     Wait(1, WaitBehavior.IgnoreCondition);
     LoopIfConditionIsTrue();
 }
 
-rule: "EnemyBot/reloadReloadEnemyAsset"
+rule: "EnemyBot/reloadBotAsset"
 Event.OngoingGlobal
 if(
-    reloadEnemyAssetTimer == 0
+    reloadAssetTimer == 0
 ){
+    dbgMsg("reloadBotAsset start");
+
     // create all bot
     someHero = RandomHero;
     PlayEffectsToTeam(enemyTeam);
     DestroyBots(enemyTeam);
-    CreateBotsByAssetWithMutexLock(enemyBotAssetList[RandomValueInArray([enemyBotAssetLotteryList])], enemyTeam);
+    CreateBotsByAsset(assetList[RandomValueInArray([assetLotteryList])], enemyTeam);
     // set next timer
-    reloadEnemyAssetTimer = RandomInteger(90, 120);
+    reloadAssetTimer = RandomInteger(90, 150);
 }
 
 globalvar define progressStage;
@@ -408,7 +371,7 @@ if(
     ){
         progressStage ++;
         assetNo = 5;
-        assetTimer = 80;
+        assetTimer = 90;
     }
     else if(
         progressStage == 1 && progress >= 60
@@ -427,15 +390,14 @@ if(
 
     if(assetNo != -1){
         // create all bot
-        someHero = RandomHero;
         PlayEffectsToTeam(enemyTeam);
         DestroyBots(enemyTeam);
-        CreateBotsByAssetWithMutexLock(enemyBotAssetList[assetNo], enemyTeam);
+        CreateBotsByAsset(assetList[assetNo], enemyTeam);
         // set next timer
-        reloadEnemyAssetTimer = assetTimer;
+        reloadAssetTimer = assetTimer;
     }
-    // check timer
-    Wait(3, WaitBehavior.AbortWhenFalse);
+
+    Wait(2, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -471,7 +433,7 @@ playervar define eachPerkDropProbability;   // dummy
 define minionSpawnTimeMin: 10 * 1;
 define eliteSpawnTimeMin: 10 * 2;
 define generalBossSpawnTimeMin: 10 * 4;
-define spawnTimeMinToMaxMulti: 2.0;
+define spawnTimeMinToMaxMulti: 1.5;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
@@ -485,7 +447,7 @@ if(
 
     // setEnemyType
     if(enemyType == EnemyType.Minion){
-        watchUpdateRate = 27;
+        watchUpdateRate = 18;
         eachTextOffset = 0.75;
         StartScalingPlayer(ep, 0.75, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
@@ -504,7 +466,7 @@ if(
         eachTextSize = basicInWorldTextSize;
     }
     else if(enemyType == EnemyType.Elite){
-        watchUpdateRate = 9;
+        watchUpdateRate = 6;
         eachTextOffset = 1.0;
         StartScalingPlayer(ep, 1.0, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
@@ -523,7 +485,7 @@ if(
         eachTextSize = basicInWorldTextSize + 0.5;
     }
     else if(enemyType == EnemyType.General){
-        watchUpdateRate = 3;
+        watchUpdateRate = 2;
         eachTextOffset = 1.5;
         StartScalingPlayer(ep, 1.5, false);
         StartModifyingHeroVoiceLines(ep, 0.5, false);
@@ -542,7 +504,7 @@ if(
         eachTextSize = basicInWorldTextSize + 1;
     }
     else if(enemyType == EnemyType.Boss){
-        watchUpdateRate = 3;
+        watchUpdateRate = 2;
         eachTextOffset = 2.5;
         StartScalingPlayer(ep, 2.5, false);
         StartModifyingHeroVoiceLines(ep, 0.1, false);
@@ -956,7 +918,7 @@ void WaitEnemyAbility()"WaitEnemyAbility"{
     Wait(
         10 +
         RandomInteger(0, 10) +
-        (30 * 1 - (TotalObjectProgress() / DefaultPercentage())),
+        (20 * 1 - (TotalObjectProgress() / DefaultPercentage())),
         WaitBehavior.AbortWhenFalse
     );
 }
@@ -964,11 +926,12 @@ void WaitEnemyAbility()"WaitEnemyAbility"{
 rule: "EnemyBot/EnemyAbility/rush"
 Event.OngoingGlobal
 if(
-    IsGameInProgress()
+    IsGameInProgress() &&
+    !IsOverTime()
 ){
     enemyAbilityStatus[0] = false;
     WaitEnemyAbility();
-    define rushDurling! = RandomInteger(5, 15);
+    define rushDurling! = RandomInteger(10, 20);
     for(rushCount; rushDurling > 0; rushDurling--){
         Respawn(AllDeadPlayers(enemyTeam));
 
@@ -1022,30 +985,10 @@ if(
     LoopIfConditionIsTrue();
 }
 
-rule: "EnemyBot/EnemyAbility/moreUltimate"
-Event.OngoingPlayer
-if(
-    TeamOf() == enemyTeam &&
-    (
-        enemyType == EnemyType.Boss ||
-        enemyType == EnemyType.General
-    ) &&
-    IsAlive() &&
-    actionState != ActionState.Non &&
-    !IsUsingUltimate()
-){
-    if(
-        ProbabilityTrue(70)
-    ){
-        SetUltimateCharge(ep, DefaultPercentage());
-        Wait(RandomReal(0, 3), WaitBehavior.AbortWhenFalse);
-        PressButton(ep, Button.Ultimate);
-    }
-}
-
 rule: "EnemyBot/EnemyAbility/hopToObject"
 Event.OngoingPlayer
 if(
+    initCompleted &&
     TeamOf() == enemyTeam &&
     IsAlive() &&
     TotalObjectProgress() >= 95
@@ -1208,7 +1151,7 @@ playervar define confirmDealtDamage!;
 globalvar define autoTuneDmgDlt!;
 globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Dynamic Difficult Scale", 1.0, 0, 1000, 0);
 
-define internalRate: 0.3;
+define internalRate: 0.4;
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1242,7 +1185,7 @@ if(
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 30, 0, 1000, 1);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 40, 0, 1000, 1);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
     // apply auto tune
@@ -1345,8 +1288,7 @@ Team.All
 if(
     initCompleted
 ){
-    debugMode = DebugMode.ShowParam;
-    ShowDebugHud(HostPlayer());
+    debugMode = DebugMode.Non;
 
     // CreateIcon(commonTeleportPosition != 0 ? AllPlayers(): null,
     //     commonTeleportPosition + PositionOffsetY1(), Icon.Spiral,
@@ -1429,7 +1371,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         >, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("enemy rush status", enemyAbilityStatus[0], enemyAbilityStatus[0] == false ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("enemy shot call status", enemyAbilityStatus[1], enemyAbilityStatus[1] == false ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("reload Enemy Asset Timer", reloadEnemyAssetTimer, reloadEnemyAssetTimer > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("reload Asset Timer", reloadAssetTimer, reloadAssetTimer > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
     }
 }
@@ -1456,14 +1398,9 @@ if(
     someHero = RandomHero;
     PlayEffectsToTeam(enemyTeam);
     DestroyBots(enemyTeam);
-    isLockedCreateBotsByAsset = false;
-    CreateBotsByAssetWithMutexLock(enemyBotAssetList[RandomValueInArray([enemyBotAssetLotteryList])], enemyTeam);
+    CreateBotsByAsset(assetList[RandomValueInArray([assetLotteryList])], enemyTeam);
     // set next timer
-    reloadEnemyAssetTimer = RandomInteger(90, 120);
-
-    WaitLongPressConfirm();
-    buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
-    dbgHudTxt(<"buddyAssetNo <0>", buddyAssetNo>);
+    reloadAssetTimer = RandomInteger(90, 180);
 }
 
 rule: "Debug/increaseMatchTime"
@@ -1472,9 +1409,8 @@ Team.All
 if(
     HostPlayer() == ep &&
     IsButtonHeld(ep, Button.Interact) &&
-    !IsButtonHeld(ep, Button.Ability1) &&
-    IsButtonHeld(ep, Button.Ability2)){
-
+    IsButtonHeld(ep, Button.Ability2)
+){
     WaitLongPressConfirm();
     SetMatchTime(MatchTime() + 30);
     LoopIfConditionIsTrue();
@@ -1486,34 +1422,11 @@ Team.All
 if(
     HostPlayer() == ep &&
     IsButtonHeld(ep, Button.Interact) &&
-    IsButtonHeld(ep, Button.Ability1) &&
-    !IsButtonHeld(ep, Button.Ability2)
+    IsButtonHeld(ep, Button.Ability1)
 ){
     WaitLongPressConfirm();
     SetMatchTime(MatchTime() - 30);
     LoopIfConditionIsTrue();
-}
-
-globalvar define isPauseMatchTime;
-
-rule: "Debug/pauseMatchTime"
-Event.OngoingPlayer
-Team.All
-if(
-    HostPlayer() == ep &&
-    IsButtonHeld(ep, Button.Interact) &&
-    IsButtonHeld(ep, Button.Ability1) &&
-    IsButtonHeld(ep, Button.Ability2)
-){
-    WaitLongPressConfirm();
-    if(!isPauseMatchTime){
-        PauseMatchTime();
-        isPauseMatchTime = true;
-    }
-    else{
-        UnpauseMatchTime();
-        isPauseMatchTime = false;
-    }
 }
 
 disabled rule: "Output Completed" 99999 {}
