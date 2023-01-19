@@ -185,9 +185,11 @@ if(
         }
 
         // show human player outline
+        define players! = AllPlayers();
+        players[CountOf(players)] = HostPlayer();
         StartForcingPlayerOutlines(
             FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae)),
-            HostPlayer(),
+            players,
             true,
             Color.Green,
             OutlineType.Always
@@ -470,9 +472,9 @@ playervar define eachNameColor!;
 
 playervar define eachPerkDropProbability;   // dummy
 
-define minionSpawnTimeMin: 7 * 1;
-define eliteSpawnTimeMin: 7 * 2;
-define generalBossSpawnTimeMin: 7 * 4;
+define minionSpawnTimeMin: 8 * 1;
+define eliteSpawnTimeMin: 8 * 2;
+define generalBossSpawnTimeMin: 8 * 4;
 define spawnTimeMinToMaxMulti: 2.0;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
@@ -493,11 +495,11 @@ if(
         StartModifyingHeroVoiceLines(ep, 1.5, false);
 
         SetMaxHealth(ep, 25);
-        SetHealingDealt(ep, 50);
+        SetHealingDealt(ep, 25);
         SetHealingReceived(ep, 25);
         
         eachDealtDamageScale = 0.5;
-        eachChargeUltInterval = 90;
+        eachChargeUltInterval = 60;
         eachMinSpawnInterval = minionSpawnTimeMin;
         eachMaxSpawnInterval = minionSpawnTimeMin * spawnTimeMinToMaxMulti;
 
@@ -512,7 +514,7 @@ if(
         StartModifyingHeroVoiceLines(ep, 1.0, false);
 
         SetMaxHealth(ep, 100);
-        SetHealingDealt(ep, 200);
+        SetHealingDealt(ep, 100);
         SetHealingReceived(ep, 100);
 
         eachDealtDamageScale = 1.0;
@@ -531,11 +533,11 @@ if(
         StartModifyingHeroVoiceLines(ep, 0.5, false);
 
         SetMaxHealth(ep, 1000);
-        SetHealingDealt(ep, 400);
+        SetHealingDealt(ep, 200);
         SetHealingReceived(ep, 200);
 
         eachDealtDamageScale = 2.0;
-        eachChargeUltInterval = 10;
+        eachChargeUltInterval = 15;
         eachMinSpawnInterval = generalBossSpawnTimeMin;
         eachMaxSpawnInterval = generalBossSpawnTimeMin * spawnTimeMinToMaxMulti;
 
@@ -550,11 +552,11 @@ if(
         StartModifyingHeroVoiceLines(ep, 0.1, false);
 
         SetMaxHealth(ep, 1000);
-        SetHealingDealt(ep, 400);
+        SetHealingDealt(ep, 200);
         SetHealingReceived(ep, 200);
 
         eachDealtDamageScale = 2.0;
-        eachChargeUltInterval = 10;
+        eachChargeUltInterval = 15;
         eachMinSpawnInterval = generalBossSpawnTimeMin;
         eachMaxSpawnInterval = generalBossSpawnTimeMin * spawnTimeMinToMaxMulti;
 
@@ -966,7 +968,8 @@ void WaitEnemyAbility()"WaitEnemyAbility"{
 rule: "EnemyBot/EnemyAbility/rush"
 Event.OngoingGlobal
 if(
-    IsGameInProgress()
+    IsGameInProgress() &&
+    !IsOverTime()
 ){
     enemyAbilityStatus[0] = false;
     WaitEnemyAbility();
@@ -984,7 +987,8 @@ if(
 rule: "EnemyBot/EnemyAbility/shotCall"
 Event.OngoingGlobal
 if(
-    IsGameInProgress()
+    IsGameInProgress() &&
+    !IsOverTime()
 ){
     enemyAbilityStatus[1] = false;
     WaitEnemyAbility();
@@ -1024,6 +1028,8 @@ if(
     LoopIfConditionIsTrue();
 }
 
+globalvar define moreUltProb!;
+
 rule: "EnemyBot/EnemyAbility/moreUltimate"
 Event.OngoingPlayer
 if(
@@ -1036,13 +1042,27 @@ if(
     actionState != ActionState.Non &&
     !IsUsingUltimate()
 ){
-    if(
-        ProbabilityTrue(70)
+    moreUltProb = 100;
+    while(
+        IsAlive() &&
+        ProbabilityTrue(moreUltProb)
     ){
         SetUltimateCharge(ep, DefaultPercentage());
-        Wait(RandomReal(0.5, 3), WaitBehavior.AbortWhenFalse);
+        Wait(RandomReal(0, 3), WaitBehavior.IgnoreCondition);
         PressButton(ep, Button.Ultimate);
+        WaitUntil(!IsUsingUltimate(), 20);
     }
+    moreUltProb = 0;
+}
+
+rule: "EnemyBot/EnemyAbility/decreaseMoreUltimate"
+Event.OngoingGlobal
+if(
+    moreUltProb > 0
+){
+    moreUltProb -= moreUltProb < 5 ? moreUltProb : 5;
+    Wait(1.0, WaitBehavior.AbortWhenFalse);
+    Loop();
 }
 
 rule: "EnemyBot/EnemyAbility/hopToObject"
@@ -1210,7 +1230,7 @@ playervar define confirmDealtDamage!;
 globalvar define autoTuneDmgDlt!;
 globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Dynamic Difficult Scale", 1.0, 0, 1000, 0);
 
-define internalRate: 0.4;
+define internalRate: 0.3;
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1244,7 +1264,7 @@ if(
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 40, 0, 1000, 1);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 35, 0, 1000, 1);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
     // apply auto tune
@@ -1417,7 +1437,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
     ){  
-        debugHuds[Last()] = CreateDebugHud("watch Time Speed Increase", watchTimeSpeedIncrease, watchTimeSpeedIncrease >= watchTimeSpeedDecrease ? Color.Orange : Color.Red);
+        debugHuds[Last()] = CreateDebugHud("watch Time Speed Increase", watchTimeSpeedIncrease, watchTimeSpeedIncrease >= watchTimeSpeedIncreaseMax ? Color.Orange : Color.Red);
         debugHuds[Last()] = CreateDebugHud("count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("human player num", CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae))), Color.Team2);
         debugHuds[Last()] = CreateDebugHud("player team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, Color.Team2);
@@ -1431,6 +1451,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         >, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("enemy rush status", enemyAbilityStatus[0], enemyAbilityStatus[0] == false ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("enemy shot call status", enemyAbilityStatus[1], enemyAbilityStatus[1] == false ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("more ult prob", moreUltProb, moreUltProb == 0 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("reload Enemy Asset Timer", reloadEnemyAssetTimer, reloadEnemyAssetTimer > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
     }
@@ -1465,7 +1486,6 @@ if(
 
     WaitLongPressConfirm();
     buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
-    dbgHudTxt(<"buddyAssetNo <0>", buddyAssetNo>);
 }
 
 rule: "Debug/increaseMatchTime"
