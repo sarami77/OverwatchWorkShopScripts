@@ -11,9 +11,8 @@ enum SlowControlHandler{
 }
 
 globalvar define gameLogicSpeed = maxGameLogicSpeed;
-define watchTimeSpeedDecrease: 1.5;
-define watchTimeSpeedIncreaseMax : 1.0;
-globalvar define watchTimeSpeedIncrease = watchTimeSpeedIncreaseMax;
+define watchTimeSpeedIncrease: watchTimeSpeedDecrease * 0.75;
+define watchTimeSpeedDecrease: 1.0;
 define changeUnitSpeedDecrease: 10;
 define changeUnitSpeedIncrease: 10;
 rule: "ServerOverLoadMeasures/increaseGameLogicSpeed"
@@ -24,7 +23,7 @@ if(
     gameLogicSpeed < maxGameLogicSpeed
 ){
     Wait(
-        watchTimeSpeedDecrease *
+        watchTimeSpeedIncrease *
         (gameLogicSpeed / DefaultPercentage()),
         WaitBehavior.AbortWhenFalse);
     
@@ -33,9 +32,6 @@ if(
     gameLogicSpeed = Min(gameLogicSpeed, maxGameLogicSpeed);
     // apply slow level
     SetSlowMotion(gameLogicSpeed);
-
-    // reset watchTimeSpeedIncrease
-    watchTimeSpeedIncrease = (watchTimeSpeedDecrease);
 
     LoopIfConditionIsTrue();
 }
@@ -47,22 +43,16 @@ if(
     isServerOverLoading() &&
     gameLogicSpeed > 0
 ){
-    // decrease watchTimeSpeedIncrease
-    if(
-        gameLogicSpeed < maxGameLogicSpeed &&
-        watchTimeSpeedIncrease > 0
-    ){
-        watchTimeSpeedIncrease -= 0.02;
-    }
-
-    Wait(watchTimeSpeedIncrease *
+    Wait(
+        watchTimeSpeedDecrease *
         (gameLogicSpeed / DefaultPercentage()),
         WaitBehavior.AbortWhenFalse);
     
     // decrease slow level
     gameLogicSpeed -= changeUnitSpeedIncrease;
-    gameLogicSpeed = Max(gameLogicSpeed, 50);
+    gameLogicSpeed = Max(gameLogicSpeed, 0);
     // apply slow level
     SetSlowMotion(gameLogicSpeed);
+
     LoopIfConditionIsTrue();
 }
