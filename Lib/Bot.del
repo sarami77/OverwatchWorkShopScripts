@@ -186,35 +186,26 @@ if(
     SetHeroActionRoutine();
 }
 
-rule: "Bot/SetActionRoutineByHeroUniqueAction"
+rule: "Bot/SetActionRoutineByStartDuplicate"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
-    (
-        (
-            // Duplicated of Echo
-            IsDuplicated(ep)
-        )
-        ||
-        (
-            // Nemesis form of Ramattra
-            HeroOf() == Hero.Ramattra &&
-            IsUsingAbility1()
-        )
-    )
+    HeroOf() == Hero.Echo &&
+    IsDuplicating(ep)
 ){
     SetHeroActionRoutine();
-    //dbgHudTxt(<"<0> is change routin to <1>", ep, heroName>);
+    // dbgHudTxt(<"<0> is change routin to <1>", ep, heroName>);
+}
 
-    if(HeroOf() == Hero.Echo){
-        WaitUntil(!IsDuplicating(), MaxValue());
-    }
-    else if(HeroOf() == Hero.Ramattra){
-        WaitUntil(!IsUsingAbility1(), MaxValue());
-    }
-
+rule: "Bot/SetActionRoutineByEndDuplicate"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    HeroOf() == Hero.Echo &&
+    !IsDuplicating(ep)
+){
     SetHeroActionRoutine();
-    //dbgHudTxt(<"<0> is change routin to <1>", ep, heroName>);
+    // dbgHudTxt(<"<0> is change routin to <1>", ep, heroName>);
 }
 
 void SetHeroActionRoutine()"SetHeroActionRoutine"{
@@ -977,19 +968,134 @@ if(
 }
 
 playervar define statusText;
-playervar define moveDir;
-playervar define sideStepDir;
+playervar define moveDirFB;
+playervar define moveDirLR;
+
+playervar define enableMoveOfNeedHealing = true;
+
+void setMoveDir() playervar "setMoveDir"{
+    // need healing
+    if(
+        enableMoveOfNeedHealing &&
+        ProbabilityTrue(100 * (1 - NormalizedHealth()))
+        // NormalizedHealth() <= 0.5
+    ){
+        WaitRandomForDistributeServerLoad();
+        // move to healer for heal
+
+        // set to near healer
+        define moveToPlayer! = 
+            FirstOf(
+                SortedArray(
+                    FilteredArray(
+                        AllLivingPlayers(TeamOf()),
+                        (
+                            ae != ep &&
+                            0 < ae.supportPrioloty &&
+                            IsInLineOfSight(ae, ep)
+                        )
+                    ),
+                    DistanceBetween(ae, ep)
+                )
+            );
+        
+        // no near healer
+        if(moveToPlayer != null){
+            // set to any role teammate
+            moveToPlayer = ClosestPlayerTo(ep, TeamOf());
+        }
+        define dir! = LocalVectorOf(DirectionTowards(ep, moveToPlayer), ep, Transformation.Rotation);
+        moveDirFB = Vector(0, 0, ZOf(dir));
+        moveDirLR = Vector(XOf(dir), 0, 0);
+    }
+
+    // not need healing
+    else{
+        // move to target for combat
+
+        // set move dir front/back
+        define distToTarget! = DistanceBetween(ep, target);
+        define distRate! = actionState == ActionState.Attack ? 1 : 0.7;
+        // target is far
+        if(
+            distToTarget > (actionRangeMax * distRate)
+        ){
+            moveDirFB = Forward();
+        }
+        // target is close
+        else if(
+            distToTarget < (actionRangeMin * distRate)
+        ){
+            moveDirFB = Backward();
+        }
+        else{
+            // no moveDir
+            moveDirFB = NoDirection();
+        }
+
+        // set move dir left/right
+        if(actionState == ActionState.Attack){
+            define distanceToTarget! = DistanceBetween(ep, target);
+            // start sidestep by distance to target
+            if(
+                ProbabilityTrue(
+                    25 +
+                    (
+                        100 *
+                        (1 - NormalizedHealth()) *      // by health
+                        (1 - (distanceToTarget / 30))   // by target distance
+                    )
+                )
+            ){
+                // start sidestep
+                // already has sidestep
+                if(moveDirLR != NoDirection()){
+                    if(
+                        ProbabilityTrue(
+                            25 +
+                            (
+                                100 *
+                                (1 - NormalizedHealth()) *      // by health
+                                (1 - (distanceToTarget / 30))   // by target distance
+                            )
+                        )
+                    ){
+                        // reverse sidestep
+                        moveDirLR = -moveDirLR;
+                    }
+                    else{
+                        // stop sidestep
+                        moveDirLR = NoDirection();
+                    }
+                }
+                else{
+                    if(ProbabilityTrue(50)){
+                        // right sidestep
+                        moveDirLR = Right();
+                    }
+                    else{
+                        // left sidestep
+                        moveDirLR = Left();
+                    }
+                }
+            }
+            else{
+                // stop sidestep
+                moveDirLR = NoDirection();
+            }
+        }
+        else{
+            moveDirLR = NoDirection();
+        }
+    }
+}
 
 define noMoving: false;   // for debug
-
-void StopMove()"StopMove"{
-    StopThrottleInDirection();
-} 
 
 void StartMove() playervar "StartMove"{
     AbortIf(noMoving);
 
-    define confirmMoveDir! = moveDir + sideStepDir;
+    define confirmMoveDir! = moveDirFB + moveDirLR;
     // move to position is abyss
     if(
         IsBelowAbyss(
@@ -1021,94 +1127,9 @@ void StartMove() playervar "StartMove"{
     }
 }
 
-playervar define backWhenLowHealth = true;
-
-void setMoveDir() playervar "setMoveDir"{
-    // low health
-    if(
-        backWhenLowHealth &&
-        ProbabilityTrue(100 * (1 - NormalizedHealth()))
-    ){
-        moveDir = Backward();
-    }
-    // attack state
-    else{
-        define distToTarget! = DistanceBetween(ep, target);
-        define distRate! = actionState == ActionState.Attack ? 1 : 0.7;
-        // target is far
-        if(
-            distToTarget > (actionRangeMax * distRate)
-        ){
-            moveDir = Forward();
-        }
-        // target is close
-        else if(
-            distToTarget < (actionRangeMin * distRate)
-        ){
-            moveDir = Backward();
-        }
-        else{
-            // no moveDir
-            moveDir = NoDirection();
-        }
-    }
-}
-
-void setSideStep() playervar "setSideStep"{
-    if(actionState == ActionState.Attack){
-        define distance! = DistanceBetween(ep, target);
-        // start sidestep by distance to target
-        if(
-            ProbabilityTrue(
-                25 +
-                (
-                    100 *
-                    (1 - NormalizedHealth()) *  // by health
-                    (1 - (distance / 30))       // by target distance
-                )
-            )
-        ){
-            // start sidestep
-            // already has sidestep
-            if(sideStepDir != NoDirection()){
-                if(
-                    ProbabilityTrue(
-                        25 +
-                        (
-                            100 *
-                            (1 - NormalizedHealth()) *  // by health
-                            (1 - (distance / 30))       // by target distance
-                        )
-                    )
-                ){
-                    // reverse sidestep
-                    sideStepDir = -sideStepDir;
-                }
-                else{
-                    // stop sidestep
-                    sideStepDir = NoDirection();
-                }
-            }
-            else{
-                if(ProbabilityTrue(50)){
-                    // right sidestep
-                    sideStepDir = Right();
-                }
-                else{
-                    // left sidestep
-                    sideStepDir = Left();
-                }
-            }
-        }
-        else{
-            // stop sidestep
-            sideStepDir = NoDirection();
-        }
-    }
-    else{
-        sideStepDir = NoDirection();
-    }
-}
+void StopMove()"StopMove"{
+    StopThrottleInDirection();
+} 
 
 define aimingPosition:
     IsInAlternateForm(target) ?
@@ -1141,8 +1162,8 @@ if(
 ){
     statusText = <"Non">;
 
-    moveDir = NoDirection();
-    sideStepDir = NoDirection();
+    moveDirFB = NoDirection();
+    moveDirLR = NoDirection();
     target = 0;
     StopMove();
     Wait(0.1, WaitBehavior.AbortWhenFalse);
@@ -1202,9 +1223,6 @@ if(
 
         // set moveDir direction
         setMoveDir();
-
-        // set sidestep direction
-        setSideStep();
 
         // start move by moveDir and sideStepDir
         StartMove();
@@ -1366,8 +1384,8 @@ if(
         // wait for start mode
         Wait(waitForStartMove, WaitBehavior.AbortWhenFalse);
         // start move postion selecter to foward
-        moveDir = Forward();
-        sideStepDir = NoDirection();
+        moveDirFB = Forward();
+        moveDirLR = NoDirection();
         StartMove();
         // decrease move speed if multi position attack mode
         if(multiPosAttack) moveSpeed -= 0.01;
