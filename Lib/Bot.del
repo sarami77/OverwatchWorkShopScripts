@@ -5,7 +5,7 @@ import "Debug.del";
 // bot nead healing state
 
 // TAG public property
-globalvar define botAimScat = WorkshopSettingReal("Enemy Bot Settings", "Aim Scattering (0 is head shot)",              0.2, 0, 1000, 3);
+globalvar define botAimScat = WorkshopSettingReal("Enemy Bot Settings", "Aim Scattering (0 is head shot)",              0.1, 0, 1000, 3);
 
 // TAG Bot/Spawn ----------
 enum BotAsset{
@@ -25,24 +25,22 @@ enum EnemyType{
 }
 
 // TAG BotAsset ----------
-globalvar define enemyTeamName! = "";
-
-void CreateBotsByAssetList(define assetList, define team)"CreateBotsByAssetList"{
+void CreateBotsByAssetList(define assetList, define team, define addLimitNum)"CreateBotsByAssetList"{
     // select asset in assetList
-    define asset = ValueInArray(assetList, RandomInteger(0, CountOf(assetList) - 1));
+    define asset! = ValueInArray(assetList, RandomInteger(0, CountOf(assetList) - 1));
     // make bot by asset
-    CreateBotsByAsset(asset, team);
+    CreateBotsByAsset(asset, team, addLimitNum);
 }
 
-define addableBotsCount: MaxValue();
-
-void CreateBotsByAsset(define asset, define team)"CreateBotsByAsset"{
-    // set team name
-    enemyTeamName = asset[0];
+void CreateBotsByAsset(define asset, define team, define addLimitNum)"CreateBotsByAsset"{
+    define addNum! = 0;
     // run asset items
-    for(define assetIdx! = 1; assetIdx < CountOf(asset); assetIdx++){
+    for(define assetIdx! = 0; assetIdx < CountOf(asset); assetIdx++){
         // run bot count in asset
         for(define botCount! = 0; botCount < asset[assetIdx][BotAsset.Count]; botCount ++){
+            if(addNum >= addLimitNum){
+                break;
+            }
 
             if(IsAssemblingHeroes()){
                 Wait(RandomReal(0, 3), WaitBehavior.IgnoreCondition);
@@ -50,9 +48,9 @@ void CreateBotsByAsset(define asset, define team)"CreateBotsByAsset"{
 
             // get empty slot
             define slot! = getEmptySlotNo(team);
-            while(
-                PlayersInSlot(slot, team) == null
-            ){
+            // while(
+            //     PlayersInSlot(slot, team) == null
+            // ){
                 // create bot
                 CreateDummyBot(
                     asset[assetIdx][BotAsset.Hero],
@@ -62,18 +60,12 @@ void CreateBotsByAsset(define asset, define team)"CreateBotsByAsset"{
                     RandomDirection()
                 );
                 Wait(0.1, WaitBehavior.IgnoreCondition);
-            }
+            // }
             // set Bot type as enemy type
             define bot! = PlayersInSlot(slot, team);
             bot.enemyType = asset[assetIdx][BotAsset.EnemyType];
-
-            // check addableBotsCount
-            if(
-                asset[assetIdx][BotAsset.Count]  == addableBotsCount &&
-                NumberOfSlots(team) <= NumberOfPlayers(team)
-            ){
-                return;
-            }
+            // count up addNum
+            addNum ++;
         }
     }
 }
@@ -83,7 +75,9 @@ void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsBy
     for(define slotIdx! = 0; slotIdx < num; slotIdx++){
         // get empty slot
         define slot! = getEmptySlotNo(team);
-        while(PlayersInSlot(slot, team) == null){
+        // while(
+        //     PlayersInSlot(slot, team) == null
+        // ){
             // create bot
             CreateDummyBot(
                 RandomValueInArray(heroList),
@@ -93,7 +87,7 @@ void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsBy
                 RandomDirection()
             );
             Wait(0.1, WaitBehavior.IgnoreCondition);
-        }
+        // }
     }
 }
 
@@ -102,17 +96,19 @@ void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHer
     for(define slotIdx! = 0; slotIdx < num; slotIdx++){
         // get empty slot
         define slot! = getEmptySlotNo(team);
-        while(PlayersInSlot(slot, team) == null){
+        // while(
+        //     PlayersInSlot(slot, team) == null
+        // ){
             // create bot
             CreateDummyBot(
                 hero,
                 team,
                 slot,
-                SpawnPoints(team)[0] + RandomPosition(3, 0, 3),
+                SpawnPoints(team)[0],
                 RandomDirection()
             );
             Wait(0.1, WaitBehavior.IgnoreCondition);
-        }
+        // }
     }
 }
 
@@ -136,10 +132,10 @@ Number getEmptySlotNo(define team!)"getEmptySlotNo"{
 
 // TAG Bot/SetBotInfo ----------
 
-playervar define heroName!;
-playervar define supportPrioloty!;
-playervar define supportButtons!;
-playervar define attackButtons!;
+playervar define heroName;
+playervar define supportPrioloty;
+playervar define supportButtons;
+playervar define attackButtons;
 playervar define canFireButtonCombination;
 
 playervar define primaryFireButtonBehaivor;
@@ -168,6 +164,16 @@ playervar define ultimateButtonReleaseMin;
 playervar define ultimateButtonReleaseMax;
 playervar define ultimateButtonPressMin;
 playervar define ultimateButtonPressMax;
+
+playervar define crouchButtonReleaseMin;
+playervar define crouchButtonReleaseMax;
+playervar define crouchButtonPressMin;
+playervar define crouchButtonPressMax;
+
+playervar define jumpButtonReleaseMin;
+playervar define jumpButtonReleaseMax;
+playervar define jumpButtonPressMin;
+playervar define jumpButtonPressMax;
 
 define ActionRange_Melee: 0;
 define ActionRange_Close: 10;
@@ -208,9 +214,6 @@ if(
     // dbgHudTxt(<"<0> is change routin to <1>", ep, heroName>);
 }
 
-define buttonRelaseBase: 5;
-define buttonPressBase: 10;
-
 void SetHeroActionRoutine()"SetHeroActionRoutine"{
         target = 0;
         
@@ -221,30 +224,40 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
         primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         primaryFireButtonReleaseMin = 0;
-        primaryFireButtonReleaseMax = buttonRelaseBase;
+        primaryFireButtonReleaseMax = 5;
         primaryFireButtonPressMin = 0;
-        primaryFireButtonPressMax = buttonPressBase;
+        primaryFireButtonPressMax = 10;
 
         secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
         secondaryFireButtonReleaseMin = 0;
-        secondaryFireButtonReleaseMax = buttonRelaseBase;
+        secondaryFireButtonReleaseMax = 5;
         secondaryFireButtonPressMin = 0;
-        secondaryFireButtonPressMax = buttonPressBase;
+        secondaryFireButtonPressMax = 10;
 
         ability1ButtonReleaseMin = 0;
-        ability1ButtonReleaseMax = buttonRelaseBase;
+        ability1ButtonReleaseMax = 5;
         ability1ButtonPressMin = 0;
-        ability1ButtonPressMax = buttonPressBase * 0.1;
+        ability1ButtonPressMax = 1;
 
         ability2ButtonReleaseMin = 0;
-        ability2ButtonReleaseMax = buttonRelaseBase;
+        ability2ButtonReleaseMax = 5;
         ability2ButtonPressMin = 0;
-        ability2ButtonPressMax = buttonPressBase * 0.1;
+        ability2ButtonPressMax = 1;
 
         ultimateButtonReleaseMin = 0;
-        ultimateButtonReleaseMax = buttonRelaseBase;
+        ultimateButtonReleaseMax = 5;
         ultimateButtonPressMin = 0;
-        ultimateButtonPressMax = buttonPressBase * 0.1;
+        ultimateButtonPressMax = 1;
+
+        crouchButtonReleaseMin = 0;
+        crouchButtonReleaseMax = 5;
+        crouchButtonPressMin = 0;
+        crouchButtonPressMax = 1;
+
+        jumpButtonReleaseMin = 0;
+        jumpButtonReleaseMax = 5;
+        jumpButtonPressMin = 0;
+        jumpButtonPressMax = 1;
 
         supportPrioloty = 0;
         supportButtons = [
@@ -290,8 +303,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMax = ActionRange_Far;
         canFireButtonCombination = true;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleaseRepeat;
-        secondaryFireButtonPressMin = 20;
-        secondaryFireButtonPressMax = 40;
+        secondaryFireButtonPressMin = 30;
+        secondaryFireButtonPressMax = 60;
         break;
 
         case Hero.Baptiste:
@@ -299,6 +312,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMin = ActionRange_Middle;
         actionRangeMax = ActionRange_Far;
         canFireButtonCombination = true;
+        crouchButtonReleaseMax = 1;
+        crouchButtonPressMax = 30;
         supportPrioloty = 1;
         supportButtons = [
             Button.SecondaryFire,
@@ -318,7 +333,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         primaryFireButtonReleaseMax = 1;
         ability1ButtonReleaseMin = 8;
         ability1ButtonReleaseMax = 8;
-        ultimateButtonReleaseMax = 20;
+        ultimateButtonReleaseMax = 30;
         break;
 
         case Hero.Brigitte:
@@ -420,7 +435,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMin = ActionRange_Close;
         actionRangeMax = ActionRange_Middle;
         ultimateButtonReleaseMax = 15;
-        supportPrioloty = 0.25;
+        supportPrioloty = 0.5;
         supportButtons = [
             Button.Ability1,
             Button.Ability2
@@ -440,7 +455,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMax = ActionRange_Far;
         primaryFireButtonReleaseMax = 1;
         secondaryFireButtonReleaseMax = 10;
-        ability1ButtonReleaseMax = 3;
         ability2ButtonPressMax = 10;
         ability2ButtonReleaseMax = 0.1;
         supportPrioloty = 1;
@@ -576,10 +590,9 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         primaryFireButtonPressMax = 1;
         secondaryFireButtonPressMin = 30;
         secondaryFireButtonPressMax = 60;
-        ability1ButtonReleaseMin = 15;
-        ability1ButtonReleaseMax = 60;
-        ability2ButtonReleaseMin = 15;
-        ability2ButtonReleaseMax = 60;
+        ability1ButtonReleaseMax = 30;
+        ability2ButtonReleaseMax = 30;
+        jumpButtonReleaseMax = 30;
         break;
 
         case Hero.Winston:
@@ -609,7 +622,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ability1ButtonPressMax = 0.5;
         ability2ButtonReleaseMax = 0.5;
         ability2ButtonPressMax = 0.5;
-        supportPrioloty = 0.25;
+        supportPrioloty = 0.5;
         supportButtons = [
             Button.Ability2
         ];
@@ -635,7 +648,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ability2ButtonReleaseMin = 0.5;
         ability2ButtonReleaseMax = 0.5;
         ultimateButtonReleaseMax = 30;
-        supportPrioloty = 0.25;
+        supportPrioloty = 0.5;
         supportButtons = [
             Button.Ability1,
             Button.Ability2
@@ -698,12 +711,6 @@ define FindAttackTarget()"FindAttackTarget"{
                     )
                 )
             ),
-            // (   
-            //     ProbabilityTrue(100 * NormalizedHealth())
-            // ) ?
-            // Health(ae) :
-            // ProbabilityTrue(100 * NormalizedHealth()) ?
-            // NormalizedHealth(ae) :
             DistanceBetween(ep, ae)
         )
     );
@@ -724,15 +731,10 @@ define FindSupportTarget()"FindSupportTarget"{
                         true :
                         IsInLineOfSight(EyePosition(ep), EyePosition(ae), BarrierLOS.NoBarriersBlock)
                     ) &&
-                    NormalizedHealth(ae) < 0.9
+                    NormalizedHealth(ae) < 1
                 )
             ),
-            // (   
-            //     ProbabilityTrue(100 * NormalizedHealth())
-            // ) ?
-            NormalizedHealth(ae) //:
-            // DistanceBetween(ep, ae)
-            // Health(ae)
+            NormalizedHealth(ae)
         )
     );
 }
@@ -793,13 +795,13 @@ if(
             // heal completed or target dead
             if(
                 NormalizedHealth(target) >= 1 ||
-                NormalizedHealth(target) <= 0
+                IsDead(target)
             ){
                 tryGetTarget = true;
             }
             // change target dependent on support target health
             else if(
-                ProbabilityTrue(100 * NormalizedHealth(target) * supportPrioloty)
+                ProbabilityTrue(100 * NormalizedHealth(target))
             ){
                 tryGetTarget = true;
             }
@@ -916,7 +918,7 @@ if(
 ){
     // change target dependent on attack target helth & attack prob
     if(
-        ProbabilityTrue(100 * NormalizedHealth(target))
+        ProbabilityTrue(50 * NormalizedHealth(target))
     ){
         // set attacker to target
         target = Attacker();
@@ -954,6 +956,7 @@ void CallAttackNearBot(define attackTarget!)"CallAttackNearBot"{
     // dbgHudTxt(<"CallAttackNearBot <0>", CountOf(nearFriends)>);
     
     for(define nearFriendsIndex! = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
+        WaitRandomForDistributeServerLoad();
         // set target
         nearFriends[nearFriendsIndex].target = attackTarget;
         // set attack 
@@ -982,8 +985,7 @@ void setMoveDir() playervar "setMoveDir"{
     // need healing
     if(
         enableHealingMove &&
-        ProbabilityTrue(100 * (1 - NormalizedHealth()))
-        // NormalizedHealth() <= 0.5
+        NormalizedHealth() < 0.5
     ){
         WaitRandomForDistributeServerLoad();
         // move to healer for heal
@@ -1005,15 +1007,15 @@ void setMoveDir() playervar "setMoveDir"{
             );
         
         // no near healer
-        if(moveToPlayer != null){
+        if(moveToPlayer == null){
             // set to any role teammate
             moveToPlayer = ClosestPlayerTo(ep, TeamOf());
         }
+
         define dir! = LocalVectorOf(DirectionTowards(ep, moveToPlayer), ep, Transformation.Rotation);
         moveDirFB = Vector(0, 0, ZOf(dir));
         moveDirLR = Vector(XOf(dir), 0, 0);
     }
-
     // not need healing
     else{
         // move to target for combat
@@ -1398,7 +1400,9 @@ if(
         // decrease move speed if multi position attack mode
         if(multiPosAttack) moveSpeed -= 0.01;
         // wait for arrival target
-        Wait(DistanceBetween(ep, target) * (moveSpeed), WaitBehavior.AbortWhenFalse);
+        define dist! = DistanceBetween(ep, target);
+        dist = dist <= 5 ? 5 : dist;
+        Wait(dist * (moveSpeed), WaitBehavior.AbortWhenFalse);
         // stop move if not multi position attack mode
         if(!multiPosAttack) StopMove();
         // trigger attack by attackCount
@@ -1517,7 +1521,8 @@ Boolean isMatchButton(define matchButton!, define butttons!){
     return IsTrueForAny(butttons, ae == matchButton);
 }
 
-define buttonControlTimeScale: 1.0;
+define buttonControlPressScale: 1.0;
+define buttonControlReleaseScale: 1.0;
 define noShooting: false;   // for debug
 
 void StartButtonControl(define bc){
@@ -1564,7 +1569,6 @@ void StartButtonControl(define bc){
                 IsButtonHeld(ep, Button.SecondaryFire)
             ){
                 StopHoldingButton(ep, Button.SecondaryFire);
-                Wait(0.1, WaitBehavior.AbortWhenFalse);
             }
             // if start secondary button, release primary button
             else if(
@@ -1572,7 +1576,6 @@ void StartButtonControl(define bc){
                 IsButtonHeld(ep, Button.PrimaryFire)
             ){
                 StopHoldingButton(ep, Button.PrimaryFire);
-                Wait(0.1, WaitBehavior.AbortWhenFalse);
             }
         }
 
@@ -1587,26 +1590,47 @@ void StartButtonControl(define bc){
         // release-press action
         if(bc[ButtonControl.buttonBehaivor] == ButtonBehaivor.ReleasePress){
             while(true){
-                WaitRandomForDistributeServerLoad();
-                Wait(RandomReal(bc[ButtonControl.releaseMin], bc[ButtonControl.releaseMax]) * buttonControlTimeScale, WaitBehavior.AbortWhenFalse);
+                Wait(
+                    RandomReal(
+                        bc[ButtonControl.releaseMin],
+                        bc[ButtonControl.releaseMax]
+                    ) * buttonControlReleaseScale,
+                    WaitBehavior.AbortWhenFalse
+                );
 
                 StartHoldingButton(ep, bc[ButtonControl.button]);
-                Wait(RandomReal(bc[ButtonControl.pressMin], bc[ButtonControl.pressMax]) * buttonControlTimeScale, WaitBehavior.AbortWhenFalse);
-                StopHoldingButton(ep, bc[ButtonControl.button]);
+                Wait(
+                    RandomReal(
+                        bc[ButtonControl.pressMin],
+                        bc[ButtonControl.pressMax]
+                    ) * buttonControlPressScale,
+                    WaitBehavior.AbortWhenFalse
+                );
 
+                StopHoldingButton(ep, bc[ButtonControl.button]);
                 PressFirstButtonWhenIdle();
             }
         }
         // release-repeat action
         else if(bc[ButtonControl.buttonBehaivor] == ButtonBehaivor.ReleaseRepeat){
             while(true){
-                WaitRandomForDistributeServerLoad();
-                Wait(RandomReal(bc[ButtonControl.releaseMin], bc[ButtonControl.releaseMax] * buttonControlTimeScale), WaitBehavior.AbortWhenFalse);
+                Wait(
+                    RandomReal(
+                        bc[ButtonControl.releaseMin],
+                        bc[ButtonControl.releaseMax]
+                    ) * buttonControlReleaseScale,
+                    WaitBehavior.AbortWhenFalse
+                );
 
-                repeatDuring = RandomReal(bc[ButtonControl.pressMin], bc[ButtonControl.pressMax] * buttonControlTimeScale);
+                repeatDuring = 
+                    RandomReal(
+                        bc[ButtonControl.pressMin],
+                        bc[ButtonControl.pressMax]
+                    ) * buttonControlPressScale;
                 isRepeaFiring = true;
+
                 while(isRepeaFiring){
-                    PressButton(ep, bc[ButtonControl.button]); 
+                    PressButton(ep, bc[ButtonControl.button]);
                     Wait(0.2, WaitBehavior.AbortWhenFalse);
                 }
 
@@ -1637,12 +1661,11 @@ void PressFirstButtonWhenIdle()"PressFirstButtonWhenIdle"{
     ){
         define button!;
         if(actionState == ActionState.Attack){
-            button = FirstOf(attackButtons);
+            StartHoldingButton(ep, FirstOf(attackButtons));
         }
         else if(actionState == ActionState.Support){
-            button = FirstOf(supportButtons);
+            StartHoldingButton(ep, FirstOf(supportButtons));
         }
-        StartHoldingButton(ep, button);
     }
 
 }
@@ -1747,25 +1770,6 @@ if(
     );
 }
 
-// TAG Bot/ButtonControl/Jump ----------
-rule: "Bot/ButtonControl/Jump/StartButtonControl"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    enableButtonControlState
-){
-    StartButtonControl(
-        [
-            Button.Jump,
-            ButtonBehaivor.ReleasePress,
-            0,
-            8,
-            0.5,
-            5
-        ]
-    );
-}
-
 // TAG Bot/ButtonControl/Crouch ----------
 rule: "Bot/ButtonControl/Crouch/StartButtonControl"
 Event.OngoingPlayer
@@ -1777,10 +1781,29 @@ if(
         [
             Button.Crouch,
             ButtonBehaivor.ReleasePress,
-            5,
-            15,
-            0.5,
-            2.5
+            crouchButtonReleaseMin,
+            crouchButtonReleaseMax,
+            crouchButtonPressMin,
+            crouchButtonPressMax
+        ]
+    );
+}
+
+// TAG Bot/ButtonControl/Jump ----------
+rule: "Bot/ButtonControl/Jump/StartButtonControl"
+Event.OngoingPlayer
+if(
+    IsDummyBot() &&
+    enableButtonControlState
+){
+    StartButtonControl(
+        [
+            Button.Jump,
+            ButtonBehaivor.ReleasePress,
+            jumpButtonReleaseMin,
+            jumpButtonReleaseMax,
+            jumpButtonPressMin,
+            jumpButtonPressMax
         ]
     );
 }

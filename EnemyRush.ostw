@@ -45,8 +45,8 @@ Event.OngoingGlobal
 if(
     IsAssemblingHeroes()
 ){
-    // SetMatchTime(0);
-    SetMatchTime(25);
+    SetMatchTime(0);
+    // SetMatchTime(25);
 }
 
 rule: "Initialize/shortenSetup"
@@ -54,15 +54,15 @@ Event.OngoingGlobal
 if(
     IsInSetup()
 ){
-    SetMatchTime(25);
+    SetMatchTime(15);
+    // SetMatchTime(25);
 }
 
 // TAG Buddy ----------
 define buddyAssetList:
     [
         // random hero
-        [   // assetNo 0
-            "recommend",
+        [   // assetNo 0 recommend
             [EnemyType.None,    Hero.Mercy, 1],
             [EnemyType.None,    Hero.Genji, 1],
             [EnemyType.None,    Hero.Reinhardt, 1],
@@ -73,8 +73,7 @@ define buddyAssetList:
             [EnemyType.None,    Hero.Soldier76, 1]
         ],
         [
-            // assetNo 1
-            "random with fix role",
+            // assetNo 1 random with fix role
             [EnemyType.None,    RandomSupportHero, 1],
             [EnemyType.None,    RandomTankHero, 1],
             [EnemyType.None,    RandomDamageHero, 1],
@@ -85,23 +84,23 @@ define buddyAssetList:
             [EnemyType.None,    RandomDamageHero, 1]
         ],
         [
-            // assetNo 2
-            "many hero",
+            // assetNo 2 many hero
             [EnemyType.None,    favSupport, 1],
-            [EnemyType.None,    favDamage, addableBotsCount]
+            [EnemyType.None,    favSupport, 1],
+            [EnemyType.None,    favDamage,  6]
         ]
     ];
 
 define buddyAssetLotteryList: [
-    0,0,0,
-    1,1,1,
+    0,0,0,0,
+    1,1,1,1,
     2
 ];
 
 globalvar define isLockedCreateBotsByAsset = false;
 
 
-void CreateBotsByAssetWithMutexLock(define asset!, define team!){ 
+void CreateBotsByAssetWithMutexLock(define asset!, define team!, define addLimitNum!){ 
     // can't implement as subroutin for mutex  
     define forceReleaseCount = 0;
     while(isLockedCreateBotsByAsset){
@@ -115,9 +114,33 @@ void CreateBotsByAssetWithMutexLock(define asset!, define team!){
         Wait(1, WaitBehavior.IgnoreCondition);
     }
     isLockedCreateBotsByAsset = true;
-    CreateBotsByAsset(asset, team);
+    CreateBotsByAsset(asset, team, addLimitNum);
     isLockedCreateBotsByAsset = false;
 }
+
+define playerNum:
+    CountOf(
+        FilteredArray(
+            AllPlayers(playerTeam),
+            !IsDummyBot(ae)
+        )
+    );
+
+define buddyNum:
+    CountOf(
+        FilteredArray(
+            AllPlayers(playerTeam),
+            IsDummyBot(ae)
+        )
+    );
+
+define needBuddyNum:
+    maxBuddyBotNum - playerNum;
+
+globalvar define maxBuddyBotNum! =
+    WorkshopSettingInteger(
+        "Follower AI Settings(Join on behalf of absent player)",
+        "Follower Max Num", 8, 0, 8, 1);
 
 globalvar define buddyAssetNo!;
 
@@ -126,35 +149,15 @@ Event.OngoingGlobal
 if(
     initCompleted
 ){
-    define settingBuddyMaxNum! = WorkshopSettingInteger(
-            "Follower AI Settings(Join on behalf of absent player)",
-            "Follower Max Num", 8, 0, 8, 1);
+
     define prevPlayerNum! = -1;
     define prevAssetNo! = -1;
     // set initial asset no
     buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
 
     while(true){
-        define buddyAsset! = buddyAssetList[buddyAssetNo];
-        define teamName! = buddyAsset[0];
-        // slice buddy list by setting and remove asset name of first
-        buddyAsset = ArraySlice(buddyAsset, 1, settingBuddyMaxNum);
-        define playerNum! = CountOf(
-            FilteredArray(
-                AllPlayers(playerTeam),
-                !IsDummyBot(ae)
-            )
-        );
-        define buddyNum! = CountOf(
-            FilteredArray(
-                AllPlayers(playerTeam),
-                IsDummyBot(ae)
-            )
-        );
-        define needBuddyNum! = settingBuddyMaxNum - playerNum;
-
         if(
-            // choicedAssetNo changed
+            // choiced AssetNo changed
             prevAssetNo != buddyAssetNo ||
             // not filed by need buddy number
             buddyNum != needBuddyNum ||
@@ -170,15 +173,9 @@ if(
             define ultCharge! = GetAvgUltChgOfDummyBot(playerTeam);
             // reload buddy list
             DestroyBots(playerTeam);
-            // build add hero list
-            buddyAsset = ArraySlice(buddyAsset, 0, needBuddyNum);
-            // add teamName to asset as first item
-            define addAsset! = [teamName];
-            for(define idx = 0; idx < CountOf(buddyAsset); idx++){
-                addAsset[1 + idx] = buddyAsset[idx];
-            }
             // create bots by addAsset
-            CreateBotsByAssetWithMutexLock(addAsset, playerTeam);
+            define asset! = buddyAssetList[buddyAssetNo];
+            CreateBotsByAssetWithMutexLock(asset, playerTeam, needBuddyNum);
             // set avg ult charge of bots
             SetAvgUltChgOfDummyBot(playerTeam, ultCharge);
         }
@@ -345,11 +342,17 @@ define enemyBotAssetList:
             [EnemyType.Boss,        favTank,            1],
             [EnemyType.Elite,       favDamage,          5],
             [EnemyType.Minion,      RandomHero,         10]
+        ],
+        [   // assetNo 9
+            "test",
+            [EnemyType.Boss,        Hero.Widowmaker,            1],
+            [EnemyType.Elite,       Hero.Soldier76,          5],
+            [EnemyType.Minion,      Hero.Soldier76,         10]
         ]
     ];
 
 define enemyBotAssetLotteryList: [
-    // 8
+    // 9   //debug
     0, 0, 0,
     1, 1, 1,
     2, 2, 2,
@@ -382,6 +385,8 @@ if(
     LoopIfConditionIsTrue();
 }
 
+define maxEnemyBotNum: 16;
+
 rule: "EnemyBot/reloadReloadEnemyAsset"
 Event.OngoingGlobal
 if(
@@ -391,7 +396,8 @@ if(
     someHero = RandomHero;
     PlayEffectsToTeam(enemyTeam);
     DestroyBots(enemyTeam);
-    CreateBotsByAssetWithMutexLock(enemyBotAssetList[RandomValueInArray([enemyBotAssetLotteryList])], enemyTeam);
+    define asset! = enemyBotAssetList[RandomValueInArray([enemyBotAssetLotteryList])];
+    CreateBotsByAssetWithMutexLock(asset, enemyTeam, maxEnemyBotNum);
     // set next timer
     reloadEnemyAssetTimer = RandomInteger(90, 120);
 }
@@ -405,37 +411,38 @@ if(
     IsGameInProgress()
 ){
     define progress! = TotalObjectProgress();
-    define assetNo! = -1;
+    define enemyAssetNo! = -1;
     define assetTimer;
 
     if(
         progressStage == 0 && progress >= 30
     ){
         progressStage ++;
-        assetNo = 6;
+        enemyAssetNo = 6;
         assetTimer = RandomInteger(90, 120);
     }
     else if(
         progressStage == 1 && progress >= 60
     ){
         progressStage ++;
-        assetNo = 7;
+        enemyAssetNo = 7;
         assetTimer = RandomInteger(90, 120);
     }
     else if(
         progressStage == 2 && progress >= 90
     ){
         progressStage ++;
-        assetNo = 8;
+        enemyAssetNo = 8;
         assetTimer = -1;
     }
 
-    if(assetNo != -1){
+    if(enemyAssetNo != -1){
         // create all bot
         someHero = RandomHero;
         PlayEffectsToTeam(enemyTeam);
         DestroyBots(enemyTeam);
-        CreateBotsByAssetWithMutexLock(enemyBotAssetList[assetNo], enemyTeam);
+        define asset! = enemyBotAssetList[enemyAssetNo];
+        CreateBotsByAssetWithMutexLock(asset, enemyTeam, maxEnemyBotNum);
         // set next timer
         reloadEnemyAssetTimer = assetTimer;
     }
@@ -486,7 +493,7 @@ if(
     HasSpawned() &&
     enemyType != EnemyType.None
 ){
-    define maxHealthRate! = IsTankHero(HeroOf(ep)) ? (400 / 600) : 1;
+    define maxHealthRate! = IsTankHero(HeroOf(ep)) ? 0.666 : 1;
 
     // setEnemyType
     if(enemyType == EnemyType.Minion){
@@ -807,7 +814,7 @@ Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCo
     return true;
 }
 
-define showTeleportBeamTime: 0.8;
+define showTeleportBeamTime: 0.6;
 void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
     // if before teleport
     if(isBefore){
@@ -960,9 +967,9 @@ globalvar define enemyAbilityStatus;
 
 void WaitEnemyAbility()"WaitEnemyAbility"{
     Wait(
-        10 +
-        RandomInteger(0, 10) +
-        (30 * 1 - (TotalObjectProgress() / DefaultPercentage())),
+        20 +
+        RandomInteger(-5, 5) +
+        (20 * 1 - (TotalObjectProgress() / DefaultPercentage())),
         WaitBehavior.AbortWhenFalse
     );
 }
@@ -970,8 +977,7 @@ void WaitEnemyAbility()"WaitEnemyAbility"{
 rule: "EnemyBot/EnemyAbility/rush"
 Event.OngoingGlobal
 if(
-    IsGameInProgress() &&
-    !IsOverTime()
+    IsGameInProgress()
 ){
     enemyAbilityStatus[0] = false;
     WaitEnemyAbility();
@@ -989,8 +995,7 @@ if(
 rule: "EnemyBot/EnemyAbility/shotCall"
 Event.OngoingGlobal
 if(
-    IsGameInProgress() &&
-    !IsOverTime()
+    IsGameInProgress()
 ){
     enemyAbilityStatus[1] = false;
     WaitEnemyAbility();
@@ -1062,7 +1067,7 @@ Event.OngoingGlobal
 if(
     moreUltProb > 0
 ){
-    moreUltProb -= moreUltProb < 7.5 ? moreUltProb : 7.5;
+    moreUltProb -= moreUltProb < 6 ? moreUltProb : 6;
     Wait(1.0, WaitBehavior.AbortWhenFalse);
     Loop();
 }
@@ -1232,7 +1237,7 @@ playervar define confirmDealtDamage!;
 globalvar define autoTuneDmgDlt!;
 globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Dynamic Difficult Scale", 1.0, 0, 1000, 0);
 
-define internalRate: 0.3;
+define internalRate: 0.4;
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1266,7 +1271,7 @@ if(
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 35, 0, 1000, 1);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 40, 0, 1000, 1);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
     // apply auto tune
@@ -1372,6 +1377,11 @@ if(
     debugMode = DebugMode.ShowParam;
     ShowDebugHud(HostPlayer());
 
+    // while(true){
+    //     define list = FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Boss);
+    //     SetUltimateCharge(list, 100);
+    //     Wait(1);
+    // }
     // CreateIcon(commonTeleportPosition != 0 ? AllPlayers(): null,
     //     commonTeleportPosition + PositionOffsetY1(), Icon.Spiral,
     //     IconRev.VisibleToAndPosition, enemyColor, true);
@@ -1482,7 +1492,8 @@ if(
     PlayEffectsToTeam(enemyTeam);
     DestroyBots(enemyTeam);
     isLockedCreateBotsByAsset = false;
-    CreateBotsByAssetWithMutexLock(enemyBotAssetList[RandomValueInArray([enemyBotAssetLotteryList])], enemyTeam);
+    define asset! = enemyBotAssetList[RandomValueInArray([enemyBotAssetLotteryList])];
+    CreateBotsByAssetWithMutexLock(asset, enemyTeam, maxEnemyBotNum);
     // set next timer
     reloadEnemyAssetTimer = RandomInteger(90, 120);
 
