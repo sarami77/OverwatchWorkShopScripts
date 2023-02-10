@@ -138,9 +138,7 @@ define needBuddyNum:
     maxBuddyBotNum - playerNum;
 
 globalvar define maxBuddyBotNum! =
-    WorkshopSettingInteger(
-        "Follower AI Settings(Join on behalf of absent player. include player as count.)",
-        "Follower Max Num", 8, 0, 8, 1);
+    WorkshopSettingInteger("Follower AI Settings (Join as behalf when absent player)", "Max Fill AI Num", 8, 0, 8, 1);
 
 globalvar define buddyAssetNo!;
 
@@ -178,6 +176,7 @@ if(
             CreateBotsByAssetWithMutexLock(asset, playerTeam, needBuddyNum);
             // set avg ult charge of bots
             SetAvgUltChgOfDummyBot(playerTeam, ultCharge);
+
         }
 
         // show human player outline
@@ -191,12 +190,16 @@ if(
             OutlineType.Always
         );
 
-        // SetStatus(AllPlayers(playerTeam), null, Status.Unkillable, MaxValue());
+        // set max respawn time
+        define respawnTime! = 10 * WorkshopSettingReal("Player Settings", "Max Respawn Time Scale", 1.0, 0, 100, 0);
+        SetRespawnMaxTime(AllPlayers(playerTeam), respawnTime);
 
         // check timer
         Wait(10, WaitBehavior.IgnoreCondition);
     }
 }
+
+define assetChangeInterval: RandomInteger(90, 120);
 
 rule: "Buddy/changeBuddyAssetNo"
 Event.OngoingGlobal
@@ -205,7 +208,7 @@ if(
     IsGameInProgress()
 ){
     // force reload buddy list timer
-    Wait(RandomInteger(90, 120), WaitBehavior.IgnoreCondition);
+    Wait(assetChangeInterval, WaitBehavior.IgnoreCondition);
     buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
     LoopIfConditionIsTrue();
 }
@@ -399,7 +402,7 @@ if(
     define asset! = enemyBotAssetList[RandomValueInArray([enemyBotAssetLotteryList])];
     CreateBotsByAssetWithMutexLock(asset, enemyTeam, maxEnemyBotNum);
     // set next timer
-    reloadEnemyAssetTimer = RandomInteger(90, 120);
+    reloadEnemyAssetTimer = assetChangeInterval;
 }
 
 globalvar define progressStage;
@@ -419,14 +422,14 @@ if(
     ){
         progressStage ++;
         enemyAssetNo = 6;
-        assetTimer = RandomInteger(90, 120);
+        assetTimer = assetChangeInterval;
     }
     else if(
         progressStage == 1 && progress >= 60
     ){
         progressStage ++;
         enemyAssetNo = 7;
-        assetTimer = RandomInteger(90, 120);
+        assetTimer = assetChangeInterval;
     }
     else if(
         progressStage == 2 && progress >= 90
@@ -965,14 +968,9 @@ if(
 // TAG EnemyBot/EnemyAbility ----------
 globalvar define enemyAbilityStatus;
 
-void WaitEnemyAbility()"WaitEnemyAbility"{
-    Wait(
+define enemyAbilityInterval: 
         20 +
-        RandomInteger(-5, 5) +
-        (20 * 1 - (TotalObjectProgress() / DefaultPercentage())),
-        WaitBehavior.AbortWhenFalse
-    );
-}
+        40 * (1 - (TotalObjectProgress() / DefaultPercentage()));
 
 rule: "EnemyBot/EnemyAbility/rush"
 Event.OngoingGlobal
@@ -980,7 +978,11 @@ if(
     IsGameInProgress()
 ){
     enemyAbilityStatus[0] = false;
-    WaitEnemyAbility();
+
+    define interval! = enemyAbilityInterval;
+    interval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Interval Scale", 1.0, 0, 100, 3);
+    Wait(interval, WaitBehavior.AbortWhenFalse);
+
     define rushDurling! = RandomInteger(5, 10);
     for(rushCount; rushDurling > 0; rushDurling--){
         Respawn(AllDeadPlayers(enemyTeam));
@@ -998,7 +1000,11 @@ if(
     IsGameInProgress()
 ){
     enemyAbilityStatus[1] = false;
-    WaitEnemyAbility();
+
+    define interval! = enemyAbilityInterval;
+    interval *= WorkshopSettingReal("Enemy Bot Settings", "Shot Call Interval Scale", 1.0, 0, 100, 4);
+    Wait(interval, WaitBehavior.AbortWhenFalse);
+
     define deployedEnemys! = FilteredArray(
         AllLivingPlayers(enemyTeam),
         !IsInSpawnRoom(ae)
@@ -1027,7 +1033,9 @@ if(
     actionState != ActionState.Non
 ){
     define interval! = NormalizedHealth() * 10 + RandomInteger(1, 5);
+    interval *= WorkshopSettingReal("Enemy Bot Settings", "(General & Boss) Combat Teleport Interval Scale", 1.0, 0, 100, 5);
     Wait(interval, WaitBehavior.AbortWhenFalse);
+
     // set teleport position to object around
     if(SetTeleportPositionToPlayerAround()){
         TeleportWithEffect();
@@ -1062,12 +1070,14 @@ if(
     moreUltProb = 0;
 }
 
+globalvar define decreaseProb = WorkshopSettingInteger("Enemy Bot Settings", "(General & Boss) More Ultmate Decay", 8, 0, 100, 6);
+
 rule: "EnemyBot/EnemyAbility/decreaseMoreUltimate"
 Event.OngoingGlobal
 if(
     moreUltProb > 0
 ){
-    moreUltProb -= moreUltProb < 6 ? moreUltProb : 6;
+    moreUltProb -= moreUltProb < decreaseProb ? moreUltProb : decreaseProb;
     Wait(1.0, WaitBehavior.AbortWhenFalse);
     Loop();
 }
@@ -1178,6 +1188,7 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
         spawnTimeScale = 2.5;
     }
     confirmSpawnInterval *= spawnTimeScale;
+    confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Intarval Scale", 1.0, 0, 100, 2);
     SetRespawnMaxTime(ep, confirmSpawnInterval + showDeadEffectTime);
 }
 
@@ -1235,9 +1246,9 @@ if(
 // TAG EnemyBot/DealtDamage ----------
 playervar define confirmDealtDamage!;
 globalvar define autoTuneDmgDlt!;
-globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Dynamic Difficult Scale", 1.0, 0, 1000, 0);
+globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Dynamic Damage Deal Increase Scale", 1.0, 0, 100, 0);
 
-define internalRate: 0.4;
+define upTuneInternalRate: 0.3;
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1246,16 +1257,16 @@ if(
     Attacker() != ep
 ){
     if(enemyType == EnemyType.Minion){
-        autoTuneDmgDlt += 0.25 * internalRate * autoTuneScale;
+        autoTuneDmgDlt += 0.25 * upTuneInternalRate * autoTuneScale;
     }
     else if(enemyType == EnemyType.Elite){
-        autoTuneDmgDlt += 1.0 *  internalRate * autoTuneScale;
+        autoTuneDmgDlt += 1.0 *  upTuneInternalRate * autoTuneScale;
     }
     else if(enemyType == EnemyType.General){
-        autoTuneDmgDlt += 10.0 * internalRate * autoTuneScale;
+        autoTuneDmgDlt += 10.0 * upTuneInternalRate * autoTuneScale;
     }
     else if(enemyType == EnemyType.Boss){
-        autoTuneDmgDlt += 30.0 * internalRate * autoTuneScale;
+        autoTuneDmgDlt += 20.0 * upTuneInternalRate * autoTuneScale;
     }
 }
 
@@ -1265,13 +1276,13 @@ if(
     TeamOf() == playerTeam &&
     Attacker() != ep
 ){
-    autoTuneDmgDlt -= 1.0;
+    autoTuneDmgDlt -= NumberOfSlots(playerTeam) / NumberOfPlayers(playerTeam);
     autoTuneDmgDlt = autoTuneDmgDlt < 0 ? 0 : autoTuneDmgDlt;
 }
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 40, 0, 1000, 1);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 35, 0, 100, 0);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
     // apply auto tune
@@ -1495,7 +1506,7 @@ if(
     define asset! = enemyBotAssetList[RandomValueInArray([enemyBotAssetLotteryList])];
     CreateBotsByAssetWithMutexLock(asset, enemyTeam, maxEnemyBotNum);
     // set next timer
-    reloadEnemyAssetTimer = RandomInteger(90, 120);
+    reloadEnemyAssetTimer = assetChangeInterval;
 
     WaitLongPressConfirm();
     buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
