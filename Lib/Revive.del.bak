@@ -12,7 +12,7 @@ playervar define downPosition!;
 playervar define reviveTimeRemain!;
 playervar define needHelpEntitys!;
 
-define IsNeedRevive():
+define CanRevive():
     IsDead() &&
     IsOnGround();
 
@@ -61,26 +61,22 @@ rule: "Player/Revive/showNeedHelp"
 Event.OngoingPlayer
 if(
     isReviveEnableTeam &&
-    IsNeedRevive()
+    CanRevive()
 ){
     // Display HELP on the downed player's position
     // As for the player position, the appearance position and the down position will not match the dead body where the ragdoll works
     // Therefore, save and use the position when down, not the position of the player
     // If down in the abyss of the map, can not revive, so do not display HELP
     downPosition = PositionOf(ep);
-
     if(!IsDeadByAbyss()){
         needHelpEntitys = [];
-        // set need rivive message
         needHelpEntitys[0] = CreateInWorldText(
             AllPlayers(TeamOf()),  reviveStatusMessage,
             downPosition, basicInWorldTextSize, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
             Color.White, Spectators.VisibleAlways);
-        // set need rivive icon
         needHelpEntitys[1] = CreateIcon(
             AllPlayers(TeamOf()), downPosition,
             Icon.Skull, IconRev.VisibleToAndPosition, Color.Red, true);
-        // set rivive range ring
         needHelpEntitys[2] = CreateEffect(
             AllPlayers(TeamOf()), Effect.Ring, Color.White,
             downPosition, reviveRange, EffectRev.VisibleToPositionAndRadius);
@@ -91,7 +87,7 @@ rule: "Player/Revive/hideNeedHelp"
 Event.OngoingPlayer
 if(
     isReviveEnableTeam &&
-    !IsNeedRevive()
+    !CanRevive()
 ){
     // Hide HELP on the downed player's position
     DestroyEffect(needHelpEntitys[2]);
@@ -99,49 +95,9 @@ if(
     DestroyInWorldText(needHelpEntitys[0]);
 }
 
-rule: "Player/Revive/countDownTimeLimit"
-Event.OngoingPlayer
-if(
+define isReviving:
     isReviveEnableTeam &&
-    IsNeedRevive() &&
-    reviveTimeRemain >= 0
-){
-    if(reviver == null){
-        reviveStatusMessage = <"Revive <0> <1> <2>", ep, HeroIconString(HeroOf(ep)), reviveTimeRemain>;
-    }
-
-    // Count down revive time limit on the downed player's position
-    WaitUpdateASecond();
-    
-    // countdown
-    if(reviveTimeRemain > 0){
-        reviveTimeRemain -= 1;
-    }
-    
-    // check timeout 
-    if(
-        reviveTimeRemain <= 0
-    ){
-        if(reviver == null){
-            reviveTimeoutCount ++;
-            Abort();
-        }
-        else{
-            WaitUntil(IsAlive(), reviveCompleteSecond);
-            Abort();
-        }
-    }
-    LoopIfConditionIsTrue();
-}
-
-globalvar define reviveTimeoutCount! = 0;
-
-playervar define reviveProgressRingSize;
-
-playervar define reviver!;
-
-define CanRevive():
-    IsNeedRevive() &&
+    CanRevive() &&
     CountOf(
         FilteredArray(
             AllLivingPlayers(TeamOf()),
@@ -152,10 +108,47 @@ define CanRevive():
         )
     ) > 0;
 
+rule: "Player/Revive/countDownTimeLimit"
+Event.OngoingPlayer
+if(
+    isReviveEnableTeam &&
+    CanRevive() &&
+    reviveTimeRemain >= 0
+){
+    if(!isReviving){
+        reviveStatusMessage = <"Revive <0> <1> <2>", ep, HeroIconString(HeroOf(ep)), reviveTimeRemain>;
+    }
+
+    // Count down revive time limit on the downed player's position
+    WaitUpdateASecond();
+    // countdown
+    if(reviveTimeRemain > 0){
+        reviveTimeRemain -= 1;
+    }
+    // check timeout 
+    if(
+        reviveTimeRemain <= 0
+    ){
+        WaitUntil(!isReviving, reviveCompleteSecond);
+        AbortIf(IsAlive());
+        Respawn();
+
+        reviveTimeoutCount ++;
+        Abort();
+    }
+    LoopIfConditionIsTrue();
+}
+
+globalvar define reviveTimeoutCount! = 0;
+
+playervar define reviveProgressRingSize;
+
+playervar define reviver!;
+
 rule: "Player/Revive/reviveByTeammate"
 Event.OngoingPlayer
 if(
-    CanRevive()
+    isReviving
 ){
     // revived when a teammate is nearby
     // The event player is the player who receives the revival.
@@ -168,20 +161,16 @@ if(
             )
         );
 
-    // init revive progress ling size
+    // init progress ling
     reviveProgressRingSize = reviveRange;
-    // set revive progress ling
     needHelpEntitys[3] = CreateEffect(
         AllPlayers(TeamOf()), Effect.Ring, Color.Yellow,
         downPosition, reviveProgressRingSize, EffectRev.VisibleToPositionAndRadius);
-
-    // start revive progress ling convergence
     ChaseVariableOverTime(reviveProgressRingSize, 0, reviveCompleteSecond, TimeChaseReevaluation.None);
 
     // reviving effect and progress count
-    for(define reviveProgressSecond! = reviveCompleteSecond; reviveProgressSecond > 0; reviveProgressSecond --){
-        // set revive progress message
-        reviveStatusMessage = <"reviving <0> <1> <2>", ep, HeroIconString(HeroOf(ep)), reviveProgressSecond>;
+    for(define reviveProgressSecond! = 0; reviveProgressSecond < reviveCompleteSecond; reviveProgressSecond ++){
+        reviveStatusMessage = <"reviving <0> <1> <2>", ep, HeroIconString(HeroOf(ep)), reviveProgressSecond - reviveProgressSecond>;
 
         PlayEffect(
             AllPlayers(TeamOf()), PlayEffect.GoodPickupEffect,
@@ -190,6 +179,7 @@ if(
             AllPlayers(TeamOf()), PlayEffect.BuffImpactSound,
             Color.Yellow, downPosition, MaxValue());
             
+        define reviveCountDown! = reviveCompleteSecond - reviveProgressSecond;
         WaitUpdateASecond();
     }
 
@@ -197,17 +187,6 @@ if(
 
     // revive
     revive(reviver, ep, reviveRange * 3);
-}
-
-rule: "Player/Revive/abortReviveByTeammate"
-Event.OngoingPlayer
-if(
-    !CanRevive()
-){
-    reviver = null;
-    reviveStatusMessage = <"Revive <0> <1> <2>", ep, HeroIconString(HeroOf(ep)), reviveTimeRemain>;
-    StopChasingVariable(reviveProgressRingSize);
-    DestroyEffect(needHelpEntitys[3]);
 }
 
 // TAG Debug ----------
