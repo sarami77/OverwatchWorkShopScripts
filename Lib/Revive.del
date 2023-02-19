@@ -1,7 +1,9 @@
 import "Utility.del";
 
 // TAG public property
-globalvar define reviveEnableTeam! = Team.All;
+globalvar define reviveEnableTeams! = [Team.Team1, Team.Team2];
+define isReviveEnableTeam: IsTrueForAny(reviveEnableTeams, TeamOf(ep) == ae);
+
 globalvar define reviveTimeLimit! = 10;
 globalvar define reviveRange! = 2.5;
 globalvar define reviveCompleteSecond! = 5;
@@ -10,10 +12,6 @@ playervar define downPosition!;
 playervar define reviveTimeRemain!;
 playervar define needHelpEntitys!;
 
-define IsReviveEnableTeam:
-    reviveEnableTeam == TeamOf() ||
-    reviveEnableTeam == Team.All;
-
 define CanRevive():
     IsDead() &&
     IsOnGround();
@@ -21,17 +19,11 @@ define CanRevive():
 rule: "Player/Revive/setTimeLimit"
 Event.OngoingPlayer
 if(
-    IsReviveEnableTeam &&
+    isReviveEnableTeam &&
     IsDead()
 ){
     // set revive time limit by player dead
-    DisableRespawning();    // not work in skirmish
-    SetRespawnMaxTime(reviveTimeLimit);
     reviveTimeRemain = reviveTimeLimit;
-
-    // failsafe respawn for respawn logic not working
-    Wait(reviveTimeLimit + reviveCompleteSecond + 1, WaitBehavior.AbortWhenFalse);
-    Respawn();
 }
 
 playervar define returnPosition!;
@@ -39,7 +31,7 @@ playervar define returnPosition!;
 rule: "Player/Revive/saveReturnPosition"
 Event.OngoingPlayer
 if(
-    IsReviveEnableTeam &&
+    isReviveEnableTeam &&
     IsAlive() &&
     IsInAir()
 ){
@@ -51,22 +43,22 @@ if(
 rule: "Player/Revive/returnGround"
 Event.OngoingPlayer
 if(
-    IsReviveEnableTeam &&
+    isReviveEnableTeam &&
     IsDead() &&
     !IsOnGround()
 ){
-    Wait(RandomReal(0, 1), WaitBehavior.AbortWhenFalse);    // for avoid server overload
+    WaitRandomForDistributeServerLoad();
     if(IsDeadByAbyss()){
+        WaitRandomForDistributeServerLoad();
         Teleport(ep, NearestWalkablePosition(returnPosition));
         Abort();
     }
-    LoopIfConditionIsTrue();
 }
 
 rule: "Player/Revive/showNeedHelp"
 Event.OngoingPlayer
 if(
-    IsReviveEnableTeam &&
+    isReviveEnableTeam &&
     CanRevive()
 ){
     // Display HELP on the downed player's position
@@ -76,30 +68,23 @@ if(
     downPosition = PositionOf(ep);
     if(!IsDeadByAbyss()){
         needHelpEntitys = [];
-        
-        CreateInWorldText(
-            AllPlayers(), 
-                <"Revive <0> <1> <2>", ep, HeroIconString(HeroOf(ep)), reviveTimeRemain>,
+        needHelpEntitys[0] = CreateInWorldText(
+            AllPlayers(TeamOf()),  <"Revive <0> <1> <2>", ep, HeroIconString(HeroOf(ep)), reviveTimeRemain>,
             downPosition, basicInWorldTextSize, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
             Color.White, Spectators.VisibleAlways);
-        needHelpEntitys[0] = LastTextID();
-
-        CreateIcon(
-            AllPlayers(), downPosition,
+        needHelpEntitys[1] = CreateIcon(
+            AllPlayers(TeamOf()), downPosition,
             Icon.Skull, IconRev.VisibleToAndPosition, Color.Red, true);
-        needHelpEntitys[1] = LastCreatedEntity();
-
-        CreateEffect(
-            AllPlayers(), Effect.Ring, Color.White,
+        needHelpEntitys[2] = CreateEffect(
+            AllPlayers(TeamOf()), Effect.Ring, Color.White,
             downPosition, reviveRange, EffectRev.VisibleToPositionAndRadius);
-        needHelpEntitys[2] = LastCreatedEntity();
     }
 }
 
 rule: "Player/Revive/hideNeedHelp"
 Event.OngoingPlayer
 if(
-    IsReviveEnableTeam &&
+    isReviveEnableTeam &&
     !CanRevive()
 ){
     // Hide HELP on the downed player's position
@@ -109,7 +94,7 @@ if(
 }
 
 define isReviving:
-    IsReviveEnableTeam &&
+    isReviveEnableTeam &&
     CanRevive() &&
     CountOf(
         FilteredArray(
@@ -124,7 +109,7 @@ define isReviving:
 rule: "Player/Revive/countDownTimeLimit"
 Event.OngoingPlayer
 if(
-    IsReviveEnableTeam &&
+    isReviveEnableTeam &&
     CanRevive() &&
     reviveTimeRemain >= 0
 ){
@@ -165,16 +150,15 @@ if(
     // Save the reviver to display a message to the reviver
     reviver = FirstOf(
             SortedArray(
-                AllLivingPlayers(reviveEnableTeam),
+                AllLivingPlayers(TeamOf()),
                 DistanceBetween(ep, ae)
             )
         );
 
     reviveProgressRingSize = reviveRange;
-    CreateEffect(
-        AllPlayers(), Effect.Ring, Color.Yellow,
+    needHelpEntitys[3] = CreateEffect(
+        AllPlayers(TeamOf()), Effect.Ring, Color.Yellow,
         downPosition, reviveProgressRingSize, EffectRev.VisibleToPositionAndRadius);
-    needHelpEntitys[3] = LastCreatedEntity();
     ChaseVariableOverTime(reviveProgressRingSize, 0, reviveCompleteSecond, TimeChaseReevaluation.None);
 
     SmallMessage(reviver,

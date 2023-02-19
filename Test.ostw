@@ -1,6 +1,8 @@
 import "Test.setting.json";
-import "Lib/Utility.del";
 import "Lib/Debug.del";
+import "Lib/Utility.del";
+import "Lib/Regeneration.del";
+import "Lib/Revive.del";
 
 // Builtin -----------------------------------------------
 globalvar define playerTeam;
@@ -13,6 +15,10 @@ if(
     true
 ){
     Wait(5);
+
+    // reviveEnableTeams = [Team.Team1];
+
+    SetMatchTime(900);
 
     while(true){
         if(TeamOf(HostPlayer()) == Team.Team1){
@@ -28,21 +34,15 @@ if(
             enemyTeam = Team.Team1;    
         }
 
-        // SetRespawnMaxTime(AllPlayers(), 0);
-        // SetMaxHealth(AllPlayers(), MaxValue());
-        // SetStatus(HostPlayer(), null, Status.PhasedOut, MaxValue());
-        // SetStatus(HostPlayer(), null, Status.Unkillable, MaxValue());
-        // SetMoveSpeed(HostPlayer(), 100);
-
-        // SetMoveSpeed(spawnPosRootPlayer, 200);
-
         initCompleted = true;
-        Wait(10, WaitBehavior.IgnoreCondition);
+
+        SetRespawnMaxTime(AllPlayers(), 15);
+        Wait(5, WaitBehavior.IgnoreCondition);
     }
 }
 
 // TAG Buddy ----------
-import "Lib/Buddy.del";
+import "Lib/Bot.del";
 
 define playerRespawnTime: 15;
 
@@ -51,197 +51,22 @@ Event.OngoingGlobal
 if(
     initCompleted
 ){
-    define assetE! = [   // assetNo 0
-            "asset",
-            [EnemyType.None,    Hero.Reinhardt, 12],
-            [EnemyType.None,    Hero.Ana,   0],
-            [EnemyType.None,    Hero.Hanzo, 0]
+    DisableInspectorRecording();
+
+    define assetE! = [
+            [EnemyType.None,    Hero.Hanzo, 3]
         ];
-    CreateBotsByAsset(assetE, enemyTeam);
+    CreateBotsByAsset(assetE, enemyTeam, 24);
 
-    define assetP! = [   // assetNo 0
-            "asset",
-            [EnemyType.None,    Hero.Genji, 2],
-            [EnemyType.None,    Hero.Ana,   2],
-            [EnemyType.None,    Hero.Hanzo, 2]
+    define assetP! = [
+            [EnemyType.None,    Hero.Hanzo, 3]
         ];
-    CreateBotsByAsset(assetP, playerTeam);
-
-    SetMatchTime(900);
-    SetRespawnMaxTime(AllPlayers(playerTeam), playerRespawnTime);
+    CreateBotsByAsset(assetP, playerTeam, 24);
 
 
-    SetObjectiveDescription(AllPlayers(), "Survive until time runs out");
 }
 
 // Test Code -----------------------------------------------
-// EnemySpawnArround
-
-define spawnPosRootPlayer: PlayersInSlot(0, playerTeam);
-globalvar define spawnPos = 0;
-
-define getNewSpawnPosition()"getNewSpawnPosition"{
-    define pos! = BlockedPositon(
-        spawnPosRootPlayer,
-        DirectionFromAngles(
-            RandomReal(0, 360),
-            RandomReal(30, -30),
-        ),
-        30
-    );
-    pos += (DirectionTowards(pos, spawnPosRootPlayer) * 0.5);
-    return pos;
-}
-
-define spawnPosMinDist: 30;
-define changeSpawnPosProb: 10;
-
-void UpdateEnemySpawnPosition()"UpdateEnemySpawnPosition"{
-    if(
-        spawnPos == 0 ||
-        ProbabilityTrue(changeSpawnPosProb) ||
-        !IsInLineOfSight(spawnPosRootPlayer, spawnPos) ||
-        DistanceBetween(spawnPosRootPlayer, spawnPos) < spawnPosMinDist
-    ){
-        define calcCount = 00;
-        define posCand = getNewSpawnPosition();
-        while(
-            calcCount < 30 &&
-            posCand != 0 &&
-            DistanceBetween(spawnPosRootPlayer, posCand) < (spawnPosMinDist - (calcCount * 1.0)) &&
-            IsInLineOfSight(spawnPosRootPlayer, BelowPosition(posCand)) &&
-            !IsBelowAbyss(posCand)
-        ){
-            Wait(0.1);
-            posCand = getNewSpawnPosition();
-            calcCount ++;
-            dbgHudTxt(calcCount);
-        }
-        spawnPos = posCand;
-    }
-
-    // spawn enemy
-    if(
-        !IsInSpawnRoom(spawnPosRootPlayer)
-    ){
-        define telepoTarget = FilteredArray(
-                AllPlayers(enemyTeam),
-                (
-                    !IsInLineOfSight(spawnPosRootPlayer, ae) &&
-                    IsAlive(ae)
-                )
-            );
-        
-        SetStatus(telepoTarget, null, Status.Rooted, 1.0);
-        Teleport(
-            telepoTarget,
-            spawnPos
-        );
-    }
-}
-
-rule: "EnemySpawnArround/Main"
-Event.OngoingGlobal
-if(
-    HasSpawned(spawnPosRootPlayer)
-){
-    CreateBeamEffect(HostPlayer(),
-        BeamType.GoodBeam, spawnPosRootPlayer, spawnPos,
-        Color.Yellow, EffectRev.VisibleToPositionAndRadius);
-
-    while(true){
-        Wait(1, WaitBehavior.IgnoreCondition);
-        UpdateEnemySpawnPosition();
-    }
-}
-
-rule: "EnemySpawnArround/ChangePosByAbyssDead"
-Event.OnDeath
-if(
-    TeamOf(ep) == enemyTeam &&
-    Attacker() == ep
-){
-    Wait(1, WaitBehavior.IgnoreCondition);
-    spawnPos = 0;
-}
-
-globalvar define enemyStatusBuff!;
-
-rule: "EnemySpawnArround/increaseEnemyBuff"
-Event.OngoingGlobal
-if(
-    initCompleted
-){
-    Wait(3);
-    enemyStatusBuff += 0;
-    applyEnemyStatus();
-
-    while(true){
-        SetUltimateAbilityEnabled(AllPlayers(enemyTeam), false);
-        SetSecondaryFireEnabled(AllPlayers(enemyTeam), false);
-        SetAbility1Enabled(AllPlayers(enemyTeam), false);
-        SetAbility2Enabled(AllPlayers(enemyTeam), false);
-        AllPlayers(enemyTeam).enableHealingMove = false;
-        AllPlayers(enemyTeam).enableCheckAbyss = false;
-        Wait(5);
-    }
-}
-
-rule: "EnemySpawnArround/increaseEnemyBuff"
-Event.OnDeath
-if(
-    TeamOf() == enemyTeam &&
-    Attacker() != ep
-){
-    enemyStatusBuff += 1;
-    applyEnemyStatus();
-}
-
-void applyEnemyStatus()"applyEnemyStatus"{
-    SetRespawnMaxTime(AllPlayers(enemyTeam),    10 -  (enemyStatusBuff * 0.02));
-    SetMaxHealth(AllPlayers(enemyTeam),         25 +  (enemyStatusBuff * 0.05));
-    SetMoveSpeed(AllPlayers(enemyTeam),         25 +  (enemyStatusBuff * 0.20));
-    SetDamageDealt(AllPlayers(enemyTeam),       25 +  (enemyStatusBuff * 0.05));
-}
-
-
-
-rule: "EnemySpawnArround/knockBack"
-Event.OnDamageTaken
-if(
-    TeamOf() == enemyTeam &&
-    Attacker() != ep
-){
-    ApplyImpulse(ep, 
-        VectorTowards(Attacker(), ep),
-        EventDamage() * 1,
-        Relative.ToWorld, ContraryMotion.Cancel);
-}
-
-rule: "EnemySpawnArround/playerReboot"
-Event.OnDeath
-if(
-    TeamOf() == playerTeam
-){
-    Wait(playerRespawnTime - 0.1, WaitBehavior.AbortWhenFalse);
-    Resurrect(ep);
-}
-
-rule: "EnemySpawnArround/playerDefeat"
-Event.OnDeath
-if(
-    NumberOfLivingPlayers(playerTeam) <= 0
-){
-    DeclareTeamVictory(enemyTeam);
-}
-
-rule: "EnemySpawnArround/playerVictory"
-Event.OngoingGlobal
-if(
-    MatchTime() <= 0
-){
-    DeclareTeamVictory(playerTeam);
-}
 
 
 
@@ -296,14 +121,6 @@ Event.OngoingGlobal
         Location.Left, -1,
         Color.White, Color.Orange, Color.White,
         HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "enemy buff", enemyStatusBuff>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);  
 }
 
 rule: "Debug/TuneVal/startIncreaseParam"

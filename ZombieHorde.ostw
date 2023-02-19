@@ -4,7 +4,7 @@ import "Lib/Utility.del";
 import "Lib/ElapsedTimer.del";
 
 // Builtin -----------------------------------------------
-define maxDummyBotNum: 19;
+define maxDummyBotNum: 24;
 define maxPlayerNum: 5;
 define maxEnemyNum: maxDummyBotNum - maxPlayerNum;
 define destEnemyKills: 500;
@@ -44,11 +44,11 @@ if(
             enemyTeam = Team.Team1;    
         }
 
-        SetObjectiveDescription(AllPlayers(playerTeam), <"Survive alone until <0> kills", (destEnemyKills - enemyKills)>);
+        SetObjectiveDescription(AllPlayers(playerTeam), <"Survive until <0> kills", (destEnemyKills - enemyKills)>);
         SetRespawnMaxTime(AllPlayers(playerTeam), playerRespawnTime);
 
         initCompleted = true;
-        Wait(5, WaitBehavior.IgnoreCondition);
+        Wait(3, WaitBehavior.IgnoreCondition);
     }
 }
 
@@ -60,26 +60,30 @@ Event.OngoingGlobal
 if(
     initCompleted
 ){
-    define assetE! = [   // assetNo 0
-            "asset",
-            [EnemyType.None,    Hero.Reinhardt, maxEnemyNum]
-        ];
-    CreateBotsByAsset(assetE, enemyTeam, 19);
-
     define assetP! = [   // assetNo 0
             "asset",
-            [EnemyType.None,    Hero.Ana,   1],
-            [EnemyType.None,    Hero.Mercy, 1],
+            [EnemyType.None,    Hero.Ana,       1],
+            [EnemyType.None,    Hero.Mercy,     1],
+
+            [EnemyType.None,    Hero.Doomfist,  1],
             [EnemyType.None,    Hero.Reinhardt, 1],
-            [EnemyType.None,    Hero.Genji, 1],
-            [EnemyType.None,    Hero.Hanzo, 1]
+            
+            [EnemyType.None,    Hero.Genji,     1],
+            [EnemyType.None,    Hero.Hanzo,     1],
+            [EnemyType.None,    Hero.Reaper,    1]
         ];
-    CreateBotsByAsset(assetP, playerTeam, 19);
+    CreateBotsByAsset(assetP, playerTeam, 24);
+
+    define assetE! = [   // assetNo 0
+            "asset",
+            [EnemyType.None,    Hero.Reinhardt, 99]
+        ];
+    CreateBotsByAsset(assetE, enemyTeam, 24);
 }
 
 // Test Code -----------------------------------------------
 // EnemySpawnArround
-define makeSpawnPosDistMax: 30;
+define makeSpawnPosDistMax: ActionRange_Far;
 define changeSpawnPosDist: makeSpawnPosDistMax / 3;
 define changeSpawnPosProb: 3;
 globalvar define spawnPosRootPlayer;
@@ -150,8 +154,7 @@ void UpdateEnemySpawnPosition()"UpdateEnemySpawnPosition"{
                 )
             );
         
-        SetStatus(telepoTarget, null, Status.KnockedDown, 1.5);
-        Wait(0.5);
+        SetStatus(telepoTarget, null, Status.Rooted, 1.0);
         Teleport(
             telepoTarget,
             // spawnPos
@@ -168,10 +171,9 @@ if(
     while(true){
         spawnPosRootPlayer = RandomValueInArray(FilteredArray(AllLivingPlayers(playerTeam), !IsDummyBot(ae)));
         if(spawnPosRootPlayer == null){
-            spawnPosRootPlayer = RandomValueInArray(AllPlayers(playerTeam));
+            spawnPosRootPlayer = RandomValueInArray(FilteredArray(AllLivingPlayers(playerTeam), IsDummyBot(ae)));
         }
         Wait(10, WaitBehavior.IgnoreCondition);
-        UpdateEnemySpawnPosition();
     }
 }
 
@@ -203,18 +205,40 @@ if(
 rule: "EnemySpawnArround/increaseEnemyBuff"
 Event.OngoingGlobal
 if(
-    NumberOfPlayers(enemyTeam) >= maxEnemyNum
+    initCompleted
 ){
     enemyKills = 0;
-    applyEnemyStatus();
-
+    
     while(true){
-        SetUltimateAbilityEnabled(AllPlayers(enemyTeam), false);
-        SetSecondaryFireEnabled(AllPlayers(enemyTeam), false);
-        SetAbility1Enabled(AllPlayers(enemyTeam), false);
-        SetAbility2Enabled(AllPlayers(enemyTeam), false);
+        // SetStatus(AllPlayers(enemyTeam), null, Status.Unkillable, MaxValue());
+
         AllPlayers(enemyTeam).enableHealingMove = false;
         AllPlayers(enemyTeam).enableCheckAbyss = false;
+        SetSecondaryFireEnabled(AllPlayers(enemyTeam), false);
+        define killProg = enemyKills / destEnemyKills;
+
+        if(killProg >= 0.25){
+            SetAbility2Enabled(AllPlayers(enemyTeam), true);
+        }
+        else{
+            SetAbility2Enabled(AllPlayers(enemyTeam), false);
+        }
+        
+        if(killProg >= 0.5){
+            SetAbility1Enabled(AllPlayers(enemyTeam), true);
+        }
+        else{
+            SetAbility1Enabled(AllPlayers(enemyTeam), false);
+        }
+
+        if(killProg >= 0.75){
+            SetUltimateAbilityEnabled(AllPlayers(enemyTeam), true);
+        }
+        else{
+            SetUltimateAbilityEnabled(AllPlayers(enemyTeam), false);
+        }
+
+        applyEnemyStatus();
         Wait(5);
     }
 }
@@ -225,14 +249,13 @@ if(
     TeamOf() == enemyTeam &&
     Attacker() != ep
 ){
-    enemyKills += 5;
-    applyEnemyStatus();
+    enemyKills += 1;
 }
 
 void applyEnemyStatus()"applyEnemyStatus"{
     SetRespawnMaxTime(AllPlayers(enemyTeam),    10 -  (enemyKills * 0.02));
+    SetMoveSpeed(AllPlayers(enemyTeam),         25 +  (enemyKills * 0.30));    
     SetMaxHealth(AllPlayers(enemyTeam),         25 +  (enemyKills * 0.05));
-    SetMoveSpeed(AllPlayers(enemyTeam),         25 +  (enemyKills * 0.30));
     SetDamageDealt(AllPlayers(enemyTeam),       25 +  (enemyKills * 0.05));
 }
 
@@ -242,10 +265,23 @@ if(
     TeamOf() == enemyTeam &&
     Attacker() != ep
 ){
-    ApplyImpulse(ep, 
-        VectorTowards(Attacker(), ep + Vector(0, 0.5, 0)),
-        EventDamage() * 1.5,
-        Relative.ToWorld, ContraryMotion.Cancel);
+    // if(Health() > 1){
+        ApplyImpulse(ep, 
+            VectorTowards(Attacker(), ep + Vector(0, 0.5, 0)),
+            EventDamage() * 1.0,
+            Relative.ToWorld, ContraryMotion.Cancel);
+    }
+    // else{
+    //     ApplyImpulse(ep, 
+    //         VectorTowards(Attacker(), ep + Vector(0, 0.5, 0)),
+    //         EventDamage() * 3.0,
+    //         Relative.ToWorld, ContraryMotion.Cancel);
+
+    //     ClearStatus(ep, Status.Unkillable);
+    //     Wait(0.2);
+    //     Kill(ep, Attacker());
+    //     SetStatus(ep, null, Status.Unkillable, MaxValue());
+    // }
 }
 
 define preDelay: 3;
@@ -273,11 +309,12 @@ Event.OnDeath
 if(    
     NumberOfLivingPlayers(playerTeam) <= 0
 ){
-    Teleport(AllPlayers(enemyTeam), Vector(0,MaxValue(),0));
+    DisableRespawning(AllPlayers(playerTeam));
+    Kill(AllPlayers(playerTeam), null);
 
     Wait(preDelay, WaitBehavior.IgnoreCondition);
     BigMessage(AllPlayers(playerTeam), "no survivor left...");
-    Wait(10, WaitBehavior.IgnoreCondition);
+    Wait(8, WaitBehavior.IgnoreCondition);
     DeclareTeamVictory(enemyTeam);
 }
 
@@ -286,12 +323,13 @@ Event.OngoingGlobal
 if(
     destEnemyKills <= enemyKills
 ){
-    Teleport(AllPlayers(enemyTeam), Vector(0,MaxValue(),0));
+    DisableRespawning(AllPlayers(enemyTeam));
+    Kill(AllPlayers(enemyTeam), null);
 
     Wait(preDelay, WaitBehavior.IgnoreCondition);
     BigMessage(AllPlayers(playerTeam), <"zombie <0> kills completed.", destEnemyKills>);
-    Wait(10, WaitBehavior.IgnoreCondition);
-    // DeclareTeamVictory(playerTeam);
+    Wait(8, WaitBehavior.IgnoreCondition);
+    DeclareTeamVictory(playerTeam);
 }
 
 

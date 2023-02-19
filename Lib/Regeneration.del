@@ -4,68 +4,67 @@ import "Utility.del";
 // Set team in import destination parent file
 
 // TAG public property
-globalvar define regenerationEnableTeam!;
-globalvar define regenerationNeedBalanceTeam1!;
-globalvar define regenerationNeedBalanceTeam2!;
-globalvar define regenerationHealthPerSecondTeam1!;
-globalvar define regenerationHealthPerSecondTeam2!;
-globalvar define regenerationStartWaitSecondTeam1!;
-globalvar define regenerationStartWaitSecondTeam2!;
+globalvar define regenerationEnableTeams! = [Team.Team1, Team.Team2];
+define isRegenerationEnableTeam: IsTrueForAny(regenerationEnableTeams, TeamOf(ep) == ae);
 
-define IsRegenerationEnableTeam:
-    regenerationEnableTeam == TeamOf() ||
-    regenerationEnableTeam == Team.All;
-globalvar define regenRateTeam1!;
-globalvar define regenRateTeam2!;
-playervar define waitRegen!;
+globalvar define regenerationStartWaitSecond! = 5;
+globalvar define regenerationInterval = 0.25;
+globalvar define regenerationNeedBalanceTeam1! = false;
+globalvar define regenerationNeedBalanceTeam2! = false;
+globalvar define regenerationHealthTeam1! = 25;
+globalvar define regenerationHealthTeam2! = 25;
+
 
 rule: "Player/Regeneration/updateRate //if there are few players, incrase regeneration rate for fair play."
 Event.OngoingGlobal
 {
     // If don't enough players, adjust player regeneration rate to make the game fair
     // Multiply heal unit
-    regenRateTeam1 = (regenerationHealthPerSecondTeam1);
-    regenRateTeam2 = (regenerationHealthPerSecondTeam2);
+    regenerationRateTeam1 = regenerationHealthTeam1;
+    regenerationRateTeam2 = regenerationHealthTeam2;
+
     // Apply balance multiplier
     if(regenerationNeedBalanceTeam1)
-        regenRateTeam1 *= ConvertToBalancedValue(0.75, Team.Team1);  // TAG player regeneration scale
-    else if(regenerationHealthPerSecondTeam2)
-        regenRateTeam2 *= ConvertToBalancedValue(0.75, Team.Team2);  // TAG player regeneration scale
+        regenerationRateTeam1 *= ConvertToBalancedValue(0.75, Team.Team1);  // TAG player regeneration scale
+    if(regenerationNeedBalanceTeam2)
+        regenerationRateTeam2 *= ConvertToBalancedValue(0.75, Team.Team2);  // TAG player regeneration scale
 
     WaitUpdateLongCycle();
     LoopIfConditionIsTrue();
 }
 
+playervar define waitRegen!;
+
 rule: "Player/Regeneration/waitRegenerate //by taken damage"
 Event.OnDamageTaken
 if(
-    IsRegenerationEnableTeam &&
-    IsAlive(EventPlayer())
+    isRegenerationEnableTeam &&
+    IsAlive()
 ){
     // Stop regeneration when player receives damage
     // Resume regeneration over time
     waitRegen = true;
-    if(TeamOf() == Team.Team1)
-        Wait(regenerationStartWaitSecondTeam1, WaitBehavior.RestartWhenTrue);  // TAG wait regenenation timer
-    else if(TeamOf() == Team.Team2)
-        Wait(regenerationStartWaitSecondTeam2, WaitBehavior.RestartWhenTrue);
+
+    Wait(regenerationStartWaitSecond, WaitBehavior.RestartWhenTrue);  // TAG wait regenenation timer
+
     waitRegen = false;
 }
+
+globalvar define regenerationRateTeam1!;
+globalvar define regenerationRateTeam2!;
 
 rule: "Player/Regeneration/regenerate //heal if not damaged for a short time"
 Event.OngoingPlayer
 if(
-    IsRegenerationEnableTeam &&
-    IsAlive(EventPlayer()) &&
-    !waitRegen &&
-    Health(EventPlayer()) < MaxHealth(EventPlayer())
+    isRegenerationEnableTeam &&
+    IsAlive() &&
+    Health() < MaxHealth() &&
+    !waitRegen    
 ){
+    Heal(ep, null, (TeamOf() == Team.Team1 ? regenerationRateTeam1 : regenerationRateTeam2) * regenerationInterval);
+
     // Heal until the player's health is maximized
-    WaitUpdateASecond();
-    if(TeamOf() == Team.Team1)
-        Heal(EventPlayer(), null, regenRateTeam1);
-    else if(TeamOf() == Team.Team2)
-        Heal(EventPlayer(), null, regenRateTeam2);
+    Wait(regenerationInterval, WaitBehavior.IgnoreCondition);
     LoopIfConditionIsTrue();
 }
 

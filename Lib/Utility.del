@@ -121,9 +121,6 @@ void WaitChangeState(){ Wait(0.1, WaitBehavior.IgnoreCondition); }
 define ButtonGuide(Button button):
     <"[<0>]", InputBindingString(button)>;
 
-// TAG ButtonPress ----------
-playervar define intaractDoublePressed!;
-
 // TAG parallelAnimationNum ----------
 define parallelAnimationNum: 2;
 
@@ -132,34 +129,6 @@ define minMoveImpulse: 20;
 
 // TAG canRidingRange ----------
 define canRidingRange : 6.0;
-
-
-// TAG DoublePressed ----------
-rule: "Player/intaractDoublePressed"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    !intaractDoublePressed &&
-    IsButtonHeld(ep, Button.Interact)
-){
-    WaitUntil(!IsButtonHeld(ep, Button.Interact), 0.3);
-    AbortIf(IsButtonHeld(ep, Button.Interact));
-    WaitUntil(IsButtonHeld(ep, Button.Interact), 0.3);
-    AbortIf(!IsButtonHeld(ep, Button.Interact));
-    intaractDoublePressed = true;
-}
-
-rule: "Player/releaseDoublePressed"
-Event.OngoingPlayer
-Team.Team1
-Player.All
-if(
-    intaractDoublePressed
-){
-    WaitConditionConfirmed();
-    intaractDoublePressed = false;
-}
 
 // TAG BlockDetect ----------
 define walkMeterPerSec: 5.5; // avarage hero speed
@@ -217,7 +186,8 @@ Boolean IsThereWall(define basePos)"IsThereWall"{
 // Determine if death by Abyss
 // Binding the NearestWalkablePosition to a Condition is too much for the server, so call it as a function
 define IsDeadByAbyss():
-    DistanceBetween(ep, NearestWalkablePosition(ep)) > 10;
+    IsDead() &&
+    DistanceBetween(ep, NearestWalkablePosition(ep)) > 5;
 
 // TAG Direction ----------
 define NoDirection(): Vector(0,0,0);
@@ -386,22 +356,18 @@ Number GetTeamNormalizedHealth()"GetTeamNormalizedHealth"{
 // You can change the buff amount by changing the scale value.
 define ConvertToBalancedValue(define scale!, define team!)"ConvertToBalancedValue"{
     define amount!;
-    define activePlayerNum!;
+    define playerNum!;
 
-    if(team == Team.Team1 || team == Team.Team2){
-        activePlayerNum = 
-            CountOf(
-                FilteredArray(
-                    AllPlayers(team),
-                    HasSpawned(ae)
-                )
-            );
-        activePlayerNum = Max(activePlayerNum, 1);
-        amount = NumberOfSlots(team) / activePlayerNum;
-    }
-    else{
-        amount = 1;
-    }
+    playerNum = 
+        CountOf(
+            FilteredArray(
+                AllPlayers(team),
+                HasSpawned(ae)
+            )
+        );
+    playerNum = Max(playerNum, 1);
+    amount = NumberOfSlots(team) / playerNum;
+
 
     amount -= 1;
     amount *= scale;
