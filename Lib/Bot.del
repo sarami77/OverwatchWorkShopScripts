@@ -1,8 +1,9 @@
 import "Utility.del";
 import "Debug.del";
 
-// TODO
-// bot nead healing state
+globalvar define botEnableTeams! = [Team.Team1, Team.Team2];
+// define isBotEnableTeam: IsTrueForAny(botEnableTeams, TeamOf(ep) == ae);
+define isBotEnableTeam: true;
 
 // TAG public property
 globalvar define botAimScat = WorkshopSettingReal("Enemy Bot Settings", "Aim Scattering (0 is head shot)",              0.15, 0, 1000, 3);
@@ -189,6 +190,7 @@ playervar define actionRangeMax!;
 rule: "Bot/SetActionRoutineBySpawned"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     HasSpawned()
 ){
@@ -198,6 +200,7 @@ if(
 rule: "Bot/SetActionRoutineByStartDuplicate"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     HeroOf() == Hero.Echo &&
     IsDuplicating(ep)
@@ -209,6 +212,7 @@ if(
 rule: "Bot/SetActionRoutineByEndDuplicate"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     HeroOf() == Hero.Echo &&
     !IsDuplicating(ep)
@@ -759,6 +763,7 @@ void ApplyNextActionState(define player!, define nextActionState!) playervar "Ap
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     HasSpawned() &&
     IsAlive()
@@ -868,7 +873,7 @@ if(
         nextActionState == ActionState.Attack
     ){
         // call attack by trans to attack state
-        CallAttackNearBot(target);
+        CallAttackNearBot(target, TeamOf());
     }
 
     // apply next state
@@ -881,6 +886,7 @@ if(
 rule: "Bot/ActionState/SetNonStateByDead"
 Event.OnDeath
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     Victim() == ep &&
     actionState != ActionState.Non
@@ -892,6 +898,7 @@ if(
 rule: "Bot/ActionState/ChangeTargetByTargetDead"
 Event.OnElimination
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     Victim() == target &&
     actionState != ActionState.Non
@@ -916,6 +923,7 @@ if(
 rule: "Bot/ActionState/ChangeTargetByDamageTaken"
 Event.OnDamageTaken
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     actionState == ActionState.Attack
 ){
@@ -932,18 +940,27 @@ if(
 rule: "Bot/ActionState/CallAttackByDamageTaken"
 Event.OnDamageTaken
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     Attacker() != ep
 ){
     // call attack by damage taken
-    CallAttackNearBot(Attacker());
+    CallAttackNearBot(Attacker(), TeamOf());
 }
 
-globalvar define isCallAttackCoolingDown! = false;
+globalvar define isCallAttackCoolingDown1! = false;
+globalvar define isCallAttackCoolingDown2! = false;
 
-void CallAttackNearBot(define attackTarget!)"CallAttackNearBot"{
-    AbortIf(isCallAttackCoolingDown);
-    isCallAttackCoolingDown = true;
+void CallAttackNearBot(define attackTarget!, define team!)"CallAttackNearBot"{
+    if(team == Team.Team1){
+        AbortIf(isCallAttackCoolingDown1);
+        isCallAttackCoolingDown1 = true;
+    }
+    else{
+        AbortIf(isCallAttackCoolingDown2);
+        isCallAttackCoolingDown2 = true;
+    }
+
     define nearFriends = FilteredArray(
         PlayersWithinRadius(
             ep, 30, TeamOf(ep), RadiusLOS.Off
@@ -968,13 +985,23 @@ void CallAttackNearBot(define attackTarget!)"CallAttackNearBot"{
     }
 }
 
-rule: "Bot/ActionState/callAttackCoolDown"
+rule: "Bot/ActionState/callAttackCoolDown1"
 Event.OngoingGlobal
 if(
-    isCallAttackCoolingDown
+    isCallAttackCoolingDown1
 ){
     Wait(1.0, WaitBehavior.IgnoreCondition);
-    isCallAttackCoolingDown = false;
+    isCallAttackCoolingDown1 = false;
+    Loop();
+}
+
+rule: "Bot/ActionState/callAttackCoolDown2"
+Event.OngoingGlobal
+if(
+    isCallAttackCoolingDown2
+){
+    Wait(1.0, WaitBehavior.IgnoreCondition);
+    isCallAttackCoolingDown2 = false;
     Loop();
 }
 
@@ -1170,6 +1197,7 @@ void StartFacingTarget()"StartFacingTarget"{
 rule: "Bot/ActionState/Non"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     actionState == ActionState.Non
 ){
@@ -1214,6 +1242,7 @@ if(
 rule: "Bot/ActionState/AttackOrSupport"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     (
         actionState == ActionState.Attack ||
@@ -1346,6 +1375,7 @@ define AbortIfNotDepEcho()"AbortIfNotDepEcho"{
 rule: "Bot/HeroUniqueAction/positionMoveUltmate"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     IsUsingUltimate()
 ){
@@ -1437,6 +1467,7 @@ define FacingTargetBetweenPosition(define distRate!)"FacingTargetBetweenPosition
 rule: "Bot/HeroUniqueAction/positionAimUltmate"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     UltimateChargePercent() >= DefaultPercentage() &&
     IsButtonHeld(ep, Button.Ultimate)
@@ -1476,6 +1507,7 @@ if(
 rule: "Bot/HeroUniqueAction/positionAimSecondary"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     !IsUsingAbility1() &&
     AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
@@ -1647,6 +1679,7 @@ void StartButtonControl(define bc){
 rule: "Bot/ButtonControl/releaseIsRepeaFiring"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     isRepeaFiring
 ){
@@ -1681,6 +1714,7 @@ define enableButtonControlState:
 rule: "Bot/ButtonControl/PrimaryFire/StartButtonControl"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     enableButtonControlState
 ){
@@ -1700,6 +1734,7 @@ if(
 rule: "Bot/ButtonControl/SecondaryFire/StartButtonControl"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     enableButtonControlState
 ){
@@ -1719,6 +1754,7 @@ if(
 rule: "Bot/ButtonControl/Ability1/StartButtonControl"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     enableButtonControlState
 ){
@@ -1738,6 +1774,7 @@ if(
 rule: "Bot/ButtonControl/Ability2/StartButtonControl"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     enableButtonControlState
 ){
@@ -1757,6 +1794,7 @@ if(
 rule: "Bot/ButtonControl/Ultimate/StartButtonControl"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     enableButtonControlState &&
     UltimateChargePercent() >= DefaultPercentage()
@@ -1777,6 +1815,7 @@ if(
 rule: "Bot/ButtonControl/Crouch/StartButtonControl"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     enableButtonControlState
 ){
@@ -1796,6 +1835,7 @@ if(
 rule: "Bot/ButtonControl/Jump/StartButtonControl"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     enableButtonControlState
 ){
@@ -1811,31 +1851,11 @@ if(
     );
 }
 
-// TAG Bot/ButtonControl/Reload ----------
-/*
-disabled rule: "Bot/ButtonControl/Reload/StartButtonControl"
-Event.OngoingPlayer
-if(
-    IsDummyBot() &&
-    enableButtonControlState
-){
-    StartButtonControl(
-        [
-            Button.Reload,
-            ButtonBehaivor.ReleasePress,
-            5,
-            15,
-            0,
-            1
-        ]
-    );
-}
-*/
-
 // TAG Bot/ButtonControl/StopButtonControl ----------
 rule: "Bot/ButtonControl/StopButtonControl"
 Event.OngoingPlayer
 if(
+    isBotEnableTeam &&
     IsDummyBot() &&
     !enableButtonControlState
 ){
