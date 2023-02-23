@@ -52,37 +52,31 @@ if(
     }
 }
 
-// TAG Buddy ----------
-import "Lib/Buddy.del";
+// EnemyBot ----------
+define needEneymNum: 16;
+define enemyAssetList:
+    [
+        // random hero
+        [
+            [EnemyType.None,    Hero.Reinhardt, needEneymNum]
+        ]
+    ];
 
-rule: "Buddy/BuddyContorl"
+rule: "EnemyBot/EnemyBotControl"
 Event.OngoingGlobal
 if(
     initCompleted
 ){
-    define assetP! = [   // assetNo 0
-            "asset",
-            [EnemyType.None,    Hero.Ana,       1],
-            [EnemyType.None,    Hero.Mercy,     1],
+    Wait(5);
+    define asset! = RandomValueInArray(enemyAssetList);
+    CreateBotsByAssetWithMutexLock(asset, enemyTeam, needEneymNum);
 
-            [EnemyType.None,    Hero.Doomfist,  1],
-            [EnemyType.None,    Hero.Reinhardt, 1],
-            
-            [EnemyType.None,    Hero.Genji,     1],
-            [EnemyType.None,    Hero.Hanzo,     1],
-            [EnemyType.None,    Hero.Reaper,    1]
-        ];
-    CreateBotsByAsset(assetP, playerTeam, 24);
-
-    define assetE! = [   // assetNo 0
-            "asset",
-            [EnemyType.None,    Hero.Reinhardt, 99]
-        ];
-    CreateBotsByAsset(assetE, enemyTeam, 24);
+    while(true){
+        Wait(1, WaitBehavior.IgnoreCondition);
+        UpdateEnemySpawnPosition();
+    }
 }
 
-// Test Code -----------------------------------------------
-// EnemySpawnArround
 define makeSpawnPosDistMax: ActionRange_Far;
 define changeSpawnPosDist: makeSpawnPosDistMax / 3;
 define changeSpawnPosProb: 3;
@@ -92,19 +86,6 @@ globalvar define orbPos = 0;
 globalvar define calcCount;
 globalvar define initalHolDir;
 globalvar define changeDir;
-
-define getNewSpawnPosition()"getNewSpawnPosition"{
-    define pos! = BlockedPositon(
-        spawnPosRootPlayer,
-        DirectionFromAngles(
-            initalHolDir + (changeDir * calcCount),
-            RandomReal(30, -10),
-        ),
-        makeSpawnPosDistMax
-    );
-    pos += (DirectionTowards(pos, spawnPosRootPlayer) * 0.5);
-    return pos;
-}
 
 define maxCalcCount: 100;
 
@@ -119,8 +100,8 @@ void UpdateEnemySpawnPosition()"UpdateEnemySpawnPosition"{
         )
     ){
         calcCount = 0;
-        initalHolDir = RandomInteger(0, 360);
-        changeDir = RandomValueInArray([10, -10]);
+        initalHolDir = DirectionFromAngles(RandomReal(0, 360), 0);
+        changeDir = RandomValueInArray([-5, 5]);
 
         define posCand = getNewSpawnPosition();
         while(
@@ -163,7 +144,21 @@ void UpdateEnemySpawnPosition()"UpdateEnemySpawnPosition"{
     }
 }
 
-rule: "EnemySpawnArround/UpdateSpawnPosRootPlayer"
+define getNewSpawnPosition()"getNewSpawnPosition"{
+    define pos! = BlockedPositon(
+        spawnPosRootPlayer,
+        DirectionFromAngles(
+            initalHolDir + (changeDir * calcCount),
+            RandomReal(30, -10),
+        ),
+        makeSpawnPosDistMax
+    );
+    pos += (DirectionTowards(pos, spawnPosRootPlayer) * 0.5);
+    dbgPlyBemEft(pos, HostPlayer());
+    return pos;
+}
+
+rule: "EnemyBot/UpdateSpawnPosRootPlayer"
 Event.OngoingGlobal
 if(
     NumberOfLivingPlayers(playerTeam) > 0
@@ -177,22 +172,7 @@ if(
     }
 }
 
-rule: "EnemySpawnArround/Main"
-Event.OngoingGlobal
-if(
-    HasSpawned(spawnPosRootPlayer)
-){
-    // CreateBeamEffect(HostPlayer(),
-    //     BeamType.GoodBeam, spawnPosRootPlayer, spawnPos,
-    //     Color.Yellow, EffectRev.VisibleToPositionAndRadius);
-
-    while(true){
-        Wait(1, WaitBehavior.IgnoreCondition);
-        UpdateEnemySpawnPosition();
-    }
-}
-
-rule: "EnemySpawnArround/ChangePosByAbyssDead"
+rule: "EnemyBot/ChangePosByAbyssDead"
 Event.OnDeath
 if(
     TeamOf(ep) == enemyTeam &&
@@ -202,7 +182,7 @@ if(
     spawnPos = 0;
 }
 
-rule: "EnemySpawnArround/increaseEnemyBuff"
+rule: "EnemyBot/increaseEnemyBuff"
 Event.OngoingGlobal
 if(
     initCompleted
@@ -211,27 +191,32 @@ if(
     
     while(true){
         // SetStatus(AllPlayers(enemyTeam), null, Status.Unkillable, MaxValue());
-
+        define killProg = enemyKills / destEnemyKills;
         AllPlayers(enemyTeam).enableHealingMove = false;
         AllPlayers(enemyTeam).enableCheckAbyss = false;
-        SetSecondaryFireEnabled(AllPlayers(enemyTeam), false);
-        define killProg = enemyKills / destEnemyKills;
 
-        if(killProg >= 0.25){
+        if(killProg >= 0.2){
+            SetSecondaryFireEnabled(AllPlayers(enemyTeam), true);
+        }
+        else{
+            SetSecondaryFireEnabled(AllPlayers(enemyTeam), false);
+        }
+
+        if(killProg >= 0.4){
             SetAbility2Enabled(AllPlayers(enemyTeam), true);
         }
         else{
             SetAbility2Enabled(AllPlayers(enemyTeam), false);
         }
         
-        if(killProg >= 0.5){
+        if(killProg >= 0.6){
             SetAbility1Enabled(AllPlayers(enemyTeam), true);
         }
         else{
             SetAbility1Enabled(AllPlayers(enemyTeam), false);
         }
 
-        if(killProg >= 0.75){
+        if(killProg >= 0.8){
             SetUltimateAbilityEnabled(AllPlayers(enemyTeam), true);
         }
         else{
@@ -243,7 +228,7 @@ if(
     }
 }
 
-rule: "EnemySpawnArround/increaseEnemyBuff"
+rule: "EnemyBot/increaseEnemyBuff"
 Event.OnDeath
 if(
     TeamOf() == enemyTeam &&
@@ -253,40 +238,28 @@ if(
 }
 
 void applyEnemyStatus()"applyEnemyStatus"{
-    SetRespawnMaxTime(AllPlayers(enemyTeam),    10 -  (enemyKills * 0.02));
-    SetMoveSpeed(AllPlayers(enemyTeam),         25 +  (enemyKills * 0.30));    
-    SetMaxHealth(AllPlayers(enemyTeam),         25 +  (enemyKills * 0.05));
-    SetDamageDealt(AllPlayers(enemyTeam),       25 +  (enemyKills * 0.05));
+    SetRespawnMaxTime(AllPlayers(enemyTeam),    20 -  (enemyKills * 0.2));
+    SetMoveSpeed(AllPlayers(enemyTeam),         50 +  (enemyKills * 0.2));    
+    SetMaxHealth(AllPlayers(enemyTeam),         50 +  (enemyKills * 0.2));
+    SetDamageDealt(AllPlayers(enemyTeam),       50 +  (enemyKills * 0.2));
 }
 
-rule: "EnemySpawnArround/knockBack"
+rule: "EnemyBot/knockBack"
 Event.OnDamageTaken
 if(
     TeamOf() == enemyTeam &&
     Attacker() != ep
 ){
-    // if(Health() > 1){
-        ApplyImpulse(ep, 
-            VectorTowards(Attacker(), ep + Vector(0, 0.5, 0)),
-            EventDamage() * 1.0,
-            Relative.ToWorld, ContraryMotion.Cancel);
-    }
-    // else{
-    //     ApplyImpulse(ep, 
-    //         VectorTowards(Attacker(), ep + Vector(0, 0.5, 0)),
-    //         EventDamage() * 3.0,
-    //         Relative.ToWorld, ContraryMotion.Cancel);
-
-    //     ClearStatus(ep, Status.Unkillable);
-    //     Wait(0.2);
-    //     Kill(ep, Attacker());
-    //     SetStatus(ep, null, Status.Unkillable, MaxValue());
-    // }
+    ApplyImpulse(ep, 
+        VectorTowards(Attacker(), ep + Vector(0, 0.1, 0)),
+        EventDamage() * 1.0,
+        Relative.ToWorld, ContraryMotion.Cancel);
 }
 
 define preDelay: 3;
+define showMsgDelay: 7;
 
-rule: "EnemySpawnArround/playerRestand"
+rule: "EnemyBot/playerRestand"
 Event.OnDeath
 if(
     TeamOf() == playerTeam &&
@@ -300,25 +273,32 @@ if(
     if(DistanceBetween(ep, pos) >= 5){
         Teleport(ep, pos);
     }
-    Resurrect(ep);
-    SetStatus(ep, null, Status.PhasedOut, 5);
+    if(!isDisableRespawning){
+        Resurrect(ep);
+        SetStatus(ep, null, Status.PhasedOut, 5);
+    }
 }
 
-rule: "EnemySpawnArround/playerDefeat"
+globalvar define isDisableRespawning;
+
+rule: "EnemyBot/playerDefeat"
 Event.OnDeath
 if(    
     NumberOfLivingPlayers(playerTeam) <= 0
 ){
+    Wait(1, WaitBehavior.AbortWhenFalse);
+
+    isDisableRespawning = true;
     DisableRespawning(AllPlayers(playerTeam));
     Kill(AllPlayers(playerTeam), null);
 
     Wait(preDelay, WaitBehavior.IgnoreCondition);
     BigMessage(AllPlayers(playerTeam), "no survivor left...");
-    Wait(8, WaitBehavior.IgnoreCondition);
+    Wait(showMsgDelay, WaitBehavior.IgnoreCondition);
     DeclareTeamVictory(enemyTeam);
 }
 
-rule: "EnemySpawnArround/playerVictory"
+rule: "EnemyBot/playerVictory"
 Event.OngoingGlobal
 if(
     destEnemyKills <= enemyKills
@@ -328,176 +308,192 @@ if(
 
     Wait(preDelay, WaitBehavior.IgnoreCondition);
     BigMessage(AllPlayers(playerTeam), <"zombie <0> kills completed.", destEnemyKills>);
-    Wait(8, WaitBehavior.IgnoreCondition);
+    Wait(showMsgDelay, WaitBehavior.IgnoreCondition);
     DeclareTeamVictory(playerTeam);
 }
 
+// TAG Buddy ----------
+import "Lib/Buddy.del";
 
+define buddyAssetList:
+    [
+        // random hero
+        [   // assetNo 0 recommend
+            [EnemyType.None,    Hero.Mercy, 1],
+            [EnemyType.None,    Hero.Genji, 1],
+            [EnemyType.None,    Hero.Reinhardt, 1],
+            [EnemyType.None,    Hero.Kiriko, 1],
+            [EnemyType.None,    Hero.Hanzo, 1],
+            [EnemyType.None,    Hero.Zarya, 1],
+            [EnemyType.None,    Hero.Zenyatta, 1],
+            [EnemyType.None,    Hero.Soldier76, 1]
+        ],
+        [
+            // assetNo 1 random with fix role
+            [EnemyType.None,    RandomSupportHero, 1],
+            [EnemyType.None,    RandomTankHero, 1],
+            [EnemyType.None,    RandomDamageHero, 1],
+            [EnemyType.None,    RandomSupportHero, 1],
+            [EnemyType.None,    RandomTankHero, 1],
+            [EnemyType.None,    RandomDamageHero, 1],
+            [EnemyType.None,    RandomSupportHero, 1],
+            [EnemyType.None,    RandomDamageHero, 1]
+        ],
+        [
+            // assetNo 2 many hero
+            [EnemyType.None,    favSupport, 1],
+            [EnemyType.None,    favSupport, 1],
+            [EnemyType.None,    favDamage,  6]
+        ]
+    ];
 
-// Debug/Slow -----------------------------------------------
-globalvar define slow = DefaultPercentage();
+define buddyAssetLotteryList: [
+    0, 0, 0,
+    1, 1, 1,
+    2
+];
 
-rule: "Debug/Slow/setSlow"
-Event.OngoingPlayer
-Team.Team1
-if(
-    HostPlayer() == ep &&
-    IsButtonHeld(ep, Button.Interact) &&
-    IsButtonHeld(ep, Button.Jump)
-){
-    // 100 -> 50 -> 25 -> 10
-    if(slow == DefaultPercentage())
-        slow = 50;
-    else if(slow == 50)
-        slow = 25;
-    else if(slow == 25)
-        slow = 10;
-    else if(slow == 10)
-        slow = DefaultPercentage();
-    else
-        slow = DefaultPercentage();
-    SetSlowMotion(slow);
-    dbgMsg(<"setSlow <0>", slow>);
-}
+globalvar define isLockedCreateBotsByAsset = false;
 
-// Debug/TuneVal -----------------------------------------------
-define changeTimeInterval: 0.1;
-define initialTuneUnit : 0.01;
-globalvar define tuneVal = 0.1;
-globalvar define consecutiveChangeCount = 0;
-globalvar define tuneUnit = initialTuneUnit;
-
-rule: "showParam"
-Event.OngoingGlobal
-{
-    // DEBUG
-    if(false){
-        CreateEffect(
-            HostPlayer(), Effect.Orb, Color.Red,
-            orbPos, 1, EffectRev.PositionAndRadius);
-
-        CreateBeamEffect(HostPlayer(),
-            BeamType.BadBeam, spawnPosRootPlayer, orbPos, Color.Red,
-            EffectRev.PositionAndRadius);
-
-        CreateIcon(HostPlayer(), orbPos, Icon.Asterisk,
-            IconRev.VisibleToAndPosition, Color.Red, true);
+void CreateBotsByAssetWithMutexLock(define asset!, define team!, define addLimitNum!){ 
+    // can't implement as subroutin for mutex  
+    define forceReleaseCount = 0;
+    while(isLockedCreateBotsByAsset){
+        dbgHudTxt(<"isLockedCreateBotsByAsset <0>", team>);
+        if(forceReleaseCount < 5){
+            forceReleaseCount ++;
+        }
+        else{
+            break;
+        }
+        Wait(1, WaitBehavior.IgnoreCondition);
     }
-
-
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "tune Val", tuneVal>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "Server Load", ServerLoad()>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "enemy Kills", enemyKills>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);  
-
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "calc Count", calcCount>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);  
+    isLockedCreateBotsByAsset = true;
+    CreateBotsByAsset(asset, team, addLimitNum);
+    isLockedCreateBotsByAsset = false;
 }
 
-rule: "Debug/TuneVal/startIncreaseParam"
-Event.OngoingPlayer
+define playerNum:
+    CountOf(
+        FilteredArray(
+            AllPlayers(playerTeam),
+            !IsDummyBot(ae)
+        )
+    );
+
+define buddyNum:
+    CountOf(
+        FilteredArray(
+            AllPlayers(playerTeam),
+            IsDummyBot(ae)
+        )
+    );
+
+define needBuddyNum:
+    maxBuddyBotNum - playerNum;
+
+globalvar define maxBuddyBotNum! =
+    WorkshopSettingInteger("Follower AI Settings (Join as behalf when absent player)", "Max Fill AI Num", 8, 0, 8, 1);
+
+globalvar define buddyAssetNo!;
+
+rule: "Buddy/BuddyContorl"
+Event.OngoingGlobal
 if(
-    HostPlayer() &&
-    (
-        IsButtonHeld(ep, Button.Interact) &&
-        IsButtonHeld(ep, Button.Ability2)
-    )
+    initCompleted
 ){
-    tuneVal += tuneUnit;
-    Wait(changeTimeInterval, WaitBehavior.AbortWhenFalse);
-    changeTuneUnit();
+    define prevPlayerNum! = -1;
+    define prevAssetNo! = -1;
+    // set initial asset no
+    buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
+
+    while(true){
+        if(
+            // choiced AssetNo changed
+            prevAssetNo != buddyAssetNo ||
+            // not filed by need buddy number
+            buddyNum != needBuddyNum ||
+            // playerNum changed
+            prevPlayerNum != playerNum ||
+            // entity num than over slot num
+            playerNum + buddyNum > NumberOfSlots(playerTeam)
+        ){
+            // save prev value
+            prevPlayerNum = playerNum;
+            prevAssetNo = buddyAssetNo;
+            // get avg ult charge of bots
+            define ultCharge! = GetAvgUltChgOfDummyBot(playerTeam);
+            // reload buddy list
+            DestroyBots(playerTeam);
+            // create bots by addAsset
+            define asset! = buddyAssetList[buddyAssetNo];
+            CreateBotsByAssetWithMutexLock(asset, playerTeam, needBuddyNum);
+            // set avg ult charge of bots
+            SetAvgUltChgOfDummyBot(playerTeam, ultCharge);
+
+        }
+
+        // show human player outline
+        define players! = AllPlayers();
+        players[CountOf(players)] = HostPlayer();
+        StartForcingPlayerOutlines(
+            FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae)),
+            players,
+            true,
+            Color.Green,
+            OutlineType.Always
+        );
+
+        // set max respawn time
+        define respawnTime! = 10 * WorkshopSettingReal("Player Settings", "Max Respawn Time Scale", 1.0, 0, 100, 0);
+        SetRespawnMaxTime(AllPlayers(playerTeam), respawnTime);
+
+        // check timer
+        Wait(10, WaitBehavior.IgnoreCondition);
+    }
+}
+
+define assetChangeInterval: RandomInteger(180, 180);
+
+rule: "Buddy/changeBuddyAssetNo"
+Event.OngoingGlobal
+if(
+    initCompleted &&
+    IsGameInProgress()
+){
+    // force reload buddy list timer
+    Wait(assetChangeInterval, WaitBehavior.IgnoreCondition);
+    buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
     LoopIfConditionIsTrue();
 }
 
-rule: "Debug/TuneVal/stopIncreaseParam"
+rule: "Buddy/Teleport/init"
 Event.OngoingPlayer
 if(
-    HostPlayer() &&
-    !(
-        IsButtonHeld(ep, Button.Interact) &&
-        IsButtonHeld(ep, Button.Ability2)
-    )
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned()
 ){
-    resetTuneUnit();
+    // set bot option
+    watchUpdateRate = 2;
+
+    if(IsGameInProgress()){
+        // teleport to player near object
+        Teleport(ep, ClosestPlayerTo(CurrentObjectPosition(), playerTeam));
+    }
+    else{
+        // teleport to spawn point
+        Teleport(ep, SpawnPoints(playerTeam)[0]);
+    }
 }
 
-rule: "Debug/TuneVal/startDecreaseParam"
-Event.OngoingPlayer
+rule: "Buddy/fastRespawnBySucide"
+Event.OnDeath
 if(
-    HostPlayer() &&
-    (
-        IsButtonHeld(ep, Button.Interact) &&
-        IsButtonHeld(ep, Button.Ability1)
-    )
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    Attacker() == ep
 ){
-    tuneVal -= tuneUnit;
-    Wait(changeTimeInterval, WaitBehavior.AbortWhenFalse);
-    changeTuneUnit();
-    LoopIfConditionIsTrue();
+    Respawn();
 }
 
-rule: "Debug/TuneVal/stopDecreaseParam"
-Event.OngoingPlayer
-if(
-    HostPlayer() &&
-    !(
-        IsButtonHeld(ep, Button.Interact) &&
-        IsButtonHeld(ep, Button.Ability1)
-    )
-){
-    resetTuneUnit();
-}
-
-void resetTuneUnit(){
-    tuneUnit = initialTuneUnit;
-    consecutiveChangeCount= 0;
-}
-
-void changeTuneUnit(){
-    consecutiveChangeCount ++;
-    if(consecutiveChangeCount < 10)
-        tuneUnit =  initialTuneUnit * 1;
-    else if(consecutiveChangeCount < 20 )
-        tuneUnit = initialTuneUnit * 10;
-    else if(consecutiveChangeCount < 30 )
-        tuneUnit = initialTuneUnit * 100;
-    else
-        tuneUnit = initialTuneUnit * 1000;
-}
-
-rule: "Debug/TuneVal/debugTrigger"
-Event.OngoingPlayer
-if(
-    HostPlayer() &&
-    !(
-        IsButtonHeld(ep, Button.Interact) &&
-        IsButtonHeld(ep, Button.PrimaryFire)
-    )
-){
-    SetUltimateCharge(AllPlayers(enemyTeam), 100);
-    PressButton(AllPlayers(enemyTeam), Button.Ultimate);
-}
