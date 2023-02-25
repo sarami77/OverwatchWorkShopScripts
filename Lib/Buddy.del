@@ -2,7 +2,8 @@ import "Utility.del";
 import "Bot.del";
 
 // TAG Buddy ----------
-define followRange: 5.5;
+define followRangeMin: 4;
+define followRangeMax: Bot_ActionRange_Far;
 define followTryIntervalSecond: 0.5;
 define followTryCountMax: 6;
 define followHopEmpluseScale: 2.2;
@@ -92,13 +93,13 @@ if(
     while(followTryCount < followTryCountMax){
         // get distance to followTarget
         define dist! = DistanceBetween(ep, followTarget);
-        define hasLine1! = IsInLineOfSight(ep, followTarget);
-        // is in follow range
+        define hasLine! = IsInLineOfSight(ep, followTarget);
+        // is in follow range min and has line
         if(
             // near followTarget
-            dist <= followRange &&
+            dist <= followRangeMin &&
             // has line followTarget
-            hasLine1
+            hasLine
         ){
             // stop following
             // reset walk fast
@@ -109,19 +110,18 @@ if(
             // exit loop
             break;           
         }
-        // is out follow range
+        // is in follow range max
         else if(
-            dist < followRange * 8
+            dist < followRangeMax
         ){
             // start following
             // set walk fast by dist
-            SetMoveSpeed(ep, DefaultPercentage() + (dist * 15));
+            SetMoveSpeed(ep, DefaultPercentage() + (dist * 10));
             // walk to followTarget
             StartFacing(
                 ep, DirectionTowards(EyePosition(), followTarget),
                 300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
             // start follow
-            define hasLine = IsInLineOfSight(ep, followTarget);
             moveDirFB = hasLine ?
                 Forward() :
                 RandomValueInArray([Forward(), Forward(), Forward(), Backward()]);
@@ -141,7 +141,7 @@ if(
             // count up try count
             followTryCount ++;
         }
-        // is more out follow range
+        // is out follow range max
         else{
             // follow by teleport
             // need teleport
@@ -161,7 +161,7 @@ if(
         StopMove();
         // teleport to range edge
         Teleport(ep,
-            BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRange)
+            BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRangeMin)
         );
     }
 

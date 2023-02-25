@@ -217,11 +217,8 @@ Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     IsDummyBot() &&
-    HasSpawned()
+    IsInSpawnRoom()
 ){
-    // set bot option
-    watchUpdateRate = 2;
-
     if(IsGameInProgress()){
         // teleport to player near object
         Teleport(ep, ClosestPlayerTo(CurrentObjectPosition(), playerTeam));
@@ -486,6 +483,7 @@ rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
+    IsDummyBot() &&
     HasSpawned() &&
     enemyType != EnemyType.None
 ){
@@ -649,9 +647,7 @@ Player ClosestPlayerFromObject()"ClosestPlayerFromObject"{
             FilteredArray(
                 AllPlayers(playerTeam),
                 (
-                    HasSpawned(ae) &&
                     IsAlive(ae)
-                    // !IsInSpawnRoom(ae)
                 )
             ),
             DistanceBetween(ae, CurrentObjectPosition())
@@ -723,7 +719,7 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
 }
 
 globalvar define additinalTeleportAreaSize;
-define teleportAreaSizeOffset: 30;
+define teleportAreaSizeOffset: Bot_ActionRange_Far;
 define OnCurrentObjectPosition(): CurrentObjectPosition() + Vector(0, 5, 0); // not collision in payload object position
 
 Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
@@ -936,7 +932,7 @@ if(
         if(
             actionState != ActionState.Non &&        // in combat
             (
-                DistanceBetween(ep, CurrentObjectPosition()) <= 30 ||   // near object
+                DistanceBetween(ep, CurrentObjectPosition()) <= Bot_ActionRange_Far ||   // near object
                 !IsPlayerOnObject                                       // player not on object
             )
         ){
@@ -1114,7 +1110,7 @@ rule: "EnemyBot/chargeUltimate"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    HasSpawned() &&
+    IsDummyBot() &&
     enemyType != EnemyType.None &&
     !IsUsingUltimate()
 ){
@@ -1370,15 +1366,6 @@ if(
     Wait(0.3, WaitBehavior.AbortWhenFalse);   // show slow
     SetSlowMotion(DefaultPercentage());
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
-
-    define scList! = AllPlayers(enemyTeam);
-    define scDelay! = RandomReal(0, 1);
-    for(define scLoopIndex! = 0; scLoopIndex < CountOf(scList); scLoopIndex ++){
-        SetUltimateCharge(scList[scLoopIndex], DefaultPercentage());
-        PressButton(scList[scLoopIndex], Button.Ultimate);
-        Wait(scDelay, WaitBehavior.AbortWhenFalse);
-    }
-
 }
 
 // TAG Debug ----------
