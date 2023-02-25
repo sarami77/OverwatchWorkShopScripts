@@ -18,12 +18,11 @@ enum BotAsset{
 // TAG EnemyType ----------
 playervar define enemyType;
 enum EnemyType{
-    None = 0,
-    Minion = 1,
-    Elite = 2,
-    General = 3,
-    Boss = 4,
-    Zombie = 8
+    None,
+    Minion,
+    Elite,
+    General,
+    Boss
 }
 
 // TAG BotAsset ----------
@@ -1345,25 +1344,6 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
                 }
             }
         }
-        // WreckingBall
-        else if(HeroOf() == Hero.WreckingBall){
-            // jump for pile driver
-            if(
-                AbilityCooldown(ep, Button.Crouch) <= 0 &&
-                IsButtonHeld(ep, Button.Crouch)
-            ){
-                ApplyImpulse(ep, Up(),
-                    10, Relative.ToWorld, ContraryMotion.Cancel);
-            }
-            // accsell for ball tackle
-            while(IsFiringSecondary(ep)){
-                // for ball charge
-                define boostDir! = RandomValueInArray([Right(), Right(), Left(), Left(), Forward(), Backward()]);
-                ApplyImpulse(ep, boostDir,
-                    30, Relative.ToWorld, ContraryMotion.Cancel);
-                Wait(0.5, WaitBehavior.AbortWhenFalse);
-            }
-        }
     }
 }
 
@@ -1373,7 +1353,7 @@ define AbortIfNotDepEcho()"AbortIfNotDepEcho"{
     }
 }
 
-rule: "Bot/HeroUniqueAction/positionMoveUltmate"
+rule: "Bot/HeroUniqueAction/ultmate"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
@@ -1382,14 +1362,28 @@ if(
 ){
     AbortIfNotDepEcho();
 
+    define isPositionAimUltmate;
     define isPositionMoveUltmate!;
     define waitForStartMove!;
     define moveSpeed!;
     define attackCount!;
-    define multiPosAttack!;
+    define multiPosAttack!;   
 
-    // postion move hero
+    // postion aim hero
     if(
+        HeroOf() == Hero.Baptiste ||
+        HeroBeingDuplicated() == Hero.Baptiste
+    ){
+        isPositionAimUltmate = true;
+    }
+    else if(
+        HeroOf() == Hero.Symmetra ||
+        HeroBeingDuplicated() == Hero.Symmetra
+    ){
+        isPositionAimUltmate = true;
+    }
+    // postion move hero
+    else if(
         HeroOf() == Hero.Doomfist ||
         HeroBeingDuplicated() == Hero.Doomfist
     ){
@@ -1419,8 +1413,24 @@ if(
         attackCount = 1;
         multiPosAttack = false;
     }
-
-    if(isPositionMoveUltmate){
+    
+    // is postion aim ultmate
+    if(isPositionAimUltmate){
+        StopHoldingButton(ep, Button.PrimaryFire);
+        StopHoldingButton(ep, Button.SecondaryFire);
+        for(define tryCount!; tryCount < 6; tryCount++){
+            FacingTargetBetweenPosition(0.5, target);
+            Wait(0.2, WaitBehavior.IgnoreCondition);
+            PressButton(ep, Button.PrimaryFire);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+            if(IsUsingUltimate()){
+                break;
+            }
+        }
+        StartFacingTarget();
+    }
+    // is postion move ultmate
+    else if(isPositionMoveUltmate){
         // stop current moving input
         StopMove();
         StopHoldingButton(ep, Button.PrimaryFire);
@@ -1452,57 +1462,7 @@ if(
     }
 }
 
-rule: "Bot/HeroUniqueAction/positionAimUltmate"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    UltimateChargePercent() >= DefaultPercentage() &&
-    IsButtonHeld(ep, Button.Ultimate)
-){
-    AbortIfNotDepEcho();
-
-    define isPositionAimUltmate!;
-    define isRotateProb!;
-    
-    // postion aim hero
-    if(
-        HeroOf() == Hero.Baptiste ||
-        HeroBeingDuplicated() == Hero.Baptiste
-    ){
-        isPositionAimUltmate = true;
-        isRotateProb = 10;
-    }
-    else if(
-        HeroOf() == Hero.Symmetra ||
-        HeroBeingDuplicated() == Hero.Symmetra
-    ){
-        isPositionAimUltmate = true;
-        isRotateProb = 50;
-    }
-
-    if(isPositionAimUltmate){
-        StopHoldingButton(ep, Button.PrimaryFire);
-        StopHoldingButton(ep, Button.SecondaryFire);
-        for(define tryCount!; tryCount < 6; tryCount++){
-            FacingTargetBetweenPosition(0.5, target);
-            Wait(0.5, WaitBehavior.IgnoreCondition);
-
-            if(ProbabilityTrue(isRotateProb)){
-                PressButton(ep, Button.Ultimate);    
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-            }
-
-            PressButton(ep, Button.PrimaryFire);
-            if(IsUsingUltimate()){
-                break;
-            }
-        }
-        StartFacingTarget();
-    }
-}
-
-rule: "Bot/HeroUniqueAction/positionAimSecondary"
+rule: "Bot/HeroUniqueAction/secondary"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
@@ -1510,29 +1470,26 @@ if(
     AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
     IsButtonHeld(ep, Button.SecondaryFire)
 ){
+    AbortIf(IsUsingUltimate());
     AbortIfNotDepEcho();
 
-    define isPositionAimSecondary!;
+    define isPositionAimSecondary;
 
     if(
         HeroOf() == Hero.Ramattra ||
         HeroBeingDuplicated() == Hero.Ramattra
     ){
-        if(
-            !IsUsingAbility1() &&
-            !IsUsingUltimate()
-        ){
-            isPositionAimSecondary = true;
-        }        
+        isPositionAimSecondary = true;
     }
 
     if(isPositionAimSecondary){
         StopHoldingButton(ep, Button.PrimaryFire);
+        StopHoldingButton(ep, Button.SecondaryFire);
         for(define tryCount!; tryCount < 6; tryCount++){
-            FacingTargetBetweenPosition(0.25, target);
-            Wait(0.5, WaitBehavior.IgnoreCondition);
-            
+            FacingTargetBetweenPosition(0.3, target);
+            Wait(0.2, WaitBehavior.IgnoreCondition);
             PressButton(ep, Button.SecondaryFire);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
             if(IsFiringSecondary()){
                 break;
             }

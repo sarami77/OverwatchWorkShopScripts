@@ -29,6 +29,8 @@ Event.OngoingGlobal
     // Start watch over load
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 
+    botEnableTeams= [Team.Team2];
+
     // show version and share code
     CreateHudText(AllPlayers(),
         null, "ENEMY RUSH -HORDE PVE [ver.3.0] Share code [V7PEF]", null,
@@ -98,6 +100,7 @@ define buddyAssetLotteryList: [
 ];
 
 globalvar define isLockedCreateBotsByAsset = false;
+
 
 void CreateBotsByAssetWithMutexLock(define asset!, define team!, define addLimitNum!){ 
     // can't implement as subroutin for mutex  
@@ -286,63 +289,73 @@ if(
 // TAG EnemyBot ----------
 globalvar define someHero!;
 
+define rva(define array): RandomValueInArray(array);
+
+define favDamage: RandomDamageHero;
+    // rva([Hero.Reaper, Hero.Genji, Hero.Soldier76, Hero.Bastion, Hero.Tracer, Hero.Pharah, Hero.Echo, Hero.Hanzo, Hero.Widowmaker]);
+
+define favTank: RandomTankHero;
+    // rva([Hero.Reinhardt, Hero.Roadhog, Hero.Sigma, Hero.Doomfist, Hero.Orisa, Hero.Zarya, Hero.Ramattra]);
+
+define favSupport: rva([Hero.Mercy, Hero.Ana, Hero.Baptiste, Hero.Moira]);
+
 define enemyBotAssetList:
     [
         // random hero
         [   // assetNo 0
-            // basic
+            "basic",
             [EnemyType.General,     RandomHero,         1],
             [EnemyType.Elite,       RandomHero,         5],
             [EnemyType.Minion,      RandomHero,         10]
         ],
         [   // assetNo 1
-            // General and minions
+            "General and minions",
             [EnemyType.General,     RandomHero,         1],
             [EnemyType.Minion,      RandomHero,         15]
         ],
         [   // assetNo 2
-            // all elites
+            "all elites",
             [EnemyType.Elite,       RandomHero,         5],
             [EnemyType.Elite,       RandomHero,         5],
             [EnemyType.Elite,       RandomHero,         6]
         ],
         [   // assetNo 3
-            // double General
+            "double General",
             [EnemyType.General,     RandomHero,         1],
             [EnemyType.General,     RandomHero,         1],
             [EnemyType.Minion,      RandomHero,         14]
         ],
         [   // assetNo 4
-            // the boss
+            "the boss",
             [EnemyType.Boss,        favDamage,          1],
-            [EnemyType.Minion,      RandomHero,         11]
+            [EnemyType.Minion,      RandomHero,         10]
         ],
         [   // assetNo 5
-            // minion horde
+            "minion horde",
             [EnemyType.Minion,      rva([favDamage, favTank]),   16]
         ],
         [   // assetNo 6
-            // the boss
+            "the boss",
             [EnemyType.Boss,        favDamage,          1],
-            [EnemyType.Minion,      RandomHero,         11]
+            [EnemyType.Minion,      RandomHero,         10]
         ],
         [   // assetNo 7
-            // the boss with elite
+            "the boss with elite",
             [EnemyType.Boss,        favDamage,          1],
             [EnemyType.Elite,       RandomHero,         5],
             [EnemyType.Minion,      RandomHero,         10]
         ],
         [   // assetNo 8
-            // finale
+            "finale",
             [EnemyType.Boss,        favTank,            1],
-            [EnemyType.Elite,       RandomHero,         5],
+            [EnemyType.Elite,       RandomHero,          5],
             [EnemyType.Minion,      RandomHero,         10]
         ],
         [   // assetNo 9
-            // test
-            [EnemyType.Boss,        Hero.Widowmaker,    1],
-            [EnemyType.Elite,       Hero.Soldier76,     5],
-            [EnemyType.Minion,      Hero.Soldier76,     10]
+            "test",
+            [EnemyType.Boss,        Hero.Widowmaker,            1],
+            [EnemyType.Elite,       Hero.Soldier76,          5],
+            [EnemyType.Minion,      Hero.Soldier76,         10]
         ]
     ];
 
@@ -392,7 +405,7 @@ if(
     someHero = RandomHero;
     PlayEffectsToTeam(enemyTeam);
     DestroyBots(enemyTeam);
-    define asset! = enemyBotAssetList[RandomValueInArray(enemyBotAssetLotteryList)];
+    define asset! = enemyBotAssetList[RandomValueInArray([enemyBotAssetLotteryList])];
     CreateBotsByAssetWithMutexLock(asset, enemyTeam, maxEnemyBotNum);
     // set next timer
     reloadEnemyAssetTimer = assetChangeInterval;
@@ -966,14 +979,9 @@ if(
 // TAG EnemyBot/EnemyAbility ----------
 globalvar define enemyAbilityStatus;
 
-define EnemyAbilityInterval(define baseInterval) globalvar "enemyAbilityInterval"{
-    define intarval = 
-        baseInterval +
-        baseInterval * (1 - (TotalObjectProgress() / DefaultPercentage())) +
-        RandomInteger(-(baseInterval / 2), (baseInterval / 2));
-    intarval = intarval < 0 ? 0 : intarval;
-    return intarval;
-}
+define enemyAbilityInterval: 
+        30 +
+        30 * (1 - (TotalObjectProgress() / DefaultPercentage()));
 
 rule: "EnemyBot/EnemyAbility/rush"
 Event.OngoingGlobal
@@ -982,7 +990,7 @@ if(
 ){
     enemyAbilityStatus[0] = false;
 
-    define interval! = EnemyAbilityInterval(20);
+    define interval! = enemyAbilityInterval;
     interval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Interval Scale", 1.0, 0, 100, 3);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
@@ -1004,7 +1012,7 @@ if(
 ){
     enemyAbilityStatus[1] = false;
 
-    define interval! = EnemyAbilityInterval(30);
+    define interval! = enemyAbilityInterval;
     interval *= WorkshopSettingReal("Enemy Bot Settings", "Shot Call Interval Scale", 1.0, 0, 100, 4);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
@@ -1035,7 +1043,7 @@ if(
     IsAlive() &&
     actionState != ActionState.Non
 ){
-    define interval! = EnemyAbilityInterval(10);
+    define interval! = NormalizedHealth() * 10 + RandomInteger(1, 5);
     interval *= WorkshopSettingReal("Enemy Bot Settings", "(General & Boss) Combat Teleport Interval Scale", 1.0, 0, 100, 5);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
@@ -1505,8 +1513,8 @@ if(
     someHero = RandomHero;
     PlayEffectsToTeam(enemyTeam);
     DestroyBots(enemyTeam);
-    define asset! = enemyBotAssetList[RandomValueInArray(enemyBotAssetLotteryList)];
-    isLockedCreateBotsByAsset = false;  // force release lock
+    isLockedCreateBotsByAsset = false;
+    define asset! = enemyBotAssetList[RandomValueInArray([enemyBotAssetLotteryList])];
     CreateBotsByAssetWithMutexLock(asset, enemyTeam, maxEnemyBotNum);
     // set next timer
     reloadEnemyAssetTimer = assetChangeInterval;
