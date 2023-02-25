@@ -5,9 +5,6 @@ globalvar define botEnableTeams! = [Team.Team1, Team.Team2];
 // define isBotEnableTeam: IsTrueForAny(botEnableTeams, TeamOf(ep) == ae);
 define isBotEnableTeam: true;
 
-// TAG public property
-globalvar define botAimScat = WorkshopSettingReal("Enemy Bot Settings", "Aim Scattering (0 is head shot)",              0.15, 0, 1000, 3);
-
 // TAG Bot/Spawn ----------
 enum BotAsset{
     EnemyType,
@@ -136,8 +133,8 @@ Number getEmptySlotNo(define team!)"getEmptySlotNo"{
 }
 
 // TAG Bot/SetBotInfo ----------
-
 playervar define heroName;
+playervar define aimScatter;
 playervar define supportPrioloty;
 playervar define supportButtons;
 playervar define attackButtons;
@@ -232,6 +229,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMax = Bot_ActionRange_Melee;
         Abort();
     }
+    // basic
+    aimScatter = 0.5;
 
     actionRangeMin = Bot_ActionRange_Melee;
     actionRangeMax = Bot_ActionRange_Melee;
@@ -298,9 +297,11 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
     switch(hero){
         case Hero.Ana:
         heroName = "Ana";
+        aimScatter = 0.3;
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
         canFireButtonCombination = true;
+        primaryFireButtonPressMax = 5;
         secondaryFireButtonPressMin = 20;
         secondaryFireButtonPressMax = 40;
         supportPrioloty = 1;
@@ -313,12 +314,13 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
         case Hero.Ashe:
         heroName = "Ashe";
+        aimScatter = 0.1;
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
         canFireButtonCombination = true;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleaseRepeat;
-        secondaryFireButtonPressMin = 30;
-        secondaryFireButtonPressMax = 60;
+        secondaryFireButtonPressMin = 20;
+        secondaryFireButtonPressMax = 40;
         break;
 
         case Hero.Baptiste:
@@ -406,6 +408,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
         case Hero.Hanzo:
         heroName = "Hanzo";
+        aimScatter = 0.1;
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
         primaryFireButtonReleaseMax = 1;
@@ -595,6 +598,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
         case Hero.Widowmaker:
         heroName = "Widowmaker";
+        aimScatter = 0.1;
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
         canFireButtonCombination = true;
@@ -602,10 +606,10 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         primaryFireButtonReleaseMax = 1.1;
         primaryFireButtonPressMin = 0;
         primaryFireButtonPressMax = 1;
-        secondaryFireButtonPressMin = 30;
-        secondaryFireButtonPressMax = 60;
-        ability1ButtonReleaseMax = 30;
-        ability2ButtonReleaseMax = 30;
+        secondaryFireButtonPressMin = 20;
+        secondaryFireButtonPressMax = 40;
+        ability1ButtonReleaseMax = 10;
+        ability2ButtonReleaseMax = 20;
         jumpButtonReleaseMax = 30;
         break;
 
@@ -621,11 +625,12 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMin = Bot_ActionRange_Melee;
         actionRangeMax = Bot_ActionRange_Middle;
         primaryFireButtonReleaseMax = 15;
-        primaryFireButtonPressMax = 20;
-        secondaryFireButtonPressMin = 6;
-        secondaryFireButtonPressMax = 15;
-        ability1ButtonReleaseMin = 5;
-        ability1ButtonReleaseMax = 10;
+        secondaryFireButtonReleaseMin = 1;
+        secondaryFireButtonReleaseMax = 1;
+        secondaryFireButtonPressMin = 1;
+        secondaryFireButtonPressMax = 8;
+        ability1ButtonReleaseMax = 20;
+        crouchButtonPressMax = 2;
         break;
 
         case Hero.Zarya:
@@ -708,7 +713,7 @@ enum ButtonBehaivor{
 }
 
 // TAG Bot/ActionState/StateControl ----------
-playervar define watchUpdateRate = 1;
+playervar define watchUpdateRate = 2;
 playervar define actionState;
 playervar define target;
 
@@ -813,16 +818,17 @@ if(
             ){
                 tryGetTarget = true;
             }
-            // change target dependent on support target health
+            // change target dependent on supportPrioloty or support target health
             else if(
-                ProbabilityTrue(100 * NormalizedHealth(target))
+                ProbabilityTrue(100 * (1 - supportPrioloty)) ||
+                ProbabilityTrue(100 * NormalizedHealth(target))                
             ){
                 tryGetTarget = true;
             }
         }
         // is not support role hero
         else{
-            // change target dependent on attack target helth & attack prob
+            // change target dependent on attack target health
             if(
                 ProbabilityTrue(50 * NormalizedHealth(target))
             ){
@@ -832,7 +838,7 @@ if(
 
         // get new target
         if(tryGetTarget){
-            // is support role hero
+            // by supportPrioloty
             if(ProbabilityTrue(100 * supportPrioloty))
             {
                 // find support target
@@ -1185,14 +1191,15 @@ void StopMove()"StopMove"{
 } 
 
 define aimingPosition:
-    IsInAlternateForm(target) ?
+    (
+        IsInAlternateForm(target) ?
         EyePosition(target) - Vector(0, 0.6, 0)     // body position
-    :
+            :
         EyePosition(target) + Vector(0, 0.2, 0)     // head position
-            +
-    RandomPosition(botAimScat, botAimScat, botAimScat)  // aim scattet
-            +
-    Vector(0, -(botAimScat / 2), 0);    // vertical offset
+    ) +
+    RandomPosition(aimScatter, aimScatter, aimScatter)  // aim scatter
+        +
+    Vector(0, -(aimScatter / 2), 0);    // vertical offset
 
 void StartFacingTarget()"StartFacingTarget"{
     if(
@@ -1290,6 +1297,8 @@ if(
 define MercyStaff: 1;
 define MercyPistol: 2;
 
+playervar define isRepeatReloading!;
+
 void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
     // common action
     // melee
@@ -1318,26 +1327,37 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
     }
 
     // hero unique action
+    // ashe
+    if(HeroOf() == Hero.Ashe){
+        if(IsReloading()){
+            isRepeatReloading = true;
+            define isUsingSecondaryFire! = IsButtonHeld(ep, Button.SecondaryFire);
+
+            // reload by empty ammo count
+            while(
+                IsAlive() &&
+                MaxAmmo(ep, 0) > Ammo(ep, 0)                
+            ){
+                StopHoldingButton(ep, Button.PrimaryFire);
+                StopHoldingButton(ep, Button.SecondaryFire);
+                Wait(0.25, WaitBehavior.IgnoreCondition);    // wait stop repeat fire
+                PressButton(ep, Button.Reload);  
+            }
+
+            if(
+                IsAlive() &&
+                isUsingSecondaryFire
+            ){
+                StartHoldingButton(ep, Button.SecondaryFire);
+            }
+            isRepeatReloading = false;
+        }
+    }
     else if(
         actionState != ActionState.Non
     ){
-        // ashe
-        if(HeroOf() == Hero.Ashe){
-            // reduce fire when reloading
-            if(
-                Ammo(ep, 0) <= MaxAmmo(ep, 0) / 2 ||
-                IsReloading()
-            ){
-                    StopHoldingButton(ep, Button.PrimaryFire);
-                    StopHoldingButton(ep, Button.SecondaryFire);
-                    StopHoldingButton(ep, Button.Ability1);
-                    StopHoldingButton(ep, Button.Ability2);
-                    Wait(0.1, WaitBehavior.AbortWhenFalse);
-                    PressButton(ep, Button.Reload);
-            }
-        }
         // Mercy
-        else if(HeroOf() == Hero.Mercy){
+        if(HeroOf() == Hero.Mercy){
             // change weapon
             if(actionState == ActionState.Attack){
                 SetWeapon(ep, MercyPistol);
@@ -1371,14 +1391,6 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
             ){
                 ApplyImpulse(ep, Up(),
                     10, Relative.ToWorld, ContraryMotion.Cancel);
-            }
-            // accsell for ball tackle
-            while(IsFiringSecondary(ep)){
-                // for ball charge
-                define boostDir! = RandomValueInArray([Right(), Right(), Left(), Left(), Forward(), Backward()]);
-                ApplyImpulse(ep, boostDir,
-                    30, Relative.ToWorld, ContraryMotion.Cancel);
-                Wait(0.5, WaitBehavior.AbortWhenFalse);
             }
         }
     }
@@ -1558,6 +1570,64 @@ if(
     }
 }
 
+rule: "Bot/HeroUniqueAction/positionFixSecondary"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    IsFiringSecondary()
+){
+    AbortIfNotDepEcho();
+
+    define isPositionFixSecondary!;
+
+    if(
+        HeroOf() == Hero.WreckingBall ||
+        HeroBeingDuplicated() == Hero.WreckingBall
+    ){
+        if(IsFiringSecondary()){
+            isPositionFixSecondary = true;       
+        }
+    }
+
+    if(isPositionFixSecondary){
+        // accsell for ball tackle
+        StopHoldingButton(ep, Button.PrimaryFire);
+        define moveDir!;
+        while(IsFiringSecondary()){
+            if(ProbabilityTrue(80)){
+                moveDir = VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf()));
+            }
+            else{
+                moveDir = RandomValueInArray([
+                    Forward(),
+                    Backward(),
+                    Right(),
+                    Left(),
+                    Up(), Up(),
+                    Down()
+                ]);
+            }
+            // for ball charge
+            ApplyImpulse(ep, 
+                VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf())),
+                30, Relative.ToWorld, ContraryMotion.Incorporate);
+            Wait(RandomReal(0.5, 1.0), WaitBehavior.IgnoreCondition);
+        }
+
+        for(define tryCount! = 8; tryCount > 0; tryCount --){
+            if(!IsInAlternateForm()){
+                break;
+            }
+            ApplyImpulse(ep, 
+                moveDir,
+                30, Relative.ToWorld, ContraryMotion.Incorporate);
+            Wait(0.25, WaitBehavior.IgnoreCondition);
+        }
+    }
+}
+
+
 // TAG Bot/ButtonControl ----------
 enum ButtonControl{
     button,
@@ -1568,7 +1638,7 @@ enum ButtonControl{
     pressMax
 }
 
-playervar define isRepeaFiring;
+playervar define isRepeatFiring;
 playervar define repeatDuring;
 
 
@@ -1683,11 +1753,15 @@ void StartButtonControl(define bc){
                         bc[ButtonControl.pressMin],
                         bc[ButtonControl.pressMax]
                     ) * buttonControlPressScale;
-                isRepeaFiring = true;
+                isRepeatFiring = true;
 
-                while(isRepeaFiring){
-                    PressButton(ep, bc[ButtonControl.button]);
-                    Wait(0.2, WaitBehavior.AbortWhenFalse);
+                while(
+                    isRepeatFiring                    
+                ){
+                    if(!isRepeatReloading){
+                        PressButton(ep, bc[ButtonControl.button]);
+                    }
+                    Wait(0.25, WaitBehavior.AbortWhenFalse);
                 }
 
                 PressFirstButtonWhenIdle();
@@ -1702,10 +1776,10 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isRepeaFiring
+    isRepeatFiring
 ){
     Wait(repeatDuring, WaitBehavior.AbortWhenFalse);
-    isRepeaFiring = false;
+    isRepeatFiring = false;
 }
 
 void PressFirstButtonWhenIdle()"PressFirstButtonWhenIdle"{
