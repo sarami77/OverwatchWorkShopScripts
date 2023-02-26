@@ -1,8 +1,7 @@
 import "Test.setting.json";
 import "Lib/Debug.del";
 import "Lib/Utility.del";
-// import "Lib/Regeneration.del";
-// import "Lib/Revive.del";
+import "Lib/Bot.del";
 
 // Builtin -----------------------------------------------
 globalvar define playerTeam;
@@ -16,9 +15,7 @@ if(
 ){
     Wait(5);
 
-    // reviveEnableTeams = [Team.Team1];
-
-    SetMatchTime(900);
+    tuneVal = 2.0;
 
     while(true){
         if(TeamOf(HostPlayer()) == Team.Team1){
@@ -30,23 +27,29 @@ if(
             enemyTeam = Team.Team1;
         }
         else{
-            playerTeam = Team.Team2;
-            enemyTeam = Team.Team1;    
+            playerTeam = Team.Team1;
+            enemyTeam = Team.Team2;    
         }
 
         initCompleted = true;
 
-        // SetRespawnMaxTime(AllPlayers(), 10);
+        Wait(3, WaitBehavior.IgnoreCondition);
+
+        Heal(AllPlayers(), null, MaxValue());
+        SetMaxHealth(AllPlayers(), 1000);
+
+        SetPrimaryFireEnabled(AllPlayers(), false);
+
+        // SetRespawnMaxTime(AllPlayers(), 3);
+        SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
+        SetStatus(AllPlayers(enemyTeam), null, Status.Rooted, MaxValue());
+
         // SetUltimateCharge(AllPlayers(), 100);
-        SetDamageDealt(AllPlayers(playerTeam), 300);
-        // SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
-        Wait(5, WaitBehavior.IgnoreCondition);
+        // SetDamageDealt(AllPlayers(playerTeam), 300);
     }
 }
 
 // TAG Buddy ----------
-import "Lib/Bot.del";
-
 define playerRespawnTime: 15;
 
 rule: "Buddy/BuddyContorl"
@@ -56,24 +59,47 @@ if(
 ){
     DisableInspectorRecording();
 
-    define assetP! = [
-            // [EnemyType.None,    Hero.Symmetra, 4]
-            // [EnemyType.None,    Hero.Baptiste, 1],
-            [EnemyType.None,    Hero.Soldier76, 1]
-        ];
-    CreateBotsByAsset(assetP, playerTeam, 24);
-
     define assetE! = [
             // [EnemyType.None,    Hero.Symmetra, 4]
             // [EnemyType.None,    Hero.Baptiste, 1],
-            [EnemyType.Zombie,    Hero.Reinhardt, 99]
+            [EnemyType.None,    Hero.Reinhardt, 1]
+            // [EnemyType.None,    Hero.Widowmaker, 1],
+            // [EnemyType.None,    Hero.Reaper, 1],
+            // [EnemyType.None,    Hero.Ashe, 1],
+            // [EnemyType.None,    Hero.Ana, 1],
+            // [EnemyType.None,    Hero.Baptiste, 1]
         ];
     CreateBotsByAsset(assetE, enemyTeam, 24);
+
+    define assetP! = [
+            // [EnemyType.None,    Hero.Symmetra, 4]
+            // [EnemyType.None,    Hero.Baptiste, 1],
+            [EnemyType.None,    Hero.WreckingBall, 0]
+            // [EnemyType.None,    Hero.Bastion, 1],
+            // [EnemyType.None,    Hero.Soldier76, 1],
+            // [EnemyType.None,    Hero.Hanzo, 1],
+            // [EnemyType.None,    Hero.Zenyatta, 1],
+            // [EnemyType.None,    Hero.Brigitte, 1]
+        ];
+    CreateBotsByAsset(assetP, playerTeam, 24);
+
+
 }
 
 // Test Code -----------------------------------------------
+rule: "debug"
+Event.OngoingPlayer
+if(
+    ep == HostPlayer() &&
+    IsButtonHeld(ep, Button.Melee)
+){
 
+    define _target! = FirstOf(AllPlayers(enemyTeam));
+    define dest! = AimingPositionIgnorePlayer();
+    FlightTo(_target, AimingPosition(), Color.Purple);
 
+    LoopIfConditionIsTrue();
+}
 
 // Debug/Slow -----------------------------------------------
 globalvar define slow = DefaultPercentage();
@@ -108,24 +134,20 @@ globalvar define tuneVal = 0.1;
 globalvar define consecutiveChangeCount = 0;
 globalvar define tuneUnit = initialTuneUnit;
 
+// TAG Debug ----------
+globalvar define debugHuds!;
+
+define Last():
+    CountOf(debugHuds);
+
+
 rule: "showParam"
 Event.OngoingGlobal
 {
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "tune Val", tuneVal>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
-
-    CreateHudText(HostPlayer(),
-        null,
-        <"<0> <1>", "Server Load", ServerLoad()>,
-        null,
-        Location.Left, -1,
-        Color.White, Color.Orange, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.VisibleNever);
+    debugHuds[Last()] = CreateDebugHud("tune Val", tuneVal, Color.Orange);
+    debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Red);
+    debugHuds[Last()] = CreateDebugHud("player team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, Color.Team1);
+    debugHuds[Last()] = CreateDebugHud("enemy team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team2);
 }
 
 rule: "Debug/TuneVal/startIncreaseParam"
@@ -197,17 +219,4 @@ void changeTuneUnit(){
         tuneUnit = initialTuneUnit * 100;
     else
         tuneUnit = initialTuneUnit * 1000;
-}
-
-rule: "Debug/TuneVal/debugTrigger"
-Event.OngoingPlayer
-if(
-    HostPlayer() &&
-    !(
-        IsButtonHeld(ep, Button.Interact) &&
-        IsButtonHeld(ep, Button.PrimaryFire)
-    )
-){
-    SetUltimateCharge(AllPlayers(enemyTeam), 100);
-    PressButton(AllPlayers(enemyTeam), Button.Ultimate);
 }
