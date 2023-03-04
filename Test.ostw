@@ -2,6 +2,7 @@ import "Test.setting.json";
 import "Lib/Debug.del";
 import "Lib/Utility.del";
 import "Lib/Bot.del";
+import "Lib/ServerOverLoadMeasures.del";
 
 // Builtin -----------------------------------------------
 globalvar define playerTeam;
@@ -14,8 +15,7 @@ if(
     true
 ){
     Wait(5);
-
-    tuneVal = 2.0;
+    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 
     while(true){
         if(TeamOf(HostPlayer()) == Team.Team1){
@@ -32,20 +32,12 @@ if(
         }
 
         initCompleted = true;
+        Wait(10, WaitBehavior.IgnoreCondition);
+        
+        SetRespawnMaxTime(AllPlayers(), 15);
+        // SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
 
-        Wait(3, WaitBehavior.IgnoreCondition);
-
-        Heal(AllPlayers(), null, MaxValue());
-        SetMaxHealth(AllPlayers(), 1000);
-
-        SetPrimaryFireEnabled(AllPlayers(), false);
-
-        // SetRespawnMaxTime(AllPlayers(), 3);
-        SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
-        SetStatus(AllPlayers(enemyTeam), null, Status.Rooted, MaxValue());
-
-        // SetUltimateCharge(AllPlayers(), 100);
-        // SetDamageDealt(AllPlayers(playerTeam), 300);
+        Respawn(AllDeadPlayers(Team.All));
     }
 }
 
@@ -60,26 +52,22 @@ if(
     DisableInspectorRecording();
 
     define assetE! = [
-            // [EnemyType.None,    Hero.Symmetra, 4]
-            // [EnemyType.None,    Hero.Baptiste, 1],
-            [EnemyType.None,    Hero.Reinhardt, 1]
-            // [EnemyType.None,    Hero.Widowmaker, 1],
-            // [EnemyType.None,    Hero.Reaper, 1],
-            // [EnemyType.None,    Hero.Ashe, 1],
-            // [EnemyType.None,    Hero.Ana, 1],
-            // [EnemyType.None,    Hero.Baptiste, 1]
+            [EnemyType.None,    RandomDamageHero, 2],
+            [EnemyType.None,    RandomDamageHero, 2],
+            [EnemyType.None,    RandomTankHero, 2],
+            [EnemyType.None,    RandomTankHero, 2],
+            [EnemyType.None,    RandomSupportHero, 2],
+            [EnemyType.None,    RandomSupportHero, 2]
         ];
     CreateBotsByAsset(assetE, enemyTeam, 24);
 
     define assetP! = [
-            // [EnemyType.None,    Hero.Symmetra, 4]
-            // [EnemyType.None,    Hero.Baptiste, 1],
-            [EnemyType.None,    Hero.WreckingBall, 0]
-            // [EnemyType.None,    Hero.Bastion, 1],
-            // [EnemyType.None,    Hero.Soldier76, 1],
-            // [EnemyType.None,    Hero.Hanzo, 1],
-            // [EnemyType.None,    Hero.Zenyatta, 1],
-            // [EnemyType.None,    Hero.Brigitte, 1]
+            [EnemyType.None,    RandomDamageHero, 2],
+            [EnemyType.None,    RandomDamageHero, 2],
+            [EnemyType.None,    RandomTankHero, 2],
+            [EnemyType.None,    RandomTankHero, 2],
+            [EnemyType.None,    RandomSupportHero, 2],
+            [EnemyType.None,    RandomSupportHero, 2]
         ];
     CreateBotsByAsset(assetP, playerTeam, 24);
 
@@ -94,11 +82,20 @@ if(
     IsButtonHeld(ep, Button.Melee)
 ){
 
-    define _target! = FirstOf(AllPlayers(enemyTeam));
-    define dest! = AimingPositionIgnorePlayer();
-    FlightTo(_target, AimingPosition(), Color.Purple);
+}
 
-    LoopIfConditionIsTrue();
+// killCount -----------------------------------------------
+globalvar define killCountTeam1;
+globalvar define killCountTeam2;
+
+rule: "killCount/countUp"
+Event.OnFinalBlow
+{
+    if(TeamOf() == Team.Team1)
+        killCountTeam1 ++;
+    else if(TeamOf() == Team.Team2)        
+        killCountTeam2 ++;
+    
 }
 
 // Debug/Slow -----------------------------------------------
@@ -140,14 +137,16 @@ globalvar define debugHuds!;
 define Last():
     CountOf(debugHuds);
 
-
 rule: "showParam"
 Event.OngoingGlobal
 {
     debugHuds[Last()] = CreateDebugHud("tune Val", tuneVal, Color.Orange);
     debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Red);
+    debugHuds[Last()] = CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Red);
     debugHuds[Last()] = CreateDebugHud("player team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, Color.Team1);
     debugHuds[Last()] = CreateDebugHud("enemy team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team2);
+    debugHuds[Last()] = CreateDebugHud("killCountTeam1", killCountTeam1, Color.Team1);
+    debugHuds[Last()] = CreateDebugHud("killCountTeam2", killCountTeam2, Color.Team2);
 }
 
 rule: "Debug/TuneVal/startIncreaseParam"

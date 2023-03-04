@@ -47,8 +47,10 @@ void CreateBotsByAsset(define asset, define team, define addLimitNum)"CreateBots
 
             // get empty slot
             define slot! = getEmptySlotNo(team);
-            while(
-                PlayersInSlot(slot, team) == null
+            for(
+                define tryCount = 10;
+                tryCount > 0 && PlayersInSlot(slot, team) == null;
+                tryCount --
             ){
                 // create bot
                 CreateDummyBot(
@@ -58,7 +60,7 @@ void CreateBotsByAsset(define asset, define team, define addLimitNum)"CreateBots
                     SpawnPoints(team)[0],
                     RandomDirection()
                 );
-                Wait(0.1, WaitBehavior.IgnoreCondition);
+                Wait(0.2, WaitBehavior.IgnoreCondition);
                 WaitRandomForDistributeServerLoad();
             }
             // set Bot type as enemy type
@@ -75,8 +77,10 @@ void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsBy
     for(define slotIdx! = 0; slotIdx < num; slotIdx++){
         // get empty slot
         define slot! = getEmptySlotNo(team);
-        while(
-            PlayersInSlot(slot, team) == null
+        for(
+            define tryCount = 10;
+            tryCount > 0 && PlayersInSlot(slot, team) == null;
+            tryCount --
         ){
             // create bot
             CreateDummyBot(
@@ -86,7 +90,7 @@ void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsBy
                 SpawnPoints(team)[0],
                 RandomDirection()
             );
-            Wait(0.1, WaitBehavior.IgnoreCondition);
+            Wait(0.2, WaitBehavior.IgnoreCondition);
             WaitRandomForDistributeServerLoad();
         }
     }
@@ -97,8 +101,10 @@ void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHer
     for(define slotIdx! = 0; slotIdx < num; slotIdx++){
         // get empty slot
         define slot! = getEmptySlotNo(team);
-        while(
-            PlayersInSlot(slot, team) == null
+        for(
+            define tryCount = 10;
+            tryCount > 0 && PlayersInSlot(slot, team) == null;
+            tryCount --
         ){
             // create bot
             CreateDummyBot(
@@ -108,7 +114,7 @@ void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHer
                 SpawnPoints(team)[0],
                 RandomDirection()
             );
-            Wait(0.1, WaitBehavior.IgnoreCondition);
+            Wait(0.2, WaitBehavior.IgnoreCondition);
             WaitRandomForDistributeServerLoad();
         }
     }
@@ -204,7 +210,6 @@ if(
     IsDuplicating(ep)
 ){
     SetHeroActionRoutine();
-    // dbgHudTxt(<"<0> is change routin to <1>", ep, heroName>);
 }
 
 rule: "Bot/SetActionRoutineByEndDuplicate"
@@ -216,7 +221,6 @@ if(
     !IsDuplicating(ep)
 ){
     SetHeroActionRoutine();
-    // dbgHudTxt(<"<0> is change routin to <1>", ep, heroName>);
 }
 
 void SetHeroActionRoutine()"SetHeroActionRoutine"{
@@ -680,8 +684,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMax = Bot_ActionRange_Close;
         ability1ButtonReleaseMin = 12;
         ability1ButtonReleaseMax = 16;
-        ability1ButtonPressMin = 1;
-        ability1ButtonPressMax = 1;
         secondaryFireButtonReleaseMax = 10;
         secondaryFireButtonPressMin = 2;
         secondaryFireButtonPressMax = 4;
@@ -750,7 +752,7 @@ define FindSupportTarget()"FindSupportTarget"{
                         true :
                         IsInLineOfSight(EyePosition(ep), EyePosition(ae), BarrierLOS.NoBarriersBlock)
                     ) &&
-                    NormalizedHealth(ae) < 1.0
+                    (100 * (1 - NormalizedHealth(ae)))
                 )
             ),
             NormalizedHealth(ae)
@@ -987,8 +989,6 @@ void CallAttackNearBot(define attackTarget!, define team!)"CallAttackNearBot"{
         )
     );
 
-    // dbgHudTxt(<"CallAttackNearBot <0>", CountOf(nearFriends)>);
-    
     for(define nearFriendsIndex! = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
         WaitRandomForDistributeServerLoad();
         // set target
@@ -1022,8 +1022,7 @@ if(
 playervar define statusText;
 playervar define moveDirFB;
 playervar define moveDirLR;
-
-playervar define enableHealingMove = true;
+playervar define enableRetreat! = true;
 
 void setMoveDir() playervar "setMoveDir"{
     if(enemyType == EnemyType.Zombie){
@@ -1034,8 +1033,7 @@ void setMoveDir() playervar "setMoveDir"{
 
     // need healing
     if(
-        enableHealingMove &&
-        NormalizedHealth() <= 0.5
+        enableRetreat ? (100 * (1 - NormalizedHealth())) : false
     ){
         WaitRandomForDistributeServerLoad();
         // move to healer for heal
@@ -1093,37 +1091,22 @@ void setMoveDir() playervar "setMoveDir"{
         // set move dir left/right
         if(actionState == ActionState.Attack){
             define distanceToTarget! = DistanceBetween(ep, target);
-            // start sidestep by distance to target
+            // start sidestep by distance and health
             if(
                 ProbabilityTrue(
-                    25 +
                     (
-                        100 *
-                        (1 - NormalizedHealth()) *      // by health
-                        (1 - (distanceToTarget / 30))   // by target distance
+                        (100 * (1 - NormalizedHealth())) +      // by health
+                        (100 * ( 1 - (distanceToTarget / 30)))   // by target distance
                     )
                 )
             ){
                 // start sidestep
                 // already has sidestep
-                if(moveDirLR != NoDirection()){
-                    if(
-                        ProbabilityTrue(
-                            25 +
-                            (
-                                100 *
-                                (1 - NormalizedHealth()) *      // by health
-                                (1 - (distanceToTarget / 30))   // by target distance
-                            )
-                        )
-                    ){
-                        // reverse sidestep
-                        moveDirLR = -moveDirLR;
-                    }
-                    else{
-                        // stop sidestep
-                        moveDirLR = NoDirection();
-                    }
+                if(
+                    moveDirLR != NoDirection()
+                ){
+                    // reverse sidestep
+                    moveDirLR = -moveDirLR;
                 }
                 else{
                     if(ProbabilityTrue(50)){
@@ -1513,9 +1496,9 @@ if(
     if(isPositionAimUltmate){
         StopHoldingButton(ep, Button.PrimaryFire);
         StopHoldingButton(ep, Button.SecondaryFire);
-        for(define tryCount!; tryCount < 6; tryCount++){
+        for(define tryCount!; tryCount < 4; tryCount++){
             FacingTargetBetweenPosition(0.5, target);
-            Wait(0.5, WaitBehavior.IgnoreCondition);
+            Wait(0.25, WaitBehavior.IgnoreCondition);
 
             if(ProbabilityTrue(isRotateProb)){
                 PressButton(ep, Button.Ultimate);    
@@ -1523,7 +1506,7 @@ if(
             }
 
             PressButton(ep, Button.PrimaryFire);
-            if(IsUsingUltimate()){
+            if(UltimateChargePercent() < DefaultPercentage()){
                 break;
             }
         }
@@ -1557,12 +1540,12 @@ if(
 
     if(isPositionAimSecondary){
         StopHoldingButton(ep, Button.PrimaryFire);
-        for(define tryCount!; tryCount < 6; tryCount++){
+        for(define tryCount!; tryCount < 4; tryCount++){
             FacingTargetBetweenPosition(0.25, target);
-            Wait(0.5, WaitBehavior.IgnoreCondition);
+            Wait(0.25, WaitBehavior.IgnoreCondition);
             
             PressButton(ep, Button.SecondaryFire);
-            if(IsFiringSecondary()){
+            if(AbilityCooldown(ep, Button.SecondaryFire) > 0){
                 break;
             }
         }
@@ -1613,16 +1596,6 @@ if(
                 VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf())),
                 20, Relative.ToWorld, ContraryMotion.Incorporate);
             Wait(RandomReal(0.25, 1.0), WaitBehavior.IgnoreCondition);
-        }
-
-        for(define tryCount! = 8; tryCount > 0; tryCount --){
-            if(!IsInAlternateForm()){
-                break;
-            }
-            ApplyImpulse(ep, 
-                moveDir,
-                20, Relative.ToWorld, ContraryMotion.Incorporate);
-            Wait(0.25, WaitBehavior.IgnoreCondition);
         }
     }
 }
