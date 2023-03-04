@@ -1,50 +1,42 @@
 import "Test.setting.json";
 import "Lib/Debug.del";
 import "Lib/Utility.del";
-import "Lib/Bot.del";
 import "Lib/ServerOverLoadMeasures.del";
 
 // Builtin -----------------------------------------------
-globalvar define playerTeam;
-globalvar define enemyTeam;
+globalvar define playerTeam = Team.Team1;
+globalvar define enemyTeam =  Team.Team2;
 globalvar define initCompleted!;
 
 rule: "BuiltinGlobal"
 Event.OngoingGlobal
-if(
-    true
-){
+{
     Wait(5);
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
-
-    while(true){
-        if(TeamOf(HostPlayer()) == Team.Team1){
-            playerTeam = Team.Team1;
-            enemyTeam = Team.Team2;
-        }
-        else if(TeamOf(HostPlayer()) == Team.Team2){
-            playerTeam = Team.Team2;
-            enemyTeam = Team.Team1;
-        }
-        else{
-            playerTeam = Team.Team1;
-            enemyTeam = Team.Team2;    
-        }
-
-        initCompleted = true;
-        Wait(10, WaitBehavior.IgnoreCondition);
-        
-        SetRespawnMaxTime(AllPlayers(), 15);
-        // SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
-
-        Respawn(AllDeadPlayers(Team.All));
-    }
+    initCompleted = true;
 }
 
 // TAG Buddy ----------
 define playerRespawnTime: 15;
 
-rule: "Buddy/BuddyContorl"
+define CreateBotByArray(define array, define team){
+    for(define idx = 0; idx < CountOf(array); idx ++){
+        // create bot
+        CreateDummyBot(
+            array[idx],
+            team,
+            GetEmptySlotNo(team),
+            SpawnPoints(team)[0],
+            RandomDirection()
+        );
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+    }
+}
+
+define stagePosition: Vector(0, 0, 0);
+define stageRange: 3;
+
+rule: "Main"
 Event.OngoingGlobal
 if(
     initCompleted
@@ -52,27 +44,125 @@ if(
     DisableInspectorRecording();
 
     define assetE! = [
-            [EnemyType.None,    RandomDamageHero, 2],
-            [EnemyType.None,    RandomDamageHero, 2],
-            [EnemyType.None,    RandomTankHero, 2],
-            [EnemyType.None,    RandomTankHero, 2],
-            [EnemyType.None,    RandomSupportHero, 2],
-            [EnemyType.None,    RandomSupportHero, 2]
+            Hero.Roadhog,
+            Hero.Roadhog,
+            Hero.Roadhog,
+            Hero.Roadhog,
+            Hero.Roadhog,
+            Hero.Roadhog,
+            Hero.Roadhog,
+            Hero.Roadhog,
+            Hero.Roadhog,
+            Hero.Roadhog,
+            Hero.Roadhog
         ];
-    CreateBotsByAsset(assetE, enemyTeam, 24);
+    CreateBotByArray(assetE, enemyTeam);
 
     define assetP! = [
-            [EnemyType.None,    RandomDamageHero, 2],
-            [EnemyType.None,    RandomDamageHero, 2],
-            [EnemyType.None,    RandomTankHero, 2],
-            [EnemyType.None,    RandomTankHero, 2],
-            [EnemyType.None,    RandomSupportHero, 2],
-            [EnemyType.None,    RandomSupportHero, 2]
+            Hero.Kiriko,
+            Hero.Ana,
+            Hero.Mercy,
+            Hero.Baptiste
         ];
-    CreateBotsByAsset(assetP, playerTeam, 24);
+    CreateBotByArray(assetP, playerTeam);
 
+    CreateEffect(AllPlayers(), Effect.Ring, Color.Aqua, stagePosition, stageRange, EffectRev.VisibleTo);
 
+        CreateDummyBot(
+            Hero.Bastion,
+            playerTeam,
+            GetEmptySlotNo(playerTeam),
+            SpawnPoints(playerTeam)[0],
+            RandomDirection()
+        );
+    
+    Wait(1);
+        define bastion = FirstOf(FilteredArray(AllPlayers(playerTeam), IsDummyBot(ae) && HeroOf(ae) == Hero.Bastion));
+    Teleport(bastion, stagePosition);
 }
+
+globalvar define stagedPlayer;
+
+rule: "setStagedPlayer"
+Event.OngoingPlayer
+if(
+    stagedPlayer == 0 &&
+    DistanceBetween(ep, stagePosition) <= stageRange
+){
+    Wait(0.1,WaitBehavior.AbortWhenFalse);
+    stagedPlayer = ep;
+}
+
+rule: "unsetStagedPlayer"
+Event.OngoingPlayer
+if(
+    stagedPlayer == ep &&
+    DistanceBetween(ep, stagePosition) > stageRange
+){
+    Wait(0.1,WaitBehavior.AbortWhenFalse);
+    stagedPlayer = 0;
+}
+
+rule: "startMaxPower"
+Event.OngoingPlayer
+if(
+    stagedPlayer == ep
+){
+
+    define enemys = AllPlayers(enemyTeam);
+
+    for(define idx = 0; idx < CountOf(enemys); idx ++){
+        Teleport(enemys[idx], Vector(0,0, 10 + idx));
+    }
+
+    define friends = FilteredArray(AllPlayers(playerTeam), IsDummyBot(ae) && HeroOf(ae) != Hero.Bastion);
+
+    for(define idx = 0; idx < CountOf(friends); idx ++){
+        define friend = friends[idx];       
+        
+
+        Teleport(friend, Vector(-(CountOf(friends)/2) + idx, 0, -5));
+
+        SetUltimateCharge(friend, 100);
+
+        if(
+            HeroOf(friend) == Hero.Mercy
+        ){
+            SetFacing(friend, DirectionTowards(EyePosition(friend), EyePosition(stagedPlayer)), Relative.ToWorld);
+            SetWeapon(friend, 0);
+            Wait(1);
+            StartHoldingButton(friend, Button.SecondaryFire);
+            PressButton(friend, Button.Ultimate);
+        }
+        else if(
+            HeroOf(friend) == Hero.Ana
+        ){
+            SetFacing(friend, DirectionTowards(EyePosition(friend), EyePosition(stagedPlayer)), Relative.ToWorld);
+            StartHoldingButton(friend, Button.SecondaryFire);
+            Wait(5);
+            StartHoldingButton(friend, Button.Ultimate);
+        }
+        else if(
+            HeroOf(friend) == Hero.Baptiste
+        ){
+            SetFacing(friend, DirectionTowards(EyePosition(friend), Vector(0,0,5)), Relative.ToWorld);
+            Wait(1);
+            PressButton(friend, Button.Ultimate);
+            PressButton(friend, Button.PrimaryFire);
+        }
+        else if(
+            HeroOf(friend) == Hero.Kiriko
+        ){
+            SetFacing(friend, DirectionTowards(EyePosition(friend), EyePosition(stagedPlayer)), Relative.ToWorld);
+            Wait(1);
+            PressButton(friend, Button.Ultimate);
+        }
+    }
+
+    Wait(10);
+    LoopIfConditionIsTrue();
+}
+
 
 // Test Code -----------------------------------------------
 rule: "debug"

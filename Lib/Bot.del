@@ -46,7 +46,7 @@ void CreateBotsByAsset(define asset, define team, define addLimitNum)"CreateBots
             }
 
             // get empty slot
-            define slot! = getEmptySlotNo(team);
+            define slot! = GetEmptySlotNo(team);
             for(
                 define tryCount = 10;
                 tryCount > 0 && PlayersInSlot(slot, team) == null;
@@ -76,7 +76,7 @@ void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsBy
     // create bot by asset
     for(define slotIdx! = 0; slotIdx < num; slotIdx++){
         // get empty slot
-        define slot! = getEmptySlotNo(team);
+        define slot! = GetEmptySlotNo(team);
         for(
             define tryCount = 10;
             tryCount > 0 && PlayersInSlot(slot, team) == null;
@@ -100,7 +100,7 @@ void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHer
     // create bot by asset
     for(define slotIdx! = 0; slotIdx < num; slotIdx++){
         // get empty slot
-        define slot! = getEmptySlotNo(team);
+        define slot! = GetEmptySlotNo(team);
         for(
             define tryCount = 10;
             tryCount > 0 && PlayersInSlot(slot, team) == null;
@@ -126,16 +126,6 @@ void DestroyBots(define team!)"DestroyBots"{
             team, slotIdx);
         Wait(0.01, WaitBehavior.IgnoreCondition);
     }
-}
-
-Number getEmptySlotNo(define team!)"getEmptySlotNo"{
-    for(define slotNo! = 0; slotNo < builtinMaxSlotNum; slotNo++){
-        if(PlayersInSlot(slotNo, team) == null) {
-            return slotNo;
-        }
-    }
-    errLog("getEmptySlotNo not found empty slot");
-    return -1;
 }
 
 // TAG Bot/SetBotInfo ----------
@@ -305,7 +295,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
         canFireButtonCombination = true;
-        primaryFireButtonPressMax = 5;
+        primaryFireButtonReleaseMin /= 2;
+        primaryFireButtonReleaseMax /= 2;
         secondaryFireButtonPressMin = 20;
         secondaryFireButtonPressMax = 40;
         supportPrioloty = 1;
@@ -332,6 +323,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
         canFireButtonCombination = true;
+        secondaryFireButtonReleaseMin /= 2;
+        secondaryFireButtonReleaseMax /= 2;
         crouchButtonReleaseMax = 1;
         crouchButtonPressMax = 30;
         supportPrioloty = 1;
@@ -437,7 +430,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Kiriko";
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
-        primaryFireButtonReleaseMax = 1;
+        primaryFireButtonReleaseMin /= 2;
+        primaryFireButtonReleaseMax /= 2;
         ability1ButtonPressMax = 1;
         ability1ButtonReleaseMax = 1;
         supportPrioloty = 1;
@@ -474,7 +468,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Mercy";
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
-        primaryFireButtonReleaseMax = 1;
+        primaryFireButtonReleaseMin /= 2;
+        primaryFireButtonReleaseMax /= 2;
         secondaryFireButtonReleaseMax = 10;
         ability2ButtonPressMax = 10;
         ability2ButtonReleaseMax = 0.1;
@@ -491,7 +486,9 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Moira";
         actionRangeMin = Bot_ActionRange_Close;
         actionRangeMax = Bot_ActionRange_Middle;
-        supportPrioloty = 1;
+        primaryFireButtonReleaseMin /= 2;
+        primaryFireButtonReleaseMax /= 2;
+        supportPrioloty = 0.75;
         supportButtons = [
             Button.PrimaryFire,
             Button.Ability1,
@@ -508,7 +505,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Orisa";
         actionRangeMin = Bot_ActionRange_Melee;
         actionRangeMax = Bot_ActionRange_Middle;
-        primaryFireButtonPressMax = 15;        
         break;
 
         case Hero.Pharah:
@@ -521,7 +517,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Reaper";
         actionRangeMin = Bot_ActionRange_Melee;
         actionRangeMax = Bot_ActionRange_Close;
-        primaryFireButtonPressMax = 20;
         ability2ButtonReleaseMax = 20;
         break;
 
@@ -532,7 +527,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         secondaryFireButtonReleaseMax = 15;
         secondaryFireButtonPressMin = 3;
         secondaryFireButtonPressMax = 6;
-        primaryFireButtonPressMax = 20;
         primaryFireButtonReleaseMax = 1;
         break;
 
@@ -540,7 +534,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Roadhog";
         actionRangeMin = Bot_ActionRange_Melee;
         actionRangeMax = Bot_ActionRange_Close;
-        primaryFireButtonPressMax = 10;
         break;
 
         case Hero.Sigma:
@@ -645,7 +638,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ability1ButtonPressMax = 0.5;
         ability2ButtonReleaseMax = 0.5;
         ability2ButtonPressMax = 0.5;
-        supportPrioloty = 0.5;
+        supportPrioloty = 0.25;
         supportButtons = [
             Button.Ability2
         ];
@@ -752,7 +745,7 @@ define FindSupportTarget()"FindSupportTarget"{
                         true :
                         IsInLineOfSight(EyePosition(ep), EyePosition(ae), BarrierLOS.NoBarriersBlock)
                     ) &&
-                    (100 * (1 - NormalizedHealth(ae)))
+                    NormalizedHealth(ae) < 1.0
                 )
             ),
             NormalizedHealth(ae)
@@ -808,32 +801,47 @@ if(
         if(!targetSighted){
             tryGetTarget = true;
         }
-        // is support role hero and do support
+        // is support role and now supporting
         else if(
             0 < supportPrioloty &&
             actionState == ActionState.Support
         ){
-            // heal completed or target dead
             if(
+                // heal target completed
                 NormalizedHealth(target) >= 1 ||
+                // target dead
                 IsDead(target)
             ){
+                // change target 
                 tryGetTarget = true;
             }
-            // change target dependent on supportPrioloty or support target health
             else if(
+                // by no support prioloty
                 ProbabilityTrue(100 * (1 - supportPrioloty)) ||
+                // by support target health
                 ProbabilityTrue(100 * NormalizedHealth(target))                
             ){
+                // change target 
                 tryGetTarget = true;
             }
         }
         // is not support role hero
         else{
-            // change target dependent on attack target health
             if(
+                // target dead
+                IsDead(target)
+            ){
+                // change target 
+                tryGetTarget = true;
+            }
+            
+            else if(
+                // by support prioloty
+                ProbabilityTrue(100 * supportPrioloty) ||
+                // by attack target health
                 ProbabilityTrue(50 * NormalizedHealth(target))
             ){
+                // change target 
                 tryGetTarget = true;
             }
         }
@@ -1070,7 +1078,7 @@ void setMoveDir() playervar "setMoveDir"{
 
         // set move dir front/back
         define distToTarget! = DistanceBetween(ep, target);
-        define distRate! = actionState == ActionState.Attack ? 1 : 0.7;
+        define distRate! = actionState == ActionState.Attack ? 1 : 0.75;
         // target is far
         if(
             distToTarget > (actionRangeMax * distRate)

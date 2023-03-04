@@ -31,15 +31,6 @@ Event.OngoingGlobal
 
     // debugMode = DebugMode.ShowParam;
 
-    // Regeneration.del
-    regenerationEnableTeam = Team.All;
-    define waitSecond = WorkshopSettingReal("Player Settings", "Wait Second Until Start Regeneration", 1, 0, 100, 1);
-    regenerationStartWaitSecondTeam1 = waitSecond;
-    regenerationStartWaitSecondTeam2 = waitSecond;
-    define regRate = WorkshopSettingReal("Player Settings", "Regeneration Rate In Per Seconds", 25, 0, 1000, 2);
-    regenerationHealthPerSecondTeam1 = regRate;
-    regenerationHealthPerSecondTeam2 = regRate;
-
     CreateEffect(AllPlayers(), Effect.Sphere, Color.White, combatAreaPos,
         combatAreaRange, EffectRev.VisibleToPositionRadiusAndColor);
 
@@ -111,7 +102,7 @@ if(
     CreateInWorldText(
         AllPlayers(),
         <"<0> Kills", killCount>,
-        ep + PositionOffset(), basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
+        EyePosition(ep) + Vector(0,0.2,0), basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
         Color.White, Spectators.DefaultVisibility);
 }
 
@@ -125,8 +116,16 @@ if(
 
 globalvar define botNum;
 
-define ActionRangeHeroes(define actionRange, define team):
-    FilteredArray(AllPlayers(team), ae.actionRange == actionRange);
+define botAsset:
+    [   // assetNo 0
+        [EnemyType.None,     Hero.Ana,         1],
+        [EnemyType.None,     Hero.Zenyatta,         1],
+        [EnemyType.None,     Hero.Moira,         1],
+        [EnemyType.None,     Hero.Baptiste,         1],
+        [EnemyType.None,     Hero.Widowmaker,         1],
+        [EnemyType.None,     Hero.Bastion,         1],
+        [EnemyType.None,     Hero.Reinhardt,         1]
+    ];
 
 rule: "ReloadBotList"
 Event.OngoingGlobal
@@ -135,41 +134,12 @@ if(
 ){
     // TAG BotList
     dbgMsg("Reload Bot List");
-    
-    // define teamAsset = AllHeroes();
-    define teamAsset;
 
-    while(false){
-        teamAsset = [RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero, RandomTankHero];
-        DestroyBots(Team.Team1);
-        CreateBotsByHeroList(teamAsset, CountOf(teamAsset), Team.Team1);
-        Wait(NumberOfPlayers(Team.Team1) == CountOf(teamAsset));
-        define ramList = FilteredArray(AllPlayers(Team.Team1), ae.isRamattra);
-        if(
-            ramList != []
-        ){
-            teamAsset = [HeroOf(FirstOf(ramList))];
-            break;
-        }
-    }
-    teamAsset = [Hero.Doomfist, Hero.Bastion, Hero.Junkrat];
-
-    parallelCount = 0;
     DestroyBots(Team.Team1);
-    CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team1);
+    CreateBotsByAsset(botAsset, Team.Team1, botNum / 2);
+
     DestroyBots(Team.Team2);
-    CreateBotsByHeroList(teamAsset, botNum / 2, Team.Team2);
-
-        Wait(1, WaitBehavior.AbortWhenFalse);
-        AllPlayers().watchUpdateRate = 2;
-        // SetStatus(AllPlayers(), null, Status.Unkillable, MaxValue());
-
-        while(true){
-            SetUltimateCharge(AllPlayers(), 100);
-            // SetAbilityCooldown(AllPlayers(), Button.SecondaryFire, 0);
-            // SetAbilityCooldown(AllPlayers(), Button.Ability1, 100);
-            Wait(5);
-        }
+    CreateBotsByAsset(botAsset, Team.Team2, botNum / 2);
     
     Wait(180, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
