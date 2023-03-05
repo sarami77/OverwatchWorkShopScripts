@@ -495,11 +495,11 @@ playervar define eachNameColor!;
 
 playervar define eachPerkDropProbability;   // dummy
 
-define basicSpawnTimeMin: 10;
+define basicSpawnTimeMin: 15;
 define minionSpawnTimeMin: basicSpawnTimeMin * 1;
 define eliteSpawnTimeMin: basicSpawnTimeMin * 2;
 define generalBossSpawnTimeMin: basicSpawnTimeMin * 4;
-define spawnTimeMinToMaxMulti: 2.0;
+define spawnTimeScaleMinToMax: 2;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
@@ -515,7 +515,7 @@ if(
     if(enemyType == EnemyType.Minion){
         watchUpdateRate = 12;
         eachBodyScale = 0.75;
-        StartScalingPlayer(ep, 0.75, false);
+        StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
 
         SetMaxHealth(ep, 25 * maxHealthRate);
@@ -525,7 +525,7 @@ if(
         eachDealtDamageScale = 0.5;
         eachChargeUltInterval = 60;
         eachMinSpawnInterval = minionSpawnTimeMin;
-        eachMaxSpawnInterval = minionSpawnTimeMin * spawnTimeMinToMaxMulti;
+        eachMaxSpawnInterval = minionSpawnTimeMin * spawnTimeScaleMinToMax;
 
         eachNameText = "Minion";
         eachNameColor = Color.White;
@@ -534,7 +534,7 @@ if(
     else if(enemyType == EnemyType.Elite){
         watchUpdateRate = 6;
         eachBodyScale = 1.0;
-        StartScalingPlayer(ep, 1.0, false);
+        StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
 
         SetMaxHealth(ep, 100 * maxHealthRate);
@@ -544,7 +544,7 @@ if(
         eachDealtDamageScale = 1.0;
         eachChargeUltInterval = 30;
         eachMinSpawnInterval = eliteSpawnTimeMin;
-        eachMaxSpawnInterval = eliteSpawnTimeMin * spawnTimeMinToMaxMulti;
+        eachMaxSpawnInterval = eliteSpawnTimeMin * spawnTimeScaleMinToMax;
 
         eachNameText = "Elite";
         eachNameColor = Color.Yellow;
@@ -553,7 +553,7 @@ if(
     else if(enemyType == EnemyType.General){
         watchUpdateRate = 3;
         eachBodyScale = 1.5;
-        StartScalingPlayer(ep, 1.5, false);
+        StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 0.5, false);
 
         SetMaxHealth(ep, 1000 * maxHealthRate);
@@ -563,7 +563,7 @@ if(
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 15;
         eachMinSpawnInterval = generalBossSpawnTimeMin;
-        eachMaxSpawnInterval = generalBossSpawnTimeMin * spawnTimeMinToMaxMulti;
+        eachMaxSpawnInterval = generalBossSpawnTimeMin * spawnTimeScaleMinToMax;
 
         eachNameText = "General";
         eachNameColor = Color.Orange;
@@ -572,7 +572,7 @@ if(
     else if(enemyType == EnemyType.Boss){
         watchUpdateRate = 3;
         eachBodyScale = 2.5;
-        StartScalingPlayer(ep, 2.5, false);
+        StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 0.1, false);
 
         SetMaxHealth(ep, 1000 * maxHealthRate);
@@ -582,7 +582,7 @@ if(
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 15;
         eachMinSpawnInterval = generalBossSpawnTimeMin;
-        eachMaxSpawnInterval = generalBossSpawnTimeMin * spawnTimeMinToMaxMulti;
+        eachMaxSpawnInterval = generalBossSpawnTimeMin * spawnTimeScaleMinToMax;
 
         eachNameText = "Boss";
         eachNameColor = Color.Red;
@@ -985,15 +985,6 @@ if(
 // TAG EnemyBot/EnemyAbility ----------
 globalvar define enemyAbilityStatus;
 
-define EnemyAbilityInterval(define baseInterval) globalvar "enemyAbilityInterval"{
-    define intarval = 
-        baseInterval +
-        baseInterval * (1 - (TotalObjectProgress() / DefaultPercentage())) +
-        RandomInteger(-(baseInterval / 2), (baseInterval / 2));
-    intarval = intarval < 0 ? 0 : intarval;
-    return intarval;
-}
-
 rule: "EnemyBot/EnemyAbility/rush"
 Event.OngoingGlobal
 if(
@@ -1001,7 +992,7 @@ if(
 ){
     enemyAbilityStatus[0] = false;
 
-    define interval! = EnemyAbilityInterval(30);
+    define interval! = ObjectProgressScaledInterval(30, 60);
     interval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Interval Scale", 1.0, 0, 100, 3);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
@@ -1023,7 +1014,7 @@ if(
 ){
     enemyAbilityStatus[1] = false;
 
-    define interval! = EnemyAbilityInterval(40);
+    define interval! = ObjectProgressScaledInterval(40, 70);
     interval *= WorkshopSettingReal("Enemy Bot Settings", "Shot Call Interval Scale", 1.0, 0, 100, 4);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
@@ -1054,7 +1045,7 @@ if(
     IsAlive() &&
     actionState != ActionState.Non
 ){
-    define interval! = EnemyAbilityInterval(20);
+    define interval! = ObjectProgressScaledInterval(10, 30);
     interval *= WorkshopSettingReal("Enemy Bot Settings", "(General & Boss) Combat Teleport Interval Scale", 1.0, 0, 100, 5);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
@@ -1124,7 +1115,7 @@ if(
             Relative.ToWorld, ContraryMotion.Cancel);
     }
     
-    Wait(RandomReal(0.8, 1.2) * IsOverTime() ? 3 : 1, WaitBehavior.AbortWhenFalse);
+    Wait(RandomReal(0.8, 1.6) * IsOverTime() ? 3 : 1, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -1146,47 +1137,9 @@ if(
 define showDeadEffectTime: 1.0;
 playervar define confirmSpawnInterval!;
 
-Number TotalObjectProgress()"TotalObjectProgress"{
-    Number progress;
-
-    if(!IsGameInProgress()){
-        progress = DefaultPercentage();
-    }
-    else{
-        define mode = CurrentGameMode();
-        if(mode == GameMode.Assault){
-            if(CurrentObjectNo() == 0){
-                progress = (PointCapturePercentage() * 0.5);
-            }
-            else{
-                progress = 50 + (PointCapturePercentage() * 0.5);
-            }
-        }
-        else if(mode == GameMode.Escort){
-            progress = PayloadProgressPercentage();
-        }
-        else if(mode == GameMode.Hybrid){
-            if(CurrentObjectNo() == 0){
-                progress = (PointCapturePercentage() * 0.3);
-            }
-            else{
-                progress = 30 + (PayloadProgressPercentage() * 0.7);
-            }
-        }
-        else{
-            errLog("ERROR ON TotalObjectProgress");
-        }
-    }
-    return progress;
-}
-
 globalvar define spawnTimeScale;
 
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
-    confirmSpawnInterval = (eachMaxSpawnInterval - eachMinSpawnInterval);
-    confirmSpawnInterval *= (1 - (TotalObjectProgress() / DefaultPercentage()));
-    confirmSpawnInterval += eachMinSpawnInterval;
-    
     define diff = GameProgressDiff();
     if(70 <= diff){
         spawnTimeScale = 0;
@@ -1209,6 +1162,9 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     else if(diff < -70){
         spawnTimeScale = 2.5;
     }
+
+    confirmSpawnInterval = 
+        ObjectProgressScaledInterval(eachMinSpawnInterval, eachMaxSpawnInterval);
     confirmSpawnInterval *= spawnTimeScale;
     confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Intarval Scale", 1.0, 0, 100, 2);
     SetRespawnMaxTime(ep, confirmSpawnInterval + showDeadEffectTime);
@@ -1221,6 +1177,13 @@ Number GameProgressDiff()"GameProgressDiff"{
     timePrg = DefaultPercentage() - timePrg;
     prgDiff = objPrg - timePrg;
     return prgDiff;
+}
+
+Number ObjectProgressScaledInterval(define intervalMin, define intervalMax) globalvar "ObjectProgressScaledInterval"{
+    define intarval! = (intervalMax - intervalMin);
+    intarval *= (1 - (TotalObjectProgress() / DefaultPercentage()));
+    intarval += intervalMin;
+    return intarval;
 }
 
 rule: "EnemyBot/SpawnInterval/update"
