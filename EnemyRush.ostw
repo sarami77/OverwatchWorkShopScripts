@@ -226,7 +226,7 @@ if(
 }
 
 // TAG Buddy/BotAssetTimer ----------
-define assetChangeInterval: RandomInteger(120, 180);
+define assetChangeInterval: RandomInteger(120, 150);
 globalvar define reloadBuddyAssetTimer = -1;
 
 rule: "Buddy/BotAssetTimer/initReloadAssetTimer"
@@ -335,7 +335,8 @@ define enemyBotAssetTimerList:
         [   // assetNo 4
             // the boss
             [EnemyType.Boss,        favDamage,          1],
-            [EnemyType.Minion,      RandomHero,         11]
+            [EnemyType.Elite,       RandomHero,         5],
+            [EnemyType.Minion,      RandomHero,         10]
         ],
         [   // assetNo 5
             // minion horde
@@ -344,7 +345,8 @@ define enemyBotAssetTimerList:
         [   // assetNo 6
             // the boss
             [EnemyType.Boss,        favDamage,          1],
-            [EnemyType.Minion,      RandomHero,         11]
+            [EnemyType.Elite,       RandomHero,         5],
+            [EnemyType.Minion,      RandomHero,         10]
         ],
         [   // assetNo 7
             // the boss with elite
@@ -357,12 +359,6 @@ define enemyBotAssetTimerList:
             [EnemyType.Boss,        favTank,            1],
             [EnemyType.Elite,       RandomHero,         5],
             [EnemyType.Minion,      RandomHero,         10]
-        ],
-        [   // assetNo 9
-            // test
-            [EnemyType.Boss,        Hero.WreckingBall,    1],
-            [EnemyType.Elite,       Hero.WreckingBall,     5],
-            [EnemyType.Minion,      Hero.WreckingBall,     10]
         ]
     ];
 
@@ -495,7 +491,7 @@ playervar define eachNameColor!;
 
 playervar define eachPerkDropProbability;   // dummy
 
-define basicSpawnTimeMin: 15;
+define basicSpawnTimeMin: 12;
 define minionSpawnTimeMin: basicSpawnTimeMin * 1;
 define eliteSpawnTimeMin: basicSpawnTimeMin * 2;
 define generalBossSpawnTimeMin: basicSpawnTimeMin * 4;
@@ -926,8 +922,8 @@ void HybridTeleport()"HybridTeleport"{
 rule: "EnemyBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
 if(
-    IsGameInProgress() &&
     TeamOf() == enemyTeam &&
+    IsGameInProgress() &&
     IsInSpawnRoom()
 ){
     HybridTeleport();
@@ -941,8 +937,8 @@ define checkTeleportConditionMaxCount: 3;
 rule: "EnemyBot/Teleport/teleportForDefenceObject"
 Event.OngoingPlayer
 if(
-    IsGameInProgress() &&
     TeamOf() == enemyTeam &&
+    IsGameInProgress() &&
     IsAlive() &&
     !IsInSpawnRoom()
 ){
@@ -1094,6 +1090,8 @@ if(
     Loop();
 }
 
+globalvar define overtimeDuring;
+
 rule: "EnemyBot/EnemyAbility/hopToObject"
 Event.OngoingPlayer
 if(
@@ -1102,19 +1100,23 @@ if(
     TotalObjectProgress() >= 95
 ){
     if(
+        IsPlayerOnObject &&
         !IsInSpawnRoom() &&
         IsOnGround() &&
-        IsPlayerOnObject &&
-        CountOf(AllPlayersOnObjective(enemyTeam)) <= (NumberOfPlayers(enemyTeam) / 3) &&
         DistanceBetween(ep, OnCurrentObjectPosition()) >= 5
     ){
         PressButton(ep, Button.Jump);
         ApplyImpulse(ep, 
-            VectorTowards(ep, OnCurrentObjectPosition()), 10,
+            VectorTowards(ep, OnCurrentObjectPosition()), 12,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
-    
-    Wait(RandomReal(0.8, 1.6) * IsOverTime() ? 3 : 1, WaitBehavior.AbortWhenFalse);
+
+    Wait(1 + overtimeDuring, WaitBehavior.AbortWhenFalse);
+
+    if(IsOverTime()){
+        overtimeDuring += 0.025;
+    }
+
     LoopIfConditionIsTrue();
 }
 
@@ -1277,7 +1279,6 @@ rule: "EnemyBot/ChargeUltimate/charge"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    IsDummyBot() &&
     enemyType != EnemyType.None &&
     !IsUsingUltimate()
 ){
@@ -1452,6 +1453,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("enemy shot call status", enemyAbilityStatus[1], enemyAbilityStatus[1] == false ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("more ult prob", moreUltProb, moreUltProb == 0 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("over time During", overtimeDuring, Color.Team1);
     }
 }
 
