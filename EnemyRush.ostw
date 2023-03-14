@@ -526,11 +526,11 @@ playervar define eachBodyScale!;
 playervar define eachTextSize!;
 playervar define eachNameText!;
 playervar define eachNameColor!;
-define basicSpawnTimeMin: 12;
+define basicSpawnTimeMin: 8;
 define minionSpawnTimeMin: basicSpawnTimeMin * 1;
 define eliteSpawnTimeMin: basicSpawnTimeMin * 2;
 define generalBossSpawnTimeMin: basicSpawnTimeMin * 4;
-define spawnTimeScaleMinToMax: 2;
+define spawnTimeScaleMinToMax: 1.5;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
@@ -1015,28 +1015,6 @@ if(
 // TAG EnemyBot/EnemyAbility ----------
 globalvar define enemyAbilityStatus;
 
-rule: "EnemyBot/EnemyAbility/rush"
-Event.OngoingGlobal
-if(
-    IsGameInProgress()
-){
-    enemyAbilityStatus[0] = false;
-
-    define interval! = ObjectProgressScaledInterval(30, 60);
-    interval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Interval Scale", 1.0, 0, 100, 3);
-    Wait(interval, WaitBehavior.AbortWhenFalse);
-
-    define rushDurling! = RandomInteger(5, 10);
-    for(rushCount; rushDurling > 0; rushDurling--){
-        Respawn(AllDeadPlayers(enemyTeam));
-
-        enemyAbilityStatus[0] = rushDurling;
-        Wait(1, WaitBehavior.AbortWhenFalse);
-    }
-
-    LoopIfConditionIsTrue();
-}
-
 rule: "EnemyBot/EnemyAbility/shotCall"
 Event.OngoingGlobal
 if(
@@ -1044,7 +1022,7 @@ if(
 ){
     enemyAbilityStatus[1] = false;
 
-    define interval! = ObjectProgressScaledInterval(40, 70);
+    define interval! = ObjectProgressScaledInterval(30, 60);
     interval *= WorkshopSettingReal("Enemy Bot Settings", "Shot Call Interval Scale", 1.0, 0, 100, 4);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
@@ -1064,6 +1042,29 @@ if(
     LoopIfConditionIsTrue();
 }
 
+rule: "EnemyBot/EnemyAbility/rush"
+Event.OngoingGlobal
+if(
+    IsGameInProgress() &&
+    !IsOverTime()
+){
+    enemyAbilityStatus[0] = false;
+
+    define interval! = ObjectProgressScaledInterval(20, 50);
+    interval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Interval Scale", 1.0, 0, 100, 3);
+    Wait(interval, WaitBehavior.AbortWhenFalse);
+
+    define rushDurling! = RandomInteger(5, 10);
+    for(rushCount; rushDurling > 0; rushDurling--){
+        Respawn(AllDeadPlayers(enemyTeam));
+
+        enemyAbilityStatus[0] = rushDurling;
+        Wait(1, WaitBehavior.AbortWhenFalse);
+    }
+
+    LoopIfConditionIsTrue();
+}
+
 rule: "EnemyBot/EnemyAbility/combatTeleport"
 Event.OngoingPlayer
 if(
@@ -1073,7 +1074,8 @@ if(
         enemyType == EnemyType.General
     ) &&
     IsAlive() &&
-    actionState != ActionState.Non
+    actionState != ActionState.Non &&
+    !IsOverTime()
 ){
     define interval! = ObjectProgressScaledInterval(10, 30);
     interval *= WorkshopSettingReal("Enemy Bot Settings", "(General & Boss) Combat Teleport Interval Scale", 1.0, 0, 100, 5);
@@ -1142,14 +1144,14 @@ if(
     ){
         PressButton(ep, Button.Jump);
         ApplyImpulse(ep, 
-            VectorTowards(ep, OnCurrentObjectPosition()), 10,
+            VectorTowards(ep, OnCurrentObjectPosition()), 12,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
 
-    Wait(1 + overtimeDuring, WaitBehavior.AbortWhenFalse);
+    Wait(1.0 + overtimeDuring, WaitBehavior.AbortWhenFalse);
 
     if(IsOverTime()){
-        overtimeDuring += 0.02;
+        overtimeDuring += 0.01;
     }
 
     LoopIfConditionIsTrue();
