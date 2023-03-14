@@ -173,7 +173,7 @@ define needBuddyNum:
     maxBuddyBotNum - playerNum;
 
 globalvar define maxBuddyBotNum! =
-    WorkshopSettingInteger("Follower AI Settings (Join as behalf when absent player)", "Max Fill AI Num", 8, 0, 8, 1);
+    WorkshopSettingInteger("Follower AI Settings (Join as behalf when absent player)", "Max Fill Count", 8, 0, 8, 1);
 
 globalvar define buddyAssetNo!;
 
@@ -324,6 +324,22 @@ if(
 }
 
 // TAG Player ----------
+// TAG Player/DealtDamage ----------
+rule: "Player/DealtDamage/update"
+Event.OngoingPlayer
+if(
+    initCompleted
+){
+    UpdatePlayerDamageDealt();
+    WaitUpdateLongCycle();
+    LoopIfConditionIsTrue();
+}
+
+void UpdatePlayerDamageDealt()"UpdatePlayerDamageDealt"{
+    define playerDamageDealt! = WorkshopSettingReal("Player Settings", "Damage Dealt Scale", 1.0, 0, 100, 1);
+    SetDamageDealt(AllPlayers(playerTeam), playerDamageDealt * 100);
+}
+
 // TAG Player/FisrtFast
 rule: "Player/FisrtFast/setFastSpeed"
 Event.OngoingPlayer
@@ -526,7 +542,7 @@ playervar define eachBodyScale!;
 playervar define eachTextSize!;
 playervar define eachNameText!;
 playervar define eachNameColor!;
-define basicSpawnTimeMin: 8;
+define basicSpawnTimeMin: 10;
 define minionSpawnTimeMin: basicSpawnTimeMin * 1;
 define eliteSpawnTimeMin: basicSpawnTimeMin * 2;
 define generalBossSpawnTimeMin: basicSpawnTimeMin * 4;
@@ -544,7 +560,7 @@ if(
 
     // setEnemyType
     if(enemyType == EnemyType.Minion){
-        watchUpdateRate = 15;
+        watchUpdateRate = 24;
         eachBodyScale = 0.75;
         StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
@@ -563,7 +579,7 @@ if(
         eachTextSize = basicInWorldTextSize;
     }
     else if(enemyType == EnemyType.Elite){
-        watchUpdateRate = 9;
+        watchUpdateRate = 12;
         eachBodyScale = 1.0;
         StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
@@ -887,7 +903,7 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
         // hide teleport beam effect
         DestroyEffect(telBeam);
         // play teleport sound
-        PlayEffect(AllPlayers(), PlayEffect.RingExplosionSound, null, ep, 40);
+        PlayEffect(AllPlayers(), PlayEffect.RingExplosionSound, null, ep, 50);
     }
 }
 
@@ -1023,7 +1039,7 @@ if(
     enemyAbilityStatus[1] = false;
 
     define interval! = ObjectProgressScaledInterval(30, 60);
-    interval *= WorkshopSettingReal("Enemy Bot Settings", "Shot Call Interval Scale", 1.0, 0, 100, 4);
+    interval *= WorkshopSettingReal("Enemy Bot Settings", "Shot Call Event Interval Scale", 1.0, 0.1, 100, 4);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
     define deployedEnemys! = FilteredArray(
@@ -1051,7 +1067,7 @@ if(
     enemyAbilityStatus[0] = false;
 
     define interval! = ObjectProgressScaledInterval(20, 50);
-    interval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Interval Scale", 1.0, 0, 100, 3);
+    interval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Event Interval Scale", 1.0, 0.1, 100, 3);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
     define rushDurling! = RandomInteger(5, 10);
@@ -1078,7 +1094,7 @@ if(
     !IsOverTime()
 ){
     define interval! = ObjectProgressScaledInterval(10, 30);
-    interval *= WorkshopSettingReal("Enemy Bot Settings", "(General & Boss) Combat Teleport Interval Scale", 1.0, 0, 100, 5);
+    interval *= WorkshopSettingReal("Enemy Bot Settings", "(General & Boss) Combat Teleport Interval Scale", 1.0, 0.1, 100, 5);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
     // set teleport position to object around
@@ -1088,9 +1104,9 @@ if(
     LoopIfConditionIsTrue();
 }
 
-globalvar define moreUltProb!;
+globalvar define multiUltProb!;
 
-rule: "EnemyBot/EnemyAbility/moreUltimate"
+rule: "EnemyBot/EnemyAbility/multiUltimate"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
@@ -1102,56 +1118,59 @@ if(
     actionState != ActionState.Non &&
     !IsUsingUltimate()
 ){
-    moreUltProb = 100;
+    multiUltProb = 100;
     while(
         IsAlive() &&
-        ProbabilityTrue(moreUltProb)
+        ProbabilityTrue(multiUltProb)
     ){
         SetUltimateCharge(ep, DefaultPercentage());
         Wait(RandomReal(0, 3), WaitBehavior.IgnoreCondition);
         PressButton(ep, Button.Ultimate);
         WaitUntil(!IsUsingUltimate(), 20);
     }
-    moreUltProb = 0;
+    multiUltProb = 0;
 }
 
-globalvar define decreaseProb = WorkshopSettingInteger("Enemy Bot Settings", "(General & Boss) More Ultmate Decay", 10, 0, 100, 6);
+globalvar define decreaseProb = WorkshopSettingInteger("Enemy Bot Settings", "(General & Boss) Multi Ultimate Probability Decrease Rate", 10, 0, 100, 6);
 
-rule: "EnemyBot/EnemyAbility/decreaseMoreUltimate"
+rule: "EnemyBot/EnemyAbility/decreasemultiUltimate"
 Event.OngoingGlobal
 if(
-    moreUltProb > 0
+    multiUltProb > 0
 ){
-    moreUltProb -= moreUltProb < decreaseProb ? moreUltProb : decreaseProb;
+    multiUltProb -= multiUltProb < decreaseProb ? multiUltProb : decreaseProb;
     Wait(1.0, WaitBehavior.AbortWhenFalse);
     Loop();
 }
 
-globalvar define overtimeDuring;
+globalvar define additinalHopInterval!;
 
 rule: "EnemyBot/EnemyAbility/hopToObject"
-Event.OngoingPlayer
+Event.OngoingGlobal
 if(
-    TeamOf() == enemyTeam &&
-    IsAlive() &&
-    TotalObjectProgress() >= 95
+    IsGameInProgress() &&
+    TotalObjectProgress() >= 90 &&
+    IsPlayerOnObject
 ){
-    if(
-        IsPlayerOnObject &&
-        !IsInSpawnRoom() &&
-        IsOnGround() &&
-        DistanceBetween(ep, OnCurrentObjectPosition()) >= 5
-    ){
-        PressButton(ep, Button.Jump);
-        ApplyImpulse(ep, 
-            VectorTowards(ep, OnCurrentObjectPosition()), 12,
+    define enemys! = FilteredArray(
+        AllLivingPlayers(enemyTeam),
+        (
+            !IsInSpawnRoom(ae) &&
+            DistanceBetween(ae, OnCurrentObjectPosition()) >= 5
+        )
+    );
+
+    for(define enemysIndex! = 0; enemysIndex < CountOf(enemys); enemysIndex ++){
+        PressButton(enemys[enemysIndex], Button.Jump);
+        ApplyImpulse(enemys[enemysIndex], 
+            VectorTowards(enemys[enemysIndex], OnCurrentObjectPosition()), 12,
             Relative.ToWorld, ContraryMotion.Cancel);
     }
 
-    Wait(1.0 + overtimeDuring, WaitBehavior.AbortWhenFalse);
+    Wait(1.0 + additinalHopInterval, WaitBehavior.AbortWhenFalse);
 
     if(IsOverTime()){
-        overtimeDuring += 0.01;
+        additinalHopInterval += 0.001;
     }
 
     LoopIfConditionIsTrue();
@@ -1189,7 +1208,7 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     confirmSpawnInterval = 
         ObjectProgressScaledInterval(eachMinSpawnInterval, eachMaxSpawnInterval);
     confirmSpawnInterval *= spawnTimeScale;
-    confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Intarval Scale", 1.0, 0, 100, 2);
+    confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Basic Spawn Intarval Scale", 1.0, 0, 100, 2);
     SetRespawnMaxTime(ep, confirmSpawnInterval + showDeadEffectTime);
 }
 
@@ -1269,7 +1288,7 @@ playervar define confirmDealtDamage!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Deal Damage", 35, 0, 100, 0);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Damage Dealt", 35, 0, 100, 0);
     // apply auto tune
     confirmDealtDamage += autoTuneDmgDlt;
     // apply enemy type scale
@@ -1488,9 +1507,9 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         >, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("enemy rush status", enemyAbilityStatus[0], enemyAbilityStatus[0] == false ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("enemy shot call status", enemyAbilityStatus[1], enemyAbilityStatus[1] == false ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("more ult prob", moreUltProb, moreUltProb == 0 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("more ult prob", multiUltProb, multiUltProb == 0 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("over time During", overtimeDuring, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("over time During", additinalHopInterval, Color.Team1);
     }
 }
 
