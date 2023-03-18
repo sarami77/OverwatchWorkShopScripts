@@ -1138,30 +1138,32 @@ void setMoveDir() playervar "setMoveDir"{
 define noMoving: false;   // for debug
 
 playervar define enableCheckAbyss! = true;
+playervar define confirmMoveDir!;
 
-void StartMove() playervar "StartMove"{
+void StartMove(define player!)"StartMove"{
     AbortIf(noMoving);
 
-    define confirmMoveDir! = moveDirFB + moveDirLR;
+    player.confirmMoveDir = player.moveDirFB + player.moveDirLR;
     // move to position is abyss
     if(
-        enableCheckAbyss &&
+        player.enableCheckAbyss &&
         IsBelowAbyss(
             BlockedPositonByLocalVector(
-                confirmMoveDir,
-                walkMeterPerSec * watchUpdateRate
+                player,
+                player.confirmMoveDir,
+                walkMeterPerSec * player.watchUpdateRate
             )
         )
     ){
-        StopMove();
+        StopMove(player);
     }
     else{
         if(
-            confirmMoveDir != NoDirection()
+            player.confirmMoveDir != NoDirection()
         ){
             StartThrottleInDirection(
-                ep,
-                confirmMoveDir,
+                player,
+                player.confirmMoveDir,
                 1,
                 Relative.ToPlayer,
                 ThrottleBehavior.ReplaceExistingThrottle,
@@ -1169,13 +1171,13 @@ void StartMove() playervar "StartMove"{
             );
         }
         else{
-            StopMove();
+            StopMove(player);
         }
     }
 }
 
-void StopMove()"StopMove"{
-    StopThrottleInDirection();
+void StopMove(define player)"StopMove"{
+    StopThrottleInDirection(player);
 } 
 
 define aimingPosition:
@@ -1214,7 +1216,7 @@ if(
     moveDirFB = NoDirection();
     moveDirLR = NoDirection();
     target = 0;
-    StopMove();
+    StopMove(ep);
     Wait(0.1, WaitBehavior.AbortWhenFalse);
 
     // hero unique action
@@ -1276,7 +1278,7 @@ if(
         setMoveDir();
 
         // start move by moveDir and sideStepDir
-        StartMove();
+        StartMove(ep);
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
@@ -1440,7 +1442,7 @@ if(
 
     if(isPositionMoveUltmate){
         // stop current moving input
-        StopMove();
+        StopMove(ep);
         StopHoldingButton(ep, Button.PrimaryFire);
         StopHoldingButton(ep, Button.SecondaryFire);
         // wait for start mode
@@ -1448,7 +1450,7 @@ if(
         // start move postion selecter to foward
         moveDirFB = Forward();
         moveDirLR = NoDirection();
-        StartMove();
+        StartMove(ep);
         // decrease move speed if multi position attack mode
         if(multiPosAttack) moveSpeed -= 0.01;
         // wait for arrival target
@@ -1456,7 +1458,9 @@ if(
         dist = dist <= 5 ? 5 : dist;
         Wait(dist * (moveSpeed), WaitBehavior.AbortWhenFalse);
         // stop move if not multi position attack mode
-        if(!multiPosAttack) StopMove();
+        if(!multiPosAttack){
+            StopMove(ep);
+        }
         // trigger attack by attackCount
         for(; 0 < attackCount; attackCount--){
             PressButton(ep, Button.PrimaryFire);
@@ -1466,7 +1470,7 @@ if(
             }
         }
         // reduce walking after ult
-        StopMove();
+        StopMove(ep);
     }
 }
 
