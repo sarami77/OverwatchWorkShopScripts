@@ -379,7 +379,7 @@ define enemyAssetList:
         ],
         [   // assetNo 3
             // all elites same hero
-            [EnemyType.Elite,       sameHero,           14]
+            [EnemyType.Elite,       sameHero,           16]
         ],
         [   // assetNo 4
             // all minion
@@ -413,10 +413,15 @@ define enemyAssetList:
             [EnemyType.Boss,        favTank,            1],
             [EnemyType.Elite,       favDamage,          5],
             [EnemyType.Minion,      RandomHero,         10]
+        ],
+        [   // assetNo 10 [debug]
+            // tank boss with damage elite
+            [EnemyType.Elite,       Hero.Ramattra,          16]
         ]
     ];
 
 define enemyAssetLotteryList: [
+    // 10   debug
     0, 0, 0,
     1, 1, 
     2, 2,
@@ -1036,7 +1041,7 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    enemyAbilityStatus[1] = false;
+    enemyAbilityStatus[1] = 0;
 
     define interval! = ObjectProgressScaledInterval(30, 60);
     interval *= WorkshopSettingReal("Enemy Bot Settings", "Shot Call Event Interval Scale", 1.0, 0.1, 100, 4);
@@ -1046,13 +1051,14 @@ if(
         AllLivingPlayers(enemyTeam),
         !IsInSpawnRoom(ae)
     );
-    define shotCallDelay! = RandomReal(0.25, 1);
+    define shotCallDelay! = RandomReal(0.1, 1.0);
     for(define scLoopIndex! = 0; scLoopIndex < CountOf(deployedEnemys); scLoopIndex ++){
         SetUltimateCharge(deployedEnemys[scLoopIndex], DefaultPercentage());
         PressButton(deployedEnemys[scLoopIndex], Button.Ultimate);
 
         enemyAbilityStatus[1] = CountOf(deployedEnemys) - scLoopIndex;
         Wait(shotCallDelay, WaitBehavior.AbortWhenFalse);
+        WaitRandomForDistributeServerLoad();
     }
 
     LoopIfConditionIsTrue();
@@ -1064,7 +1070,7 @@ if(
     IsGameInProgress() &&
     !IsOverTime()
 ){
-    enemyAbilityStatus[0] = false;
+    enemyAbilityStatus[0] = 0;
 
     define interval! = ObjectProgressScaledInterval(20, 50);
     interval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Event Interval Scale", 1.0, 0.1, 100, 3);
@@ -1076,6 +1082,7 @@ if(
 
         enemyAbilityStatus[0] = rushDurling;
         Wait(1, WaitBehavior.AbortWhenFalse);
+        WaitRandomForDistributeServerLoad();
     }
 
     LoopIfConditionIsTrue();
@@ -1493,22 +1500,21 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
     ){  
-        // debugHuds[Last()] = CreateDebugHud("watch Time Speed Increase", watchTimeSpeedIncrease, watchTimeSpeedIncrease >= 1.0 ? Color.Orange : Color.Red);
         debugHuds[Last()] = CreateDebugHud("count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("human player num", CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae))), Color.Team2);
-        debugHuds[Last()] = CreateDebugHud("player team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, Color.Team2);
-        debugHuds[Last()] = CreateDebugHud("reload buddy Asset Timer", reloadBuddyAssetTimer, reloadBuddyAssetTimer > 5 ? Color.Team2 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("enemy team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("reload Enemy Asset Timer", reloadEnemyAssetTimer, reloadEnemyAssetTimer > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("enemy spawn interval", <"scale = <0> / M = <1> / E = <2> / G = <3> / B = <4>",
+        debugHuds[Last()] = CreateDebugHud("team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, Color.Team2);
+        debugHuds[Last()] = CreateDebugHud("reload Asset Timer", reloadBuddyAssetTimer, reloadBuddyAssetTimer > 5 ? Color.Team2 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("reload Asset Timer", reloadEnemyAssetTimer, reloadEnemyAssetTimer > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("spawn interval", <"scale = <0> / M = <1> / E = <2> / G = <3> / B = <4>",
             spawnTimeScale,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Minion)).confirmSpawnInterval,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Elite)).confirmSpawnInterval,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.General)).confirmSpawnInterval,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Boss)).confirmSpawnInterval
         >, Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("enemy rush status", enemyAbilityStatus[0], enemyAbilityStatus[0] == false ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("enemy shot call status", enemyAbilityStatus[1], enemyAbilityStatus[1] == false ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("rush status", enemyAbilityStatus[0], enemyAbilityStatus[0] == false ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("shot call status", enemyAbilityStatus[1], enemyAbilityStatus[1] == false ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("more ult prob", multiUltProb, multiUltProb == 0 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("over time During", closeToObjectInterval, Color.Team1);
