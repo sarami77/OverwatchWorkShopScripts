@@ -182,7 +182,6 @@ Event.OngoingGlobal
 if(
     initCompleted
 ){
-
     define prevPlayerNum! = -1;
     define prevAssetNo! = -1;
     // set initial asset no
@@ -190,14 +189,18 @@ if(
 
     while(true){
         if(
-            // choiced AssetNo changed
-            prevAssetNo != buddyAssetNo ||
-            // not filed by need buddy number
-            buddyNum != needBuddyNum ||
-            // playerNum changed
-            prevPlayerNum != playerNum ||
-            // entity num than over slot num
-            playerNum + buddyNum > NumberOfSlots(playerTeam)
+            (
+                // choiced AssetNo changed
+                prevAssetNo != buddyAssetNo ||
+                // not filed by need buddy number
+                buddyNum != needBuddyNum ||
+                // playerNum changed
+                prevPlayerNum != playerNum ||
+                // entity num than over slot num
+                playerNum + buddyNum > NumberOfSlots(playerTeam)
+            ) &&
+            // create bot not locked
+            !isLockedCreateBotsByAsset
         ){
             // save prev value
             prevPlayerNum = playerNum;
@@ -211,7 +214,6 @@ if(
             CreateBotsByAssetWithMutexLock(asset, playerTeam, needBuddyNum);
             // set avg ult charge of bots
             SetAvgUltChgOfDummyBot(playerTeam, ultCharge);
-
         }
 
         // show human player outline
@@ -289,12 +291,7 @@ Event.OngoingGlobal
 if(
     reloadBuddyAssetTimer == 0
 ){
-    // force reload buddy list timer
-    DestroyBots(playerTeam);
     buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
-    define asset! = buddyAssetList[buddyAssetNo];
-    CreateBotsByAssetWithMutexLock(asset, playerTeam, needBuddyNum);
-    // set next timer
     reloadBuddyAssetTimer = assetChangeInterval;
 }
 
@@ -363,60 +360,60 @@ define enemyAssetList:
         [   // assetNo 0
             // basic
             [EnemyType.General,     RandomHero,         1],
-            [EnemyType.Elite,       RandomHero,         5],
-            [EnemyType.Minion,      RandomHero,         10]
+            [EnemyType.Elite,       RandomHero,         4],
+            [EnemyType.Minion,      RandomHero,         8]
         ],
         [   // assetNo 1
             // general and minion
             [EnemyType.General,     RandomHero,         1],
-            [EnemyType.Minion,      RandomHero,         15]
+            [EnemyType.Minion,      RandomHero,         12]
         ],
         [   // assetNo 2
             // all elite
-            [EnemyType.Elite,       RandomHero,         5],
-            [EnemyType.Elite,       RandomHero,         5],
-            [EnemyType.Elite,       RandomHero,         6]
+            [EnemyType.Elite,       RandomHero,         4],
+            [EnemyType.Elite,       RandomHero,         4],
+            [EnemyType.Elite,       RandomHero,         5]
         ],
         [   // assetNo 3
             // all elites same hero
-            [EnemyType.Elite,       sameHero,           16]
+            [EnemyType.Elite,       sameHero,           13]
         ],
         [   // assetNo 4
             // all minion
-            [EnemyType.Minion,      rva([favDamage, favTank]),   16]
+            [EnemyType.Minion,      rva([favDamage, favTank]),   13]
         ],
         [   // assetNo 5
             // double general
             [EnemyType.General,     RandomHero,         1],
             [EnemyType.General,     RandomHero,         1],
-            [EnemyType.Minion,      RandomHero,         14]
+            [EnemyType.Minion,      RandomHero,         11]
         ],
         [   // assetNo 6
             // damage boss with minion
             [EnemyType.Boss,        favDamage,          1],
-            [EnemyType.Minion,      RandomHero,         15]
+            [EnemyType.Minion,      RandomHero,         12]
         ],
 
         [   // assetNo 7 [progress asset]
             // damage boss with minion
             [EnemyType.Boss,        favDamage,          1],
-            [EnemyType.Minion,      RandomHero,         15]
+            [EnemyType.Minion,      RandomHero,         12]
         ],
         [   // assetNo 8 [progress asset]
             // damage boss with tank elite
             [EnemyType.Boss,        favDamage,          1],
-            [EnemyType.Elite,       favTank,            5],
-            [EnemyType.Minion,      RandomHero,         10]
+            [EnemyType.Elite,       favTank,            4],
+            [EnemyType.Minion,      RandomHero,         8]
         ],
         [   // assetNo 9 [progress asset]
             // tank boss with damage elite
             [EnemyType.Boss,        favTank,            1],
-            [EnemyType.Elite,       favDamage,          5],
-            [EnemyType.Minion,      RandomHero,         10]
+            [EnemyType.Elite,       favDamage,          4],
+            [EnemyType.Minion,      RandomHero,         8]
         ],
         [   // assetNo 10 [debug]
             // tank boss with damage elite
-            [EnemyType.Elite,       Hero.Ramattra,          16]
+            [EnemyType.Elite,       Hero.Ramattra,      13]
         ]
     ];
 
@@ -432,7 +429,6 @@ define enemyAssetLotteryList: [
 ];
 
 // TAG EnemyBot/BotAssetTimer ----------
-define maxEnemyBotNum: 16;
 globalvar define reloadEnemyAssetTimer = -1;
 
 rule: "EnemyBot/BotAssetTimer/initReloadAssetTimer"
@@ -456,6 +452,8 @@ if(
     Wait(1, WaitBehavior.IgnoreCondition);
     LoopIfConditionIsTrue();
 }
+
+define maxEnemyBotNum: 13;
 
 rule: "EnemyBot/BotAssetTimer/reloadReloadEnemyAsset"
 Event.OngoingGlobal
@@ -547,11 +545,11 @@ playervar define eachBodyScale!;
 playervar define eachTextSize!;
 playervar define eachNameText!;
 playervar define eachNameColor!;
-define basicSpawnTimeMin: 10;
+define basicSpawnTimeMin: 10 * (13/16);
 define minionSpawnTimeMin: basicSpawnTimeMin * 1;
 define eliteSpawnTimeMin: basicSpawnTimeMin * 2;
 define generalBossSpawnTimeMin: basicSpawnTimeMin * 4;
-define spawnTimeScaleMinToMax: 1.75;
+define spawnTimeScaleMinToMax: 1.5;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
@@ -565,7 +563,7 @@ if(
 
     // setEnemyType
     if(enemyType == EnemyType.Minion){
-        watchUpdateRate = 60;
+        watchUpdateRate = 27;
         eachBodyScale = 0.75;
         StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
@@ -584,7 +582,7 @@ if(
         eachTextSize = basicInWorldTextSize;
     }
     else if(enemyType == EnemyType.Elite){
-        watchUpdateRate = 15;
+        watchUpdateRate = 9;
         eachBodyScale = 1.0;
         StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
@@ -890,8 +888,8 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
         PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, teleportPosition, 1);
         // show teleport beam effect
         DestroyEffect(telBeam);
-        // define fromSky! = IsInSpawnRoom();
-        define fromSky! = true;
+        define fromSky! = IsInSpawnRoom(ep);
+        // define fromSky! = true;
         telBeam = CreateBeamEffect(AllPlayers(),
             BeamType.BadBeam,
             fromSky ? 
@@ -1043,7 +1041,7 @@ if(
 ){
     enemyAbilityStatus[1] = 0;
 
-    define interval! = ObjectProgressScaledInterval(30, 60);
+    define interval! = ObjectProgressScaledInterval(30, 50);
     interval *= WorkshopSettingReal("Enemy Bot Settings", "Shot Call Event Interval Scale", 1.0, 0.1, 100, 4);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
@@ -1071,7 +1069,7 @@ if(
 ){
     enemyAbilityStatus[0] = 0;
 
-    define interval! = ObjectProgressScaledInterval(20, 50);
+    define interval! = ObjectProgressScaledInterval(20, 40);
     interval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Event Interval Scale", 1.0, 0.1, 100, 3);
     Wait(interval, WaitBehavior.AbortWhenFalse);
 
@@ -1296,7 +1294,7 @@ playervar define confirmDealtDamage!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Damage Dealt", 35, 0, 100, 0);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Damage Dealt", 40, 0, 100, 0);
     // apply auto tune
     confirmDealtDamage += autoTuneDmgDlt;
     // apply enemy type scale
