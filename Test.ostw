@@ -2,6 +2,7 @@ import "Test.setting.json";
 import "Lib/Debug.del";
 import "Lib/Utility.del";
 import "Lib/ServerOverLoadMeasures.del";
+import "Lib/Bot.del";
 
 // Builtin -----------------------------------------------
 globalvar define playerTeam = Team.Team1;
@@ -11,156 +12,60 @@ globalvar define initCompleted!;
 rule: "BuiltinGlobal"
 Event.OngoingGlobal
 {
+    DisableInspectorRecording();
     Wait(5);
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
     initCompleted = true;
+    dbgHudTxt("initCompleted");
+
 }
 
-// TAG Buddy ----------
-define playerRespawnTime: 15;
-
-define CreateBotByArray(define array, define team){
-    for(define idx = 0; idx < CountOf(array); idx ++){
-        // create bot
-        CreateDummyBot(
-            array[idx],
-            team,
-            GetEmptySlotNo(team),
-            SpawnPoints(team)[0],
-            RandomDirection()
-        );
-        Wait(0.1, WaitBehavior.IgnoreCondition);
-    }
-}
-
-define stagePosition: Vector(0, 0, 0);
-define stageRange: 3;
-
-rule: "Main"
+rule: "DebugCode"
 Event.OngoingGlobal
 if(
     initCompleted
 ){
-    DisableInspectorRecording();
+    dbgHudTxt("DebugCode");
+    define lifeWeever = null;
 
-    define assetE! = [
-            Hero.Roadhog,
-            Hero.Roadhog,
-            Hero.Roadhog,
-            Hero.Roadhog,
-            Hero.Roadhog,
-            Hero.Roadhog,
-            Hero.Roadhog,
-            Hero.Roadhog,
-            Hero.Roadhog,
-            Hero.Roadhog,
-            Hero.Roadhog
-        ];
-    CreateBotByArray(assetE, enemyTeam);
+    while(true){
+        DestroyBots(playerTeam);
+        CreateBotsByHeroList(AllSupportHeroes(), 16, playerTeam);
+        WaitUntil(NumberOfPlayers(playerTeam) >= 16, 10);
 
-    define assetP! = [
-            Hero.Kiriko,
-            Hero.Ana,
-            Hero.Mercy,
-            Hero.Baptiste
-        ];
-    CreateBotByArray(assetP, playerTeam);
-
-    CreateEffect(AllPlayers(), Effect.Ring, Color.Aqua, stagePosition, stageRange, EffectRev.VisibleTo);
-
-        CreateDummyBot(
-            Hero.Bastion,
-            playerTeam,
-            GetEmptySlotNo(playerTeam),
-            SpawnPoints(playerTeam)[0],
-            RandomDirection()
+        lifeWeever = FirstOf(
+            FilteredArray(
+            AllPlayers(playerTeam),
+            ae.isLifeWeever
+            )
         );
+        if(lifeWeever != null){
+            break;
+        }
+        Wait(0.1);
+    }
+    lifeWeever = HeroOf(lifeWeever);
+
+    DestroyBots(playerTeam);
     
-    Wait(1);
-        define bastion = FirstOf(FilteredArray(AllPlayers(playerTeam), IsDummyBot(ae) && HeroOf(ae) == Hero.Bastion));
-    Teleport(bastion, stagePosition);
-}
+    CreateBotsByHeroList([lifeWeever], 2, playerTeam);
+    CreateBotsByHeroList([Hero.Reinhardt], 1, playerTeam);
+    // CreateBotsByHeroList([Hero.Genji], 2, playerTeam);
 
-globalvar define stagedPlayer;
+    CreateBotsByHeroList([lifeWeever], 2, enemyTeam);
+    CreateBotsByHeroList([Hero.Reinhardt], 1, enemyTeam);
+    // CreateBotsByHeroList([Hero.Genji], 2, enemyTeam);
 
-rule: "setStagedPlayer"
-Event.OngoingPlayer
-if(
-    stagedPlayer == 0 &&
-    DistanceBetween(ep, stagePosition) <= stageRange
-){
-    Wait(0.1,WaitBehavior.AbortWhenFalse);
-    stagedPlayer = ep;
-}
-
-rule: "unsetStagedPlayer"
-Event.OngoingPlayer
-if(
-    stagedPlayer == ep &&
-    DistanceBetween(ep, stagePosition) > stageRange
-){
-    Wait(0.1,WaitBehavior.AbortWhenFalse);
-    stagedPlayer = 0;
-}
-
-rule: "startMaxPower"
-Event.OngoingPlayer
-if(
-    stagedPlayer == ep
-){
-
-    define enemys = AllPlayers(enemyTeam);
-
-    for(define idx = 0; idx < CountOf(enemys); idx ++){
-        Teleport(enemys[idx], Vector(0,0, 10 + idx));
+    while(true){
+        define tank = RandomValueInArray(
+            FilteredArray(
+            AllPlayers(playerTeam),
+            HeroOf(ae) == Hero.Reinhardt
+            )
+        );
+        Damage(tank, null, Health(tank) - 25);
+        Wait(1);
     }
-
-    define friends = FilteredArray(AllPlayers(playerTeam), IsDummyBot(ae) && HeroOf(ae) != Hero.Bastion);
-
-    for(define idx = 0; idx < CountOf(friends); idx ++){
-        define friend = friends[idx];       
-        
-
-        Teleport(friend, Vector(-(CountOf(friends)/2) + idx, 0, -5));
-
-        SetUltimateCharge(friend, 100);
-
-        if(
-            HeroOf(friend) == Hero.Mercy
-        ){
-            SetFacing(friend, DirectionTowards(EyePosition(friend), EyePosition(stagedPlayer)), Relative.ToWorld);
-            SetWeapon(friend, 0);
-            Wait(1);
-            StartHoldingButton(friend, Button.SecondaryFire);
-            PressButton(friend, Button.Ultimate);
-        }
-        else if(
-            HeroOf(friend) == Hero.Ana
-        ){
-            SetFacing(friend, DirectionTowards(EyePosition(friend), EyePosition(stagedPlayer)), Relative.ToWorld);
-            StartHoldingButton(friend, Button.SecondaryFire);
-            Wait(5);
-            StartHoldingButton(friend, Button.Ultimate);
-        }
-        else if(
-            HeroOf(friend) == Hero.Baptiste
-        ){
-            SetFacing(friend, DirectionTowards(EyePosition(friend), Vector(0,0,5)), Relative.ToWorld);
-            Wait(1);
-            PressButton(friend, Button.Ultimate);
-            PressButton(friend, Button.PrimaryFire);
-        }
-        else if(
-            HeroOf(friend) == Hero.Kiriko
-        ){
-            SetFacing(friend, DirectionTowards(EyePosition(friend), EyePosition(stagedPlayer)), Relative.ToWorld);
-            Wait(1);
-            PressButton(friend, Button.Ultimate);
-        }
-    }
-
-    Wait(10);
-    LoopIfConditionIsTrue();
 }
 
 

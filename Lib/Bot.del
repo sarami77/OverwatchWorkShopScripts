@@ -210,6 +210,8 @@ if(
     SetHeroActionRoutine();
 }
 
+playervar define isLifeWeever;
+
 void SetHeroActionRoutine()"SetHeroActionRoutine"{
     target = 0;
     heroName = "";
@@ -228,23 +230,23 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
     primaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
     primaryFireButtonReleaseMin = 0;
-    primaryFireButtonReleaseMax = 3;
+    primaryFireButtonReleaseMax = 1;
     primaryFireButtonPressMin = 0;
     primaryFireButtonPressMax = 10;
 
     secondaryFireButtonBehaivor = ButtonBehaivor.ReleasePress;
     secondaryFireButtonReleaseMin = 0;
-    secondaryFireButtonReleaseMax = 3;
+    secondaryFireButtonReleaseMax = 1;
     secondaryFireButtonPressMin = 0;
     secondaryFireButtonPressMax = 10;
 
     ability1ButtonReleaseMin = 0;
-    ability1ButtonReleaseMax = 3;
+    ability1ButtonReleaseMax = 5;
     ability1ButtonPressMin = 0;
     ability1ButtonPressMax = 1;
 
     ability2ButtonReleaseMin = 0;
-    ability2ButtonReleaseMax = 3;
+    ability2ButtonReleaseMax = 5;
     ability2ButtonPressMin = 0;
     ability2ButtonPressMax = 1;
 
@@ -263,7 +265,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
     jumpButtonPressMin = 0;
     jumpButtonPressMax = 1;
 
-    supportPrioloty = 0;
+    supportPrioloty = 0.0;
     supportButtons = [
         Button.PrimaryFire,
         Button.SecondaryFire,
@@ -297,7 +299,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         secondaryFireButtonPressMax = 40;
         jumpButtonReleaseMax = 40;
 
-        supportPrioloty = 1;
+        supportPrioloty = 1.0;
         supportButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
@@ -326,7 +328,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         jumpButtonReleaseMax = 5;
         crouchButtonReleaseMax = 1;
         crouchButtonPressMax = 20;
-        supportPrioloty = 1;
+        supportPrioloty = 1.0;
         supportButtons = [
             Button.SecondaryFire,
             Button.Ability1,
@@ -431,7 +433,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMax = Bot_ActionRange_Far;
         ability1ButtonPressMax = 1;
         ability1ButtonReleaseMax = 1;
-        supportPrioloty = 1;
+        supportPrioloty = 1.0;
         supportButtons = [
             Button.PrimaryFire,
             Button.Ability1,
@@ -468,7 +470,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         secondaryFireButtonReleaseMax = 10;
         ability2ButtonPressMax = 10;
         ability2ButtonReleaseMax = 0.1;
-        supportPrioloty = 1;
+        supportPrioloty = 1.0;
         supportButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
@@ -681,6 +683,24 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         break;
 
         default:
+        isLifeWeever = true;
+        actionRangeMin = Bot_ActionRange_Middle;
+        actionRangeMax = Bot_ActionRange_Far;
+        primaryFireButtonPressMin = 0.8;
+        primaryFireButtonPressMax = 1.6;
+        supportPrioloty = 1.0;
+        supportButtons = [
+            Button.PrimaryFire,
+            Button.SecondaryFire,
+            Button.Ability1,
+            Button.Ability2
+        ];
+        attackButtons = [
+            Button.PrimaryFire,
+            Button.SecondaryFire,
+            Button.Ability1
+        ];
+
     }
 }
 
@@ -1038,6 +1058,8 @@ void setMoveDir() playervar "setMoveDir"{
         Abort();
     }
 
+    define distToTarget! = DistanceBetween(ep, target);
+
     // need healing
     if(
         enableRetreat ?
@@ -1045,7 +1067,6 @@ void setMoveDir() playervar "setMoveDir"{
             false
     ){
         // move to healer for heal
-
         // set to near healer
         define moveToPlayer! = 
             FirstOf(
@@ -1071,7 +1092,17 @@ void setMoveDir() playervar "setMoveDir"{
         }
         else{
             moveDirFB = Backward();
-            moveDirLR = NoDirection();
+            // start sidestep by distance and health
+            if(
+                ProbabilityTrue(50 * (1 - NormalizedHealth())) ||     // by low health
+                ProbabilityTrue(50 * (1 - (distToTarget / 30)))   // by target close
+            ){
+                moveDirLR = RandomValueInArray([-moveDirLR, Right(), Left()]);
+            }
+            else{
+                // stop sidestep
+                moveDirLR = NoDirection();
+            }
         }
     }
     // not need healing
@@ -1079,7 +1110,6 @@ void setMoveDir() playervar "setMoveDir"{
         // move to target for combat
 
         // set move dir front/back
-        define distToTarget! = DistanceBetween(ep, target);
         define distRate! = actionState == ActionState.Attack ? 1 : 0.75;
         // target is far
         if(
@@ -1100,28 +1130,12 @@ void setMoveDir() playervar "setMoveDir"{
 
         // set move dir left/right
         if(actionState == ActionState.Attack){
-            define distanceToTarget! = DistanceBetween(ep, target);
             // start sidestep by distance and health
             if(
                 ProbabilityTrue(50 * (1 - NormalizedHealth())) ||     // by low health
-                ProbabilityTrue(50 * (1 - (distanceToTarget / 30)))   // by target close
+                ProbabilityTrue(50 * (1 - (distToTarget / 30)))   // by target close
             ){
-                // start sidestep
-                // already has sidestep
-                if(
-                    moveDirLR != NoDirection()
-                ){
-                    // reverse sidestep
-                    moveDirLR = -moveDirLR;
-                }
-                else if(ProbabilityTrue(50)){
-                    // right sidestep
-                    moveDirLR = Right();
-                }
-                else{
-                    // left sidestep
-                    moveDirLR = Left();
-                }
+                moveDirLR = RandomValueInArray([-moveDirLR, Right(), Left()]);
             }
             else{
                 // stop sidestep
@@ -1284,8 +1298,8 @@ if(
 }
 
 // TAG Bot/HeroUniqueAction ----------
-define MercyStaff: 1;
-define MercyPistol: 2;
+define SupportArm: 1;
+define AttackArm: 2;
 
 playervar define isRepeatReloading!;
 
@@ -1350,28 +1364,36 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
     else if(
         actionState != ActionState.Non
     ){
-        // Mercy
-        if(HeroOf() == Hero.Mercy){
+        // has secondary arm
+        if(
+            HeroOf() == Hero.Torbjorn ||
+            HeroOf() == Hero.Mercy ||
+            isLifeWeever
+        ){
             // change weapon
             if(actionState == ActionState.Attack){
-                SetWeapon(ep, MercyPistol);
+                SetWeapon(ep, AttackArm);
             }
             else{
-                SetWeapon(ep, MercyStaff);
-                if(
-                    TeamOf() == TeamOf(target)
-                ){
+                SetWeapon(ep, SupportArm);
+
+                // Mercy
+                if(HeroOf() == Hero.Mercy){
                     if(
-                        ProbabilityTrue(100 * NormalizedHealth(target))
+                        TeamOf() == TeamOf(target)
                     ){
-                        // damage boost
-                        StopHoldingButton(ep, Button.PrimaryFire);
-                        StartHoldingButton(ep, Button.SecondaryFire);
-                    }
-                    else{
-                        // heal
-                        StopHoldingButton(ep, Button.SecondaryFire);
-                        StartHoldingButton(ep, Button.PrimaryFire);
+                        if(
+                            ProbabilityTrue(100 * NormalizedHealth(target))
+                        ){
+                            // damage boost
+                            StopHoldingButton(ep, Button.PrimaryFire);
+                            StartHoldingButton(ep, Button.SecondaryFire);
+                        }
+                        else{
+                            // heal
+                            StopHoldingButton(ep, Button.SecondaryFire);
+                            StartHoldingButton(ep, Button.PrimaryFire);
+                        }
                     }
                 }
             }
@@ -1643,19 +1665,24 @@ void StartButtonControl(define bc){
     if(enemyType == EnemyType.Zombie) Abort();
 
     define startButton! = false;
-    define fireAndAbilityButtons! = [Button.PrimaryFire, Button.SecondaryFire, Button.Ability1, Button.Ability2];
-    // if fire or ability button
+    define checkButton! = [
+        Button.PrimaryFire,
+        Button.SecondaryFire,
+        Button.Ability1,
+        Button.Ability2];
+    
+    // if check button
     if(
-        isMatchButton(bc[ButtonControl.button], fireAndAbilityButtons)
+        isMatchButton(bc[ButtonControl.button], checkButton)
     ){
-        // if match attack buttons
+        // if match attack state buttons
         if(
             actionState == ActionState.Attack &&
             isMatchButton(bc[ButtonControl.button], attackButtons)
         ){
             startButton = true;
         }
-        // if match Support buttons
+        // if match support state buttons
         else if(
             actionState == ActionState.Support &&
             isMatchButton(bc[ButtonControl.button], supportButtons)
@@ -1691,14 +1718,6 @@ void StartButtonControl(define bc){
             ){
                 StopHoldingButton(ep, Button.PrimaryFire);
             }
-        }
-
-        // ajust max to min when over
-        if(bc[ButtonControl.releaseMax] < bc[ButtonControl.releaseMin]){
-            bc[ButtonControl.releaseMax] = bc[ButtonControl.releaseMin];
-        }
-        if(bc[ButtonControl.pressMax] < bc[ButtonControl.pressMin]){
-            bc[ButtonControl.pressMax] = bc[ButtonControl.pressMin];
         }
 
         // release-press action
