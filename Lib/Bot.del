@@ -223,7 +223,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         Abort();
     }
     // basic
-    aimScatter = 0.4;
+    aimScatter = 0.5;
 
     actionRangeMin = Bot_ActionRange_Melee;
     actionRangeMax = Bot_ActionRange_Melee;
@@ -290,7 +290,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
     switch(hero){
         case Hero.Ana:
         heroName = "Ana";
-        aimScatter = 0.2;
+        aimScatter = 0.4;
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
         canFireButtonCombination = true;
@@ -309,7 +309,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
         case Hero.Ashe:
         heroName = "Ashe";
-        aimScatter = 0.1;
+        aimScatter = 0.3;
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
         canFireButtonCombination = true;
@@ -406,7 +406,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
         case Hero.Hanzo:
         heroName = "Hanzo";
-        aimScatter = 0.1;
+        aimScatter = 0.3;
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
         primaryFireButtonReleaseMax = 1;
@@ -592,7 +592,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
         case Hero.Widowmaker:
         heroName = "Widowmaker";
-        aimScatter = 0.0;
+        aimScatter = 0.1;
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
         canFireButtonCombination = true;
@@ -697,7 +697,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         ];
         attackButtons = [
             Button.PrimaryFire,
-            Button.SecondaryFire,
             Button.Ability1
         ];
 
@@ -734,10 +733,13 @@ define FindAttackTarget()"FindAttackTarget"{
     return FirstOf(
         SortedArray(
             FilteredArray(
-                AllLivingPlayers(EnemyTeamOf()),
+                AllPlayers(EnemyTeamOf()),
                 (
+                    IsAlive(ae) &&
+                    HasSpawned(ae) &&
                     IsInLineOfSight(EyePosition(ep), EyePosition(ae), BarrierLOS.NoBarriersBlock) &&
                     !(
+                        TeamOf() != TeamOf(ae) &&
                         IsStealth(ae) &&
                         DistanceBetween(ae, ep) >= 4
                     )
@@ -758,12 +760,13 @@ define FindSupportTarget()"FindSupportTarget"{
                         AllLivingPlayers(TeamOf())),
                 (
                     ae != ep &&
+                    HasSpawned(ae) &&
+                    NormalizedHealth(ae) < 1.0 &&
                     (
                         CanPhantom(ep) ?
                         true :
                         IsInLineOfSight(EyePosition(ep), EyePosition(ae), BarrierLOS.NoBarriersBlock)
-                    ) &&
-                    NormalizedHealth(ae) < 1.0
+                    )
                 )
             ),
             NormalizedHealth(ae)
@@ -811,19 +814,11 @@ define GetNextActionState()"GetNextActionState"{
         // target has not spawn
         nextActionState = ActionState.Non;
     }
+    
     return nextActionState;
 }
 
-void ApplyNextActionState(define player!, define nextActionState!) playervar "ApplyNextActionState"{
-    // change state to attack
-    if(
-        actionState != ActionState.Attack &&
-        nextActionState == ActionState.Attack
-    ){
-        // call attack by trans to attack state
-        CallAttackNearBot(target, TeamOf());
-    }
-
+void ApplyNextActionState(define player, define nextActionState!) "ApplyNextActionState"{
     // if state changed
     if(nextActionState != player.actionState){
         // next state is not Non state
@@ -836,62 +831,6 @@ void ApplyNextActionState(define player!, define nextActionState!) playervar "Ap
         player.actionState = nextActionState;        
     }
 }
-
-globalvar define isCallAttackCoolingDown1! = false;
-globalvar define isCallAttackCoolingDown2! = false;
-
-void CallAttackNearBot(define attackTarget!, define team!)"CallAttackNearBot"{
-    if(team == Team.Team1){
-        if(isCallAttackCoolingDown1) return;
-        isCallAttackCoolingDown1 = true;
-    }
-    else{
-        if(isCallAttackCoolingDown2) return;
-        isCallAttackCoolingDown2 = true;
-    }
-
-    define nearFriends = FilteredArray(
-        PlayersWithinRadius(
-            ep, 30, TeamOf(ep), RadiusLOS.Off
-        ),
-        (
-            // ae != ep &&
-            IsDummyBot() &&
-            IsAlive(ae) &&
-            ae.actionState == ActionState.Non
-        )
-    );
-
-    for(define nearFriendsIndex! = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
-        // set target
-        nearFriends[nearFriendsIndex].target = attackTarget;
-        // set attack 
-        ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
-        dbgHudTxt(nearFriends[nearFriendsIndex].target);
-    }
-}
-
-rule: "Bot/ActionState/callAttackCoolDown1"
-Event.OngoingGlobal
-if(
-    isCallAttackCoolingDown1
-){
-    Wait(1.0, WaitBehavior.IgnoreCondition);
-    isCallAttackCoolingDown1 = false;
-    Loop();
-}
-
-rule: "Bot/ActionState/callAttackCoolDown2"
-Event.OngoingGlobal
-if(
-    isCallAttackCoolingDown2
-){
-    Wait(1.0, WaitBehavior.IgnoreCondition);
-    isCallAttackCoolingDown2 = false;
-    Loop();
-}
-
 
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
@@ -909,9 +848,11 @@ if(
     ){ 
         // get targetSighted
         define targetSighted! =
-            target != null &&       // targe valid
-            target != ep &&         // not own
+            target != ep &&      // not own
+            target != 0 &&       // targe valid
+
             IsAlive(target) &&      // target alive
+            HasSpawned(target) &&   // target spawned
             IsInLineOfSight(EyePosition(ep), EyePosition(target), BarrierLOS.NoBarriersBlock) &&  // in line            
             !(
                 TeamOf() != TeamOf(target) &&
@@ -980,6 +921,9 @@ if(
     // apply next state
     ApplyNextActionState(ep, GetNextActionState());
 
+    // call attack by near bots
+    CallAttackNearBot();
+
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
@@ -992,6 +936,8 @@ if(
     actionState != ActionState.Non &&
     Victim() == ep
 ){
+    // reset target
+    target = 0;
     // apply next state
     ApplyNextActionState(ep, ActionState.Non);
 }
@@ -1045,15 +991,90 @@ if(
         // set target by attacker
         target = Attacker();
     }
-
     // apply next state
     ApplyNextActionState(ep, GetNextActionState());
 
     // reduce overrun
-    Wait(3.0, WaitBehavior.IgnoreCondition);
+    Wait(1.0, WaitBehavior.IgnoreCondition);
 }
 
-playervar define statusText;
+rule: "Bot/ActionState/CallAttackByDamageTaken"
+Event.OnDamageTaken
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    actionState == ActionState.Non &&
+    Attacker() != ep
+){
+    WaitRandomForDistributeServerLoad();
+
+    // set target by attacker
+    target = Attacker();
+    // apply next state
+    ApplyNextActionState(ep, GetNextActionState());
+
+    // call attack by near bots
+    CallAttackNearBot();
+}
+
+globalvar define isCallAttackCoolingDown1! = false;
+globalvar define isCallAttackCoolingDown2! = false;
+
+void CallAttackNearBot()"CallAttackNearBot"{
+    // target is invalid or friend
+    if( 
+        target == 0 ||
+        TeamOf(ep) == TeamOf(target)
+    ){
+        // abort logic
+        return;
+    }
+
+    // check cooldown for reduce overrun
+    if(TeamOf() == Team.Team1){
+        if(isCallAttackCoolingDown1) return;
+        isCallAttackCoolingDown1 = true;
+    }
+    else{
+        if(isCallAttackCoolingDown2) return;
+        isCallAttackCoolingDown2 = true;
+    }
+
+    // dbgHudTxt(<"CallAttackNearBot team=<0>", team>);
+
+    define nearFriends = FilteredArray(
+        PlayersWithinRadius(
+            ep, 30, TeamOf(), RadiusLOS.Off
+        ),
+        (
+            // ae != ep &&
+            IsDummyBot() &&
+            IsAlive(ae) &&
+            ae.actionState == ActionState.Non
+        )
+    );
+
+    for(define nearFriendsIndex! = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
+        // set target
+        nearFriends[nearFriendsIndex].target = ep.target;
+        // set attack 
+        ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+rule: "Bot/ActionState/callAttackCoolDown"
+Event.OngoingGlobal
+if(
+    isCallAttackCoolingDown1 ||
+    isCallAttackCoolingDown2
+){
+    Wait(1.0, WaitBehavior.IgnoreCondition);
+    isCallAttackCoolingDown1 = false;
+    isCallAttackCoolingDown2 = false;
+    Loop();
+}
+
 playervar define moveDirFB;
 playervar define moveDirLR;
 playervar define enableRetreat! = true;
@@ -1229,11 +1250,8 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Non
 ){
-    statusText = <"Non">;
-
     moveDirFB = NoDirection();
     moveDirLR = NoDirection();
-    target = 0;
     StopMove(ep);
     Wait(0.1, WaitBehavior.AbortWhenFalse);
 
@@ -1308,6 +1326,10 @@ playervar define isRepeatReloading!;
 define meleeDamage: 25;
 define meleeRange: 3.0;
 
+define isOutOfAmmo:
+        (MaxAmmo(ep, 0) > 0 && Ammo(ep, 0) <= 0) ||
+        (MaxAmmo(ep, 1) > 0 && Ammo(ep, 1) <= 0);
+
 void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
     // common action
     // reload
@@ -1315,15 +1337,15 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
         // in idle
         actionState == ActionState.Non
     ){
+        // reload by condition 
         PressButton(ep, Button.Reload);
     }
     else{
         // in combat
-        // out of ammo
         if(
-            (MaxAmmo(ep, 0) > 0 && Ammo(ep, 0) <= 0) ||
-            (MaxAmmo(ep, 1) > 0 && Ammo(ep, 1) <= 0)
+            isOutOfAmmo
         ){
+            // reload if out of ammo
             PressButton(ep, Button.Reload);
         }
     }
@@ -1335,6 +1357,7 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
         // melee
         while(
             actionState == ActionState.Attack &&
+            target != 0 &&
             DistanceBetween(ep, target) <= meleeRange &&
             (
                 Health(target) <= meleeDamage * 2 ||
@@ -1351,107 +1374,140 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
         if(enemyType == EnemyType.Zombie) Abort();
 
         // hero unique action
-        // change secondary arm
+        // Ashe
         if(
-            (HeroOf() == Hero.Mercy && actionState == ActionState.Attack) ||
-            (isLifeWeever && actionState == ActionState.Attack)
+            HeroOf() == Hero.Ashe
         ){
-            // change to gun
-            SetWeapon(ep, 2);
+            if(
+                IsReloading()
+            ){
+                // ignore button control for reduce reload cancel primary shot
+                isRepeatReloading = true;
+                // save aiming state
+                define isUsingScorp! = IsButtonHeld(ep, Button.SecondaryFire);
+                // reload by empty ammo count
+                while(
+                    IsAlive() &&
+                    MaxAmmo(ep, 0) > Ammo(ep, 0)                
+                ){
+                    WaitRandomForDistributeServerLoad();
+                    
+                    StopHoldingButton(ep, Button.PrimaryFire);
+                    StopHoldingButton(ep, Button.SecondaryFire);
+                    Wait(0.25, WaitBehavior.IgnoreCondition);    // wait stop repeat fire
+                    PressButton(ep, Button.Reload);
+                }
+                if(
+                    IsAlive() &&
+                    isUsingScorp
+                ){
+                    // recover aiming state
+                    StartHoldingButton(ep, Button.SecondaryFire);
+                }
+                // release ignore button control
+                isRepeatReloading = false;
+            }
         }
+        // Mercy
+        else if(
+            HeroOf() == Hero.Mercy
+        ){
+            if(actionState == ActionState.Attack){
+                // change to gun
+                SetWeapon(ep, 2);
+            }
+            else if(actionState == ActionState.Support){
+                // change to heal arm
+                SetWeapon(ep, 1);
+                if(
+                    // by target health
+                    ProbabilityTrue(100 * NormalizedHealth(target))
+                ){
+                    // damage boost
+                    StopHoldingButton(ep, Button.PrimaryFire);
+                    StartHoldingButton(ep, Button.SecondaryFire);
+                }
+                else{
+                    // heal
+                    StopHoldingButton(ep, Button.SecondaryFire);
+                    StartHoldingButton(ep, Button.PrimaryFire);
+                }
+            }
+        }
+        // LifeWeever
+        else if(isLifeWeever){
+            if(actionState == ActionState.Attack){
+                // change to gun
+                SetWeapon(ep, 2);
+            }
+            else if(actionState == ActionState.Support){
+                // change to heal arm
+                SetWeapon(ep, 1);
+            }
+
+            // lift up own
+            if(
+                ProbabilityTrue(50) &&
+                AbilityCharge(ep, Button.SecondaryFire) <= 0
+            ){
+                for(define tryCount!; tryCount < 4; tryCount++){
+                    StopMove(ep);
+                    FacingTargetBetweenPosition(0.01, target);
+                    Wait(0.25, WaitBehavior.IgnoreCondition);
+                    
+                    PressButton(ep, Button.SecondaryFire);
+                    if(AbilityCooldown(ep, Button.SecondaryFire) > 0){
+                        break;
+                    }
+                }
+                StartFacingTarget();
+            }
+        }
+        // Torbjorn
         else if(
             HeroOf() == Hero.Torbjorn
         ){
-            // change to gun
-            SetWeapon(ep, 1);
-        }
-        else{
-            // change to support arm
-            SetWeapon(ep, 1);
-        }
-
-        // ashe
-        if(
-            HeroOf() == Hero.Ashe &&
-            IsReloading()
-        ){
-            isRepeatReloading = true;   // ignore button control
-
-            define isUsingScorp! = IsButtonHeld(ep, Button.SecondaryFire);
-
-            // reload by empty ammo count
-            while(
-                IsAlive() &&
-                MaxAmmo(ep, 0) > Ammo(ep, 0)                
-            ){
-                WaitRandomForDistributeServerLoad();
-                
-                StopHoldingButton(ep, Button.PrimaryFire);
-                StopHoldingButton(ep, Button.SecondaryFire);
-                Wait(0.5, WaitBehavior.IgnoreCondition);    // wait stop repeat fire
-                PressButton(ep, Button.Reload);
-            }
-
             if(
-                IsAlive() &&
-                isUsingScorp
+                // change to melee mode condition
+                ProbabilityTrue(50) &&
+                DistanceBetween(ep, target) <= meleeRange * 3.0
             ){
-                StartHoldingButton(ep, Button.SecondaryFire);
-            }
-            
-            isRepeatReloading = false;
-        }
-
-        // Mercy
-        if(
-            HeroOf() == Hero.Mercy &&
-            Weapon() == 1 &&
-            actionState != ActionState.Support
-        ){
-            if(
-                // by target health
-                ProbabilityTrue(100 * NormalizedHealth(target))
-            ){
-                // damage boost
-                StopHoldingButton(ep, Button.PrimaryFire);
-                StartHoldingButton(ep, Button.SecondaryFire);
-            }
-            else{
-                // heal
-                StopHoldingButton(ep, Button.SecondaryFire);
-                StartHoldingButton(ep, Button.PrimaryFire);
-            }
-        }
-        
-        // WreckingBall
-        else if(
-            HeroOf() == Hero.WreckingBall &&
-            AbilityCooldown(ep, Button.Crouch) <= 0 &&
-            IsButtonHeld(ep, Button.Crouch)
-        ){
-            // jump for pile driver
-            ApplyImpulse(ep, Up(),
-                10, Relative.ToWorld, ContraryMotion.Cancel);
-        }
-
-        // Torbjorn
-        else if(
-            HeroOf() == Hero.Torbjorn &&
-            ProbabilityTrue(50)
-        ){
-            while(
-                DistanceBetween(ep, target) <= meleeRange * 1.5
-            ){
-                WaitRandomForDistributeServerLoad();
-
+                // change to melee arm
+                SetWeapon(ep, 2);
                 // move foward for melee
                 moveDirFB = Forward();
                 moveDirLR = NoDirection();
                 StartMove(ep);
-                // melee by hammer
-                SetWeapon(ep, 2);
-                PressButton(ep, Button.PrimaryFire);
-                Wait(0.5, WaitBehavior.AbortWhenFalse);
+
+                while(
+                    // continue melee mode condition
+                    target != 0 &&
+                    DistanceBetween(ep, target) <= meleeRange * 1.5
+                ){
+                    WaitRandomForDistributeServerLoad();
+
+                    // melee by hammer
+                    PressButton(ep, Button.PrimaryFire);
+                    Wait(0.5, WaitBehavior.AbortWhenFalse);
+                }
+            }
+            else{
+                // change to gun
+                SetWeapon(ep, 1);
+            }
+        }
+        // WreckingBall
+        else if(
+            HeroOf() == Hero.WreckingBall
+        ){
+            if(
+                // can use pile driver
+                AbilityCooldown(ep, Button.Crouch) <= 0 &&
+                IsButtonHeld(ep, Button.Crouch)
+            ){
+                // jump for pile driver
+                ApplyImpulse(ep, Up(),
+                    10, Relative.ToWorld, ContraryMotion.Cancel);
             }
         }
     }
