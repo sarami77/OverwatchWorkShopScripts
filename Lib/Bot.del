@@ -15,7 +15,7 @@ enum BotAsset{
 // TAG EnemyType ----------
 playervar define enemyType;
 enum EnemyType{
-    None = 0,
+    Non = 0,
     Minion = 1,
     Elite = 2,
     General = 3,
@@ -71,15 +71,38 @@ void CreateBotsByAsset(define asset, define team, define addLimitNum)"CreateBots
     }
 }
 
-void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsByHeroList"{
+void CreateBotsByHeroList(define heroList, define team)"CreateBotsByHeroList"{
     // create bot by asset
-    for(define slotIdx! = 0; slotIdx < num; slotIdx++){
+    for(define listIdx! = 0; listIdx < CountOf(heroList); listIdx++){
         // get empty slot
         define slot! = GetEmptySlotNo(team);
         for(
-            define tryCount = 10;
-            tryCount > 0 && PlayersInSlot(slot, team) == null;
-            tryCount --
+            define tryCount = 0;
+            tryCount <= 10 && PlayersInSlot(slot, team) == null;
+            tryCount ++
+        ){
+            // create bot
+            CreateDummyBot(
+                heroList[listIdx],
+                team,
+                slot,
+                SpawnPoints(team)[0],
+                RandomDirection()
+            );
+            Wait(0.2, WaitBehavior.IgnoreCondition);
+        }
+    }
+}
+
+void CreateBotsByHeroRandomList(define heroList, define num, define team)"CreateBotsByHeroRandomList"{
+    // create bot by asset
+    for(define listIdx! = 0; listIdx < num; listIdx++){
+        // get empty slot
+        define slot! = GetEmptySlotNo(team);
+        for(
+            define tryCount = 0;
+            tryCount <= 10 && PlayersInSlot(slot, team) == null;
+            tryCount ++
         ){
             // create bot
             CreateDummyBot(
@@ -96,13 +119,13 @@ void CreateBotsByHeroList(define heroList, define num, define team)"CreateBotsBy
 
 void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHeroInput"{
     // create bot by asset
-    for(define slotIdx! = 0; slotIdx < num; slotIdx++){
+    for(define listIdx! = 0; listIdx < num; listIdx++){
         // get empty slot
         define slot! = GetEmptySlotNo(team);
         for(
-            define tryCount = 10;
-            tryCount > 0 && PlayersInSlot(slot, team) == null;
-            tryCount --
+            define tryCount = 0;
+            tryCount <= 10 && PlayersInSlot(slot, team) == null;
+            tryCount ++
         ){
             // create bot
             CreateDummyBot(
@@ -177,6 +200,7 @@ define Bot_ActionRange_Far: 30;
 
 playervar define actionRangeMin!;
 playervar define actionRangeMax!;
+playervar define routineInitCompleted!;
 
 rule: "Bot/SetActionRoutineBySpawned"
 Event.OngoingPlayer
@@ -186,6 +210,8 @@ if(
     HasSpawned()
 ){
     SetHeroActionRoutine();
+    // start StateControl
+    routineInitCompleted = true;
 }
 
 rule: "Bot/SetActionRoutineByStartDuplicate"
@@ -700,7 +726,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
             Button.Ability1
         ];
 
-    }
+    }    
 }
 
 enum ActionState{
@@ -775,22 +801,34 @@ define FindSupportTarget()"FindSupportTarget"{
 }
 
 define FindTarget()"FindTarget"{
-    // by supportPrioloty
-    if(ProbabilityTrue(100 * supportPrioloty))
-    {
-        // find support target
-        target = FindSupportTarget();
+    define candidateTarget!;
 
-        // not found heal target
-        if(target == 0){
-            // find attack target
-            target = FindAttackTarget();
+    for(define tryCount! = 0; tryCount <= 3; tryCount++){
+        // by supportPrioloty
+        if(ProbabilityTrue(100 * supportPrioloty))
+        {
+            // find support target
+            candidateTarget = FindSupportTarget();
+
+            // not found heal target
+            if(candidateTarget == 0){
+                // find attack target
+                candidateTarget = FindAttackTarget();
+            }
         }
+        else{
+            // find attack target
+            candidateTarget = FindAttackTarget();
+        }
+
+        if(candidateTarget != 0){
+            break;
+        }
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        WaitRandomForDistributeServerLoad();
     }
-    else{
-        // find attack target
-        target = FindAttackTarget();
-    }
+
+    target = candidateTarget;
 }
 
 define GetNextActionState()"GetNextActionState"{
@@ -800,33 +838,35 @@ define GetNextActionState()"GetNextActionState"{
         IsAlive() &&
         HasSpawned(target)
     ){
-        // target is enemy
-        if(TeamOf() != TeamOf(target)){
+        // target is friend and can support
+        if(
+            TeamOf() == TeamOf(target)
+        ){
             // Attack state
-            nextActionState = ActionState.Attack;
+            nextActionState = ActionState.Support;
         }
         else{
             // Support state
-            nextActionState = ActionState.Support; 
+            nextActionState = ActionState.Attack; 
         }
     }
     else{
         // target has not spawn
-        nextActionState = ActionState.Non;
+        nextActionState = ActionState.Non;  
     }
     
     return nextActionState;
 }
 
-void ApplyNextActionState(define player, define nextActionState!) "ApplyNextActionState"{
+void SetActionState(define player, define nextActionState!) "SetActionState"{
     // if state changed
     if(nextActionState != player.actionState){
         // next state is not Non state
         if(nextActionState != ActionState.Non){
             // set Non state for restart button control
             player.actionState = ActionState.Changing;
-            WaitChangeState();
-        }       
+            // WaitChangeState();
+        }
         // set next state
         player.actionState = nextActionState;        
     }
@@ -837,8 +877,8 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    HasSpawned() &&
-    IsAlive()
+    IsAlive() &&
+    routineInitCompleted
 ){
     // is not in spawn room
     if(
@@ -846,8 +886,8 @@ if(
     ){ 
         // get targetSighted
         define targetSighted! =
-            target != ep &&      // not own
             target != 0 &&       // targe valid
+            target != ep &&      // not own
 
             IsAlive(target) &&      // target alive
             HasSpawned(target) &&   // target spawned
@@ -897,7 +937,6 @@ if(
                 // change target 
                 tryGetTarget = true;
             }
-            
             else if(
                 // by support prioloty
                 ProbabilityTrue(100 * supportPrioloty) ||
@@ -917,7 +956,7 @@ if(
     }
 
     // apply next state
-    ApplyNextActionState(ep, GetNextActionState());
+    SetActionState(ep, GetNextActionState());
 
     // call attack by near bots
     CallAttackNearBot();
@@ -938,7 +977,7 @@ if(
     // reset target
     target = 0;
     // apply next state
-    ApplyNextActionState(ep, ActionState.Non);
+    SetActionState(ep, ActionState.Non);
 }
 
 rule: "Bot/ActionState/ChangeTargetByTargetDead"
@@ -952,7 +991,7 @@ if(
     // find next target
     FindTarget();
     // apply next state
-    ApplyNextActionState(ep, GetNextActionState());
+    SetActionState(ep, GetNextActionState());
 }
 
 rule: "Bot/ActionState/ChangeSupportTargetByTargetHealCompleted"
@@ -966,10 +1005,10 @@ if(
     // find next target
     FindTarget();
     // apply next state
-    ApplyNextActionState(ep, GetNextActionState());
+    SetActionState(ep, GetNextActionState());
 }
 
-rule: "Bot/ActionState/ChangeAttackTargetByDamageTaken"
+rule: "Bot/ActionState/ChangeTargetByDamageTaken"
 Event.OnDamageTaken
 if(
     isBotEnableTeam &&
@@ -979,19 +1018,19 @@ if(
 ){
     // change target by target helth
     if(
-        ProbabilityTrue(100 * NormalizedHealth(target))
+        ProbabilityTrue(50 * NormalizedHealth(target))
     ){
         // set target by attacker
         target = Attacker();
     }
     // apply next state
-    ApplyNextActionState(ep, GetNextActionState());
+    SetActionState(ep, GetNextActionState());
 
     // call attack by near bots
     CallAttackNearBot();
 
     // reduce overrun
-    Wait(1.0, WaitBehavior.IgnoreCondition);
+    Wait(3.0, WaitBehavior.IgnoreCondition);
 }
 
 rule: "Bot/ActionState/CallAttackByDamageTaken"
@@ -1005,13 +1044,10 @@ if(
     // set target by attacker
     target = Attacker();
     // apply next state
-    ApplyNextActionState(ep, GetNextActionState());
+    SetActionState(ep, GetNextActionState());
 
     // call attack by near bots
     CallAttackNearBot();
-
-    // reduce overrun
-    Wait(1.0, WaitBehavior.IgnoreCondition);
 }
 
 globalvar define isCallAttackCoolingDown1! = false;
@@ -1028,12 +1064,10 @@ void CallAttackNearBot()"CallAttackNearBot"{
         isCallAttackCoolingDown2 = true;
     }
 
-    // in combat
+    // in attack
     if( 
-        actionState != ActionState.Non
+        actionState == ActionState.Attack
     ){
-        // dbgHudTxt(<"CallAttackNearBot team=<0>", team>);
-
         // get near idle bot
         define nearFriends = FilteredArray(
             PlayersWithinRadius(
@@ -1051,10 +1085,10 @@ void CallAttackNearBot()"CallAttackNearBot"{
             // set target
             nearFriends[nearFriendsIndex].target = ep.target;
             // set attack 
-            ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
-            // wait for reduce over load by bot logic overlap
-            Wait(0.1, WaitBehavior.IgnoreCondition);
+            SetActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
         }
+
+        // dbgHudTxt(<"CallAttackNearBot team=<0>, count=<1>", TeamOf(), CountOf(nearFriends)>);
     }
 }
 
@@ -1078,15 +1112,16 @@ void setMoveDir() playervar "setMoveDir"{
     if(enemyType == EnemyType.Zombie){
         moveDirFB = Forward();
         moveDirLR = NoDirection();
-        Abort();
+        return;
     }
 
     define isMoveToHealer! = false;
     define distToTarget! = DistanceBetween(ep, target);
 
     // set move dir front/back
-    // need healing
+    // retreat for recevie heal
     if(
+        actionState == ActionState.Attack &&
         enableRetreat ?
             ProbabilityTrue(150 * (1 - NormalizedHealth())) :
             false
@@ -1148,8 +1183,8 @@ void setMoveDir() playervar "setMoveDir"{
         if(actionState == ActionState.Attack){
             // start sidestep by distance and health
             if(
-                ProbabilityTrue(50 * (1 - NormalizedHealth())) ||   // by lost health
-                ProbabilityTrue(50 * (1 - (distToTarget / 30)))     // by target distance clsoe
+                ProbabilityTrue(75 * (1 - NormalizedHealth())) ||   // by lost health
+                ProbabilityTrue(75 * (1 - (distToTarget / 30)))     // by target distance clsoe
             ){
                 if(moveDirLR == NoDirection()){
                     moveDirLR = RandomValueInArray([Right(), Left()]);
@@ -1169,13 +1204,11 @@ void setMoveDir() playervar "setMoveDir"{
     }
 }
 
-define noMoving: false;   // for debug
-
 playervar define enableCheckAbyss! = true;
 playervar define confirmMoveDir!;
 
 void StartMove(define player!) playervar "StartMove"{
-    AbortIf(noMoving);
+    if(noMoving) return;
 
     player.confirmMoveDir = player.moveDirFB + player.moveDirLR;
     // move to position is abyss
@@ -1315,8 +1348,7 @@ if(
 
 // TAG Bot/HeroUniqueAction ----------
 playervar define isRepeatReloading!;
-
-define meleeDamage: 25;
+define meleeDamage: 25.0;
 define meleeRange: 3.0;
 
 define isOutOfAmmo:
@@ -1350,7 +1382,6 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
         // melee
         while(
             actionState == ActionState.Attack &&
-            target != 0 &&
             DistanceBetween(ep, target) <= meleeRange &&
             (
                 Health(target) <= meleeDamage * 2 ||
@@ -1372,28 +1403,21 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
             if(
                 IsReloading()
             ){
-                // ignore button control for reduce reload cancel primary shot
+                // disable button control for reduce reload cancel by primary shot
                 isRepeatReloading = true;
-                // save aiming state
-                define isUsingScorp! = IsButtonHeld(ep, Button.SecondaryFire);
-                // reload by empty ammo count
-                while(
-                    IsAlive() &&
-                    MaxAmmo(ep, 0) > Ammo(ep, 0)                
-                ){
+                // reload until full load
+                for(define tryCount! = 0; tryCount <= 3; tryCount++){
                     StopHoldingButton(ep, Button.PrimaryFire);
                     StopHoldingButton(ep, Button.SecondaryFire);
-                    Wait(0.25, WaitBehavior.IgnoreCondition);    // wait stop repeat fire
+                    Wait(0.5, WaitBehavior.AbortWhenFalse);    // wait stop repeat fire
                     PressButton(ep, Button.Reload);
+                    if(MaxAmmo(ep, 0) <= Ammo(ep, 0)){
+                        break;
+                    }
                 }
-                if(
-                    IsAlive() &&
-                    isUsingScorp
-                ){
-                    // recover aiming state
-                    StartHoldingButton(ep, Button.SecondaryFire);
-                }
-                // release ignore button control
+                // recover aiming
+                StartHoldingButton(ep, Button.SecondaryFire);
+                // recover button control
                 isRepeatReloading = false;
             }
         }
@@ -1439,18 +1463,20 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
             // lift up own
             if(
                 ProbabilityTrue(50) &&
-                AbilityCharge(ep, Button.SecondaryFire) <= 0
+                AbilityCooldown(ep, Button.SecondaryFire) <= 0
             ){
-                for(define tryCount!; tryCount < 4; tryCount++){
+                // try use lift on own below
+                for(define tryCount! = 0; tryCount <= 3; tryCount++){
                     StopMove(ep);
                     FacingTargetBetweenPosition(0.01, target);
-                    Wait(0.25, WaitBehavior.IgnoreCondition);
+                    Wait(0.5, WaitBehavior.AbortWhenFalse);
                     
                     PressButton(ep, Button.SecondaryFire);
                     if(AbilityCooldown(ep, Button.SecondaryFire) > 0){
                         break;
                     }
                 }
+                // recover target
                 StartFacingTarget();
             }
         }
@@ -1460,19 +1486,24 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
         ){
             // fallback by graple hook
             if(
-                ProbabilityTrue(50) &&
-                AbilityCharge(ep, Button.Ability1) <= 0
+                DistanceBetween(ep, target) <= Bot_ActionRange_Middle &&
+                AbilityCooldown(ep, Button.Ability1) <= 0
             ){
-                for(define tryCount!; tryCount < 4; tryCount++){
+                // try use graple at backword
+                for(define tryCount! = 0; tryCount <= 3; tryCount++){
                     StopMove(ep);
-                    FacingTargetBetweenPosition(0.01, target);
-                    Wait(0.25, WaitBehavior.IgnoreCondition);
-                    
-                    PressButton(ep, Button.SecondaryFire);
-                    if(AbilityCooldown(ep, Button.SecondaryFire) > 0){
+                    StopHoldingButton(ep, Button.PrimaryFire);
+                    StopHoldingButton(ep, Button.SecondaryFire);
+                    InverseFacingTarget(target);
+                    Wait(0.5, WaitBehavior.AbortWhenFalse);
+                    PressButton(ep, Button.Ability1);
+                    if(AbilityCooldown(ep, Button.Ability1) > 0){
                         break;
                     }
                 }
+                // recover aiming
+                StartHoldingButton(ep, Button.SecondaryFire);
+                // recover target
                 StartFacingTarget();
             }
         }
@@ -1484,20 +1515,20 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
             if(
                 // change to melee mode condition
                 ProbabilityTrue(50) &&
-                DistanceBetween(ep, target) <= meleeRange * 3.0
+                DistanceBetween(ep, target) <= Bot_ActionRange_Close
             ){
                 // change to melee arm
                 SetWeapon(ep, 2);
-                // move foward for melee
-                moveDirFB = Forward();
-                moveDirLR = NoDirection();
-                StartMove(ep);
 
                 while(
                     // continue melee mode condition
-                    target != 0 &&
-                    DistanceBetween(ep, target) <= meleeRange * 1.5
+                    ProbabilityTrue(95) &&
+                    DistanceBetween(ep, target) <= Bot_ActionRange_Close
                 ){
+                    // move foward for melee
+                    moveDirFB = Forward();
+                    moveDirLR = NoDirection();
+                    StartMove(ep);
                     // melee by hammer
                     PressButton(ep, Button.PrimaryFire);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
@@ -1644,7 +1675,7 @@ if(
     if(isPositionAimUltmate){
         StopHoldingButton(ep, Button.PrimaryFire);
         StopHoldingButton(ep, Button.SecondaryFire);
-        for(define tryCount!; tryCount < 4; tryCount++){
+        for(define tryCount! = 0; tryCount <= 3; tryCount++){
             FacingTargetBetweenPosition(0.5, target);
             Wait(0.25, WaitBehavior.IgnoreCondition);
 
@@ -1658,6 +1689,7 @@ if(
                 break;
             }
         }
+        // recover target
         StartFacingTarget();
     }
 }
@@ -1688,7 +1720,7 @@ if(
 
     if(isPositionAimSecondary){
         StopHoldingButton(ep, Button.PrimaryFire);
-        for(define tryCount!; tryCount < 4; tryCount++){
+        for(define tryCount! = 0; tryCount <= 3; tryCount++){
             FacingTargetBetweenPosition(0.25, target);
             Wait(0.25, WaitBehavior.IgnoreCondition);
             
@@ -1697,6 +1729,7 @@ if(
                 break;
             }
         }
+        // recover target
         StartFacingTarget();
     }
 }
@@ -1750,6 +1783,9 @@ if(
 
 
 // TAG Bot/ButtonControl ----------
+define noShooting: false;   // for debug
+define noMoving: false;   // for debug
+
 enum ButtonControl{
     button,
     buttonBehaivor,
@@ -1762,21 +1798,19 @@ enum ButtonControl{
 playervar define isRepeatFiring;
 playervar define repeatDuring;
 
-
 Boolean isMatchButton(define matchButton!, define butttons!){
     return IsTrueForAny(butttons, ae == matchButton);
 }
 
 define buttonControlPressScale: 1.0;
 define buttonControlReleaseScale: 1.0;
-define noShooting: false;   // for debug
 
 void StartButtonControl(define bc){
-    AbortIf(noShooting);
+    if(noShooting) return;
     if(enemyType == EnemyType.Zombie) Abort();
 
     define startButton! = false;
-    define checkButton! = [
+    define checkButtons! = [
         Button.PrimaryFire,
         Button.SecondaryFire,
         Button.Ability1,
@@ -1784,7 +1818,7 @@ void StartButtonControl(define bc){
     
     // if check button
     if(
-        isMatchButton(bc[ButtonControl.button], checkButton)
+        isMatchButton(bc[ButtonControl.button], checkButtons)
     ){
         // if match attack state buttons
         if(
@@ -1852,7 +1886,8 @@ void StartButtonControl(define bc){
                 );
 
                 StopHoldingButton(ep, bc[ButtonControl.button]);
-                PressFirstButtonWhenIdle();
+
+                // PressFirstButtonWhenIdle();
             }
         }
         // release-repeat action
@@ -1874,15 +1909,14 @@ void StartButtonControl(define bc){
                 isRepeatFiring = true;
 
                 while(
-                    isRepeatFiring                    
+                    isRepeatFiring&&
+                    !isRepeatReloading               
                 ){
-                    if(!isRepeatReloading){
-                        PressButton(ep, bc[ButtonControl.button]);
-                    }
+                    PressButton(ep, bc[ButtonControl.button]);
                     Wait(0.25, WaitBehavior.AbortWhenFalse);
                 }
 
-                PressFirstButtonWhenIdle();
+                // PressFirstButtonWhenIdle();
             }
         }
         // else
@@ -1903,12 +1937,12 @@ if(
 void PressFirstButtonWhenIdle()"PressFirstButtonWhenIdle"{
     Wait(0.1, WaitBehavior.AbortWhenFalse);
     if(
+        !IsReloading() &&
         !IsFiringPrimary() &&
         !IsFiringSecondary() &&
         !IsUsingAbility1() &&
         !IsUsingAbility2()
     ){
-        define button!;
         if(actionState == ActionState.Attack){
             StartHoldingButton(ep, FirstOf(attackButtons));
         }
@@ -2083,3 +2117,20 @@ if(
 }
 
 // TAG Debug ----------
+rule: "Bot/ButtonControl/StopButtonControl"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot()
+){
+        CreateInWorldText(
+            AllPlayers(),
+            actionState == ActionState.Non ? "Non" :
+            actionState == ActionState.Changing ? "Changing" :
+            actionState == ActionState.Attack ? "Attack" :
+            actionState == ActionState.Support ? "Support" :
+            "Error",
+            EyePosition(ep) + Vector(0, 1.0, 0), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+            Color.Yellow, Spectators.DefaultVisibility);
+
+}

@@ -12,8 +12,8 @@ globalvar define initCompleted!;
 rule: "BuiltinGlobal"
 Event.OngoingGlobal
 {
-    DisableInspectorRecording();
-    Wait(0);
+    // DisableInspectorRecording();
+    Wait(8);
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
     initCompleted = true;
     dbgHudTxt("initCompleted");
@@ -26,56 +26,94 @@ if(
     initCompleted
 ){
     dbgHudTxt("DebugCode");
-    define lifeWeever = null;
+    // define lifeWeever = null;
+    // while(true){
+    //     DestroyBots(playerTeam);
+    //     CreateBotsByHeroList(AllSupportHeroes(), 16, playerTeam);
+    //     WaitUntil(NumberOfPlayers(playerTeam) >= 16, 10);
 
-    while(true){
-        DestroyBots(playerTeam);
-        CreateBotsByHeroList(AllSupportHeroes(), 16, playerTeam);
-        WaitUntil(NumberOfPlayers(playerTeam) >= 16, 10);
-
-        lifeWeever = FirstOf(
-            FilteredArray(
-            AllPlayers(playerTeam),
-            ae.isLifeWeever
-            )
-        );
-        if(lifeWeever != null){
-            break;
-        }
-        Wait(0.1);
-    }
-    lifeWeever = HeroOf(lifeWeever);
-
-    DestroyBots(playerTeam);
-    
-    // CreateBotsByHeroList([Hero.Ashe], 1, playerTeam);
-    // CreateBotsByHeroList([Hero.WreckingBall], 1, playerTeam);
-    // CreateBotsByHeroList([lifeWeever], 2, playerTeam);    
-
-    // CreateBotsByHeroList([Hero.WreckingBall], 1, playerTeam);
-    // CreateBotsByHeroList([Hero.WreckingBall], 1, enemyTeam);
-    // CreateBotsByHeroList([lifeWeever], 1, playerTeam);
-    // CreateBotsByHeroList([lifeWeever], 1, enemyTeam);
-    // CreateBotsByHeroList([Hero.Mercy], 1, playerTeam);
-    // CreateBotsByHeroList([Hero.Mercy], 1, enemyTeam);
-
-    // CreateBotsByHeroList([Hero.WreckingBall], 1, playerTeam);
-    // CreateBotsByHeroList([lifeWeever], 1, playerTeam);    
-    CreateBotsByHeroList(Hero.Widowmaker, 10, playerTeam);
-    CreateBotsByHeroList(Hero.Widowmaker, 10, enemyTeam);
-    // CreateBotsByHeroList([Hero.Reinhardt], 1, enemyTeam);
-    // CreateBotsByHeroList([Hero.Mercy], 1, enemyTeam);
-    // CreateBotsByHeroList([lifeWeever], 1, enemyTeam);
+    //     lifeWeever = FirstOf(
+    //         FilteredArray(
+    //         AllPlayers(playerTeam),
+    //         ae.isLifeWeever
+    //         )
+    //     );
+    //     if(lifeWeever != null){
+    //         break;
+    //     }
+    //     Wait(0.1);
+    // }
+    // lifeWeever = HeroOf(lifeWeever);
+    // DestroyBots(playerTeam);
     
 
+    define pList = [
+        Hero.Reinhardt
+        // Hero.Widowmaker,
+        // Hero.Ashe,
+        // Hero.Reaper,
+        // Hero.Torbjorn,
+        // Hero.Moira
+        // // lifeWeever
+    ];
+    CreateBotsByHeroList(pList, playerTeam);    
+
+        SetRespawnMaxTime(AllPlayers(playerTeam), 3);
+        SetMaxHealth(AllPlayers(playerTeam), 10000);
+        Heal(AllPlayers(playerTeam), null, MaxValue());
+        StartScalingPlayer(AllPlayers(playerTeam), 10, false);
+        SetMoveSpeed(AllPlayers(playerTeam), 500);
+        SetDamageReceived(AllPlayers(playerTeam), 10);
+        SetDamageDealt(AllPlayers(playerTeam), 1000);
+
+    define eList = [
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper,
+        Hero.Reaper
+        // Hero.Widowmaker,
+        // Hero.Ashe,
+        // Hero.Reinhardt,
+        // Hero.Reaper,
+        // Hero.Torbjorn,
+        // Hero.Moira
+        // lifeWeever
+    ];
+    CreateBotsByHeroList(eList, enemyTeam);  
+
+    SetRespawnMaxTime(AllPlayers(enemyTeam), 100);
+    
     while(true){
+        SetStatus(HostPlayer(), null, Status.PhasedOut, MaxValue());
+
         // define targets = 
         //     FilteredArray(
         //         AllPlayers(Team.All),
         //         HeroOf(ae) == Hero.Torbjorn
         //     );
-        SetStatus(AllPlayers(playerTeam), null, Status.Unkillable, MaxValue());
-        SetRespawnMaxTime(AllPlayers(), 1);
+        // SetStatus(AllPlayers(playerTeam), null, Status.Unkillable, MaxValue());
+
         // SetPrimaryFireEnabled(targets, false);
         // SetSecondaryFireEnabled(targets, false);
         // SetAbility1Enabled(targets, false);
@@ -83,6 +121,9 @@ if(
         // SetUltimateAbilityEnabled(targets, false);
         // Damage(targets, null, MaxValue());
         Wait(1);
+        if(CountOf(AllLivingPlayers(enemyTeam)) <= 0)
+            Respawn(AllPlayers(enemyTeam));
+        
     }
 }
 
@@ -91,10 +132,10 @@ if(
 rule: "debug"
 Event.OngoingPlayer
 if(
-    ep == HostPlayer() &&
-    IsButtonHeld(ep, Button.Melee)
+    TeamOf() == enemyTeam &&
+    IsAlive()
 ){
-
+    Teleport(ep, Vector(RandomReal(-20, 20), 0, RandomReal(-20, 20)));
 }
 
 // killCount -----------------------------------------------
@@ -150,12 +191,24 @@ globalvar define debugHuds!;
 define Last():
     CountOf(debugHuds);
 
+define AimingPositonOf(define player):
+    RayCastHitPosition(
+        EyePosition(player),
+        EyePosition(player) +
+            (FacingDirectionOf(player) * MaxLength()),
+        null,
+        null,
+        false
+    );
+
 rule: "showParam"
 Event.OngoingGlobal
 {
     debugHuds[Last()] = CreateDebugHud("tune Val", tuneVal, Color.Orange);
+    debugHuds[Last()] = CreateDebugHud("count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad, Color.Orange);
     debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Red);
     debugHuds[Last()] = CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Red);
+    debugHuds[Last()] = CreateDebugHud("Distance to aim pos", DistanceBetween(HostPlayer(), AimingPositonOf(HostPlayer())), Color.Orange);
     debugHuds[Last()] = CreateDebugHud("player team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, Color.Team1);
     debugHuds[Last()] = CreateDebugHud("enemy team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team2);
     debugHuds[Last()] = CreateDebugHud("killCountTeam1", killCountTeam1, Color.Team1);
