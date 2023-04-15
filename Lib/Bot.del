@@ -840,8 +840,6 @@ if(
     HasSpawned() &&
     IsAlive()
 ){
-    WaitRandomForDistributeServerLoad();
-
     // is not in spawn room
     if(
         IsAlive()
@@ -925,6 +923,7 @@ if(
     CallAttackNearBot();
 
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    WaitRandomForDistributeServerLoad();
     LoopIfConditionIsTrue();
 }
 
@@ -950,8 +949,6 @@ if(
     actionState != ActionState.Non &&
     Victim() == target
 ){
-    WaitRandomForDistributeServerLoad();
-
     // find next target
     FindTarget();
     // apply next state
@@ -966,8 +963,6 @@ if(
     actionState == ActionState.Support &&
     NormalizedHealth(target) >= 1.0
 ){
-    WaitRandomForDistributeServerLoad();
-
     // find next target
     FindTarget();
     // apply next state
@@ -982,8 +977,6 @@ if(
     actionState != ActionState.Non &&
     Attacker() != ep
 ){
-    WaitRandomForDistributeServerLoad();
-
     // change target by target helth
     if(
         ProbabilityTrue(100 * NormalizedHealth(target))
@@ -993,6 +986,9 @@ if(
     }
     // apply next state
     ApplyNextActionState(ep, GetNextActionState());
+
+    // call attack by near bots
+    CallAttackNearBot();
 
     // reduce overrun
     Wait(1.0, WaitBehavior.IgnoreCondition);
@@ -1006,8 +1002,6 @@ if(
     actionState == ActionState.Non &&
     Attacker() != ep
 ){
-    WaitRandomForDistributeServerLoad();
-
     // set target by attacker
     target = Attacker();
     // apply next state
@@ -1015,21 +1009,15 @@ if(
 
     // call attack by near bots
     CallAttackNearBot();
+
+    // reduce overrun
+    Wait(1.0, WaitBehavior.IgnoreCondition);
 }
 
 globalvar define isCallAttackCoolingDown1! = false;
 globalvar define isCallAttackCoolingDown2! = false;
 
 void CallAttackNearBot()"CallAttackNearBot"{
-    // target is invalid or friend
-    if( 
-        target == 0 ||
-        TeamOf(ep) == TeamOf(target)
-    ){
-        // abort logic
-        return;
-    }
-
     // check cooldown for reduce overrun
     if(TeamOf() == Team.Team1){
         if(isCallAttackCoolingDown1) return;
@@ -1040,26 +1028,33 @@ void CallAttackNearBot()"CallAttackNearBot"{
         isCallAttackCoolingDown2 = true;
     }
 
-    // dbgHudTxt(<"CallAttackNearBot team=<0>", team>);
+    // in combat
+    if( 
+        actionState != ActionState.Non
+    ){
+        // dbgHudTxt(<"CallAttackNearBot team=<0>", team>);
 
-    define nearFriends = FilteredArray(
-        PlayersWithinRadius(
-            ep, 30, TeamOf(), RadiusLOS.Off
-        ),
-        (
-            // ae != ep &&
-            IsDummyBot() &&
-            IsAlive(ae) &&
-            ae.actionState == ActionState.Non
-        )
-    );
+        // get near idle bot
+        define nearFriends = FilteredArray(
+            PlayersWithinRadius(
+                ep, 30, TeamOf(), RadiusLOS.Off
+            ),
+            (
+                ae != ep &&
+                IsDummyBot(ae) &&
+                IsAlive(ae) &&
+                ae.actionState == ActionState.Non
+            )
+        );
 
-    for(define nearFriendsIndex! = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
-        // set target
-        nearFriends[nearFriendsIndex].target = ep.target;
-        // set attack 
-        ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        for(define nearFriendsIndex! = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
+            // set target
+            nearFriends[nearFriendsIndex].target = ep.target;
+            // set attack 
+            ApplyNextActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
+            // wait for reduce over load by bot logic overlap
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+        }
     }
 }
 
@@ -1075,8 +1070,8 @@ if(
     Loop();
 }
 
-playervar define moveDirFB;
-playervar define moveDirLR;
+playervar define moveDirFB!;
+playervar define moveDirLR!;
 playervar define enableRetreat! = true;
 
 void setMoveDir() playervar "setMoveDir"{
@@ -1260,8 +1255,6 @@ if(
 
     // action loop
     while(actionState == ActionState.Non){
-        WaitRandomForDistributeServerLoad();
-
         if(IsAlive()){
             define nearEnemy! = ClosestPlayerTo(ep, EnemyTeamOf());
             if(
@@ -1282,6 +1275,7 @@ if(
             StopFacing();
         }
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+        WaitRandomForDistributeServerLoad();
     }
 }
 
@@ -1305,8 +1299,6 @@ if(
         actionState == ActionState.Attack ||
         actionState == ActionState.Support
     ){
-        WaitRandomForDistributeServerLoad();
-
         // hero unique action
         polingHeroUniqueAction();
 
@@ -1317,6 +1309,7 @@ if(
         StartMove(ep);
 
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+        WaitRandomForDistributeServerLoad();
     }
 }
 
@@ -1364,8 +1357,6 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
                 enemyType == EnemyType.Zombie
             )
         ){
-            WaitRandomForDistributeServerLoad();
-
             // melee by punch
             PressButton(ep, Button.Melee);
             Wait(0.5, WaitBehavior.AbortWhenFalse);
@@ -1390,8 +1381,6 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
                     IsAlive() &&
                     MaxAmmo(ep, 0) > Ammo(ep, 0)                
                 ){
-                    WaitRandomForDistributeServerLoad();
-                    
                     StopHoldingButton(ep, Button.PrimaryFire);
                     StopHoldingButton(ep, Button.SecondaryFire);
                     Wait(0.25, WaitBehavior.IgnoreCondition);    // wait stop repeat fire
@@ -1435,7 +1424,9 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
             }
         }
         // LifeWeever
-        else if(isLifeWeever){
+        else if(
+            isLifeWeever
+        ){
             if(actionState == ActionState.Attack){
                 // change to gun
                 SetWeapon(ep, 2);
@@ -1463,6 +1454,29 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
                 StartFacingTarget();
             }
         }
+        // Widowmaker
+        else if(
+            HeroOf() == Hero.Widowmaker
+        ){
+            // fallback by graple hook
+            if(
+                ProbabilityTrue(50) &&
+                AbilityCharge(ep, Button.Ability1) <= 0
+            ){
+                for(define tryCount!; tryCount < 4; tryCount++){
+                    StopMove(ep);
+                    FacingTargetBetweenPosition(0.01, target);
+                    Wait(0.25, WaitBehavior.IgnoreCondition);
+                    
+                    PressButton(ep, Button.SecondaryFire);
+                    if(AbilityCooldown(ep, Button.SecondaryFire) > 0){
+                        break;
+                    }
+                }
+                StartFacingTarget();
+            }
+        }
+
         // Torbjorn
         else if(
             HeroOf() == Hero.Torbjorn
@@ -1484,8 +1498,6 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
                     target != 0 &&
                     DistanceBetween(ep, target) <= meleeRange * 1.5
                 ){
-                    WaitRandomForDistributeServerLoad();
-
                     // melee by hammer
                     PressButton(ep, Button.PrimaryFire);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
@@ -1714,8 +1726,6 @@ if(
         StopHoldingButton(ep, Button.PrimaryFire);
         define moveDir!;
         while(IsFiringSecondary()){
-            WaitRandomForDistributeServerLoad();
-
             if(SpeedOf() >= 12){
                 moveDir = VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf()));
             }
@@ -1831,7 +1841,6 @@ void StartButtonControl(define bc){
                     ) * buttonControlReleaseScale,
                     WaitBehavior.AbortWhenFalse
                 );
-                WaitRandomForDistributeServerLoad();
 
                 StartHoldingButton(ep, bc[ButtonControl.button]);
                 Wait(
@@ -1856,7 +1865,6 @@ void StartButtonControl(define bc){
                     ) * buttonControlReleaseScale,
                     WaitBehavior.AbortWhenFalse
                 );
-                WaitRandomForDistributeServerLoad();
 
                 repeatDuring = 
                     RandomReal(
