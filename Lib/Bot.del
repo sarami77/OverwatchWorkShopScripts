@@ -246,8 +246,9 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
     if(enemyType == EnemyType.Zombie){
         actionRangeMin = Bot_ActionRange_Melee;
         actionRangeMax = Bot_ActionRange_Melee;
-        Abort();
+        return;
     }
+
     // basic
     aimScatter = 0.5;
 
@@ -312,6 +313,8 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
     ){
         hero = HeroBeingDuplicated();
     }
+
+
     
     switch(hero){
         case Hero.Ana:
@@ -731,7 +734,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
 enum ActionState{
     Non,
-    Changing,
     Attack,
     Support
 }
@@ -763,6 +765,7 @@ define FindAttackTarget()"FindAttackTarget"{
                 (
                     IsAlive(ae) &&
                     HasSpawned(ae) &&
+                    DistanceBetween(ep, ae) <= Bot_ActionRange_Far &&
                     IsInLineOfSight(EyePosition(ep), EyePosition(ae), BarrierLOS.NoBarriersBlock) &&
                     !(
                         TeamOf() != TeamOf(ae) &&
@@ -787,6 +790,7 @@ define FindSupportTarget()"FindSupportTarget"{
                 (
                     ae != ep &&
                     HasSpawned(ae) &&
+                    DistanceBetween(ep, ae) <= Bot_ActionRange_Far &&
                     NormalizedHealth(ae) < 1.0 &&
                     (
                         CanPhantom(ep) ?
@@ -804,6 +808,8 @@ define FindTarget()"FindTarget"{
     define candidateTarget!;
 
     for(define tryCount! = 0; tryCount <= 3; tryCount++){
+        WaitRandomForDistributeServerLoad();
+                
         // by supportPrioloty
         if(ProbabilityTrue(100 * supportPrioloty))
         {
@@ -825,7 +831,6 @@ define FindTarget()"FindTarget"{
             break;
         }
         Wait(1, WaitBehavior.AbortWhenFalse);
-        WaitRandomForDistributeServerLoad();
     }
 
     target = candidateTarget;
@@ -836,6 +841,7 @@ define GetNextActionState()"GetNextActionState"{
     // has target
     if(
         IsAlive() &&
+        !IsInSpawnRoom() &&
         HasSpawned(target)
     ){
         // target is friend and can support
@@ -861,11 +867,20 @@ define GetNextActionState()"GetNextActionState"{
 void SetActionState(define player, define nextActionState!) "SetActionState"{
     // if state changed
     if(nextActionState != player.actionState){
-        // next state is not Non state
+        // next state is not Non state (need enable button control)
         if(nextActionState != ActionState.Non){
-            // set Non state for restart button control
-            player.actionState = ActionState.Changing;
-            // WaitChangeState();
+            WaitRandomForDistributeServerLoad();
+
+            // already enable button control
+            if(enableButtonControl){
+                // restart button control
+                enableButtonControl = false;
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
+            }
+            enableButtonControl = true;
+        }
+        else{
+            enableButtonControl = false;
         }
         // set next state
         player.actionState = nextActionState;        
@@ -877,9 +892,13 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
+    routineInitCompleted &&
     IsAlive() &&
-    routineInitCompleted
+    !IsInSpawnRoom()
 ){
+    WaitRandomForDistributeServerLoad();
+    Wait(RandomReal(1, 3));
+
     // is not in spawn room
     if(
         IsAlive()
@@ -962,7 +981,6 @@ if(
     CallAttackNearBot();
 
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    WaitRandomForDistributeServerLoad();
     LoopIfConditionIsTrue();
 }
 
@@ -1108,7 +1126,7 @@ playervar define moveDirFB!;
 playervar define moveDirLR!;
 playervar define enableRetreat! = true;
 
-void setMoveDir() playervar "setMoveDir"{
+void SetMoveDirForCombat() playervar "SetMoveDirForCombat"{
     if(enemyType == EnemyType.Zombie){
         moveDirFB = Forward();
         moveDirLR = NoDirection();
@@ -1244,6 +1262,8 @@ void StartMove(define player!) playervar "StartMove"{
 }
 
 void StopMove(define player) playervar "StopMove"{
+    moveDirFB = NoDirection();
+    moveDirLR = NoDirection();
     StopThrottleInDirection(player);
 } 
 
@@ -1261,12 +1281,15 @@ define aimingPosition:
 void StartFacingTarget() playervar "StartFacingTarget"{
     if(
         target != 0 &&
-        target != null &&
+        HasSpawned(target) &&
         IsAlive(target)
     ){
         StartFacing(
             ep, DirectionTowards(EyePosition(), aimingPosition),
             300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+    }
+    else{
+        StopFacing(ep);
     }
 }
 
@@ -1278,38 +1301,19 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Non
 ){
-    moveDirFB = NoDirection();
-    moveDirLR = NoDirection();
+    WaitRandomForDistributeServerLoad();
+
+    // stop facing
+    StopFacing(ep);
+
+    // stop move
     StopMove(ep);
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
 
     // hero unique action
-    polingHeroUniqueAction();
+    PolingHeroUniqueAction();
 
-    // action loop
-    while(actionState == ActionState.Non){
-        if(IsAlive()){
-            define nearEnemy! = ClosestPlayerTo(ep, EnemyTeamOf());
-            if(
-                nearEnemy != null &&
-                DistanceBetween(ep, nearEnemy) <= 30
-            ){
-                // set facing to near enemy
-                StartFacing(
-                    ep, DirectionTowards(ep, nearEnemy),
-                    300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
-            }
-            else{
-                // stop facing
-                StopFacing();
-            }
-        }
-        else{
-            StopFacing();
-        }
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-        WaitRandomForDistributeServerLoad();
-    }
+    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
 }
 
 // TAG Bot/ActionState/AttackOrSupport ----------
@@ -1323,31 +1327,25 @@ if(
         actionState == ActionState.Support
     )
 ){
-    // start facing direction
+    WaitRandomForDistributeServerLoad();
+
+    // start facing
     StartFacingTarget();
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
 
-    // action loop
-    while(
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    ){
-        // hero unique action
-        polingHeroUniqueAction();
+    // set moveDir for comvat
+    SetMoveDirForCombat();
 
-        // set moveDir direction
-        setMoveDir();
+    // start move by moveDir
+    StartMove(ep);
 
-        // start move by moveDir and sideStepDir
-        StartMove(ep);
+    // hero unique action
+    PolingHeroUniqueAction();
 
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-        WaitRandomForDistributeServerLoad();
-    }
+    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    LoopIfConditionIsTrue();
 }
 
 // TAG Bot/HeroUniqueAction ----------
-playervar define isRepeatReloading!;
 define meleeDamage: 25.0;
 define meleeRange: 3.0;
 
@@ -1355,7 +1353,7 @@ define isOutOfAmmo:
         (MaxAmmo(ep, 0) > 0 && Ammo(ep, 0) <= 0) ||
         (MaxAmmo(ep, 1) > 0 && Ammo(ep, 1) <= 0);
 
-void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
+void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
     // common action
     // reload
     if(
@@ -1393,7 +1391,7 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
             Wait(0.5, WaitBehavior.AbortWhenFalse);
         }
 
-        if(enemyType == EnemyType.Zombie) Abort();
+        if(enemyType == EnemyType.Zombie) return;
 
         // hero unique action
         // Ashe
@@ -1403,8 +1401,8 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
             if(
                 IsReloading()
             ){
-                // disable button control for reduce reload cancel by primary shot
-                isRepeatReloading = true;
+                // stop repeat firing for reduce reload cancel
+                isRepeatFiring = false;
                 // reload until full load
                 for(define tryCount! = 0; tryCount <= 3; tryCount++){
                     StopHoldingButton(ep, Button.PrimaryFire);
@@ -1417,8 +1415,6 @@ void polingHeroUniqueAction() playervar "polingHeroUniqueAction"{
                 }
                 // recover aiming
                 StartHoldingButton(ep, Button.SecondaryFire);
-                // recover button control
-                isRepeatReloading = false;
             }
         }
         // Mercy
@@ -1807,18 +1803,20 @@ define buttonControlReleaseScale: 1.0;
 
 void StartButtonControl(define bc){
     if(noShooting) return;
-    if(enemyType == EnemyType.Zombie) Abort();
+    if(enemyType == EnemyType.Zombie) return;
 
     define startButton! = false;
-    define checkButtons! = [
+
+    // state dependent buttons
+    define stateDependemtButtons! = [
         Button.PrimaryFire,
         Button.SecondaryFire,
         Button.Ability1,
         Button.Ability2];
     
-    // if check button
+    // if state dependent buttons
     if(
-        isMatchButton(bc[ButtonControl.button], checkButtons)
+        isMatchButton(bc[ButtonControl.button], stateDependemtButtons)
     ){
         // if match attack state buttons
         if(
@@ -1906,11 +1904,11 @@ void StartButtonControl(define bc){
                         bc[ButtonControl.pressMin],
                         bc[ButtonControl.pressMax]
                     ) * buttonControlPressScale;
-                isRepeatFiring = true;
 
+                isRepeatFiring = true;
+                
                 while(
-                    isRepeatFiring&&
-                    !isRepeatReloading               
+                    isRepeatFiring            
                 ){
                     PressButton(ep, bc[ButtonControl.button]);
                     Wait(0.25, WaitBehavior.AbortWhenFalse);
@@ -1954,16 +1952,14 @@ void PressFirstButtonWhenIdle()"PressFirstButtonWhenIdle"{
 }
 
 // TAG Bot/ButtonControl/PrimaryFire ----------
-define enableButtonControlState:
-    actionState == ActionState.Attack ||
-    actionState == ActionState.Support;
+playervar define enableButtonControl!;
 
 rule: "Bot/ButtonControl/PrimaryFire/StartButtonControl"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    enableButtonControlState
+    enableButtonControl
 ){
     StartButtonControl(
         [
@@ -1983,7 +1979,7 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    enableButtonControlState
+    enableButtonControl
 ){
     StartButtonControl(
         [
@@ -2003,7 +1999,7 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    enableButtonControlState
+    enableButtonControl
 ){
     StartButtonControl(
         [
@@ -2023,7 +2019,7 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    enableButtonControlState
+    enableButtonControl
 ){
     StartButtonControl(
         [
@@ -2043,7 +2039,7 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    enableButtonControlState &&
+    enableButtonControl &&
     UltimateChargePercent() >= DefaultPercentage()
 ){
     StartButtonControl(
@@ -2064,7 +2060,7 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    enableButtonControlState
+    enableButtonControl
 ){
     StartButtonControl(
         [
@@ -2084,7 +2080,7 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    enableButtonControlState
+    enableButtonControl
 ){
     StartButtonControl(
         [
@@ -2104,7 +2100,7 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    !enableButtonControlState
+    !enableButtonControl
 ){
     StopHoldingButton(ep, Button.PrimaryFire);
     StopHoldingButton(ep, Button.SecondaryFire);
@@ -2117,20 +2113,23 @@ if(
 }
 
 // TAG Debug ----------
-rule: "Bot/ButtonControl/StopButtonControl"
+disabled rule: "Bot/Debug/ShowActionStateText"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot()
 ){
-        CreateInWorldText(
-            AllPlayers(),
-            actionState == ActionState.Non ? "Non" :
-            actionState == ActionState.Changing ? "Changing" :
+    CreateInWorldText(
+        AllPlayers(),
+        actionState == ActionState.Non ? "Non" :
             actionState == ActionState.Attack ? "Attack" :
             actionState == ActionState.Support ? "Support" :
-            "Error",
-            EyePosition(ep) + Vector(0, 1.0, 0), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-            Color.Yellow, Spectators.DefaultVisibility);
-
+            "Err",
+        EyePosition(ep) + Vector(0, 1.0, 0),
+        0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
+        actionState == ActionState.Non ? Color.White :
+            actionState == ActionState.Attack ? Color.Red :
+            actionState == ActionState.Support ? Color.Yellow :
+            Color.Purple,
+        Spectators.DefaultVisibility);
 }
