@@ -214,7 +214,7 @@ globalvar define maxBuddyBotNum! =
 
 globalvar define buddyAssetNo!;
 
-globalvar define forceReloadBuddyAsset!;
+globalvar define forceReloadBuddyAsset! = false;
 
 // TAG Buddy/BotAssetInterval ----------
 define assetChangeInterval: RandomInteger(90, 180);
@@ -228,10 +228,12 @@ if(
     define prevAssetNo! = -1;
 
     while(true){
-        // if force reload, skip change assetNo
+        // if force reload, skip change assetNo and set interval
         if(!forceReloadBuddyAsset){
             // choice asset by random
             buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
+            // set default interval
+            reloadBuddyAssetInterval = assetChangeInterval;
         }
 
         if(
@@ -247,22 +249,14 @@ if(
             // create bots by asset
             DestroyBots(playerTeam);
             CreateBotsByAssetWithMutexLock(buddyAssetList[buddyAssetNo], playerTeam, needBuddyNum);
-
             // restore avg ult charge of bots
             SetAvgUltChgOfDummyBot(playerTeam, ultCharge);
         }
 
-        // if force reload, skip set interval
-        if(!forceReloadBuddyAsset){
-            // set default interval
-            reloadBuddyAssetInterval = assetChangeInterval;
-        }
-
         // relealse force reload
         forceReloadBuddyAsset = false;
-
-        // not trigger interval until game start.
-        WaitUntil(IsGameInProgress(), 60);
+        // wait start intarval until game start.
+        WaitUntil(IsGameInProgress(), MaxValue());
 
         for(;reloadBuddyAssetInterval > 0 && !forceReloadBuddyAsset; reloadBuddyAssetInterval--){
             Wait(1, WaitBehavior.AbortWhenFalse);
@@ -467,8 +461,8 @@ define enemyAssetNoLotteryList: [
 
 // TAG EnemyBot/BotAssetInterval ----------
 globalvar define reloadEnemyAssetInterval = -1;
-globalvar define enemyAssetNo!;
-globalvar define forceReloadEnemyAsset!;
+globalvar define enemyAssetNo! = -1;
+globalvar define forceReloadEnemyAsset! = false;
 define maxEnemyBotNum: 13;
 
 rule: "EnemyBot/BotAssetInterval/reloadReloadEnemyAsset"
@@ -488,6 +482,8 @@ if(
         if(!forceReloadEnemyAsset){
             // choice asset by random
             enemyAssetNo = RandomValueInArray(enemyAssetNoLotteryList);
+            // set default interval
+            reloadEnemyAssetInterval = assetChangeInterval;
             // change some hero
             sameHero = RandomHero;
         }
@@ -495,18 +491,10 @@ if(
         // create bots by asset
         DestroyBots(enemyTeam);
         CreateBotsByAssetWithMutexLock(enemyAssetList[enemyAssetNo], enemyTeam, maxEnemyBotNum);
-
-        // if force reload, skip set interval. use progress asset interval
-        if(!forceReloadEnemyAsset){
-            // set default interval
-            reloadEnemyAssetInterval = assetChangeInterval;
-        }
-
         // relealse force reload
         forceReloadEnemyAsset = false;
-
-        // not trigger interval until game start.
-        WaitUntil(IsGameInProgress(), 60);
+        // wait start intarval until game start.
+        WaitUntil(IsGameInProgress(), MaxValue());
 
         for(;reloadEnemyAssetInterval > 0 && !forceReloadEnemyAsset; reloadEnemyAssetInterval--){
             Wait(1, WaitBehavior.AbortWhenFalse);
@@ -787,7 +775,7 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
         if(teleportPosition != 0){
             break;
         }
-        Wait(0.25, WaitBehavior.AbortWhenFalse);        
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
     }
     return true;
 }
@@ -820,7 +808,7 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
         ){
             break;
         }
-        Wait(0.25, WaitBehavior.AbortWhenFalse);        
+        Wait(0.2, WaitBehavior.AbortWhenFalse);    
     }
     return true;
 }
@@ -873,7 +861,7 @@ Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjec
         ){
             break;
         }
-        Wait(0.25, WaitBehavior.AbortWhenFalse);        
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
     }
     teleportPosition -= PositionOffset();
     return true;
@@ -950,7 +938,7 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
 playervar define telBeam!;
 
 void TeleportWithEffect() playervar "TeleportWithEffect"{
-    WaitUntil(IsGameInProgress(), 30);
+    WaitUntil(IsGameInProgress(), MaxValue());
     WaitRandomForDistributeServerLoad();
 
     define waitTeleportInterval! = 
@@ -976,9 +964,6 @@ void TeleportWithEffect() playervar "TeleportWithEffect"{
 
 define forceActiveTeleport: 40;
 define teleportToCommonPositionProb: 50;
-
-define IsPlayerOnObject: ([] != AllPlayersOnObjective(playerTeam));
-define IsEnemyOnObject: ([] != AllPlayersOnObjective(enemyTeam));
 
 void HybridTeleport()"HybridTeleport"{
     if(
@@ -1114,17 +1099,19 @@ if(
     }
 
     // action
-    define deployedEnemys! = FilteredArray(
-        AllLivingPlayers(enemyTeam),
-        !IsInSpawnRoom(ae)
-    );
+    define allEnemys! = AllLivingPlayers(enemyTeam);
     define shotCallDelay! = RandomReal(0.1, 1.0);
-    for(define scLoopIndex! = 0; scLoopIndex < CountOf(deployedEnemys); scLoopIndex ++){
+    for(define scLoopIndex! = 0; scLoopIndex < CountOf(allEnemys); scLoopIndex ++){
         WaitRandomForDistributeServerLoad();
 
-        SetUltimateCharge(deployedEnemys[scLoopIndex], DefaultPercentage());
-        PressButton(deployedEnemys[scLoopIndex], Button.Ultimate);
-        Wait(shotCallDelay, WaitBehavior.AbortWhenFalse);
+        if(
+            IsAlive(allEnemys[scLoopIndex]) &&
+            !IsInSpawnRoom(allEnemys[scLoopIndex])
+        ){
+            SetUltimateCharge(allEnemys[scLoopIndex], DefaultPercentage());
+            PressButton(allEnemys[scLoopIndex], Button.Ultimate);
+            Wait(shotCallDelay, WaitBehavior.AbortWhenFalse);
+        }
     }
 
     LoopIfConditionIsTrue();
@@ -1156,7 +1143,6 @@ if(
     // action
     if(SetTeleportPositionToPlayerAround()){
         // set teleport position to object around
-        WaitUntil(!IsUsingUltimate(), 10);
         TeleportWithEffect();
     }
     
@@ -1202,39 +1188,46 @@ if(
     Loop();
 }
 
-globalvar define closeToObjectInterval!;
+globalvar define closeToObjectInterval! = 1.0;
 
 rule: "EnemyBot/EnemyAbility/closeToObject"
 Event.OngoingGlobal
 if(
     IsGameInProgress() &&
-    TotalObjectProgress() >= 90 &&
     IsPlayerOnObject
 ){
-    define enemys! = RandomizedArray(
-        FilteredArray(
-            AllLivingPlayers(enemyTeam),
-            (
-                !IsInSpawnRoom(ae) &&
-                DistanceBetween(ae, OnCurrentObjectPosition()) >= 6
+    WaitRandomForDistributeServerLoad();
+
+    if(
+        ProbabilityTrue(TotalObjectProgress() * 0.5)
+    ){
+        define enemys! = RandomizedArray(
+            FilteredArray(
+                AllLivingPlayers(enemyTeam),
+                (
+                    !IsInSpawnRoom(ae) &&
+                    DistanceBetween(ae, OnCurrentObjectPosition()) >= 6
+                )
             )
-        )
-    );
+        );
 
-    for(define enemysIndex! = 0; enemysIndex < CountOf(enemys); enemysIndex ++){
-        define player! = enemys[enemysIndex];
-        PressButton(player, Button.Jump);
-        ApplyImpulse(player, 
-            VectorTowards(player, OnCurrentObjectPosition()), 12,
-            Relative.ToWorld, ContraryMotion.Cancel);
+        for(define enemysIndex! = 0; enemysIndex < CountOf(enemys); enemysIndex ++){
+            define player! = enemys[enemysIndex];
+            PressButton(player, Button.Jump);
+            ApplyImpulse(player, 
+                VectorTowards(player, OnCurrentObjectPosition()), 10,
+                Relative.ToWorld, ContraryMotion.Cancel);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+        }
     }
 
-    Wait(1 + closeToObjectInterval, WaitBehavior.AbortWhenFalse);
-
-    if(IsOverTime()){
-        closeToObjectInterval += 0.02;
+    if(
+        IsOverTime()
+    ){
+        closeToObjectInterval += (1 / 50);
     }
 
+    Wait(closeToObjectInterval, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -1482,8 +1475,13 @@ Team.All
 if(
     initCompleted
 ){
-    debugMode = DebugMode.ShowParam;
-    ShowDebugHud(HostPlayer());
+    if(IsHostPlayerInGame()){
+        debugMode = DebugMode.Non;
+    }
+    else{
+        debugMode = DebugMode.ShowParam;
+        ShowDebugHud(HostPlayer());
+    }
 
     // while(true){
     //     define list = FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Boss);
@@ -1560,12 +1558,12 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         // player team
         debugHuds[Last()] = CreateDebugHud("count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("human player num", CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae))), Color.Team2);
-        debugHuds[Last()] = CreateDebugHud("team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, Color.Team2);
+        debugHuds[Last()] = CreateDebugHud("team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, NumberOfLivingPlayers(playerTeam) >= NumberOfPlayers(playerTeam) ? Color.Team2 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("reload Asset Interval", reloadBuddyAssetInterval, reloadBuddyAssetInterval > 5 ? Color.Team2 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("Asset number", buddyAssetNo, Color.Team2);
 
         // enemy team
-        debugHuds[Last()] = CreateDebugHud("team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, NumberOfLivingPlayers(enemyTeam) >= NumberOfPlayers(enemyTeam) ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("reload Asset Interval", reloadEnemyAssetInterval, reloadEnemyAssetInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("Asset number", enemyAssetNo, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("spawn interval", <"scale = <0> / M = <1> / E = <2> / G = <3> / B = <4>",
@@ -1580,8 +1578,8 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("rush interval", rushInterval, rushInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("shot call interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("more ult prob", multiUltProb, multiUltProb <= 0 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("close To Object Interval", closeToObjectInterval, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("close To Object Interval", closeToObjectInterval, Color.Team1);
     }
 }
 
