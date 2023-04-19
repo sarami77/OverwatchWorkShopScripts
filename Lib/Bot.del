@@ -754,7 +754,7 @@ enum ButtonBehaivor{
 }
 
 // TAG Bot/ActionState/StateControl ----------
-playervar define watchUpdateRate = 2.0;
+playervar define watchUpdateRate = 1.0;
 playervar define actionState;
 playervar define target;
 
@@ -875,6 +875,7 @@ void SetActionState(define player, define nextActionState!) "SetActionState"{
         // reset button control for depend state button change
         //  enableButtonControl is set by state script after
         enableButtonControl = false;
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
         // set next state
         player.actionState = nextActionState;        
     }
@@ -1118,23 +1119,23 @@ playervar define moveDirFB!;
 playervar define moveDirLR!;
 playervar define enableRetreat! = true;
 
-void SetMoveDirForCombat() playervar "SetMoveDirForCombat"{
+void SetMoveDir() playervar "SetMoveDir"{
     if(enemyType == EnemyType.Zombie){
         moveDirFB = Forward();
         moveDirLR = NoDirection();
         return;
     }
 
-    define notSetMoveDir! = false;
+    define skipSetMoveDirLR! = false;
     define distToTarget! = DistanceBetween(ep, target);
 
     // set move dir forward/backward
     // retreat for recevie heal
     if(
-        actionState == ActionState.Attack &&
         enableRetreat ?
             ProbabilityTrue(150 * (1 - NormalizedHealth())) :
-            false
+            false &&
+        actionState == ActionState.Attack
     ){
         // move to healer for heal
         // set to near healer
@@ -1159,7 +1160,7 @@ void SetMoveDirForCombat() playervar "SetMoveDirForCombat"{
             define dirToHealer! = LocalVectorOf(DirectionTowards(ep, moveToPlayer), ep, Transformation.Rotation);
             moveDirFB = Vector(0, 0, ZOf(dirToHealer));
             moveDirLR = Vector(XOf(dirToHealer), 0, 0);
-            notSetMoveDir = true;
+            skipSetMoveDirLR = true;
         }
         else{
             moveDirFB = Backward();
@@ -1168,6 +1169,7 @@ void SetMoveDirForCombat() playervar "SetMoveDirForCombat"{
     else{
         // move to target for combat
         define distRate! = actionState == ActionState.Attack ? 1 : 0.75;
+        
         // target is far
         if(
             distToTarget > (actionRangeMax * distRate)
@@ -1187,20 +1189,25 @@ void SetMoveDirForCombat() playervar "SetMoveDirForCombat"{
     }
 
     // set move dir left/right
-    // not move to healer
-    if(!notSetMoveDir){
+    // if skip set
+    if(!skipSetMoveDirLR){
         // attack state
         if(actionState == ActionState.Attack){
-            // start sidestep by distance and health
+            // start sidestep by distance close and health less
             if(
                 ProbabilityTrue(75 * (1 - NormalizedHealth())) ||   // by lost health
                 ProbabilityTrue(75 * (1 - (distToTarget / 30)))     // by target distance clsoe
             ){
                 if(moveDirLR == NoDirection()){
-                    moveDirLR = RandomValueInArray([Right(), Left()]);
+                    moveDirLR = RandomValueInArray([Left(), Right()]);
+                }
+                else if(ProbabilityTrue(75)){
+                    // change sidestep to reverse
+                    moveDirLR = -moveDirLR;
                 }
                 else{
-                    moveDirLR = RandomValueInArray([-moveDirLR, Right(), Left()]);
+                    // not change sidestep
+                    moveDirLR = moveDirLR;
                 }
             }
             else{
@@ -1219,6 +1226,8 @@ playervar define confirmMoveDir!;
 
 void StartMove(define player!) playervar "StartMove"{
     if(noMoving) return;
+    
+    WaitRandomForDistributeServerLoad();
 
     player.confirmMoveDir = player.moveDirFB + player.moveDirLR;
     // move to position is abyss
@@ -1331,7 +1340,7 @@ if(
     StartFacingTarget();
 
     // set moveDir for comvat
-    SetMoveDirForCombat();
+    SetMoveDir();
 
     // start move by moveDir
     StartMove(ep);
