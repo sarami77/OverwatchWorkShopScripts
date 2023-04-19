@@ -34,7 +34,7 @@ Event.OngoingGlobal
         null, "ENEMY RUSH -HORDE PVE ver.3.2 / Share code [V7PEF]", null,
         Location.Left, -999,
         Color.White, Color.White, Color.White,
-        HudTextRev.VisibleToAndString, Spectators.DefaultVisibility);
+        HudTextRev.VisibleToAndString, Spectators.VisibleAlways);
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
@@ -445,6 +445,12 @@ define enemyAssetList:
         [   // assetNo 10 [debug]
             // tank boss with damage elite
             [EnemyType.Elite,       Hero.Ramattra,      13]
+        ],
+        [   // assetNo 11
+            // Reinhardt army
+            [EnemyType.General,     Hero.Reinhardt,     1],
+            [EnemyType.Elite,       Hero.Reinhardt,     3],
+            [EnemyType.Minion,      Hero.Reinhardt,     9]
         ]
     ];
 
@@ -456,7 +462,8 @@ define enemyAssetNoLotteryList: [
     3,
     4,
     5,
-    6
+    6,
+    11, 11, 11
 ];
 
 // TAG EnemyBot/BotAssetInterval ----------
@@ -504,6 +511,8 @@ if(
 
 globalvar define progressStage;
 
+define finaleProgress: 90;
+
 rule: "EnemyBot/BotAssetInterval/reloadBotAssetIntervalByProgress"
 Event.OngoingGlobal
 if(
@@ -531,7 +540,7 @@ if(
             progressAssetInterval = RandomInteger(90, 120);
         }
         else if(
-            progressStage == 2 && progress >= 90
+            progressStage == 2 && progress >= finaleProgress
         ){
             progressStage ++;
             progressAssetNo = 9;
@@ -647,6 +656,7 @@ if(
         eachChargeUltInterval = 15;
         eachMinSpawnInterval = generalBossSpawnTimeMin;
         eachMaxSpawnInterval = generalBossSpawnTimeMin * spawnTimeScaleMinToMax;
+        
         // // set addtinal health
         // Wait(0.1, WaitBehavior.AbortWhenFalse);
         // define health! = MaxHealth(ep) * 0.5;
@@ -654,9 +664,7 @@ if(
         // AddHealthPoolToPlayer(ep, HealthType.Shields, health, true, false);
     }
 
-    
-
-    // set no back when Low Health
+    // no retreat
     enableRetreat = false;
 
     // update param
@@ -747,7 +755,7 @@ Player ClosestPlayerFromObject()"ClosestPlayerFromObject"{
 }
 
 Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlayerFront"{
-    // set teleportToTarget at closest player from Object
+    define setSuccess! = false;
     define teleportToTarget! = ClosestPlayerFromObject();
 
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
@@ -772,15 +780,23 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
                     (teleportAreaSize)
                 )
             );
+
         if(teleportPosition != 0){
             break;
         }
+
         Wait(0.2, WaitBehavior.AbortWhenFalse);
     }
-    return true;
+
+    if(teleportPosition != 0){
+        setSuccess = true;
+    }
+
+    return setSuccess;
 }
 
 Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlayerAround"{
+    define setSuccess! = false;
     define teleportToTarget! = ClosestPlayerFromObject();
 
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
@@ -808,9 +824,15 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
         ){
             break;
         }
+
         Wait(0.2, WaitBehavior.AbortWhenFalse);    
     }
-    return true;
+
+    if(teleportPosition != 0){
+        setSuccess = true;
+    }
+
+    return setSuccess;
 }
 
 globalvar define additinalTeleportAreaSize;
@@ -818,6 +840,7 @@ define teleportAreaSizeOffset: Bot_ActionRange_Far;
 define OnCurrentObjectPosition(): CurrentObjectPosition() + Vector(0, 5, 0); // not collision in payload object position
 
 Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
+    define setSuccess! = false;
     define teleportToTarget! = OnCurrentObjectPosition();
     
     if(
@@ -863,8 +886,12 @@ Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjec
         }
         Wait(0.2, WaitBehavior.AbortWhenFalse);
     }
-    teleportPosition -= PositionOffset();
-    return true;
+
+    if(teleportPosition != 0){
+        setSuccess = true;
+    }
+
+    return setSuccess;
 }
 
 Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCommonPosition"{
@@ -899,6 +926,7 @@ Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCo
         // set teleport position from common position
         teleportPosition = commonTeleportPosition;
     }
+    
     return true;
 }
 
@@ -1056,35 +1084,47 @@ if(
 }
 
 // TAG EnemyBot/EnemyAbility ----------
-globalvar define rushInterval!;
+globalvar define spawnRushInterval!;
+// globalvar define spawnRushWarningHud!;
 
-rule: "EnemyBot/EnemyAbility/rush"
+rule: "EnemyBot/EnemyAbility/spawnRush"
 Event.OngoingGlobal
 if(
-    IsGameInProgress() &&
-    !IsOverTime()
+    IsGameInProgress()
 ){
     // set default interval
-    rushInterval = ObjectProgressScaledInterval(20, 40);
-    rushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Event Interval Scale", 1.0, 0.1, 100, 3);
-    rushInterval = RoundToInteger(rushInterval, Rounding.Up);
-    for(;rushInterval > 0; rushInterval--){
+    spawnRushInterval = ObjectProgressScaledInterval(20, 40);
+    spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Event Interval Scale", 1.0, 0.1, 100, 3);
+    spawnRushInterval = RoundToInteger(spawnRushInterval, Rounding.Up);
+    for(;spawnRushInterval > 0; spawnRushInterval--){
         Wait(1, WaitBehavior.AbortWhenFalse);
     }
 
     // action
-    define rushDurling! = RandomInteger(5, 10);
+    // DestroyHudText(spawnRushWarningHud);
+    // spawnRushWarningHud = CreateHudText(AllPlayers(),
+    //     "ENEMY SPAWN RUSH INCOMING!", null, null,
+    //     Location.Top, 10,
+    //     warningIconColor, Color.White, Color.White,
+    //     HudTextRev.Color, Spectators.VisibleAlways);
+
+    define rushDurling! = RandomInteger(5, 15);
     for(rushCount; rushDurling > 0; rushDurling--){
         WaitRandomForDistributeServerLoad();
         
         Respawn(AllDeadPlayers(enemyTeam));
-        Wait(1, WaitBehavior.AbortWhenFalse);
+        Wait(1, WaitBehavior.IgnoreCondition);
     }
+
+    // Wait(2, WaitBehavior.IgnoreCondition);
+    // DestroyHudText(spawnRushWarningHud);
 
     LoopIfConditionIsTrue();
 }
 
 globalvar define shotCallInterval!;
+// globalvar define shotCallWarningHud!;
+
 rule: "EnemyBot/EnemyAbility/shotCall"
 Event.OngoingGlobal
 if(
@@ -1099,6 +1139,13 @@ if(
     }
 
     // action
+    // DestroyHudText(shotCallWarningHud);
+    // shotCallWarningHud = CreateHudText(AllPlayers(),
+    //     "ENEMY ALL-OUT ULTIMATE INCOMING!", null, null,
+    //     Location.Top, 11,
+    //     warningIconColor, Color.White, Color.White,
+    //     HudTextRev.Color, Spectators.VisibleAlways);
+
     define allEnemys! = AllLivingPlayers(enemyTeam);
     define shotCallDelay! = RandomReal(0.1, 1.0);
     for(define scLoopIndex! = 0; scLoopIndex < CountOf(allEnemys); scLoopIndex ++){
@@ -1110,9 +1157,12 @@ if(
         ){
             SetUltimateCharge(allEnemys[scLoopIndex], DefaultPercentage());
             PressButton(allEnemys[scLoopIndex], Button.Ultimate);
-            Wait(shotCallDelay, WaitBehavior.AbortWhenFalse);
+            Wait(shotCallDelay, WaitBehavior.IgnoreCondition);
         }
     }
+
+    // Wait(2, WaitBehavior.IgnoreCondition);
+    // DestroyHudText(shotCallWarningHud);
 
     LoopIfConditionIsTrue();
 }
@@ -1129,8 +1179,7 @@ if(
     ) &&
     IsAlive() &&
     actionState != ActionState.Non &&
-    IsGameInProgress() &&
-    !IsOverTime()
+    IsGameInProgress()
 ){
     // set default interval
     combatTeleportInterval = ObjectProgressScaledInterval(10, 30);
@@ -1151,7 +1200,7 @@ if(
 
 globalvar define multiUltProb!;
 
-rule: "EnemyBot/EnemyAbility/multiUltimate"
+rule: "EnemyBot/EnemyAbility/moreUltimate"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
@@ -1188,46 +1237,36 @@ if(
     Loop();
 }
 
-globalvar define closeToObjectInterval! = 1.0;
-
 rule: "EnemyBot/EnemyAbility/closeToObject"
 Event.OngoingGlobal
 if(
     IsGameInProgress() &&
-    IsPlayerOnObject
+    IsPlayerOnObject &&
+    TotalObjectProgress() >= finaleProgress
 ){
     WaitRandomForDistributeServerLoad();
-
-    if(
-        ProbabilityTrue(TotalObjectProgress() * 0.5)
-    ){
-        define enemys! = RandomizedArray(
-            FilteredArray(
-                AllLivingPlayers(enemyTeam),
-                (
-                    !IsInSpawnRoom(ae) &&
-                    DistanceBetween(ae, OnCurrentObjectPosition()) >= 6
-                )
+    
+    define enemyList!;
+    // get not on object and living enemys
+    enemyList = 
+        FilteredArray(
+            AllLivingPlayers(enemyTeam),
+            (
+                !IsInSpawnRoom(ae) &&
+                DistanceBetween(ae, OnCurrentObjectPosition()) >= 5
             )
         );
 
-        for(define enemysIndex! = 0; enemysIndex < CountOf(enemys); enemysIndex ++){
-            define player! = enemys[enemysIndex];
-            PressButton(player, Button.Jump);
-            ApplyImpulse(player, 
-                VectorTowards(player, OnCurrentObjectPosition()), 10,
-                Relative.ToWorld, ContraryMotion.Cancel);
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-        }
+    for(define enemysIndex! = 0; enemysIndex < CountOf(enemyList); enemysIndex ++){
+        define player! = enemyList[enemysIndex];
+        PressButton(player, Button.Jump);
+        ApplyImpulse(player, 
+            VectorTowards(player, OnCurrentObjectPosition()), 8,
+            Relative.ToWorld, ContraryMotion.Cancel);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
     }
 
-    if(
-        IsOverTime()
-    ){
-        closeToObjectInterval += (1 / 50);
-    }
-
-    Wait(closeToObjectInterval, WaitBehavior.AbortWhenFalse);
+    Wait(1, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -1344,7 +1383,7 @@ playervar define confirmDealtDamage!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Damage Dealt", 25, 0, 100, 0);
+    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Damage Dealt", 30, 0, 100, 0);
     // apply auto tune
     confirmDealtDamage += autoTuneDmgDlt;
     // apply enemy type scale
@@ -1575,11 +1614,10 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("combat teleport interval",
             FirstOf(FilteredArray(AllPlayers(enemyTeam), (ae.enemyType == EnemyType.General || ae.enemyType == EnemyType.Boss))).combatTeleportInterval,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), (ae.enemyType == EnemyType.General || ae.enemyType == EnemyType.Boss))).combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("rush interval", rushInterval, rushInterval > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("spawn rush interval", spawnRushInterval, spawnRushInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("shot call interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("more ult prob", multiUltProb, multiUltProb <= 0 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("close To Object Interval", closeToObjectInterval, Color.Team1);
     }
 }
 
@@ -1617,7 +1655,7 @@ if(
     WaitLongPressConfirm();
     AllPlayers(enemyTeam).combatTeleportInterval = 0;
     WaitLongPressConfirm();
-    rushInterval = 0;
+    spawnRushInterval = 0;
     WaitLongPressConfirm();
     shotCallInterval = 0;
 }

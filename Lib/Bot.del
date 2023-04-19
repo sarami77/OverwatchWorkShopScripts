@@ -872,21 +872,9 @@ define GetNextActionState()"GetNextActionState"{
 void SetActionState(define player, define nextActionState!) "SetActionState"{
     // if state changed
     if(nextActionState != player.actionState){
-        // next state is not Non state (need enable button control)
-        if(nextActionState != ActionState.Non){
-            WaitRandomForDistributeServerLoad();
-
-            // already enable button control
-            if(enableButtonControl){
-                // restart button control
-                enableButtonControl = false;
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-            }
-            enableButtonControl = true;
-        }
-        else{
-            enableButtonControl = false;
-        }
+        // reset button control for depend state button change
+        //  enableButtonControl is set by state script after
+        enableButtonControl = false;
         // set next state
         player.actionState = nextActionState;        
     }
@@ -1307,6 +1295,9 @@ if(
 ){
     WaitRandomForDistributeServerLoad();
 
+    // stop button
+    enableButtonControl = false;
+
     // stop facing
     StopFacing(ep);
 
@@ -1332,6 +1323,9 @@ if(
     )
 ){
     WaitRandomForDistributeServerLoad();
+
+    // start button
+    enableButtonControl = true;
 
     // start facing
     StartFacingTarget();
@@ -1805,6 +1799,7 @@ Boolean isMatchButton(define matchButton!, define butttons!){
 define buttonControlPressScale: 1.0;
 define buttonControlReleaseScale: 1.0;
 
+// can's implment as function
 void StartButtonControl(define bc){
     if(noShooting) return;
     if(enemyType == EnemyType.Zombie) return;
@@ -1816,7 +1811,8 @@ void StartButtonControl(define bc){
         Button.PrimaryFire,
         Button.SecondaryFire,
         Button.Ability1,
-        Button.Ability2];
+        Button.Ability2
+    ];
     
     // if state dependent buttons
     if(
@@ -1951,8 +1947,9 @@ void PressFirstButtonWhenIdle()"PressFirstButtonWhenIdle"{
         else if(actionState == ActionState.Support){
             StartHoldingButton(ep, FirstOf(supportButtons));
         }
-    }
 
+        dbgPlyEft(ep);
+    }
 }
 
 // TAG Bot/ButtonControl/PrimaryFire ----------
@@ -2117,12 +2114,13 @@ if(
 }
 
 // TAG Debug ----------
-disabled rule: "Bot/Debug/ShowActionStateText"
+disabled rule: "Bot/Debug/ShowDebugInfo"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot()
 ){
+    // actionState text
     CreateInWorldText(
         AllPlayers(),
         actionState == ActionState.Non ? "Non" :
@@ -2136,4 +2134,21 @@ if(
             actionState == ActionState.Support ? Color.Yellow :
             Color.Purple,
         Spectators.DefaultVisibility);
+
+    // enableButtonControl text
+    // CreateInWorldText(
+    //     AllPlayers(),
+    //     enableButtonControl,
+    //     EyePosition(ep) + Vector(0, 1.5, 0),
+    //     0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
+    //     enableButtonControl ? Color.Yellow : Color.White,
+    //     Spectators.DefaultVisibility);
+
+    while(true){
+        // tagret line
+        if(target != 0){
+            dbgPlyBemEft(EyePosition(ep), BodyPosition(target));
+        }
+        Wait(1);
+    }
 }
