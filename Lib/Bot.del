@@ -60,7 +60,7 @@ void CreateBotsByAsset(define asset, define team, define addLimitNum)"CreateBots
                     SpawnPoints(team)[0],
                     RandomDirection()
                 );
-                Wait(0.2, WaitBehavior.IgnoreCondition);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
             }
             // set Bot type as enemy type
             define bot! = PlayersInSlot(slot, team);
@@ -89,7 +89,7 @@ void CreateBotsByHeroList(define heroList, define team)"CreateBotsByHeroList"{
                 SpawnPoints(team)[0],
                 RandomDirection()
             );
-            Wait(0.2, WaitBehavior.IgnoreCondition);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
         }
     }
 }
@@ -112,7 +112,7 @@ void CreateBotsByHeroRandomList(define heroList, define num, define team)"Create
                 SpawnPoints(team)[0],
                 RandomDirection()
             );
-            Wait(0.2, WaitBehavior.IgnoreCondition);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
         }
     }
 }
@@ -135,7 +135,7 @@ void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHer
                 SpawnPoints(team)[0],
                 RandomDirection()
             );
-            Wait(0.2, WaitBehavior.IgnoreCondition);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
         }
     }
 }
@@ -197,6 +197,7 @@ define Bot_ActionRange_Melee: 0;
 define Bot_ActionRange_Close: 10;
 define Bot_ActionRange_Middle: 20;
 define Bot_ActionRange_Far: 30;
+define Bot_ActionRange_CanFind: 40;
 
 playervar define actionRangeMin!;
 playervar define actionRangeMax!;
@@ -375,7 +376,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMax = Bot_ActionRange_Far;
         primaryFireButtonReleaseMax = 1;
         ability1ButtonReleaseMin = 8;
-        ability1ButtonReleaseMax = 8;
+        ability1ButtonReleaseMax = 10;
         ultimateButtonReleaseMax = 30;
         break;
 
@@ -388,7 +389,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         secondaryFireButtonPressMin = 3;
         secondaryFireButtonPressMax = 6;
         ability2ButtonReleaseMax = 1;
-        ultimateButtonReleaseMax = 30;
         supportPrioloty = 0.75;
         supportButtons = [
             Button.SecondaryFire,
@@ -416,7 +416,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Dva";
         actionRangeMin = Bot_ActionRange_Melee;
         actionRangeMax = Bot_ActionRange_Close;
-        ultimateButtonReleaseMax = 40;
+        ultimateButtonReleaseMax = 30;
         break;
 
         case Hero.Echo:
@@ -478,7 +478,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Lucio";
         actionRangeMin = Bot_ActionRange_Close;
         actionRangeMax = Bot_ActionRange_Middle;
-        ultimateButtonReleaseMax = 15;
         supportPrioloty = 0.5;
         supportButtons = [
             Button.Ability1,
@@ -490,7 +489,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Mei";
         actionRangeMin = Bot_ActionRange_Melee;
         actionRangeMax = Bot_ActionRange_Close;
-        ultimateButtonReleaseMax = 30;
         break;
 
         case Hero.Mercy:
@@ -570,7 +568,6 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         primaryFireButtonReleaseMax = 0;
         secondaryFireButtonReleaseMax = 5;
         secondaryFireButtonPressMax = 1;
-        ultimateButtonReleaseMax = 15;
         break;
 
         case Hero.Sojourn:
@@ -615,9 +612,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         case Hero.Tracer:
         heroName = "Tracer";
         actionRangeMin = Bot_ActionRange_Melee;
-        actionRangeMax = Bot_ActionRange_Middle;
-        ultimateButtonReleaseMin = 1;
-        ultimateButtonReleaseMax = 1;
+        actionRangeMax = Bot_ActionRange_Close;
         break;
 
         case Hero.Widowmaker:
@@ -644,7 +639,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Winston";
         actionRangeMin = Bot_ActionRange_Melee;
         actionRangeMax = Bot_ActionRange_Close;
-        ultimateButtonReleaseMax = 40;
+        ultimateButtonReleaseMax = 30;
         break;
 
         case Hero.WreckingBall:
@@ -705,7 +700,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         heroName = "Ramattra";
         actionRangeMin = Bot_ActionRange_Melee;
         actionRangeMax = Bot_ActionRange_Close;
-        ability1ButtonReleaseMin = 12;
+        ability1ButtonReleaseMin = 8;
         ability1ButtonReleaseMax = 16;
         secondaryFireButtonReleaseMax = 10;
         secondaryFireButtonPressMin = 2;
@@ -754,26 +749,40 @@ enum ButtonBehaivor{
 }
 
 // TAG Bot/ActionState/StateControl ----------
-playervar define watchUpdateRate = 1.0;
+playervar define watchUpdateRate = 2.0;
 playervar define actionState;
 playervar define target;
+
+define CanFindRange(define player) :
+    DistanceBetween(ep, player) <= Bot_ActionRange_CanFind;
+
+define CanFindLine(define player) :
+    IsInLineOfSight(EyePosition(ep), EyePosition(player), BarrierLOS.NoBarriersBlock);
+
+define IsSightedAsEnemy(define player):
+        TeamOf(ep) != TeamOf(player) &&
+        HasSpawned(player) &&
+        IsAlive(player) &&
+        CanFindRange(player) &&
+        CanFindLine(player) &&
+        !(
+            IsStealth(player) &&
+            DistanceBetween(player, ep) >= 4
+        );
+
+define IsSightedAsFriend(define player):
+        TeamOf(ep) == TeamOf(player) &&
+        HasSpawned(player) &&
+        (IsAlive(player) || CanResurrect(player)) &&
+        CanFindRange(player) &&
+        (CanFindLine(player) || CanSwiftStep(player));
 
 define FindAttackTarget()"FindAttackTarget"{
     return FirstOf(
         SortedArray(
             FilteredArray(
                 AllPlayers(EnemyTeamOf()),
-                (
-                    IsAlive(ae) &&
-                    HasSpawned(ae) &&
-                    DistanceBetween(ep, ae) <= Bot_ActionRange_Far &&
-                    IsInLineOfSight(EyePosition(ep), EyePosition(ae), BarrierLOS.NoBarriersBlock) &&
-                    !(
-                        TeamOf() != TeamOf(ae) &&
-                        IsStealth(ae) &&
-                        DistanceBetween(ae, ep) >= 4
-                    )
-                )
+                IsSightedAsEnemy(ae)
             ),
             DistanceBetween(ep, ae)
         )
@@ -784,21 +793,10 @@ define FindSupportTarget()"FindSupportTarget"{
     return FirstOf(
         SortedArray(
             FilteredArray(
-                (
-                    CanResurrect(ep) ?
-                        AllPlayers(TeamOf()) :
-                        AllLivingPlayers(TeamOf())),
-                (
-                    ae != ep &&
-                    HasSpawned(ae) &&
-                    DistanceBetween(ep, ae) <= Bot_ActionRange_Far &&
-                    NormalizedHealth(ae) < 1.0 &&
-                    (
-                        CanPhantom(ep) ?
-                        true :
-                        IsInLineOfSight(EyePosition(ep), EyePosition(ae), BarrierLOS.NoBarriersBlock)
-                    )
-                )
+                AllPlayers(TeamOf()),
+                ae != ep &&
+                NormalizedHealth(ae) < 1.0 &&
+                IsSightedAsFriend(ae)
             ),
             NormalizedHealth(ae)
         )
@@ -847,9 +845,10 @@ define GetNextActionState()"GetNextActionState"{
     if(
         IsAlive() &&
         !IsInSpawnRoom() &&
+        target != 0 &&
         HasSpawned(target)
     ){
-        // target is friend and can support
+        // target is friend
         if(
             TeamOf() == TeamOf(target)
         ){
@@ -881,6 +880,12 @@ void SetActionState(define player, define nextActionState!) "SetActionState"{
     }
 }
 
+define IsSighted(define player):
+        player != 0 &&
+        TeamOf(ep) == TeamOf(player) ?
+            IsSightedAsFriend(player) :
+            IsSightedAsEnemy(player);
+
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
 if(
@@ -896,24 +901,10 @@ if(
     if(
         IsAlive()
     ){ 
-        // get targetSighted
-        define targetSighted! =
-            target != 0 &&       // targe valid
-            target != ep &&      // not own
-
-            IsAlive(target) &&      // target alive
-            HasSpawned(target) &&   // target spawned
-            IsInLineOfSight(EyePosition(ep), EyePosition(target), BarrierLOS.NoBarriersBlock) &&  // in line            
-            !(
-                TeamOf() != TeamOf(target) &&
-                IsStealth(target) &&
-                DistanceBetween(target, ep) >= 4
-            );
-
         define tryFindTarget! = false;
         
         // target not Sighted
-        if(!targetSighted){
+        if(!IsSighted(target)){
             tryFindTarget = true;
         }
         // is support role and now supporting
@@ -924,8 +915,10 @@ if(
             if(
                 // heal target completed
                 NormalizedHealth(target) >= 1 ||
-                // target dead
-                IsDead(target)
+                !(
+                    IsAlive(target) ||  // target alive
+                    CanResurrect(ep)    // can resurrect
+                )
             ){
                 // change target 
                 tryFindTarget = true;
@@ -944,7 +937,7 @@ if(
         else{
             if(
                 // target dead
-                IsDead(target)
+                !IsAlive(target)
             ){
                 // change target 
                 tryFindTarget = true;
@@ -1387,6 +1380,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         // melee
         while(
             actionState == ActionState.Attack &&
+            target != 0 &&
             DistanceBetween(ep, target) <= meleeRange &&
             (
                 Health(target) <= meleeDamage * 2 ||
@@ -1634,9 +1628,9 @@ if(
             StopMove(ep);
         }
         // trigger attack by attackCount
-        for(; 0 < attackCount; attackCount--){
+        for(define tryCount! = 0; tryCount < attackCount; tryCount++){
             PressButton(ep, Button.PrimaryFire);
-            if(0 < attackCount){
+            if(tryCount < attackCount){
                 // button press with random interval
                 Wait(RandomReal(0.2, 0.5), WaitBehavior.IgnoreCondition);
             }
@@ -1714,8 +1708,8 @@ if(
         HeroBeingDuplicated() == Hero.Ramattra
     ){
         if(
-            !IsUsingAbility1() &&
-            !IsUsingUltimate()
+            // is omnic form
+            !IsNemesisForm(ep)
         ){
             isPositionAimSecondary = true;
         }        

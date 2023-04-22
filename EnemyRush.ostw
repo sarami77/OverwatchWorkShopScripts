@@ -217,7 +217,7 @@ globalvar define buddyAssetNo!;
 globalvar define forceReloadBuddyAsset! = false;
 
 // TAG Buddy/BotAssetInterval ----------
-define assetChangeInterval: RandomInteger(90, 180);
+define AssetChangeInterval(): RandomInteger(120, 180);
 globalvar define reloadBuddyAssetInterval = -1;
 
 rule: "Buddy/BotAssetInterval/reloadReloadBuddyAsset"
@@ -233,7 +233,7 @@ if(
             // choice asset by random
             buddyAssetNo = RandomValueInArray(buddyAssetLotteryList);
             // set default interval
-            reloadBuddyAssetInterval = assetChangeInterval;
+            reloadBuddyAssetInterval = AssetChangeInterval();
         }
 
         if(
@@ -451,6 +451,12 @@ define enemyAssetList:
             [EnemyType.General,     Hero.Reinhardt,     1],
             [EnemyType.Elite,       Hero.Reinhardt,     3],
             [EnemyType.Minion,      Hero.Reinhardt,     9]
+        ],
+        [   // assetNo 12
+            // Soldier76 army
+            [EnemyType.General,     Hero.Soldier76,     1],
+            [EnemyType.Elite,       Hero.Soldier76,     3],
+            [EnemyType.Minion,      Hero.Soldier76,     9]
         ]
     ];
 
@@ -459,11 +465,12 @@ define enemyAssetNoLotteryList: [
     0, 0, 0,
     1, 1, 
     2, 2,
-    3,
+    3, 3,
     4,
     5,
     6,
-    11, 11, 11
+    11, 11, 11,
+    12, 12, 12
 ];
 
 // TAG EnemyBot/BotAssetInterval ----------
@@ -490,7 +497,7 @@ if(
             // choice asset by random
             enemyAssetNo = RandomValueInArray(enemyAssetNoLotteryList);
             // set default interval
-            reloadEnemyAssetInterval = assetChangeInterval;
+            reloadEnemyAssetInterval = AssetChangeInterval();
             // change some hero
             sameHero = RandomHero;
         }
@@ -584,7 +591,7 @@ playervar define eachMaxSpawnInterval!;
 playervar define eachMinSpawnInterval!;
 playervar define eachChargeUltInterval!;
 playervar define eachBodyScale!;
-define basicSpawnTimeMin: 10;
+define basicSpawnTimeMin: 8;
 define minionSpawnTimeMin: basicSpawnTimeMin * 1;
 define eliteSpawnTimeMin: basicSpawnTimeMin * 2;
 define generalBossSpawnTimeMin: basicSpawnTimeMin * 4;
@@ -598,7 +605,7 @@ if(
     HasSpawned() &&
     enemyType != EnemyType.Non
 ){
-    define maxHealthRate! = IsTankHero(HeroOf(ep)) ? 0.666 : 1;
+    define maxHealthRate! = IsTankHero(HeroOf(ep)) ? (600 / 600) : 1;
 
     // setEnemyType
     if(enemyType == EnemyType.Minion){
@@ -1093,10 +1100,11 @@ globalvar define spawnRushInterval!;
 rule: "EnemyBot/EnemyAbility/spawnRush"
 Event.OngoingGlobal
 if(
-    IsGameInProgress()
+    IsGameInProgress() &&
+    !IsOverTime()
 ){
     // set default interval
-    spawnRushInterval = ObjectProgressScaledInterval(20, 40);
+    spawnRushInterval = ObjectProgressScaledInterval(20, 30);
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Event Interval Scale", 1.0, 0.1, 100, 3);
     spawnRushInterval = RoundToInteger(spawnRushInterval, Rounding.Up);
     for(;spawnRushInterval > 0; spawnRushInterval--){
@@ -1134,7 +1142,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval
-    shotCallInterval = ObjectProgressScaledInterval(30, 50);
+    shotCallInterval = ObjectProgressScaledInterval(30, 40);
     shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "Shot Call Event Interval Scale", 1.0, 0.1, 100, 4);
     shotCallInterval = RoundToInteger(shotCallInterval, Rounding.Up);
     for(;shotCallInterval > 0; shotCallInterval--){
@@ -1183,10 +1191,10 @@ if(
     IsAlive() &&
     actionState != ActionState.Non &&
     IsGameInProgress() &&
-    !IsOverTime()
+    TotalObjectProgress() < finaleProgress
 ){
     // set default interval
-    combatTeleportInterval = ObjectProgressScaledInterval(10, 30);
+    combatTeleportInterval = ObjectProgressScaledInterval(10, 20);
     combatTeleportInterval *= WorkshopSettingReal("Enemy Bot Settings", "(General & Boss) Combat Teleport Interval Scale", 1.0, 0.1, 100, 5);
     combatTeleportInterval = RoundToInteger(combatTeleportInterval, Rounding.Up);
     for(;combatTeleportInterval > 0; combatTeleportInterval--){

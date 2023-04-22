@@ -19,6 +19,7 @@ Event.OngoingGlobal
     dbgHudTxt("initCompleted");
 }
 
+globalvar define waitTime = 1;
 
 rule: "DebugCode"
 Event.OngoingGlobal
@@ -38,30 +39,43 @@ if(
         // RandomHero,
         // RandomHero,
         // RandomHero
-        Hero.Moira, Hero.Brigitte
+        Hero.Bastion,
+        Hero.Tracer,
+        Hero.Soldier76,
+        Hero.Reinhardt,
+        Hero.Ana,
+        Hero.Ana
     ];
-    // CreateBotsByHeroList(pList, playerTeam);
-    CreateBotsByHeroList(pList, enemyTeam);  
 
-    
-    
-    while(true){
-        SetMaxHealth(AllPlayers(), 100);
-        SetStatus(HostPlayer(), null, Status.PhasedOut, MaxValue());
-        SetRespawnMaxTime(AllPlayers(), MaxValue());
-        Respawn(AllDeadPlayers());
-        Wait(10);
-    }
+    CreateBotsByHeroList(pList, playerTeam);
+    CreateBotsByHeroList(pList, enemyTeam);
+    DisableRespawning(ap);
+
+    startCyclicAction = true;
 }
 
 
 // Test Code -----------------------------------------------
-rule: "debug"
+globalvar define startCyclicAction;
+
+rule: "CyclicAction"
 Event.OngoingGlobal
 if(
-    true
+    startCyclicAction
 ){
-    
+    while(true){
+        SetStatus(ap, null, Status.Frozen, 2);
+        SetUltimateCharge(ap, 100);
+        Wait(1);
+        WaitUntil(
+            NumberOfLivingPlayers(playerTeam) == 0 ||
+            NumberOfLivingPlayers(enemyTeam) == 0
+            ,
+            30
+        );
+        Wait(2);
+        Respawn(ap);
+    }
 }
 
 
@@ -140,8 +154,8 @@ Event.OngoingGlobal
     debugHuds[Last()] = CreateDebugHud("enemy team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team2);
     debugHuds[Last()] = CreateDebugHud("killCountTeam1", killCountTeam1, Color.Team1);
     debugHuds[Last()] = CreateDebugHud("killCountTeam2", killCountTeam2, Color.Team2);
+    debugHuds[Last()] = CreateDebugHud("waitTime", waitTime, Color.Orange);
 }
-
 rule: "Debug/TuneVal/startIncreaseParam"
 Event.OngoingPlayer
 if(
