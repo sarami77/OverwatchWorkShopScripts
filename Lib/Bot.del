@@ -323,7 +323,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMax = Bot_ActionRange_Far;
         canFireButtonCombination = true;
         supportPrioloty = 1.0;
-        secondaryFireButtonPressMin = 20;
+        secondaryFireButtonPressMin = 30;
         secondaryFireButtonPressMax = 40;
         jumpButtonReleaseMax = 40;
         supportButtons = [
@@ -340,7 +340,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         actionRangeMax = Bot_ActionRange_Far;
         canFireButtonCombination = true;
         primaryFireButtonBehaivor = ButtonBehaivor.ReleaseRepeat;
-        secondaryFireButtonPressMin = 20;
+        secondaryFireButtonPressMin = 30;
         secondaryFireButtonPressMax = 40;
         jumpButtonReleaseMax = 40;
         break;
@@ -621,7 +621,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
         primaryFireButtonReleaseMax = 1.0;
         primaryFireButtonPressMin = 0;
         primaryFireButtonPressMax = 1;
-        secondaryFireButtonPressMin = 20;
+        secondaryFireButtonPressMin = 30;
         secondaryFireButtonPressMax = 40;
         jumpButtonReleaseMax = 40;
         ability1ButtonReleaseMax = 40;
@@ -797,8 +797,6 @@ define FindTarget()"FindTarget"{
     define candidateTarget!;
 
     for(define tryCount! = 0; tryCount <= 3; tryCount++){
-        WaitRandomForDistributeServerLoad();
-                
         // by supportPrioloty
         if(ProbabilityTrue(100 * supportPrioloty))
         {
@@ -861,6 +859,9 @@ define GetNextActionState()"GetNextActionState"{
 void SetActionState(define player, define nextActionState!) "SetActionState"{
     // if state changed
     if(nextActionState != player.actionState){
+        // reset for button control reload
+        enableButtonControl = false;
+        Wait(MinValue(), WaitBehavior.IgnoreCondition);
         // set next state
         player.actionState = nextActionState;        
     }
@@ -1205,8 +1206,6 @@ playervar define confirmMoveDir!;
 void StartMove(define player!) playervar "StartMove"{
     if(noMoving) return;
     
-    WaitRandomForDistributeServerLoad();
-
     player.confirmMoveDir = player.moveDirFB + player.moveDirLR;
     // move to position is abyss
     if(
@@ -1311,9 +1310,7 @@ if(
 ){
     WaitRandomForDistributeServerLoad();
 
-    // restart button
-    enableButtonControl = false;
-    Wait(MinValue(), WaitBehavior.AbortWhenFalse);
+    // start button control
     enableButtonControl = true;
 
     // start facing
@@ -1387,6 +1384,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             HeroOf() == Hero.Ashe
         ){
             if(
+                ProbabilityTrue(90) &&
                 IsReloading()
             ){
                 // stop repeat firing for reduce reload cancel
@@ -1443,7 +1441,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 // try use lift on own below
                 for(define tryCount! = 0; tryCount <= 3; tryCount++){
                     StopMove(ep);
-                    FacingTargetBetweenPosition(0.01, target);
+                    FacingTargetBetweenBelowPosition(target, 0.01);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     
                     PressButton(ep, Button.Ability1);
@@ -1461,15 +1459,14 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         ){
             // fallback by graple hook
             if(
+                ProbabilityTrue(90) &&
                 DistanceBetween(ep, target) <= Bot_ActionRange_Middle &&
                 AbilityCooldown(ep, Button.Ability1) <= 0
             ){
                 // try use graple at backword
                 for(define tryCount! = 0; tryCount <= 3; tryCount++){
                     StopMove(ep);
-                    StopHoldingButton(ep, Button.PrimaryFire);
-                    StopHoldingButton(ep, Button.SecondaryFire);
-                    InverseFacingTarget(target);
+                    FacingRetreatPosition(target, 5);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     PressButton(ep, Button.Ability1);
                     if(AbilityCooldown(ep, Button.Ability1) > 0){
@@ -1477,7 +1474,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     }
                 }
                 // restore aiming
-                StartHoldingButton(ep, Button.SecondaryFire);
+                // StartHoldingButton(ep, Button.SecondaryFire);
                 // restore facing
                 StartFacingTarget();
             }
@@ -1519,6 +1516,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             HeroOf() == Hero.WreckingBall
         ){
             if(
+                ProbabilityTrue(90) &&
                 // can use pile driver
                 AbilityCooldown(ep, Button.Crouch) <= 0 &&
                 IsButtonHeld(ep, Button.Crouch)
@@ -1651,7 +1649,7 @@ if(
         StopHoldingButton(ep, Button.PrimaryFire);
         StopHoldingButton(ep, Button.SecondaryFire);
         for(define tryCount! = 0; tryCount <= 3; tryCount++){
-            FacingTargetBetweenPosition(0.5, target);
+            FacingTargetBetweenBelowPosition(target, 0.5);
             Wait(0.25, WaitBehavior.IgnoreCondition);
 
             if(ProbabilityTrue(isRotateProb)){
@@ -1696,7 +1694,7 @@ if(
     if(isPositionAimSecondary){
         StopHoldingButton(ep, Button.PrimaryFire);
         for(define tryCount! = 0; tryCount <= 3; tryCount++){
-            FacingTargetBetweenPosition(0.25, target);
+            FacingTargetBetweenBelowPosition(target, 0.25);
             Wait(0.25, WaitBehavior.IgnoreCondition);
             
             PressButton(ep, Button.SecondaryFire);
@@ -1827,7 +1825,7 @@ void StartButtonControl(define bc){
         // start button
 
         // add debug text
-        //AddEnableButtonControlBit(bc[ButtonControl.button]);
+        AddEnableButtonBit(bc[ButtonControl.button]);
 
         // not conbination fire
         if(!canFireButtonCombination){
@@ -2109,11 +2107,10 @@ if(
     StopHoldingButton(ep, Button.Crouch);
     // StopHoldingButton(ep, Button.Reload);
 
-    // enableButtonBit = allButtonBitsNon;
+    CleareEableButtonBit();
 }
 
 // TAG Debug ----------
-/*
 rule: "Bot/Debug/ShowDebugInfo"
 Event.OngoingPlayer
 if(
@@ -2127,7 +2124,7 @@ if(
             actionState == ActionState.Attack ? "Attack" :
             actionState == ActionState.Support ? "Support" :
             "Err",
-        EyePosition(ep) + Vector(0, 1.0, 0),
+        EyePosition(ep) + Vector(0, 1.25, 0),
         0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
         actionState == ActionState.Non ? Color.White :
             actionState == ActionState.Attack ? Color.Red :
@@ -2139,7 +2136,7 @@ if(
     CreateInWorldText(
         AllPlayers(),
         enableButtonControl,
-        EyePosition(ep) + Vector(0, 1.5, 0),
+        EyePosition(ep) + Vector(0, 1.50, 0),
         0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
         enableButtonControl ? Color.Yellow : Color.White,
         Spectators.DefaultVisibility);
@@ -2148,7 +2145,7 @@ if(
     CreateInWorldText(
         AllPlayers(),
         enableButtonBit,
-        EyePosition(ep) + Vector(0, 2.0, 0),
+        EyePosition(ep) + Vector(0, 1.75, 0),
         0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
         enableButtonControl ? Color.Yellow : Color.White,
         Spectators.DefaultVisibility);
@@ -2184,4 +2181,7 @@ define AddEnableButtonBit(define button!)"AddEnableButtonBit"{
             enableButtonBit += Ability2FireButtonBit;
         }
 }
-*/
+
+define CleareEableButtonBit()"CleareEableButtonBit"{
+    enableButtonBit = allButtonBitsNon;
+}
