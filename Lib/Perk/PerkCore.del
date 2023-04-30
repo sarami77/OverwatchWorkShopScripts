@@ -10,7 +10,7 @@ globalvar define perkCorePerkDropProbability! = 1;
 playervar define perkCratePosition!;
 playervar define perkCrateState!;
 playervar define perkCrateEntitys!;
-playervar define playerClosestCrate!;
+playervar define pickupPlayer!;
 
 playervar define notPickupPerk!;
 playervar define dropedPerkType!;
@@ -113,7 +113,6 @@ void addLottelyPerk(define perk!, define count!)"addLottelyPerk"{
 
 rule: "Perk/CreatState/NotDropped"
 Event.OngoingPlayer
-//Team.Team2
 Player.All
 if(
     perkCrateState == PerkCrateState.NotDropped
@@ -127,7 +126,6 @@ if(
 
 rule: "Perk/CreatState/Dropped"
 Event.OngoingPlayer
-//Team.Team2
 Player.All
 if(
     perkCrateState == PerkCrateState.Dropped
@@ -148,8 +146,7 @@ playervar define eachPerkDropProbability! = 1;
 
 rule: "Perk/Enemy/dropPerkCrate // drop by some probability on death"
 Event.OnDeath
-Team.Team2
-Player.All
+Team.All//enemyTeam
 if(
     perkCrateState == PerkCrateState.NotDropped &&
     Attacker() != ep
@@ -168,8 +165,6 @@ if(
 
 rule: "Perk/Enemy/clearPerkCrate //by 30second timer"
 Event.OngoingPlayer
-//Team.Team2
-Player.All
 if(
     perkCrateState == PerkCrateState.Dropped
 ){
@@ -179,95 +174,57 @@ if(
 }
 
 define pickupRange : 2.5;
-define canPickupCratePlayers:
-    FilteredArray(
-        AllPlayers(Team.Team1),
-        (
-            IsAlive(ArrayElement()) &&
-            ArrayElement().perkState == PerkState.Non &&
-            ArrayElement().perkType == PerkType.Non &&
-            DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange &&
-            !(ArrayElement().notPickupPerk && ArrayElement() == ep)
-        )
-    );
 
 rule: "Perk/Enemy/perkPickUpByPlayer //Giving a park to the player who touched the crate"
 Event.OngoingPlayer
-//Team.Team2
-Player.All
+Team.All//enemyTeam
 if(
     perkCrateState == PerkCrateState.Dropped &&
-    CountOf(canPickupCratePlayers) > 0
+    true
 ){
     // When a player approaches the position where the perk crate drops,
     //  give the player a random perk
     WaitConditionConfirmed();
-    playerClosestCrate = FirstOf(canPickupCratePlayers);
-    // play pickup effect, message
-    PlayEffect(
-        AllPlayers(), PlayEffect.GoodPickupEffect,
-        Color.White, playerClosestCrate, 1);
-    PlayEffect(
-        playerClosestCrate, PlayEffect.BuffExplosionSound,
-        Color.White, playerClosestCrate, MaxLength());
-    SmallMessage(playerClosestCrate, "Earned perk. Check top-left list for more details.");
 
-    // set perk
-    if(dropedPerkType != PerkType.Non){
-        playerClosestCrate.perkType = dropedPerkType;
-        dropedPerkType = PerkType.Non;
+    pickupPlayer = FirstOf(true);
+
+    if(
+        pickupPlayer.perkState == PerkState.Non &&
+        pickupPlayer.perkType == PerkType.Non
+    ){
+        // play pickup effect, message
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodPickupEffect,
+            Color.White, pickupPlayer, 1);
+        PlayEffect(
+            pickupPlayer, PlayEffect.BuffExplosionSound,
+            Color.White, pickupPlayer, MaxLength());
+        SmallMessage(pickupPlayer, "Earned perk. Check top-left list for more details.");
+
+        // set perk
+        if(dropedPerkType != PerkType.Non){
+            pickupPlayer.perkType = dropedPerkType;
+            dropedPerkType = PerkType.Non;
+        }
+        else{
+            pickupPlayer.perkType = RandomValueInArray(lotteryPerkList);
+        }
+        pickupPlayer.perkState = PerkState.Ready;
+        // delete perk crate when picked up
+        perkCrateState = PerkCrateState.NotDropped;
     }
     else{
-        playerClosestCrate.perkType = RandomValueInArray(lotteryPerkList);
+        // If player already have perk
+        SmallMessage(pickupPlayer, "Already have perk.");
+        Wait(1.5, WaitBehavior.IgnoreCondition);
+        SmallMessage(pickupPlayer, <"Double press interact button <0> to swap for current perk.", ButtonGuide(Button.Interact)> );
     }
-    playerClosestCrate.perkState = PerkState.Ready;
-    // delete perk crate when picked up
-    perkCrateState = PerkCrateState.NotDropped;
-}
-
-rule: "Perk/Enemy/alreadykPickUpByPlayer"
-Event.OngoingPlayer
-//Team.Team2
-Player.All
-if(
-    perkCrateState == PerkCrateState.Dropped &&
-    CountOf(
-        FilteredArray(
-            AllPlayers(Team.Team1),
-            (
-                TeamOf(ArrayElement()) == Team.Team1 &&
-                IsAlive(ArrayElement()) &&
-                ArrayElement().perkState != PerkState.Non &&
-                DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
-            )
-        )
-    ) > 0
-){
-    WaitConditionConfirmed();
-    playerClosestCrate = 
-        FirstOf(
-            FilteredArray(
-                AllPlayers(Team.Team1),
-                (
-                    TeamOf(ArrayElement()) == Team.Team1 &&
-                    IsAlive(ArrayElement()) &&
-                    ArrayElement().perkState != PerkState.Non &&
-                    DistanceBetween(perkCratePosition, ArrayElement()) <= pickupRange
-                )
-            )
-        );
-
-    // If player already have perk
-    SmallMessage(playerClosestCrate, "Already have perk.");
-    Wait(1.5, WaitBehavior.IgnoreCondition);
-    SmallMessage(playerClosestCrate, <"Double press interact button <0> to swap for current perk.", ButtonGuide(Button.Interact)> );
 }
 
 // TAG Perk/Player ----------
 rule: "Perk/Player/ParkState/Non"
 Event.OngoingPlayer
-Team.Team1
-Player.All
+Team.All//playerTeam
 if(
     perkType == PerkType.Non &&
     perkState == PerkState.Non
@@ -278,8 +235,7 @@ if(
 
 rule: "Perk/Player/ParkState/Ready"
 Event.OngoingPlayer
-Team.Team1
-Player.All
+Team.All//playerTeam
 if(
     perkType != PerkType.Non &&
     perkState == PerkState.Ready
@@ -291,8 +247,7 @@ if(
 
 rule: "Perk/Player/ParkState/Using"
 Event.OngoingPlayer
-Team.Team1
-Player.All
+Team.All//playerTeam
 if(
     perkType != PerkType.Non &&
     perkState == PerkState.Using
@@ -702,8 +657,7 @@ void HidePerkHUD()"HidePerkHUD"{
 
 rule: "Perk/Player/usePerk"
 Event.OngoingPlayer
-Team.Team1
-Player.All
+Team.All//playerTeam
 if(
     IsAlive() &&
     perkState == PerkState.Ready &&
@@ -721,8 +675,7 @@ if(
 
 rule: "Perk/Player/dropPerk"
 Event.OngoingPlayer
-Team.Team1
-Player.All
+Team.All//playerTeam
 if(
     perkState == PerkState.Ready &&
     intaractDoublePressed
@@ -738,8 +691,7 @@ if(
 
 rule: "Perk/Player/releaseNotPickupPerk"
 Event.OngoingPlayer
-Team.Team1
-Player.All
+Team.All//playerTeam
 if(
     notPickupPerk
 ){
@@ -749,8 +701,7 @@ if(
 
 rule: "Perk/Player/countDownTimeLimit"
 Event.OngoingPlayer
-Team.Team1
-Player.All
+Team.All//playerTeam
 if(
     perkState == PerkState.Using &&
     perkTimeLimit > 0
@@ -763,8 +714,7 @@ if(
 
 rule: "Perk/Player/timeLimitOut"
 Event.OngoingPlayer
-Team.Team1
-Player.All
+Team.All//playerTeam
 if(
     perkState == PerkState.Using &&
     perkTimeLimit <= 0
@@ -777,8 +727,7 @@ if(
 
 rule: "Perk/Player/abortPerk"
 Event.OngoingPlayer
-Team.Team1
-Player.All
+Team.All//playerTeam
 if(
     perkState == PerkState.Using &&
     intaractDoublePressed
@@ -793,8 +742,7 @@ if(
 
 rule: "Perk/Player/remindPerk"
 Event.OngoingPlayer
-Team.Team1
-Player.All
+Team.All//playerTeam
 if(
     perkState == PerkState.Ready
 ){
@@ -811,8 +759,7 @@ if(
 
 rule: "Perk/Player/lostPerk"
 Event.OngoingPlayer
-Team.Team1
-Player.All
+Team.All//playerTeam
 if(
     IsDead()
 ){
@@ -843,8 +790,7 @@ if(
 
 rule: "Debug/givePerkRandomToSelf"
 Event.OngoingPlayer
-Team.All
-Player.All
+Team.All//playerTeam
 if(
     HostPlayer() == ep &&
     IsButtonHeld(ep, Button.Interact) &&
@@ -866,8 +812,7 @@ if(
 
 rule: "Debug/givePerkRandomToAll"
 Event.OngoingPlayer
-Team.All
-Player.All
+Team.All//playerTeam
 if(
     HostPlayer() == ep &&
     IsButtonHeld(ep, Button.Interact) &&
