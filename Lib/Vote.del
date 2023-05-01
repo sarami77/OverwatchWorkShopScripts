@@ -1,0 +1,100 @@
+import "Debug.del";
+
+// TAG Player/ChoiceDificculty ----------
+playervar define operationText!;
+playervar define voteDifficulty! = DifficultyText.NO_VOTE;
+
+enum DifficultyText{
+    NO_VOTE,
+    EASY,
+    NORMAL,
+    HARD,
+    HELL
+}
+
+define GameDifficultyText(define difficulty)"GameDifficultyText"{
+    define text! = "";
+    switch(difficulty){
+        case DifficultyText.NO_VOTE:
+        text = "NO VOTE";
+        break;
+        case DifficultyText.EASY:
+        text = "EASY";
+        break;
+        case DifficultyText.NORMAL:
+        text = "NORMAL";
+        break;
+        case DifficultyText.HARD:
+        text = "HARD";
+        break;
+        case DifficultyText.HELL:
+        text = "HELL";
+        break;
+    }
+    return text;
+}
+
+define UpdateOperationText()"UpdateOperationText"{
+    DestroyHudText(operationText);
+    operationText = CreateHudText(ep,
+        <"You can vote on game difficulty before the game starts.\n\rPress interact key<0> to switch game difficulty.\n\r[<1>]", ButtonGuide(Button.Interact), GameDifficultyText(voteDifficulty)>, null, null,
+        Location.Left, 10,
+        Color.White, Color.White, Color.White,
+        HudTextRev.None, Spectators.VisibleAlways);
+}
+
+rule: "Player/ChoiceDificculty/showOperationText"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsInSetup()
+){
+    UpdateOperationText();
+}
+
+rule: "Player/ChoiceDificculty/showOperationText"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    !IsInSetup()
+){
+    DestroyHudText(operationText);
+}
+
+rule: "Player/ChoiceDificculty/switchVote"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsInSetup() &&
+    IsButtonHeld(ep, Button.Interact)
+){
+    voteDifficulty ++;
+    voteDifficulty = voteDifficulty > DifficultyText.HELL ? DifficultyText.NO_VOTE : voteDifficulty;
+    UpdateOperationText();
+}
+
+globalvar define gameDifficulty;
+
+rule: "Player/ChoiceDificculty/switchVote"
+Event.OngoingGlobal
+if(
+    IsGameInProgress()
+){
+    define votedList! = AllPlayers(playerTeam).voteDifficulty;
+    votedList = FilteredArray(votedList, ae != DifficultyText.NO_VOTE);
+
+    define voteTotalList = [];
+
+    for(define votedListIndex! = 0; votedListIndex < CountOf(votedListIndex); votedListIndex++){
+        voteTotalList[votedList[votedListIndex]] ++;
+    }
+
+    voteTotalList = SortedArray(voteTotalList, ae);
+    gameDifficulty = FirstOf(voteTotalList);
+
+    CreateHudText(AllPlayers(),
+        <"game difficulty [<0>]", GameDifficultyText(gameDifficulty)>, null, null,
+        Location.Left, 10,
+        Color.White, Color.White, Color.White,
+        HudTextRev.Color, Spectators.VisibleAlways);
+}
