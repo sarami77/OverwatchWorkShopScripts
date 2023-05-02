@@ -148,7 +148,7 @@ void DestroyBots(define team!)"DestroyBots"{
     }
 }
 
-// TAG Bot/SetBotInfo ----------
+// TAG Bot/ButtonControlPropety ----------
 playervar define heroName;
 playervar define aimScatter;
 playervar define supportPrioloty;
@@ -204,19 +204,19 @@ playervar define actionRangeMin!;
 playervar define actionRangeMax!;
 playervar define routineInitCompleted!;
 
-rule: "Bot/SetActionRoutineBySpawned"
+rule: "Bot/SetButtonControlPropetyBySpawned"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
     HasSpawned()
 ){
-    SetHeroActionRoutine();
+    SetHeroButtonControlPropety();
     // start StateControl
     routineInitCompleted = true;
 }
 
-rule: "Bot/SetActionRoutineByStartDuplicate"
+rule: "Bot/SetButtonControlPropetyByStartDuplicate"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
@@ -224,10 +224,10 @@ if(
     HeroOf() == Hero.Echo &&
     IsDuplicating(ep)
 ){
-    SetHeroActionRoutine();
+    SetHeroButtonControlPropety();
 }
 
-rule: "Bot/SetActionRoutineByEndDuplicate"
+rule: "Bot/SetButtonControlPropetyByEndDuplicate"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
@@ -235,12 +235,12 @@ if(
     HeroOf() == Hero.Echo &&
     !IsDuplicating(ep)
 ){
-    SetHeroActionRoutine();
+    SetHeroButtonControlPropety();
 }
 
 playervar define isLifeWeever;
 
-void SetHeroActionRoutine()"SetHeroActionRoutine"{
+void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
     target = 0;
     heroName = "";
 
@@ -613,7 +613,7 @@ void SetHeroActionRoutine()"SetHeroActionRoutine"{
 
         case Hero.Widowmaker:
         heroName = "Widowmaker";
-        aimScatter = 0.0;
+        aimScatter = 0.1;
         actionRangeMin = Bot_ActionRange_Middle;
         actionRangeMax = Bot_ActionRange_Far;
         canFireButtonCombination = true;
@@ -737,6 +737,205 @@ enum ButtonBehaivor{
     ReleasePress,
     ReleaseRepeat
 }
+
+// TAG Bot/Moving ----------
+playervar define moveDirFB!;
+playervar define moveDirLR!;
+playervar define enableRetreat! = true;
+
+void SetMoveDir() playervar "SetMoveDir"{
+    if(enemyType == EnemyType.Zombie){
+        moveDirFB = Forward();
+        moveDirLR = NoDirection();
+        return;
+    }
+
+    define distToTarget! = DistanceBetween(ep, target);
+    define objPos! = CurrentObjectOnPosition();
+
+    // move to healer for heal
+    if(
+        enableRetreat ?
+            // lowHealth
+            ProbabilityTrue(150 * (1 - NormalizedHealth())) :
+            false &&
+        actionState == ActionState.Attack
+    ){
+        define healerPlayer! = 
+            FirstOf(
+                SortedArray(
+                    FilteredArray(
+                        AllLivingPlayers(TeamOf()),
+                        (
+                            ep != ae &&
+                            0 < ae.supportPrioloty &&
+                            IsInLineOfSight(EyePosition(ep), EyePosition(ae))
+                        )
+                    ),
+                    DistanceBetween(ep, ae)
+                )
+            );
+        
+        if(healerPlayer != null){
+            define dirToHealer! = LocalVectorOf(DirectionTowards(ep, healerPlayer), ep, Transformation.Rotation);
+            moveDirFB = Vector(0, 0, ZOf(dirToHealer));
+            moveDirLR = Vector(XOf(dirToHealer), 0, 0);
+        }
+        else{
+            // retreat to back
+            moveDirFB = Backward();
+            moveDirLR = NoDirection();
+        }
+
+        // dbgWldTxt(ep, "need heal");
+    }
+
+    // move to object for secure
+    else if(
+        // high health
+        ProbabilityTrue(100 * NormalizedHealth()) &&
+        (
+            // enemy close win
+            IsCloseWin(EnemyTeamOf()) ||
+            // over time
+            IsOverTime() ?
+                NumberOfPlayers(TeamOf()) / 2 :
+                0
+            >=
+            CountOf(AllPlayersOnObjective(TeamOf()))
+        ) &&
+        // can find object
+        IsInLineOfSight(EyePosition(ep), objPos)
+    ){
+        define dirToObject! = LocalVectorOf(DirectionTowards(ep, objPos), ep, Transformation.Rotation);
+        moveDirFB = Vector(0, 0, ZOf(dirToObject));
+        moveDirLR = Vector(XOf(dirToObject), 0, 0);
+    }
+    
+    // move for combat
+    else if(actionState != ActionState.Non){
+        define distRate! = actionState == ActionState.Attack ? 1 : 0.75;
+
+        // target is far
+        if(
+            distToTarget > (actionRangeMax * distRate)
+        ){
+            moveDirFB = Forward();
+        }
+        // target is close
+        else if(
+            distToTarget < (actionRangeMin * distRate)
+        ){
+            moveDirFB = Backward();
+        }
+        else{
+            moveDirFB = NoDirection();
+        }
+
+        // side step
+        if(actionState == ActionState.Attack){
+            // start sidestep by distance close and health less
+            if(
+                ProbabilityTrue(75 * (1 - NormalizedHealth())) ||   // by lost health
+                ProbabilityTrue(75 * (1 - (distToTarget / 30)))     // by target distance clsoe
+            ){
+                if(moveDirLR == NoDirection()){
+                    moveDirLR = RandomValueInArray([Left(), Right()]);
+                }
+                else if(ProbabilityTrue(75)){
+                    // change sidestep to reverse
+                    moveDirLR = -moveDirLR;
+                }
+                else{
+                    // not change sidestep
+                    moveDirLR = moveDirLR;
+                }
+            }
+            else{
+                // stop sidestep
+                moveDirLR = NoDirection();
+            }
+        }
+        else{
+            moveDirLR = NoDirection();
+        }
+
+        // dbgWldTxt(ep, "for combat");
+    }
+}
+
+playervar define enableCheckAbyss! = true;
+playervar define confirmMoveDir!;
+
+void StartMove(define player!) playervar "StartMove"{
+    if(noMoving) return;
+    
+    player.confirmMoveDir = player.moveDirFB + player.moveDirLR;
+    // move to position is abyss
+    if(
+        player.enableCheckAbyss &&
+        IsBelowAbyss(
+            BlockedPositonByLocalVector(
+                player,
+                player.confirmMoveDir,
+                walkMeterPerSec * player.watchUpdateRate
+            )
+        )
+    ){
+        StopMove(player);
+    }
+    else{
+        if(
+            player.confirmMoveDir != NoDirection()
+        ){
+            StartThrottleInDirection(
+                player,
+                player.confirmMoveDir,
+                1,
+                Relative.ToPlayer,
+                ThrottleBehavior.ReplaceExistingThrottle,
+                ThrottleRev.DirectionAndMagnitude
+            );
+        }
+        else{
+            StopMove(player);
+        }
+    }
+}
+
+void StopMove(define player) playervar "StopMove"{
+    player.moveDirFB = NoDirection();
+    player.moveDirLR = NoDirection();
+    StopThrottleInDirection(player);
+} 
+
+// TAG Bot/Aimming ----------
+void StartFacingTarget() playervar "StartFacingTarget"{
+    if(
+        target != 0 &&
+        HasSpawned(target) &&
+        IsAlive(target)
+    ){
+        StartFacing(
+            ep, DirectionTowards(EyePosition(), aimPosition),
+            300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+    }
+    else{
+        StopFacing(ep);
+    }
+}
+
+define aimPosition: 
+    (
+        IsInAlternateForm(target) ?
+        EyePosition(target) - Vector(0, 0.6, 0)     // body position
+            :
+        EyePosition(target) + Vector(0, 0.2, 0)     // head position
+    )
+        +
+    RandomPosition(aimScatter, aimScatter, aimScatter)  // aim scatter
+        +
+    Vector(0, -(aimScatter / 2), 0);    // vertical offset
 
 // TAG Bot/ActionState/StateControl ----------
 playervar define watchUpdateRate = 2.0;
@@ -891,7 +1090,9 @@ if(
         define tryFindTarget! = false;
         
         // target not Sighted
-        if(!IsSighted(target)){
+        if(
+            !IsSighted(target)
+        ){
             tryFindTarget = true;
         }
         // is support role and now supporting
@@ -1095,181 +1296,6 @@ if(
     Loop();
 }
 
-playervar define moveDirFB!;
-playervar define moveDirLR!;
-playervar define enableRetreat! = true;
-
-void SetMoveDir() playervar "SetMoveDir"{
-    if(enemyType == EnemyType.Zombie){
-        moveDirFB = Forward();
-        moveDirLR = NoDirection();
-        return;
-    }
-
-    define skipSetMoveDirLR! = false;
-    define distToTarget! = DistanceBetween(ep, target);
-
-    // set move dir forward/backward
-    // retreat for recevie heal
-    if(
-        enableRetreat ?
-            ProbabilityTrue(150 * (1 - NormalizedHealth())) :
-            false &&
-        actionState == ActionState.Attack
-    ){
-        // move to healer for heal
-        // set to near healer
-        define moveToPlayer! = 
-            FirstOf(
-                SortedArray(
-                    FilteredArray(
-                        AllLivingPlayers(TeamOf()),
-                        (
-                            ep != ae &&
-                            0 < ae.supportPrioloty &&
-                            IsInLineOfSight(EyePosition(ep), EyePosition(ae))
-                        )
-                    ),
-                    DistanceBetween(ep, ae)
-                )
-            );
-        
-        // has near healer
-        if(moveToPlayer != null){
-            // move to healer
-            define dirToHealer! = LocalVectorOf(DirectionTowards(ep, moveToPlayer), ep, Transformation.Rotation);
-            moveDirFB = Vector(0, 0, ZOf(dirToHealer));
-            moveDirLR = Vector(XOf(dirToHealer), 0, 0);
-            skipSetMoveDirLR = true;
-        }
-        else{
-            moveDirFB = Backward();
-        }
-    }
-    else if(actionState != ActionState.Non){
-        // move to target for combat
-        define distRate! = actionState == ActionState.Attack ? 1 : 0.75;
-
-        // target is far
-        if(
-            distToTarget > (actionRangeMax * distRate)
-        ){
-            moveDirFB = Forward();
-        }
-        // target is close
-        else if(
-            distToTarget < (actionRangeMin * distRate)
-        ){
-            moveDirFB = Backward();
-        }
-        else{
-            moveDirFB = NoDirection();
-        }
-    }
-
-    // set move dir left/right
-    // if skip set
-    if(!skipSetMoveDirLR){
-        // attack state
-        if(actionState == ActionState.Attack){
-            // start sidestep by distance close and health less
-            if(
-                ProbabilityTrue(75 * (1 - NormalizedHealth())) ||   // by lost health
-                ProbabilityTrue(75 * (1 - (distToTarget / 30)))     // by target distance clsoe
-            ){
-                if(moveDirLR == NoDirection()){
-                    moveDirLR = RandomValueInArray([Left(), Right()]);
-                }
-                else if(ProbabilityTrue(75)){
-                    // change sidestep to reverse
-                    moveDirLR = -moveDirLR;
-                }
-                else{
-                    // not change sidestep
-                    moveDirLR = moveDirLR;
-                }
-            }
-            else{
-                // stop sidestep
-                moveDirLR = NoDirection();
-            }
-        }
-        else{
-            moveDirLR = NoDirection();
-        }
-    }
-}
-
-playervar define enableCheckAbyss! = true;
-playervar define confirmMoveDir!;
-
-void StartMove(define player!) playervar "StartMove"{
-    if(noMoving) return;
-    
-    player.confirmMoveDir = player.moveDirFB + player.moveDirLR;
-    // move to position is abyss
-    if(
-        player.enableCheckAbyss &&
-        IsBelowAbyss(
-            BlockedPositonByLocalVector(
-                player,
-                player.confirmMoveDir,
-                walkMeterPerSec * player.watchUpdateRate
-            )
-        )
-    ){
-        StopMove(player);
-    }
-    else{
-        if(
-            player.confirmMoveDir != NoDirection()
-        ){
-            StartThrottleInDirection(
-                player,
-                player.confirmMoveDir,
-                1,
-                Relative.ToPlayer,
-                ThrottleBehavior.ReplaceExistingThrottle,
-                ThrottleRev.DirectionAndMagnitude
-            );
-        }
-        else{
-            StopMove(player);
-        }
-    }
-}
-
-void StopMove(define player) playervar "StopMove"{
-    player.moveDirFB = NoDirection();
-    player.moveDirLR = NoDirection();
-    StopThrottleInDirection(player);
-} 
-
-define aimingPosition:
-    (
-        IsInAlternateForm(target) ?
-        EyePosition(target) - Vector(0, 0.6, 0)     // body position
-            :
-        EyePosition(target) + Vector(0, 0.2, 0)     // head position
-    ) +
-    RandomPosition(aimScatter, aimScatter, aimScatter)  // aim scatter
-        +
-    Vector(0, -(aimScatter / 2), 0);    // vertical offset
-
-void StartFacingTarget() playervar "StartFacingTarget"{
-    if(
-        target != 0 &&
-        HasSpawned(target) &&
-        IsAlive(target)
-    ){
-        StartFacing(
-            ep, DirectionTowards(EyePosition(), aimingPosition),
-            300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
-    }
-    else{
-        StopFacing(ep);
-    }
-}
 
 // TAG Bot/ActionState/Non ----------
 rule: "Bot/ActionState/Non"
@@ -1459,14 +1485,14 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         ){
             // fallback by graple hook
             if(
-                ProbabilityTrue(90) &&
+                ProbabilityTrue(75) &&
                 DistanceBetween(ep, target) <= Bot_ActionRange_Middle &&
                 AbilityCooldown(ep, Button.Ability1) <= 0
             ){
                 // try use graple at backword
                 for(define tryCount! = 0; tryCount <= 3; tryCount++){
                     StopMove(ep);
-                    FacingRetreatPosition(target, 5);
+                    FacingRetreatFromTargetPosition(target, 5);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     PressButton(ep, Button.Ability1);
                     if(AbilityCooldown(ep, Button.Ability1) > 0){
@@ -1474,12 +1500,46 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     }
                 }
                 // restore aiming
-                // StartHoldingButton(ep, Button.SecondaryFire);
+                StartHoldingButton(ep, Button.SecondaryFire);
                 // restore facing
                 StartFacingTarget();
             }
         }
+        // WreckingBall
+        else if(
+            HeroOf() == Hero.WreckingBall
+        ){
+            // use graple hook
+            if(
+                ProbabilityTrue(75) &&
+                AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
+                IsBlockedBetween(EyePosition(ep), EyePosition(ep) + FacingDirectionOf(ep) * 20)
+            ){
+                // try use graple at target above
+                for(define tryCount! = 0; tryCount <= 3; tryCount++){
+                    StopMove(ep);
+                    FacingTargetAbovePosition(target, 5);
+                    Wait(0.5, WaitBehavior.AbortWhenFalse);
+                    StartHoldingButton(ep, Button.SecondaryFire);
+                    if(AbilityCooldown(ep, Button.SecondaryFire) > 0){
+                        break;
+                    }
+                }
+                // restore facing
+                StartFacingTarget();
+            }
 
+            // use pile driver
+            if(
+                ProbabilityTrue(75) &&
+                AbilityCooldown(ep, Button.Crouch) <= 0 &&
+                IsButtonHeld(ep, Button.Crouch)
+            ){
+                // jump for pile driver
+                ApplyImpulse(ep, Up(),
+                    10, Relative.ToWorld, ContraryMotion.Cancel);
+            }
+        }
         // Torbjorn
         else if(
             HeroOf() == Hero.Torbjorn
@@ -1509,21 +1569,6 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             else{
                 // change to gun
                 SetWeapon(ep, 1);
-            }
-        }
-        // WreckingBall
-        else if(
-            HeroOf() == Hero.WreckingBall
-        ){
-            if(
-                ProbabilityTrue(90) &&
-                // can use pile driver
-                AbilityCooldown(ep, Button.Crouch) <= 0 &&
-                IsButtonHeld(ep, Button.Crouch)
-            ){
-                // jump for pile driver
-                ApplyImpulse(ep, Up(),
-                    10, Relative.ToWorld, ContraryMotion.Cancel);
             }
         }
     }
@@ -1730,30 +1775,41 @@ if(
     if(isPositionFixSecondary){
         // accsell for ball tackle
         StopHoldingButton(ep, Button.PrimaryFire);
-        define moveDir!;
         while(IsFiringSecondary()){
-            if(SpeedOf() >= 12){
-                moveDir = VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf()));
-            }
-            else{
-                moveDir = RandomValueInArray([
-                    Forward(),
-                    Backward(),
-                    Right(),
-                    Left(),
-                    Up(), Up(),
-                    Down()
-                ]);
-            }
             // for ball charge
             ApplyImpulse(ep, 
-                VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf())),
+                BallTackleDirection(),
                 20, Relative.ToWorld, ContraryMotion.Incorporate);
-            Wait(RandomReal(0.25, 1.0), WaitBehavior.IgnoreCondition);
+            Wait(0.5, WaitBehavior.IgnoreCondition);
         }
+
+        // for ball charge
+        ApplyImpulse(ep, 
+            BallTackleDirection(),
+            20, Relative.ToWorld, ContraryMotion.Incorporate);
     }
 }
 
+define BallTackleDirection()"BallTackleDirection"{
+    define dir;
+    if(
+        SpeedOf() >= 10 &&
+        ProbabilityTrue(75)
+    ){
+        dir = VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf()));
+    }
+    else{
+        dir = RandomValueInArray([
+            Forward(),
+            Backward(),
+            Right(),
+            Left(),
+            Up(),
+            Down()
+        ]);
+    }
+    return dir;
+}
 
 // TAG Bot/ButtonControl ----------
 define noShooting: false;   // for debug
@@ -1942,8 +1998,6 @@ void PressFirstButtonWhenIdle()"PressFirstButtonWhenIdle"{
         else if(actionState == ActionState.Support){
             StartHoldingButton(ep, FirstOf(supportButtons));
         }
-
-        dbgPlyEft(ep);
     }
 }
 
@@ -2111,6 +2165,16 @@ if(
 }
 
 // TAG Debug ----------
+disabled rule: "Bot/Debug/DebugAction"
+Event.OngoingGlobal
+if(
+    true
+){ 
+    // dbgHudTxt(CountOf(AllPlayersOnObjective(playerTeam)));
+    Wait(1);
+    Loop();
+}
+
 disabled rule: "Bot/Debug/ShowDebugInfo"
 Event.OngoingPlayer
 if(

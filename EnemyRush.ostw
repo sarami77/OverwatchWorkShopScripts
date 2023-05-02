@@ -532,8 +532,6 @@ if(
 
 globalvar define progressStage;
 
-define finaleProgress: 90;
-
 rule: "EnemyBot/BotAssetInterval/reloadBotAssetIntervalByProgress"
 Event.OngoingGlobal
 if(
@@ -625,7 +623,7 @@ if(
 
     // setEnemyType
     if(enemyType == EnemyType.Minion){
-        StartForcingDummyBotName(ep, "Minion");
+        StartForcingDummyBotName(ep, "Minion.");
         watchUpdateRate = 18;
         eachBodyScale = 0.7;
         StartScalingPlayer(ep, eachBodyScale, false);
@@ -639,7 +637,7 @@ if(
         eachMaxSpawnInterval = minionSpawnTimeMin * spawnTimeScaleMinToMax;
     }
     else if(enemyType == EnemyType.Elite){
-        StartForcingDummyBotName(ep, "Elite");
+        StartForcingDummyBotName(ep, "Elite.");
         watchUpdateRate = 6;
         eachBodyScale = 1.0;
         StartScalingPlayer(ep, eachBodyScale, false);
@@ -653,7 +651,7 @@ if(
         eachMaxSpawnInterval = eliteSpawnTimeMin * spawnTimeScaleMinToMax;
     }
     else if(enemyType == EnemyType.General){
-        StartForcingDummyBotName(ep, "General");
+        StartForcingDummyBotName(ep, "General.");
         watchUpdateRate = 2;
         eachBodyScale = 1.5;
         StartScalingPlayer(ep, eachBodyScale, false);
@@ -667,7 +665,7 @@ if(
         eachMaxSpawnInterval = generalBossSpawnTimeMin * spawnTimeScaleMinToMax;
     }
     else if(enemyType == EnemyType.Boss){
-        StartForcingDummyBotName(ep, "Boss");
+        StartForcingDummyBotName(ep, "Boss.");
         watchUpdateRate = 2;
         eachBodyScale = 2.5;
         StartScalingPlayer(ep, eachBodyScale, false);
@@ -860,14 +858,11 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
 
 globalvar define additinalTeleportAreaSize;
 define teleportAreaSizeOffset: Bot_ActionRange_Far;
-define OnCurrentObjectPosition(): CurrentObjectPosition() + Vector(0, 5, 0); // not collision in payload object position
-
 define IsPlayerOnObject: ([] != AllPlayersOnObjective(playerTeam));
-define IsEnemyOnObject: ([] != AllPlayersOnObjective(enemyTeam));
 
 Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
     define setSuccess! = false;
-    define teleportToTarget! = OnCurrentObjectPosition();
+    define teleportToTarget! = CurrentObjectOnPosition();
     
     if(
         payloadDirection != 0 &&
@@ -1071,7 +1066,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define checkTeleportConditionMaxCount: 2;
+define checkTeleportConditionMaxCount: 3;
 
 rule: "EnemyBot/Teleport/teleportForDefenceObject"
 Event.OngoingPlayer
@@ -1085,10 +1080,11 @@ if(
         Wait(1, WaitBehavior.AbortWhenFalse);
         // check not teleport condition
         if(
-            actionState != ActionState.Non &&        // in combat
+            // enemy not found
+            IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf())) &&
             (
-                DistanceBetween(ep, CurrentObjectPosition()) <= Bot_ActionRange_Far ||   // near object
-                !IsPlayerOnObject                                       // player not on object
+                DistanceBetween(ep, CurrentObjectPosition()) <= Bot_ActionRange_Far ||      // near object
+                !IsPlayerOnObject                                                           // player not on object
             )
         ){
             // reset count up
@@ -1237,11 +1233,11 @@ if(
             IsPlayerOnObject
         ){
             if(
-                // is finale
-                TotalObjectProgress() >= finaleProgress
+                // close win
+                IsCloseWin(playerTeam)
             ){
                 // set teleport position to object
-                teleportPosition = OnCurrentObjectPosition();
+                teleportPosition = CurrentObjectOnPosition();
                 TeleportWithEffect();
             }
             else{
@@ -1301,15 +1297,16 @@ if(
     Loop();
 }
 
-rule: "EnemyBot/EnemyAbility/closeToObject"
+disabled rule: "EnemyBot/EnemyAbility/closeToObject"
 Event.OngoingGlobal
 if(
     IsGameInProgress() &&
     IsPlayerOnObject &&
-    TotalObjectProgress() >= finaleProgress
+    IsCloseWin(playerTeam)
 ){
     WaitRandomForDistributeServerLoad();
     
+    define objPos = CurrentObjectOnPosition();
     define enemyList!;
     // get not on object and living enemys
     enemyList = 
@@ -1317,15 +1314,17 @@ if(
             AllLivingPlayers(enemyTeam),
             (
                 !IsInSpawnRoom(ae) &&
-                DistanceBetween(ae, OnCurrentObjectPosition()) >= 5
+                DistanceBetween(ae, objPos) >= 5
             )
         );
+    
+    
 
     for(define enemysIndex! = 0; enemysIndex < CountOf(enemyList); enemysIndex ++){
         define player! = enemyList[enemysIndex];
         PressButton(player, Button.Jump);
         ApplyImpulse(player, 
-            VectorTowards(player, OnCurrentObjectPosition()), 8,
+            VectorTowards(player, objPos), 8,
             Relative.ToWorld, ContraryMotion.Cancel);
         Wait(0.1, WaitBehavior.IgnoreCondition);
     }

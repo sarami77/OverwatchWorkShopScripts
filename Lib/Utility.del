@@ -60,7 +60,44 @@ define VectorScaledY(define vector, define scale):
 
 define BodyPosition(define player): Midpoint(PositionOf(player), EyePosition(player));
 
-define IsOverTime(): MatchTime() == 0 && IsGameInProgress();
+define MaxMatchTime(): 5 * 60;
+define finaleProgress: 90;
+define finaleRemainTime: 10;
+
+define IsCloseWin(define team!)"IsCloseWin"{
+    define isCloseWin! = false;
+    if(IsTeamOnDefense(team)){
+        isCloseWin =
+            IsGameInProgress() &&
+            (
+                0 < MatchTime() &&      // not include over time
+                MatchTime() <= finaleRemainTime
+            );
+    }
+    else if(IsTeamOnOffense(team)){
+        isCloseWin =
+            IsGameInProgress() &&
+            (
+                TotalObjectProgress() >= finaleProgress
+            );
+    }
+    else{
+        isCloseWin =
+            IsGameInProgress() &&
+            (
+                (
+                    0 < MatchTime() &&      // not include over time
+                    MatchTime() <= finaleRemainTime
+                ) ||
+                TotalObjectProgress() >= finaleProgress
+            );
+    }
+    return isCloseWin;
+}
+
+define IsOverTime():
+    IsGameInProgress() &&
+    MatchTime() <= 0;
 
 Number TotalObjectProgress()"TotalObjectProgress"{
     Number progress;
@@ -211,34 +248,48 @@ Vector BlockedPositonByLocalVector(define player!, define localVector!, define d
     return blockedPosition;
 }
 
-define FacingTargetBetweenBelowPosition(define distTarget!, define distRate!)"FacingTargetBetweenBelowPosition"{
+define FacingTargetBetweenBelowPosition(define facingTarget!, define betweenDistRate!)"FacingTargetBetweenBelowPosition"{
     define rootPos! = EyePosition();
-    define destPos! = EyePosition(distTarget);
+    define destPos! = EyePosition(facingTarget);
     StartFacing(
     ep, DirectionTowards(
             rootPos,
             BelowPosition(
                 rootPos +
-                DirectionTowards(rootPos, destPos) *
-                DistanceBetween(rootPos, destPos) * distRate
+                DirectionTowards(rootPos, destPos) * DistanceBetween(rootPos, destPos) * betweenDistRate
             )
         ),
         300, Relative.ToWorld, FacingRev.DirectionAndTurnRate
     );
 }
 
-define FacingRetreatPosition(define distTarget!, define verticalOffset!)"FacingRetreatPosition"{
+define FacingTargetAbovePosition(define facingTarget!, define verticalOffset!)"FacingTargetAbovePosition"{
     define rootPos! = EyePosition();
-    define destPos! = EyePosition(distTarget);
+    define destPos! = EyePosition(facingTarget);
+    StartFacing(
+    ep, DirectionTowards(
+            rootPos,
+            (
+                destPos +
+                Vector(0, verticalOffset, 0) +
+                RandomPosition(2, 2, 2)
+            )
+        ),
+        300, Relative.ToWorld, FacingRev.DirectionAndTurnRate
+    );
+}
+
+define FacingRetreatPosition(define facingTarget!, define verticalOffset!)"FacingRetreatPosition"{
+    define rootPos! = EyePosition();
+    define destPos! = EyePosition(facingTarget);
     StartFacing(
     ep, DirectionTowards(
             rootPos,
             (
                 rootPos +
                 Vector(0, verticalOffset, 0) + 
-                RandomPosition(verticalOffset, verticalOffset, verticalOffset) +
-                -1 * DirectionTowards(rootPos, destPos) *
-                DistanceBetween(rootPos, destPos)
+                RandomPosition(2, 2, 2) +
+                -1 * DirectionTowards(rootPos, destPos) * DistanceBetween(rootPos, destPos)
             )
         ),
         300, Relative.ToWorld, FacingRev.DirectionAndTurnRate
@@ -347,6 +398,8 @@ define IsInSpawnRoomPosition(define pos, define team):
             IsInLineOfSight(ae + Up(), pos + Up())
         )
     );
+
+define CurrentObjectOnPosition(): CurrentObjectPosition() + Vector(0, 3, 0);
 
 Vector CurrentObjectPosition()"CurrentObjectPosition"{
     Vector objPos;

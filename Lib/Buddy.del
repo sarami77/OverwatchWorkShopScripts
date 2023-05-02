@@ -34,7 +34,7 @@ if(
     IsAlive() &&
     actionState == ActionState.Non
 ){
-    define objectPosition! = CurrentObjectPosition() + Vector(0, 2, 0);
+    define objPos! = CurrentObjectOnPosition();
 
     // get alive player near me
     followTarget =
@@ -48,39 +48,37 @@ if(
                         IsAlive(ae)
                     )
                 ),
-                // DistanceBetween(ae, ep)
-                DistanceBetween(ae, objectPosition)
+                DistanceBetween(ae, objPos)
             )
         );
-
-    // not game in proress
-    if(!IsGameInProgress()){        
+    
+    if(
         // not find player
-        if(followTarget == null){
-            // force set spawn point as followTarget
-            followTarget = SpawnPoints(playerTeam)[0];
-        }
+        followTarget == null &&
+        // not game in proress
+        !IsGameInProgress()
+    ){
+        // force set spawn point as followTarget
+        followTarget = SpawnPoints(playerTeam)[0];
     }
-    else{
-        if(
-            // valid object
-            objectPosition != 0 &&
-            (
-                // near or has line to object
-                DistanceBetween(ep, objectPosition) <= Bot_ActionRange_CanFind ||
-                IsInLineOfSight(ep, objectPosition)
-            )
-        ){
-            // set object as followTarget
-            followTarget = objectPosition;
-        }
-        else{
-            // not find player
-            if(followTarget == null){
-                // force set object as followTarget
-                followTarget = objectPosition;
-            }
-        }
+    else if(
+        // valid object
+        objPos != 0 &&
+        (
+            // near or has line to object
+            DistanceBetween(ep, objPos) <= Bot_ActionRange_CanFind ||
+            IsInLineOfSight(ep, objPos)
+        )
+    ){
+        // set object as followTarget
+        followTarget = objPos;
+    }
+    else if(
+        // not find player
+        followTarget == null
+    ){
+        // force set object as followTarget
+        followTarget = objPos;
     }
 
     // try follow movement by loop
@@ -156,9 +154,18 @@ if(
         SetMoveSpeed(ep, DefaultPercentage());
         // stop follow
         StopMove(ep);
-        // teleport to range edge
+
+        // teleport to facing direction from followTarget
+        define teleportPos = BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRangeMin * 3);    // avoid map surface
+        teleportPos = ShiftedPosition(teleportPos, DirectionTowards(ep, followTarget), 1);
+        
+        if(IsBelowAbyss(teleportPos)){
+            // if abyss, teleport to followTarget
+            teleportPos = followTarget;
+        }
         Teleport(ep,
-            BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRangeMin)
+            teleportPos
+            // NearestWalkablePosition(Midpoint(followTarget, ep))
         );
     }
 
