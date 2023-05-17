@@ -256,7 +256,7 @@ if(
         // relealse force reload
         forceReloadBuddyAsset = false;
         // wait start intarval until game start.
-        WaitUntil(IsGameInProgress(), MaxValue());
+        WaitUntil(IsGameInProgress() || forceReloadBuddyAsset, MaxValue());
 
         for(;reloadBuddyAssetInterval > 0 && !forceReloadBuddyAsset; reloadBuddyAssetInterval--){
             Wait(1, WaitBehavior.AbortWhenFalse);
@@ -469,6 +469,12 @@ define enemyAssetList:
             [EnemyType.General,     Hero.Roadhog,     1],
             [EnemyType.Elite,       Hero.Roadhog,     3],
             [EnemyType.Minion,      Hero.Roadhog,     9]
+        ],
+        [   // assetNo 15
+            // Pharah army
+            [EnemyType.General,     Hero.Bastion,     1],
+            [EnemyType.Elite,       Hero.Bastion,     3],
+            [EnemyType.Minion,      Hero.Bastion,     9]
         ]
     ];
 
@@ -481,10 +487,11 @@ define enemyAssetNoLotteryList: [
     4,
     5,
     6,
-    11, 11, 11,
-    12, 12, 12,
-    13,
-    14, 14
+    11, 11,
+    12, 12,
+    13, 13,
+    14, 14,
+    15, 15
 ];
 
 // TAG EnemyBot/BotAssetInterval ----------
@@ -872,8 +879,8 @@ Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjec
         define blockedHead! = BlockedPositon(teleportToTarget, payloadDirection, teleportAreaSizeOffset);
         // increase teleportAreaSize by cut off distance for spam payload block by teleport
         additinalTeleportAreaSize = teleportAreaSizeOffset - DistanceBetween(teleportToTarget, blockedHead);
-        additinalTeleportAreaSize /= 2;
-        // change teleportTarget to payload ahead
+        additinalTeleportAreaSize *= 0.5;
+        // change teleportTarget to payload ahead blocked position
         teleportToTarget = blockedHead;
     }
     else{
@@ -962,7 +969,7 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
 
         // show teleport beam to own position
         DestroyEffect(telBeam);
-        define fromSky! = IsInSpawnRoom(ep);
+        define fromSky! = IsInSpawnRoom(ep) || !IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf()));
         // define fromSky! = true;
         telBeam = CreateBeamEffect(AllPlayers(),
             BeamType.BadBeam,
@@ -1119,7 +1126,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval
-    spawnRushInterval = ObjectProgressScaledInterval(30, 60, 5);
+    spawnRushInterval = ObjectProgressScaledInterval(20, 50, 5);
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn Rush Event Interval Scale", 1.0, 0.1, 100, 3);
     spawnRushInterval = RoundToInteger(spawnRushInterval, Rounding.Up);
     for(;spawnRushInterval > 0; spawnRushInterval--){
@@ -1135,11 +1142,20 @@ if(
     //     HudTextRev.Color, Spectators.VisibleAlways);
 
     // action
-    define rushDurling! = RandomInteger(5, 15);
-    for(; rushDurling > 0; rushDurling--){
+    define rushSpawnCount! = RandomInteger(1, 6);
+    define spawnInteval! = RandomInteger(1, 3);
+    for(; rushSpawnCount > 0; rushSpawnCount--){
         WaitRandomForDistributeServerLoad();
-        Respawn(AllDeadPlayers(enemyTeam));
-        Wait(1, WaitBehavior.IgnoreCondition);
+        Respawn(
+            FilteredArray(
+                AllDeadPlayers(enemyTeam),
+                (
+                    ae.enemyType == EnemyType.Minion || 
+                    ae.enemyType == EnemyType.Elite
+                )
+            )
+        );
+        Wait(spawnInteval, WaitBehavior.IgnoreCondition);
     }
 
     // hide text
@@ -1208,7 +1224,7 @@ if(
     )
 ){
     // set default interval
-    combatTeleportInterval = ObjectProgressScaledInterval(15, 30, 5);
+    combatTeleportInterval = ObjectProgressScaledInterval(10, 40, 5);
     combatTeleportInterval *= WorkshopSettingReal("Enemy Bot Settings", "(General & Boss) Combat Teleport Interval Scale", 1.0, 0.1, 100, 5);
     if(actionRangeMax == ActionRange.Melee){
         combatTeleportInterval *= 1;
