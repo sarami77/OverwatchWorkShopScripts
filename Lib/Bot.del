@@ -326,6 +326,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         secondaryFireButtonPressMin = 30;
         secondaryFireButtonPressMax = 40;
         jumpButtonReleaseMax = 40;
+        ultimateButtonReleaseMax = 30;
         supportButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
@@ -793,16 +794,17 @@ void SetMoveDir() playervar "SetMoveDir"{
     // move to object for secure
     else if(
         // high health
-        ProbabilityTrue(100 * NormalizedHealth()) &&
+        ProbabilityTrue(150 * NormalizedHealth()) &&
         (
             // enemy close win
             IsCloseWin(EnemyTeamOf()) ||
             // over time
             IsOverTime() ?
-                NumberOfPlayers(TeamOf()) / 2 :
+                // on object player num is low
+                NumberOfPlayers(TeamOf()) * 0.75 :
                 0
-            >=
-            CountOf(AllPlayersOnObjective(TeamOf()))
+                    >=
+                        CountOf(AllPlayersOnObjective(TeamOf()))
         ) &&
         // can find object
         IsInLineOfSight(EyePosition(ep), objPos)
@@ -917,7 +919,7 @@ void StartFacingTarget() playervar "StartFacingTarget"{
         IsAlive(target)
     ){
         StartFacing(
-            ep, DirectionTowards(EyePosition(), aimPosition),
+            ep, DirectionTowards(EyePosition(), aimPosition(target)),
             300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
     }
     else{
@@ -925,12 +927,12 @@ void StartFacingTarget() playervar "StartFacingTarget"{
     }
 }
 
-define aimPosition: 
+define aimPosition(define player!): 
     (
-        IsInAlternateForm(target) ?
-        EyePosition(target) - Vector(0, 0.6, 0)     // body position
+        IsInAlternateForm(player) ?
+        EyePosition(player) - Vector(0, 0.6, 0)     // body position
             :
-        EyePosition(target) + Vector(0, 0.2, 0)     // head position
+        EyePosition(player) + Vector(0, 0.2, 0)     // head position
     )
         +
     RandomPosition(aimScatter, aimScatter, aimScatter)  // aim scatter
@@ -1406,11 +1408,10 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
 
         // hero unique action
         // Ashe
-        if(
+        else if(
             HeroOf() == Hero.Ashe
         ){
             if(
-                ProbabilityTrue(90) &&
                 IsReloading()
             ){
                 // stop repeat firing for reduce reload cancel
@@ -1421,12 +1422,53 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     StopHoldingButton(ep, Button.SecondaryFire);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);    // wait stop repeat fire
                     PressButton(ep, Button.Reload);
-                    if(MaxAmmo(ep, 0) <= Ammo(ep, 0)){
+                    if(
+                        MaxAmmo(ep, 0) <= Ammo(ep, 0) ||
+                        ProbabilityTrue(10)     // cancel reload
+                    ){
                         break;
                     }
                 }
                 // restore aiming
                 StartHoldingButton(ep, Button.SecondaryFire);
+            }
+        }
+        // Ana
+        if(
+            HeroOf() == Hero.Ana
+        ){
+            if(
+                ProbabilityTrue(50) &&
+                UltimateChargePercent(ep) >= 100
+            ){
+                // get ultimate ready or using player
+                define boostTarget! = 
+                    RandomValueInArray(
+                        FilteredArray(
+                            AllLivingPlayers(TeamOf()),
+                            (
+                                (
+                                    UltimateChargePercent(ae) >= 100 ||
+                                    IsUsingUltimate(ae)
+                                ) &&
+                                IsInLineOfSight(ep, ae)
+                            )
+                        )
+                    );
+
+                if(boostTarget != null){
+                    // try use boost to boostTarget
+                    for(define tryCount! = 0; tryCount <= 3; tryCount++){
+                        StartFacingPlayer(boostTarget);
+                        Wait(0.5, WaitBehavior.AbortWhenFalse);     
+                        PressButton(ep, Button.Ultimate);
+                        if(!IsUsingUltimate()){
+                            break;
+                        }
+                    }
+                    // restore facing
+                    StartFacingTarget();
+                }
             }
         }
         // Mercy
@@ -1466,78 +1508,16 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             ){
                 // try use lift on own below
                 for(define tryCount! = 0; tryCount <= 3; tryCount++){
+                    StartFacingPlayerBetweenBelowPosition(target, 0.01);
                     StopMove(ep);
-                    FacingTargetBetweenBelowPosition(target, 0.01);
-                    Wait(0.5, WaitBehavior.AbortWhenFalse);
-                    
-                    PressButton(ep, Button.Ability1);
-                    if(AbilityCooldown(ep, Button.Ability1) > 0){
-                        break;
-                    }
-                }
-                // restore facing
-                StartFacingTarget();
-            }
-        }
-        // Widowmaker
-        else if(
-            HeroOf() == Hero.Widowmaker
-        ){
-            // fallback by graple hook
-            if(
-                ProbabilityTrue(75) &&
-                DistanceBetween(ep, target) <= Bot_ActionRange_Middle &&
-                AbilityCooldown(ep, Button.Ability1) <= 0
-            ){
-                // try use graple at backword
-                for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    StopMove(ep);
-                    FacingRetreatPositionFromTarget(target, 5);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     PressButton(ep, Button.Ability1);
                     if(AbilityCooldown(ep, Button.Ability1) > 0){
                         break;
                     }
                 }
-                // restore aiming
-                StartHoldingButton(ep, Button.SecondaryFire);
                 // restore facing
                 StartFacingTarget();
-            }
-        }
-        // WreckingBall
-        else if(
-            HeroOf() == Hero.WreckingBall
-        ){
-            // use graple hook
-            if(
-                ProbabilityTrue(75) &&
-                AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
-                IsBlockedBetween(EyePosition(ep), EyePosition(ep) + FacingDirectionOf(ep) * 20)
-            ){
-                // try use graple at target above
-                for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    StopMove(ep);
-                    FacingTargetAbovePosition(target, 5);
-                    Wait(0.5, WaitBehavior.AbortWhenFalse);
-                    StartHoldingButton(ep, Button.SecondaryFire);
-                    if(AbilityCooldown(ep, Button.SecondaryFire) > 0){
-                        break;
-                    }
-                }
-                // restore facing
-                StartFacingTarget();
-            }
-
-            // use pile driver
-            if(
-                ProbabilityTrue(75) &&
-                AbilityCooldown(ep, Button.Crouch) <= 0 &&
-                IsButtonHeld(ep, Button.Crouch)
-            ){
-                // jump for pile driver
-                ApplyImpulse(ep, Up(),
-                    10, Relative.ToWorld, ContraryMotion.Cancel);
             }
         }
         // Torbjorn
@@ -1569,6 +1549,84 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             else{
                 // change to gun
                 SetWeapon(ep, 1);
+            }
+        }
+        // Widowmaker
+        else if(
+            HeroOf() == Hero.Widowmaker
+        ){
+            // fallback by graple hook
+            if(
+                ProbabilityTrue(50) &&
+                DistanceBetween(ep, target) <= Bot_ActionRange_Middle &&
+                AbilityCooldown(ep, Button.Ability1) <= 0
+            ){
+                // try use graple at backword
+                for(define tryCount! = 0; tryCount <= 3; tryCount++){
+                    StartFacingPlayerRetreatPosition(target, 5);
+                    StopMove(ep);
+                    Wait(0.5, WaitBehavior.AbortWhenFalse);
+                    PressButton(ep, Button.Ability1);
+                    if(AbilityCooldown(ep, Button.Ability1) > 0){
+                        break;
+                    }
+                }
+                // restore aiming
+                StartHoldingButton(ep, Button.SecondaryFire);
+                // restore facing
+                StartFacingTarget();
+            }
+        }
+        // WreckingBall
+        else if(
+            HeroOf() == Hero.WreckingBall
+        ){
+            // use graple hook
+            if(
+                ProbabilityTrue(50) &&
+                AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
+                IsBlockedBetween(EyePosition(ep), EyePosition(ep) + FacingDirectionOf(ep) * 20)
+            ){
+                // try use graple at target above
+                for(define tryCount! = 0; tryCount <= 3; tryCount++){
+                    StartFacingPlayerAbovePosition(target, 5);
+                    Wait(0.5, WaitBehavior.AbortWhenFalse);
+                    StartHoldingButton(ep, Button.SecondaryFire);
+                    if(AbilityCooldown(ep, Button.SecondaryFire) > 0){
+                        break;
+                    }
+                }
+                // restore facing
+                StartFacingTarget();
+            }
+
+            // use pile driver
+            if(
+                ProbabilityTrue(50) &&
+                AbilityCooldown(ep, Button.Crouch) <= 0 &&
+                IsButtonHeld(ep, Button.Crouch)
+            ){
+                // jump for pile driver
+                ApplyImpulse(ep, Up(),
+                    10, Relative.ToWorld, ContraryMotion.Cancel);
+            }
+        }
+        // Zenyatta
+        else if(
+            HeroOf() == Hero.Zenyatta
+        ){
+            while(
+                IsUsingUltimate()
+            ){
+                define needHealerPlayer! = FindSupportTarget();
+                if(needHealerPlayer != null){
+                    // move to need heal player for heal
+                    define localDir! = LocalVectorOf(DirectionTowards(ep, needHealerPlayer), ep, Transformation.Rotation);
+                    moveDirFB = Vector(0, 0, ZOf(localDir));
+                    moveDirLR = Vector(XOf(localDir), 0, 0);
+                    StartMove(ep);
+                }
+                Wait(0.5, WaitBehavior.AbortWhenFalse);
             }
         }
     }
@@ -1694,7 +1752,7 @@ if(
         StopHoldingButton(ep, Button.PrimaryFire);
         StopHoldingButton(ep, Button.SecondaryFire);
         for(define tryCount! = 0; tryCount <= 3; tryCount++){
-            FacingTargetBetweenBelowPosition(target, 0.5);
+            StartFacingPlayerBetweenBelowPosition(target, 0.5);
             Wait(0.25, WaitBehavior.IgnoreCondition);
 
             if(ProbabilityTrue(isRotateProb)){
@@ -1739,7 +1797,7 @@ if(
     if(isPositionAimSecondary){
         StopHoldingButton(ep, Button.PrimaryFire);
         for(define tryCount! = 0; tryCount <= 3; tryCount++){
-            FacingTargetBetweenBelowPosition(target, 0.25);
+            StartFacingPlayerBetweenBelowPosition(target, 0.25);
             Wait(0.25, WaitBehavior.IgnoreCondition);
             
             PressButton(ep, Button.SecondaryFire);

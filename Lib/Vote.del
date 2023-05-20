@@ -1,34 +1,44 @@
 import "Debug.del";
 
-// TAG Player/ChoiceDificculty ----------
+// TAG Vote ----------
 playervar define operationText!;
-playervar define voteDifficulty! = DifficultyText.NO_VOTE;
+playervar define voteDifficulty!;
 
-enum DifficultyText{
-    NO_VOTE,
-    EASY,
-    NORMAL,
-    HARD,
-    HELL
+define DifficultyNum: 6;
+
+enum Difficulty{
+    NO_VOTE = 0,
+    EASY = 1,
+    NORMAL = 2,
+    HARD = 3,
+    HELL = 4,
+    INSANE = 5
+}
+
+define GameDifficultyScale()"GameDifficultyScale"{
+    return gameDifficulty / Difficulty.INSANE;
 }
 
 define GameDifficultyText(define difficulty)"GameDifficultyText"{
     define text! = "";
     switch(difficulty){
-        case DifficultyText.NO_VOTE:
-        text = "NO VOTE";
+        case Difficulty.NO_VOTE:
+        text = "NO VOTE(0)";
         break;
-        case DifficultyText.EASY:
-        text = "EASY";
+        case Difficulty.EASY:
+        text = "EASY(1)";
         break;
-        case DifficultyText.NORMAL:
-        text = "NORMAL";
+        case Difficulty.NORMAL:
+        text = "NORMAL(2)";
         break;
-        case DifficultyText.HARD:
-        text = "HARD";
+        case Difficulty.HARD:
+        text = "HARD(3)";
         break;
-        case DifficultyText.HELL:
-        text = "HELL";
+        case Difficulty.HELL:
+        text = "HELL(4)";
+        break;
+        case Difficulty.INSANE:
+        text = "INSANE(5)";
         break;
     }
     return text;
@@ -37,64 +47,115 @@ define GameDifficultyText(define difficulty)"GameDifficultyText"{
 define UpdateOperationText()"UpdateOperationText"{
     DestroyHudText(operationText);
     operationText = CreateHudText(ep,
-        <"You can vote on game difficulty before the game starts.\n\rPress interact key<0> to switch game difficulty.\n\r[<1>]", ButtonGuide(Button.Interact), GameDifficultyText(voteDifficulty)>, null, null,
+        null, <"You can vote for game difficulty until game starts.\n\rPress interact buton <0> to switch vote difficulty.\n\rVote difficulty = <1>", ButtonGuide(Button.Interact), GameDifficultyText(voteDifficulty)>, null,
         Location.Left, 10,
-        Color.White, Color.White, Color.White,
-        HudTextRev.None, Spectators.VisibleAlways);
+        Color.White, Color.Yellow, Color.White,
+        HudTextRev.None, Spectators.DefaultVisibility);
 }
 
-rule: "Player/ChoiceDificculty/showOperationText"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    IsInSetup()
-){
-    UpdateOperationText();
-}
-
-rule: "Player/ChoiceDificculty/showOperationText"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    !IsInSetup()
-){
-    DestroyHudText(operationText);
-}
-
-rule: "Player/ChoiceDificculty/switchVote"
+rule: "Vote/showOperationText"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     IsInSetup() &&
-    IsButtonHeld(ep, Button.Interact)
+    !IsDummyBot()
+){
+    UpdateOperationText();
+}
+
+rule: "Vote/showOperationText"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    !IsInSetup() &&
+    !IsDummyBot()
+){
+    DestroyHudText(operationText);
+}
+
+rule: "Vote/switchVote"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsInSetup() &&
+    IsButtonHeld(ep, Button.Interact) &&
+    !IsDummyBot()
 ){
     voteDifficulty ++;
-    voteDifficulty = voteDifficulty > DifficultyText.HELL ? DifficultyText.NO_VOTE : voteDifficulty;
+    voteDifficulty = voteDifficulty > Difficulty.INSANE ? Difficulty.NO_VOTE : voteDifficulty;
     UpdateOperationText();
 }
 
 globalvar define gameDifficulty;
 
-rule: "Player/ChoiceDificculty/switchVote"
+rule: "Vote/confitmVote"
 Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    define votedList! = AllPlayers(playerTeam).voteDifficulty;
-    votedList = FilteredArray(votedList, ae != DifficultyText.NO_VOTE);
-
-    define voteTotalList = [];
-
-    for(define votedListIndex! = 0; votedListIndex < CountOf(votedListIndex); votedListIndex++){
-        voteTotalList[votedList[votedListIndex]] ++;
+    // make votedList
+    define votedList! = [];
+    for(define idx! = 0; idx < NumberOfPlayers(playerTeam); idx++){
+        define player! = PlayersInSlot(idx, playerTeam);
+        votedList[CountOf(votedList)] = player.voteDifficulty;
     }
 
-    voteTotalList = SortedArray(voteTotalList, ae);
-    gameDifficulty = FirstOf(voteTotalList);
+    // set zero to voteTotalList
+    define voteTotalList! = [];
+    for(define idx! = 0; idx < DifficultyNum; idx++){
+        voteTotalList[idx] = 0;
+    }
+
+    // sum voteTotalList
+    for(define idx! = 0; idx < CountOf(votedList); idx++){
+        voteTotalList[votedList[idx]] ++;
+    }
+
+    // for(define idx! = 0; idx < CountOf(voteTotalList); idx++){
+    //     dbgHudTxt(<"voteTotalList[<0>] = <1>", idx, voteTotalList[idx]>);
+    // }
+
+    // check most vote index
+    define mostVoteCount! = 0;
+    define mostVoteIdx! = 0;
+    for(define idx! = 1; idx < CountOf(voteTotalList); idx++){
+        if(mostVoteCount < voteTotalList[idx]){
+            mostVoteCount = voteTotalList[idx];
+            mostVoteIdx = idx;
+        }
+    }
+
+    // index found
+    if(mostVoteIdx > 0){
+        gameDifficulty = mostVoteIdx;
+    }
+    else{
+        gameDifficulty = Difficulty.NORMAL;
+    }
+    
+    // dbgHudTxt(<"gameDifficulty = <0>", gameDifficulty>);
 
     CreateHudText(AllPlayers(),
-        <"game difficulty [<0>]", GameDifficultyText(gameDifficulty)>, null, null,
+        null, <"game difficulty = <0>", GameDifficultyText(gameDifficulty)>, null,
         Location.Left, 10,
-        Color.White, Color.White, Color.White,
+        Color.White, 
+            gameDifficulty == Difficulty.EASY ? Color.Blue :
+            gameDifficulty == Difficulty.NORMAL ? Color.Green :
+            gameDifficulty == Difficulty.HARD ? Color.Yellow :
+            gameDifficulty == Difficulty.HELL ? Color.Red :
+            gameDifficulty == Difficulty.INSANE ? warningIconColor :
+            null,
+        Color.White,
         HudTextRev.Color, Spectators.VisibleAlways);
+}
+
+// TAG Debug ----------
+disabled rule: "Debug/Vote/forceVote"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsInSetup() &&
+    IsDummyBot()
+){
+    voteDifficulty = Difficulty.EASY;
 }

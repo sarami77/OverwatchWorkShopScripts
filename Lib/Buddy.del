@@ -17,27 +17,9 @@ if(
     IsDummyBot()
 ){
     StartForcingDummyBotName(ep, GetDummyName());
-
-    // CreateInWorldText(
-    //     AllPlayers(), followerText, 
-    //     ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString,
-    //     Color.SkyBlue, Spectators.DefaultVisibility);
-
 }
 
-rule: "Buddy/Teleport/following"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    IsDummyBot() &&
-    HasSpawned() &&
-    IsAlive() &&
-    actionState == ActionState.Non
-){
-    define objPos! = CurrentObjectOnPosition();
-
-    // get alive player near me
-    followTarget =
+define FindNearPositionAlivePlayer(define position!):
         FirstOf(
             SortedArray(
                 FilteredArray(
@@ -48,37 +30,86 @@ if(
                         IsAlive(ae)
                     )
                 ),
-                DistanceBetween(ae, objPos)
+                DistanceBetween(ae, position)
             )
         );
-    
+
+define FindPlayer():
+        FirstOf(
+            FilteredArray(
+                AllLivingPlayers(playerTeam),
+                (
+                    !IsDummyBot(ae) &&
+                    HasSpawned(ae)
+                )
+            )
+        );
+
+rule: "Buddy/Teleport/following"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned() &&
+    IsAlive() &&
+    actionState == ActionState.Non
+){
+    // get current object position
+    define objPos! = CurrentObjectOnPosition();
+    // get near object alive player
+    define alivePlayer! = FindNearPositionAlivePlayer(objPos);
+
     if(
-        // not find player
-        followTarget == null &&
         // not game in proress
         !IsGameInProgress()
     ){
-        // force set spawn point as followTarget
-        followTarget = SpawnPoints(playerTeam)[0];
+        if(
+            // find alive player
+            alivePlayer != null
+        ){
+            // set player as followTarget
+            followTarget = alivePlayer;
+        }
+        else{
+            // set spawn point as followTarget
+            followTarget = SpawnPoints(playerTeam)[0];
+        }        
     }
-    else if(
-        // valid object
-        objPos != 0 &&
-        (
-            // near or has line to object
-            DistanceBetween(ep, objPos) <= Bot_ActionRange_CanFind ||
-            IsInLineOfSight(ep, objPos)
-        )
-    ){
-        // set object as followTarget
-        followTarget = objPos;
-    }
-    else if(
-        // not find player
-        followTarget == null
-    ){
-        // force set object as followTarget
-        followTarget = objPos;
+    else{
+        if(
+            // valid object
+            objPos != 0 &&
+            (
+                // near or has line to object
+                DistanceBetween(ep, objPos) <= Bot_ActionRange_CanFind ||
+                IsInLineOfSight(ep, objPos)
+            )
+        ){
+            // set object as followTarget
+            followTarget = objPos;
+        }
+        else if(
+            // find alive player
+            alivePlayer != null
+        ){
+            // set player as followTarget
+            followTarget = alivePlayer;
+        }
+        else{
+            // get player on team
+            define player! = FindPlayer();
+            if(
+                // find player
+                player != null
+            ){
+                // set spawn point as followTarget for wait player respawn and join
+                followTarget = SpawnPoints(playerTeam)[0];
+            }
+            else{
+                // set object as followTarget by non player
+                followTarget = objPos;
+            }
+        }
     }
 
     // try follow movement by loop
@@ -156,7 +187,7 @@ if(
         StopMove(ep);
 
         // teleport to facing direction from followTarget
-        define teleportPos = BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRangeMin * 3);    // avoid map surface
+        define teleportPos! = BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRangeMin * 3);    // avoid map surface
         teleportPos = ShiftedPosition(teleportPos, DirectionTowards(ep, followTarget), 1);
         
         if(
@@ -315,7 +346,7 @@ if(
         }
         // say countdown and use ult
         else if(
-            ProbabilityTrue(50) &&
+            ProbabilityTrue(25) &&
             IsAlive() &&
             UltimateChargePercent() >= DefaultPercentage() &&
             actionState != ActionState.Non

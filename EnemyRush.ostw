@@ -4,7 +4,7 @@ import "Lib/Utility.del";
 import "Lib/ServerOverLoadMeasures.del";
 import "Lib/Bot.del";
 import "Lib/Buddy.del";
-// import "Lib/Mutation.del";
+import "Lib/Vote.del";
 
 // TAG Signature and infomation ----------
 disabled rule: "ENEMY RUSH -HORDE PVE [ver.3.2] Share code [V7PEF]. You allowed copy or modify code." -1 {}
@@ -46,7 +46,7 @@ if(
     IsAssemblingHeroes()
 ){
     // SetMatchTime(0);
-    SetMatchTime(25);
+    SetMatchTime(30);
 }
 
 rule: "Initialize/shortenSetup"
@@ -55,7 +55,7 @@ if(
     IsInSetup()
 ){
     // SetMatchTime(15);
-    SetMatchTime(25);
+    SetMatchTime(30);
 }
 
 // TAG Player ----------
@@ -152,16 +152,15 @@ define buddyAssetList:
         [
             // assetNo 6
             // for debug
-            [EnemyType.Non,    favSupport, 1],
-            [EnemyType.Non,    favSupport, 1],
-            [EnemyType.Non,    Hero.Widowmaker,    6]
+            [EnemyType.Non,    Hero.Ana,    3],
+            [EnemyType.Non,    Hero.Genji,  5]
         ]
     ];
 
 define buddyAssetLotteryList: [
     0, 0,
     1, 1,
-    2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2,
     3,
     4,
     5
@@ -487,11 +486,11 @@ define enemyAssetNoLotteryList: [
     4,
     5,
     6,
-    11, 11,
-    12, 12,
-    13, 13,
-    14, 14,
-    15, 15
+    11,
+    12,
+    13,
+    14,
+    15
 ];
 
 // TAG EnemyBot/BotAssetInterval ----------
@@ -618,6 +617,8 @@ define eliteSpawnTimeMin: basicSpawnTimeMin * 2;
 define generalBossSpawnTimeMin: basicSpawnTimeMin * 4;
 define spawnTimeScaleMinToMax: 2.0;
 
+define healDealtScale: 1.5;
+
 rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
 if(
@@ -664,8 +665,8 @@ if(
         StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 0.5, false);
         SetMaxHealth(ep, 500 * maxHealthRate);
-        SetHealingDealt(ep, 200);
-        SetHealingReceived(ep, 200);
+        SetHealingDealt(ep, 300);
+        SetHealingReceived(ep, 300);
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 15;
         eachMinSpawnInterval = generalBossSpawnTimeMin;
@@ -678,8 +679,8 @@ if(
         StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 0.1, false);
         SetMaxHealth(ep, 1000 * maxHealthRate);
-        SetHealingDealt(ep, 200);
-        SetHealingReceived(ep, 200);
+        SetHealingDealt(ep, 300 * healDealtScale);
+        SetHealingReceived(ep, 300);
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 15;
         eachMinSpawnInterval = generalBossSpawnTimeMin;
@@ -719,48 +720,41 @@ if(
 define enemyColor: Color.Team1;
 playervar define botIcon!;
 
+define isInCombat:
+    actionState != ActionState.Non &&
+    (
+        IsAlive() &&
+        !IsInSpawnRoom()
+    );
+
 rule: "EnemyBot/Effect/showBotAppearance"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    enemyType != EnemyType.Non &&
     (
-        IsAlive() &&
-        !IsInSpawnRoom()
-    )
-){
-    if(
         enemyType == EnemyType.General ||
         enemyType == EnemyType.Boss
-    ){
-        // show skull icon
-        DestroyIcon(botIcon);
-        botIcon = CreateIcon(AllPlayers(playerTeam), ep, Icon.Skull,
-            IconRev.VisibleToPositionAndColor, warningIconColor, false);
-    }
+    ) &&
+    isInCombat
+){
+    // show skull icon
+    DestroyIcon(botIcon);
+    botIcon = CreateIcon(AllPlayers(playerTeam), ep, Icon.Skull,
+        IconRev.VisibleToPositionAndColor, warningIconColor, false);
 }
 
 rule: "EnemyBot/Effect/hideBotAppearanceAndReek"
 Event.OnDeath
 if(
     TeamOf() == enemyTeam &&
-    enemyType != EnemyType.Non &&
-    !(
-        IsAlive() &&
-        !IsInSpawnRoom()
-    )
-){
-    // hide skull icon
-    if(
+    (
         enemyType == EnemyType.General ||
         enemyType == EnemyType.Boss
-    ){
-        DestroyIcon(botIcon);
-    }
-
-    // // play dead effect
-    // PlayContinuousBlast(enemyColor, BodyPosition(ep),
-    //     eachBodyScale * 1.5, eachBodyScale * 1.5, 0);
+    ) &&
+    !isInCombat
+){
+    // hide skull icon
+    DestroyIcon(botIcon);
 }
 
 // TAG EnemyBot/Teleport ----------
@@ -1425,9 +1419,9 @@ if(
 }
 
 // TAG EnemyBot/DealtDamage ----------
+define autoTuneDmgDltLimit: 75;
 globalvar define autoTuneDmgDlt!;
-globalvar define autoTuneScale! = WorkshopSettingReal("Enemy Bot Settings", "Dynamic Damage Deal Increase Scale", 1.0, 0, 100, 0);
-define upTuneInternalRate: 0.3;
+globalvar define enemyDeathCount! = [0,0,0,0];  // for debug
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1435,19 +1429,27 @@ if(
     TeamOf() == enemyTeam &&
     Attacker() != ep
 ){
+    define upValue!;
     if(enemyType == EnemyType.Minion){
-        autoTuneDmgDlt += 0.25 * upTuneInternalRate * autoTuneScale;
+        upValue = 0.25;
     }
     else if(enemyType == EnemyType.Elite){
-        autoTuneDmgDlt += 1.0 *  upTuneInternalRate * autoTuneScale;
+        upValue = 1.0;
     }
     else if(enemyType == EnemyType.General){
-        autoTuneDmgDlt += 5.0 * upTuneInternalRate * autoTuneScale;
+        upValue = 5.0;
     }
     else if(enemyType == EnemyType.Boss){
-        autoTuneDmgDlt += 10.0 * upTuneInternalRate * autoTuneScale;
+        upValue = 10.0;
     }
+    upValue *= (gameDifficulty * 0.3);  //dbgHudTxt(<"upValue <0>", upValue>);
+    autoTuneDmgDlt += upValue;
+    autoTuneDmgDlt = autoTuneDmgDlt > autoTuneDmgDltLimit ? autoTuneDmgDltLimit : autoTuneDmgDlt;
+
+    enemyDeathCount[ep.enemyType - 1] ++;
 }
+
+globalvar define playerDeathCount! = 0;  // for debug
 
 rule: "EnemyBot/DealtDamage/downTune"
 Event.OnDeath
@@ -1455,15 +1457,28 @@ if(
     TeamOf() == playerTeam &&
     Attacker() != ep
 ){
-    autoTuneDmgDlt -= NumberOfSlots(playerTeam) / NumberOfPlayers(playerTeam);
+    define downValue! = NumberOfSlots(playerTeam) / NumberOfPlayers(playerTeam);
+    if(!IsDummyBot(ep)){
+        downValue *= 3;
+    }
+    else{
+        downValue *= 1;
+    }
+    
+    downValue *= ((1 + Difficulty.INSANE - gameDifficulty) * 0.5);    //dbgHudTxt(<"downValue <0>", downValue>);
+    autoTuneDmgDlt -= downValue;
     autoTuneDmgDlt = autoTuneDmgDlt < 0 ? 0 : autoTuneDmgDlt;
+
+    playerDeathCount ++;
 }
+
+define baseDelatDamage : 25;
 
 playervar define confirmDealtDamage!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = WorkshopSettingReal("Enemy Bot Settings", "Base Damage Dealt", 40, 0, 100, 0);
+    confirmDealtDamage = 25;
     // apply auto tune
     confirmDealtDamage += autoTuneDmgDlt;
     // apply enemy type scale
@@ -1602,19 +1617,19 @@ if(
         ShowDebugHud(HostPlayer());
     }
 
-    // while(true){
-    //     define list = FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Boss);
-    //     SetUltimateCharge(list, 100);
-    //     Wait(1);
-    // }
+    // // show enemy common teleport positon
     // CreateIcon(commonTeleportPosition != 0 ? AllPlayers(): null,
     //     commonTeleportPosition + PositionOffsetY1(), Icon.Spiral,
     //     IconRev.VisibleToAndPosition, enemyColor, true);
-    // CreateEffect(commonTeleportPosition != 0 ? AllPlayers(): null, Effect.Cloud, enemyColor,
+    // CreateEffect(commonTeleportPosition != 0 ? AllPlayers(): null, Effect.Ring, enemyColor,
     //     commonTeleportPosition + PositionOffsetY1(), 3, EffectRev.VisibleToPositionRadiusAndColor);
-    // CreateBeamEffect(commonTeleportPosition != 0 ? AllPlayers(): null,
-    //     BeamType.BadBeam, HostPlayer(), commonTeleportPosition + PositionOffsetY1(),
-    //     enemyColor, EffectRev.VisibleToPositionAndRadius);
+
+    // // debug cyclic action
+    // while(true){
+    //     define list = AllPlayers(playerTeam);
+    //     SetUltimateCharge(list, 100);
+    //     Wait(20);
+    // }
 }
 
 rule: "Debug/changeDebugMode"
@@ -1669,34 +1684,38 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
     ){
         debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Red);
         debugHuds[Last()] = CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Red);
+        debugHuds[Last()] = CreateDebugHud("count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad, Color.Orange);
     }
     if(
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
     ){  
         // player team
-        debugHuds[Last()] = CreateDebugHud("count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad, Color.Orange);
-        debugHuds[Last()] = CreateDebugHud("human player num", CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae))), Color.Team2);
-        debugHuds[Last()] = CreateDebugHud("team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, NumberOfLivingPlayers(playerTeam) >= NumberOfPlayers(playerTeam) ? Color.Team2 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("human player Num", CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae))), Color.Team2);
+
+        debugHuds[Last()] = CreateDebugHud("team player Num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, NumberOfLivingPlayers(playerTeam) >= NumberOfPlayers(playerTeam) ? Color.Team2 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("reload Asset Interval", reloadBuddyAssetInterval, reloadBuddyAssetInterval > 5 ? Color.Team2 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("Asset number", buddyAssetNo, Color.Team2);
+        debugHuds[Last()] = CreateDebugHud("asset Number", buddyAssetNo, Color.Team2);
+        debugHuds[Last()] = CreateDebugHud("death Count", playerDeathCount, Color.Team2);
 
         // enemy team
         debugHuds[Last()] = CreateDebugHud("team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, NumberOfLivingPlayers(enemyTeam) >= NumberOfPlayers(enemyTeam) ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("reload Asset Interval", reloadEnemyAssetInterval, reloadEnemyAssetInterval > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("Asset number", enemyAssetNo, Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("spawn interval", <"scale = <0> / M = <1> / E = <2> / G = <3> / B = <4>",
-            spawnTimeScale,
+        debugHuds[Last()] = CreateDebugHud("Asset Number", enemyAssetNo, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("death Count", <"<0>, <1>, <2>, <3>", enemyDeathCount[0], enemyDeathCount[1], enemyDeathCount[2], enemyDeathCount[3]>, Color.Team1);
+
+        debugHuds[Last()] = CreateDebugHud("spawn Time scale", spawnTimeScale, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("spawn Interval", <"<0>, <1>, <2>, <3>",
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Minion)).confirmSpawnInterval,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Elite)).confirmSpawnInterval,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.General)).confirmSpawnInterval,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Boss)).confirmSpawnInterval>, Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("spawn rush interval", spawnRushInterval, spawnRushInterval > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("shot call interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("combat teleport interval",
+        debugHuds[Last()] = CreateDebugHud("spawn Rush Interval", spawnRushInterval, spawnRushInterval > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("combat Teleport Interval",
             FirstOf(FilteredArray(AllPlayers(enemyTeam), (ae.enemyType == EnemyType.General || ae.enemyType == EnemyType.Boss))).combatTeleportInterval,
             FirstOf(FilteredArray(AllPlayers(enemyTeam), (ae.enemyType == EnemyType.General || ae.enemyType == EnemyType.Boss))).combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("more ult prob", multiUltProb, multiUltProb <= 0 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("multi Ult Prob", multiUltProb, multiUltProb <= 0 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
     }
 }
