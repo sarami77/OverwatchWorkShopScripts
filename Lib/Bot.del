@@ -1062,7 +1062,7 @@ void SetActionState(define player, define nextActionState!) "SetActionState"{
     if(nextActionState != player.actionState){
         // reset for button control reload
         enableButtonControl = false;
-        Wait(MinValue(), WaitBehavior.AbortWhenFalse);
+        Wait(MinValue(), WaitBehavior.IgnoreCondition);
         // set next state
         player.actionState = nextActionState;        
     }
@@ -1085,69 +1085,64 @@ if(
 ){
     WaitRandomForDistributeServerLoad();
 
-    // is not in spawn room
+    define tryFindTarget! = false;
+    
+    // target not Sighted
     if(
-        IsAlive()
-    ){ 
-        define tryFindTarget! = false;
-        
-        // target not Sighted
+        !IsSighted(target)
+    ){
+        tryFindTarget = true;
+    }
+    // is support role and now supporting
+    else if(
+        0 < supportPrioloty &&
+        actionState == ActionState.Support
+    ){
         if(
-            !IsSighted(target)
+            // heal target completed
+            NormalizedHealth(target) >= 1 ||
+            !(
+                IsAlive(target) ||  // target alive
+                CanResurrect(ep)    // can resurrect
+            )
         ){
+            // change target 
             tryFindTarget = true;
         }
-        // is support role and now supporting
         else if(
-            0 < supportPrioloty &&
-            actionState == ActionState.Support
+            // by no support prioloty
+            ProbabilityTrue(100 * (1 - supportPrioloty)) ||
+            // by support target health
+            ProbabilityTrue(100 * NormalizedHealth(target))                
         ){
-            if(
-                // heal target completed
-                NormalizedHealth(target) >= 1 ||
-                !(
-                    IsAlive(target) ||  // target alive
-                    CanResurrect(ep)    // can resurrect
-                )
-            ){
-                // change target 
-                tryFindTarget = true;
-            }
-            else if(
-                // by no support prioloty
-                ProbabilityTrue(100 * (1 - supportPrioloty)) ||
-                // by support target health
-                ProbabilityTrue(100 * NormalizedHealth(target))                
-            ){
-                // change target 
-                tryFindTarget = true;
-            }
+            // change target 
+            tryFindTarget = true;
         }
-        // is not support role hero
-        else{
-            if(
-                // target dead
-                !IsAlive(target)
-            ){
-                // change target 
-                tryFindTarget = true;
-            }
-            else if(
-                // by support prioloty
-                ProbabilityTrue(100 * supportPrioloty) ||
-                // by attack target health
-                ProbabilityTrue(50 * NormalizedHealth(target))
-            ){
-                // change target 
-                tryFindTarget = true;
-            }
+    }
+    // is not support role hero
+    else{
+        if(
+            // target dead
+            !IsAlive(target)
+        ){
+            // change target 
+            tryFindTarget = true;
         }
+        else if(
+            // by support prioloty
+            ProbabilityTrue(100 * supportPrioloty) ||
+            // by attack target health
+            ProbabilityTrue(50 * NormalizedHealth(target))
+        ){
+            // change target 
+            tryFindTarget = true;
+        }
+    }
 
-        // get new target
-        if(tryFindTarget){
-            // find target
-            FindTarget();
-        }
+    // get new target
+    if(tryFindTarget){
+        // find target
+        FindTarget();
     }
 
     // apply next state
@@ -1165,13 +1160,15 @@ Event.OnDeath
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    actionState != ActionState.Non &&
     Victim() == ep
 ){
     // reset target
     target = 0;
-    // apply next state
-    SetActionState(ep, ActionState.Non);
+    while(actionState != ActionState.Non){
+        // apply next state
+        SetActionState(ep, ActionState.Non);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+    }
 }
 
 rule: "Bot/ActionState/ChangeTargetByTargetDead"
@@ -1182,6 +1179,8 @@ if(
     actionState != ActionState.Non &&
     Victim() == target
 ){
+    WaitRandomForDistributeServerLoad();
+
     // find next target
     FindTarget();
     // apply next state
@@ -1196,6 +1195,8 @@ if(
     actionState == ActionState.Support &&
     NormalizedHealth(target) >= 1.0
 ){
+    WaitRandomForDistributeServerLoad();
+
     // find next target
     FindTarget();
     // apply next state
@@ -1210,6 +1211,8 @@ if(
     actionState != ActionState.Non &&
     Attacker() != ep
 ){
+    WaitRandomForDistributeServerLoad();
+
     // change target by target helth
     if(
         ProbabilityTrue(50 * NormalizedHealth(target))
@@ -1235,6 +1238,8 @@ if(
     actionState == ActionState.Non &&
     Attacker() != ep
 ){
+    WaitRandomForDistributeServerLoad();
+
     // set target by attacker
     target = Attacker();
     // apply next state
@@ -2289,21 +2294,21 @@ define Ability1FireButtonBit: 10;
 define Ability2FireButtonBit: 1;
 
 define AddEnableButtonBit(define button!)"AddEnableButtonBit"{
-        // add debug text
-        if(button == Button.PrimaryFire){
-            enableButtonBit += PrimaryFireButtonBit;
-        }
-        else if(button == Button.SecondaryFire){
-            enableButtonBit += SecondaryFireButtonBit;
-        }
-        else if(button == Button.Ability1){
-            enableButtonBit += Ability1FireButtonBit;
-        }
-        else if(button == Button.Ability2){
-            enableButtonBit += Ability2FireButtonBit;
-        }
+    // // add debug text
+    // if(button == Button.PrimaryFire){
+    //     enableButtonBit += PrimaryFireButtonBit;
+    // }
+    // else if(button == Button.SecondaryFire){
+    //     enableButtonBit += SecondaryFireButtonBit;
+    // }
+    // else if(button == Button.Ability1){
+    //     enableButtonBit += Ability1FireButtonBit;
+    // }
+    // else if(button == Button.Ability2){
+    //     enableButtonBit += Ability2FireButtonBit;
+    // }
 }
 
 define CleareEableButtonBit()"CleareEableButtonBit"{
-    enableButtonBit = allButtonBitsNon;
+    // enableButtonBit = allButtonBitsNon;
 }

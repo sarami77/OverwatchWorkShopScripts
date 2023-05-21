@@ -298,23 +298,6 @@ if(
     }
 }
 
-rule: "Buddy/Teleport/init"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    IsDummyBot() &&
-    IsInSpawnRoom()
-){
-    if(IsGameInProgress()){
-        // teleport to player near object
-        Teleport(ep, ClosestPlayerTo(CurrentObjectPosition(), playerTeam));
-    }
-    else{
-        // teleport to spawn point
-        Teleport(ep, SpawnPoints(playerTeam)[0]);
-    }
-}
-
 rule: "Buddy/fastRespawnBySucide"
 Event.OnDeath
 if(
@@ -953,7 +936,8 @@ Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCo
 }
 
 define showTeleportBeamTime: 0.7;
-void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
+
+void PlayTeleportEffect(define isBefore!, define isCombatTeleport!) playervar "PlayTeleportEffect"{
     // if before teleport
     if(isBefore){
         // play teleport shadow to own position
@@ -963,13 +947,12 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
 
         // show teleport beam to own position
         DestroyEffect(telBeam);
-        define fromSky! = IsInSpawnRoom(ep) || !IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf()));
         // define fromSky! = true;
         telBeam = CreateBeamEffect(AllPlayers(),
             BeamType.BadBeam,
-            fromSky ? 
-                teleportPosition + Vector(0, 30, 0) :
-                BodyPosition(ep),
+            isCombatTeleport ? 
+                BodyPosition(ep) :
+                teleportPosition + Vector(0, 30, 0),
             teleportPosition + PositionOffset(),
             enemyColor, EffectRev.VisibleToPositionAndRadius);
         // wait for show teleport shadow of before
@@ -987,7 +970,7 @@ void PlayTeleportEffect(define isBefore!) playervar "PlayTeleportEffect"{
 
 playervar define telBeam!;
 
-void TeleportWithEffect() playervar "TeleportWithEffect"{
+void TeleportWithEffect(define isCombatTeleport!) playervar "TeleportWithEffect"{
     if(teleportPosition == 0){
         return;
     }
@@ -1007,11 +990,11 @@ void TeleportWithEffect() playervar "TeleportWithEffect"{
     Wait(waitTeleportInterval, WaitBehavior.AbortWhenFalse);
 
     // show pre teleport effect
-    PlayTeleportEffect(true);
+    PlayTeleportEffect(true, isCombatTeleport);
     // Teleport
     Teleport(ep, teleportPosition);
     // show teleport effect
-    PlayTeleportEffect(false);
+    PlayTeleportEffect(false, isCombatTeleport);
     // hide teleport beam effect
     DestroyEffect(telBeam);
 }
@@ -1031,24 +1014,24 @@ void HybridTeleport()"HybridTeleport"{
             ProbabilityTrue(teleportToCommonPositionProb)
         ){
             if(SetTeleportPositionToCommonPosition()){
-                TeleportWithEffect();
+                TeleportWithEffect(false);
             }
         }
         else{
             if(SetTeleportPositionToObjectAhead()){
-                TeleportWithEffect();
+                TeleportWithEffect(false);
             }
         }
     }
     else{
         if(IsTeamOnDefense(TeamOf())){
             if(SetTeleportPositionToPlayerFront()){
-                TeleportWithEffect();
+                TeleportWithEffect(false);
             }
         }
         else{
             if(SetTeleportPositionToPlayerAround()){
-                TeleportWithEffect();
+                TeleportWithEffect(false);
             }
         }
     }
@@ -1248,19 +1231,19 @@ if(
             ){
                 // set teleport position to object
                 teleportPosition = CurrentObjectOnPosition();
-                TeleportWithEffect();
+                TeleportWithEffect(true);
             }
             else{
                 if(SetTeleportPositionToPlayerAround()){
                     // set teleport to player around
-                    TeleportWithEffect();
+                    TeleportWithEffect(true);
                 }
             }
         }
         else{
             if(SetTeleportPositionToPlayerFront()){
                 // set teleport to player front
-                TeleportWithEffect();
+                TeleportWithEffect(true);
             }
         }
     }
@@ -1305,42 +1288,6 @@ if(
     multiUltProb -= multiUltProb < decreaseProb ? multiUltProb : decreaseProb;
     Wait(1.0, WaitBehavior.AbortWhenFalse);
     Loop();
-}
-
-disabled rule: "EnemyBot/EnemyAbility/closeToObject"
-Event.OngoingGlobal
-if(
-    IsGameInProgress() &&
-    IsPlayerOnObject &&
-    IsCloseWin(playerTeam)
-){
-    WaitRandomForDistributeServerLoad();
-    
-    define objPos = CurrentObjectOnPosition();
-    define enemyList!;
-    // get not on object and living enemys
-    enemyList = 
-        FilteredArray(
-            AllLivingPlayers(enemyTeam),
-            (
-                !IsInSpawnRoom(ae) &&
-                DistanceBetween(ae, objPos) >= 5
-            )
-        );
-    
-    
-
-    for(define enemysIndex! = 0; enemysIndex < CountOf(enemyList); enemysIndex ++){
-        define player! = enemyList[enemysIndex];
-        PressButton(player, Button.Jump);
-        ApplyImpulse(player, 
-            VectorTowards(player, objPos), 8,
-            Relative.ToWorld, ContraryMotion.Cancel);
-        Wait(0.1, WaitBehavior.IgnoreCondition);
-    }
-
-    Wait(0.75, WaitBehavior.AbortWhenFalse);
-    LoopIfConditionIsTrue();
 }
 
 // TAG EnemyBot/SpawnInterval ----------

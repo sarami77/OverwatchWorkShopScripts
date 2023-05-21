@@ -20,40 +20,31 @@ if(
 }
 
 define FindNearPositionAlivePlayer(define position!):
-        FirstOf(
-            SortedArray(
-                FilteredArray(
-                    AllLivingPlayers(playerTeam),
-                    (
-                        !IsDummyBot(ae) &&
-                        HasSpawned(ae) &&
-                        IsAlive(ae)
-                    )
-                ),
-                DistanceBetween(ae, position)
-            )
-        );
-
-define FindPlayer():
-        FirstOf(
+    FirstOf(
+        SortedArray(
             FilteredArray(
                 AllLivingPlayers(playerTeam),
                 (
                     !IsDummyBot(ae) &&
                     HasSpawned(ae)
                 )
-            )
-        );
+            ),
+            DistanceBetween(ae, position)
+        )
+    );
 
-rule: "Buddy/Teleport/following"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    IsDummyBot() &&
-    HasSpawned() &&
-    IsAlive() &&
-    actionState == ActionState.Non
-){
+define FindPlayer():
+    FirstOf(
+        FilteredArray(
+            AllPlayers(playerTeam),
+            (
+                !IsDummyBot(ae) &&
+                HasSpawned(ae)
+            )
+        )
+    );
+
+define SetFollowTarget()"SetFollowTarget"{
     // get current object position
     define objPos! = CurrentObjectOnPosition();
     // get near object alive player
@@ -76,6 +67,7 @@ if(
         }        
     }
     else{
+        // game in proress
         if(
             // valid object
             objPos != 0 &&
@@ -111,6 +103,48 @@ if(
             }
         }
     }
+}
+
+define TeleportToFollowTarget()"TeleportToFollowTarget"{
+    // teleport to facing direction from followTarget
+    define teleportPos! = BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRangeMin * 3);    // avoid map surface
+    teleportPos = ShiftedPosition(teleportPos, DirectionTowards(ep, followTarget), 1);
+    
+    if(
+        !IsGameInProgress() ||
+        IsBelowAbyss(teleportPos)
+    ){
+        // if abyss, teleport to followTarget
+        teleportPos = followTarget;
+    }
+    // teleport
+    Teleport(ep, teleportPos);
+}
+
+rule: "Buddy/Teleport/init"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    IsInSpawnRoom()
+){
+    // set follow target
+    SetFollowTarget();
+    // teleport to follow target
+    TeleportToFollowTarget();
+}
+
+rule: "Buddy/Teleport/following"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned() &&
+    IsAlive() &&
+    actionState == ActionState.Non
+){
+    // set follow target
+    SetFollowTarget();
 
     // try follow movement by loop
     define followTryCount! = 0;
@@ -186,21 +220,8 @@ if(
         // stop follow
         StopMove(ep);
 
-        // teleport to facing direction from followTarget
-        define teleportPos! = BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRangeMin * 3);    // avoid map surface
-        teleportPos = ShiftedPosition(teleportPos, DirectionTowards(ep, followTarget), 1);
-        
-        if(
-            !IsGameInProgress() ||
-            IsBelowAbyss(teleportPos)
-        ){
-            // if abyss, teleport to followTarget
-            teleportPos = followTarget;
-        }
-        Teleport(ep,
-            teleportPos
-            // NearestWalkablePosition(Midpoint(followTarget, ep))
-        );
+        // teleport to follow target
+        TeleportToFollowTarget();
     }
 
     Wait(1, WaitBehavior.AbortWhenFalse);
