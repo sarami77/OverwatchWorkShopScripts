@@ -380,9 +380,8 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         actionRangeMax = Bot_ActionRange_Close;
         canFireButtonCombination = true;
         supportPrioloty = 0.75;
-        secondaryFireButtonReleaseMax = 20;
-        secondaryFireButtonPressMin = 3;
-        secondaryFireButtonPressMax = 6;
+        primaryFireButtonReleaseMax = 10;
+        secondaryFireButtonReleaseMax = 30;
         ability2ButtonReleaseMax = 1;
         supportButtons = [
             Button.SecondaryFire,
@@ -547,6 +546,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         heroName = "Reinhardt";
         actionRangeMin = Bot_ActionRange_Melee;
         actionRangeMax = Bot_ActionRange_Melee;
+        primaryFireButtonReleaseMax = 10;
         secondaryFireButtonReleaseMax = 30;
         break;
 
@@ -570,6 +570,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         actionRangeMin = Bot_ActionRange_Close;
         actionRangeMax = Bot_ActionRange_Far;
         secondaryFireButtonReleaseMax = 10;
+        secondaryFireButtonPressMax = 1;
         break;
         
         case Hero.Soldier76:
@@ -979,13 +980,15 @@ define FindAttackTarget()"FindAttackTarget"{
     );
 }
 
+define NormalizedHealthFullScale: 0.9;
+
 define FindSupportTarget()"FindSupportTarget"{
     return FirstOf(
         SortedArray(
             FilteredArray(
                 AllPlayers(TeamOf()),
                 ae != ep &&
-                NormalizedHealth(ae) < 1.0 &&
+                NormalizedHealth(ae) < NormalizedHealthFullScale &&
                 IsSightedAsFriend(ae)
             ),
             NormalizedHealth(ae)
@@ -1032,7 +1035,6 @@ define GetNextActionState()"GetNextActionState"{
     // has target
     if(
         IsAlive() &&
-        !IsInSpawnRoom() &&
         target != 0 &&
         HasSpawned(target)
     ){
@@ -1079,8 +1081,7 @@ if(
     isBotEnableTeam &&
     IsDummyBot() &&
     routineInitCompleted &&
-    IsAlive() &&
-    !IsInSpawnRoom()
+    IsAlive()
 ){
     WaitRandomForDistributeServerLoad();
 
@@ -1099,7 +1100,7 @@ if(
     ){
         if(
             // heal target completed
-            NormalizedHealth(target) >= 1 ||
+            NormalizedHealth(target) >= NormalizedHealthFullScale ||
             !(
                 IsAlive(target) ||  // target alive
                 CanResurrect(ep)    // can resurrect
@@ -1192,7 +1193,7 @@ if(
     isBotEnableTeam &&
     IsDummyBot() &&
     actionState == ActionState.Support &&
-    NormalizedHealth(target) >= 1.0
+    NormalizedHealth(target) >= NormalizedHealthFullScale
 ){
     WaitRandomForDistributeServerLoad();
 
@@ -1445,7 +1446,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 ProbabilityTrue(50) &&
                 UltimateChargePercent(ep) >= 100
             ){
-                // get ultimate ready or using player
+                // get ultimate ready or ultimate using or low helath player
                 define boostTarget! = 
                     RandomValueInArray(
                         FilteredArray(
@@ -1453,7 +1454,8 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                             (
                                 (
                                     UltimateChargePercent(ae) >= 100 ||
-                                    IsUsingUltimate(ae)
+                                    IsUsingUltimate(ae) ||
+                                    NormalizedHealth(ae) <= 0.25
                                 ) &&
                                 IsInLineOfSight(ep, ae)
                             )
@@ -1966,6 +1968,7 @@ void StartButtonControl(define bc){
         // release-press action
         if(bc[ButtonControl.buttonBehaivor] == ButtonBehaivor.ReleasePress){
             while(true){
+                // button released during
                 Wait(
                     RandomReal(
                         bc[ButtonControl.releaseMin],
@@ -1974,6 +1977,23 @@ void StartButtonControl(define bc){
                     WaitBehavior.AbortWhenFalse
                 );
 
+                if(
+                    bc[ButtonControl.button] == Button.Ultimate &&
+                    ProbabilityTrue(
+                        50 *
+                        (
+                            1 -
+                            (
+                                NumberOfLivingPlayers(EnemyTeamOf()) /
+                                NumberOfPlayers(EnemyTeamOf())
+                            )
+                        )
+                    )
+                ){
+                    // skip use ultimate whem alive enemies count is low
+                    continue;
+                }
+
                 StartHoldingButton(ep, bc[ButtonControl.button]);
 
                 if(
@@ -1981,13 +2001,14 @@ void StartButtonControl(define bc){
                     hasDoubleJumpButtonAbility &&
                     ProbabilityTrue(50)
                 ){
-                    // trigger double jump ability
-                    Wait(RandomReal(0.1, 0.3), WaitBehavior.AbortWhenFalse);
+                    // use double jump ability
+                    Wait(RandomReal(0.1, 0.5), WaitBehavior.AbortWhenFalse);
                     StopHoldingButton(ep, bc[ButtonControl.button]);
-                    Wait(RandomReal(0.1, 0.3), WaitBehavior.AbortWhenFalse);
+                    Wait(RandomReal(0.1, 0.5), WaitBehavior.AbortWhenFalse);
                     StartHoldingButton(ep, bc[ButtonControl.button]);
                 }
 
+                // button hold during
                 Wait(
                     RandomReal(
                         bc[ButtonControl.pressMin],
@@ -1998,12 +2019,13 @@ void StartButtonControl(define bc){
 
                 StopHoldingButton(ep, bc[ButtonControl.button]);
 
-                // PressFirstButtonWhenIdle();
+                StartHoldinFirstButtonWhenNoFiring(bc[ButtonControl.button]);
             }
         }
         // release-repeat action
         else if(bc[ButtonControl.buttonBehaivor] == ButtonBehaivor.ReleaseRepeat){
             while(true){
+                // button released during
                 Wait(
                     RandomReal(
                         bc[ButtonControl.releaseMin],
@@ -2012,6 +2034,7 @@ void StartButtonControl(define bc){
                     WaitBehavior.AbortWhenFalse
                 );
 
+                // set button repeat during
                 repeatDuring = 
                     RandomReal(
                         bc[ButtonControl.pressMin],
@@ -2027,7 +2050,7 @@ void StartButtonControl(define bc){
                     Wait(0.25, WaitBehavior.AbortWhenFalse);
                 }
 
-                // PressFirstButtonWhenIdle();
+                StartHoldinFirstButtonWhenNoFiring(bc[ButtonControl.button]);
             }
         }
         // else
@@ -2041,24 +2064,26 @@ if(
     IsDummyBot() &&
     isRepeatFiring
 ){
+    // button repeat during
     Wait(repeatDuring, WaitBehavior.AbortWhenFalse);
     isRepeatFiring = false;
 }
 
-void PressFirstButtonWhenIdle()"PressFirstButtonWhenIdle"{
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
+void StartHoldinFirstButtonWhenNoFiring(define button!)"StartHoldinFirstButtonWhenNoFiring"{
     if(
-        !IsReloading() &&
-        !IsFiringPrimary() &&
-        !IsFiringSecondary() &&
-        !IsUsingAbility1() &&
-        !IsUsingAbility2()
+        button == Button.PrimaryFire ||
+        button == Button.SecondaryFire
     ){
-        if(actionState == ActionState.Attack){
-            StartHoldingButton(ep, FirstOf(attackButtons));
-        }
-        else if(actionState == ActionState.Support){
-            StartHoldingButton(ep, FirstOf(supportButtons));
+        if(
+            !IsFiringPrimary() &&
+            !IsFiringSecondary()
+        ){
+            if(actionState == ActionState.Attack){
+                StartHoldingButton(ep, FirstOf(attackButtons));
+            }
+            else if(actionState == ActionState.Support){
+                StartHoldingButton(ep, FirstOf(supportButtons));
+            }
         }
     }
 }

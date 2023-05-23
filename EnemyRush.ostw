@@ -598,9 +598,8 @@ define basicSpawnTimeMin: 8;
 define minionSpawnTimeMin: basicSpawnTimeMin * 1;
 define eliteSpawnTimeMin: basicSpawnTimeMin * 2;
 define generalBossSpawnTimeMin: basicSpawnTimeMin * 4;
-define spawnTimeScaleMinToMax: 2.0;
 
-define healDealtScale: 1.5;
+define spawnTimeScaleMinToMax: 2.0;
 
 rule: "EnemyBot/EnemyType/setEnemyType"
 Event.OngoingPlayer
@@ -648,8 +647,8 @@ if(
         StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 0.5, false);
         SetMaxHealth(ep, 500 * maxHealthRate);
-        SetHealingDealt(ep, 300);
-        SetHealingReceived(ep, 300);
+        SetHealingDealt(ep, 200);
+        SetHealingReceived(ep, 200);
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 15;
         eachMinSpawnInterval = generalBossSpawnTimeMin;
@@ -662,18 +661,17 @@ if(
         StartScalingPlayer(ep, eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep, 0.1, false);
         SetMaxHealth(ep, 1000 * maxHealthRate);
-        SetHealingDealt(ep, 300 * healDealtScale);
-        SetHealingReceived(ep, 300);
+        SetHealingDealt(ep, 200);
+        SetHealingReceived(ep, 200);
         eachDealtDamageScale = 2.0;
         eachChargeUltInterval = 15;
         eachMinSpawnInterval = generalBossSpawnTimeMin;
         eachMaxSpawnInterval = generalBossSpawnTimeMin * spawnTimeScaleMinToMax;
         
-        // // set addtinal health
-        // Wait(0.1, WaitBehavior.AbortWhenFalse);
-        // define health! = MaxHealth(ep) * 0.5;
-        // AddHealthPoolToPlayer(ep, HealthType.Armor, health, true, false);
-        // AddHealthPoolToPlayer(ep, HealthType.Shields, health, true, false);
+        // set addtinal health
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        AddHealthPoolToPlayer(ep, HealthType.Armor, MaxHealth(ep) * 0.25, true, false);
+        AddHealthPoolToPlayer(ep, HealthType.Shields, MaxHealth(ep) * 0.25, true, false);
     }
 
     // enemy bot can't retreat
@@ -701,7 +699,7 @@ if(
 
 // TAG EnemyBot/Effect ----------
 define enemyColor: Color.Team1;
-playervar define botIcon!;
+playervar define skullIcon!;
 
 define isInCombat:
     actionState != ActionState.Non &&
@@ -721,9 +719,11 @@ if(
     isInCombat
 ){
     // show skull icon
-    DestroyIcon(botIcon);
-    botIcon = CreateIcon(AllPlayers(playerTeam), ep, Icon.Skull,
+    DestroyIcon(skullIcon);
+    skullIcon = CreateIcon(AllPlayers(playerTeam), ep, Icon.Skull,
         IconRev.VisibleToPositionAndColor, warningIconColor, false);
+    // Wait(5, WaitBehavior.AbortWhenFalse);
+    // DestroyIcon(skullIcon);
 }
 
 rule: "EnemyBot/Effect/hideBotAppearanceAndReek"
@@ -737,7 +737,7 @@ if(
     !isInCombat
 ){
     // hide skull icon
-    DestroyIcon(botIcon);
+    DestroyIcon(skullIcon);
 }
 
 // TAG EnemyBot/Teleport ----------
@@ -1119,8 +1119,9 @@ if(
     //     HudTextRev.Color, Spectators.VisibleAlways);
 
     // action
-    define rushSpawnCount! = RandomInteger(1, 6);
-    define spawnInteval! = RandomInteger(1, 3);
+    define spawnInteval! = RandomInteger(5, 10);
+    define rushSpawnCount! = RandomInteger(3, 5);
+    spawnInteval /= rushSpawnCount;
     for(; rushSpawnCount > 0; rushSpawnCount--){
         WaitRandomForDistributeServerLoad();
         Respawn(
@@ -1128,7 +1129,8 @@ if(
                 AllDeadPlayers(enemyTeam),
                 (
                     ae.enemyType == EnemyType.Minion || 
-                    ae.enemyType == EnemyType.Elite
+                    ae.enemyType == EnemyType.Elite ||
+                    ae.enemyType == EnemyType.General
                 )
             )
         );
@@ -1168,7 +1170,7 @@ if(
 
     // action
     define allEnemys! = AllLivingPlayers(enemyTeam);
-    define shotCallDelay! = RandomReal(0.1, 1.0);
+    define shotCallDelay! = RandomReal(0.5, 1.0);
     for(define scLoopIndex! = 0; scLoopIndex < CountOf(allEnemys); scLoopIndex ++){
         WaitRandomForDistributeServerLoad();
         if(
@@ -1366,9 +1368,18 @@ if(
 }
 
 // TAG EnemyBot/DealtDamage ----------
-define autoTuneDmgDltLimit: 75;
+define autoTuneDmgDltLimit:
+    gameDifficulty == Difficulty.EASY ? 40 :
+    gameDifficulty == Difficulty.NORMAL ? 50 :
+    gameDifficulty == Difficulty.HARD ? 60 :
+    gameDifficulty == Difficulty.HELL ? 80 :
+    gameDifficulty == Difficulty.INSANE ? 100 :
+    0;
+
 globalvar define autoTuneDmgDlt!;
+
 globalvar define enemyDeathCount! = [0,0,0,0];  // for debug
+globalvar define playerDeathCount! = 0;  // for debug
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1389,14 +1400,12 @@ if(
     else if(enemyType == EnemyType.Boss){
         upValue = 10.0;
     }
-    upValue *= (gameDifficulty * 0.3);  //dbgHudTxt(<"upValue <0>", upValue>);
+    upValue *= (gameDifficulty * 0.4);  //dbgHudTxt(<"upValue <0>", upValue>);
     autoTuneDmgDlt += upValue;
     autoTuneDmgDlt = autoTuneDmgDlt > autoTuneDmgDltLimit ? autoTuneDmgDltLimit : autoTuneDmgDlt;
 
     enemyDeathCount[ep.enemyType - 1] ++;
 }
-
-globalvar define playerDeathCount! = 0;  // for debug
 
 rule: "EnemyBot/DealtDamage/downTune"
 Event.OnDeath
@@ -1412,20 +1421,20 @@ if(
         downValue *= 1;
     }
     
-    downValue *= ((1 + Difficulty.INSANE - gameDifficulty) * 0.5);    //dbgHudTxt(<"downValue <0>", downValue>);
+    downValue *= ((1 + Difficulty.INSANE - gameDifficulty) * 0.6);    //dbgHudTxt(<"downValue <0>", downValue>);
     autoTuneDmgDlt -= downValue;
     autoTuneDmgDlt = autoTuneDmgDlt < 0 ? 0 : autoTuneDmgDlt;
 
     playerDeathCount ++;
 }
 
-define baseDelatDamage : 25;
+define baseDealtDamage : 20;
 
 playervar define confirmDealtDamage!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set base damage
-    confirmDealtDamage = 25;
+    confirmDealtDamage = baseDealtDamage;
     // apply auto tune
     confirmDealtDamage += autoTuneDmgDlt;
     // apply enemy type scale
@@ -1575,7 +1584,7 @@ if(
     // while(true){
     //     define list = AllPlayers(playerTeam);
     //     SetUltimateCharge(list, 100);
-    //     Wait(20);
+    //     Wait(5);
     // }
 }
 
@@ -1635,6 +1644,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("human player Num", CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae))), Color.Team2);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
     }
+
     if(
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
