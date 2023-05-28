@@ -153,7 +153,7 @@ define buddyAssetList:
             // assetNo 6
             // for debug
             [EnemyType.Non,    Hero.Ana,    3],
-            [EnemyType.Non,    Hero.Genji,  5]
+            [EnemyType.Non,    Hero.Sombra,  5]
         ]
     ];
 
@@ -1170,7 +1170,7 @@ if(
 
     // action
     define allEnemys! = AllLivingPlayers(enemyTeam);
-    define shotCallDelay! = RandomReal(0.5, 1.0);
+    define shotCallDelay! = RandomReal(0.2, 1.0);
     for(define scLoopIndex! = 0; scLoopIndex < CountOf(allEnemys); scLoopIndex ++){
         WaitRandomForDistributeServerLoad();
         if(
@@ -1236,8 +1236,8 @@ if(
                 TeleportWithEffect(true);
             }
             else{
-                if(SetTeleportPositionToPlayerAround()){
-                    // set teleport to player around
+                if(SetTeleportPositionToObjectAhead()){
+                    // set teleport to object ahead
                     TeleportWithEffect(true);
                 }
             }
@@ -1368,6 +1368,14 @@ if(
 }
 
 // TAG EnemyBot/DealtDamage ----------
+define baseDealtDamage :
+    gameDifficulty == Difficulty.EASY ? 10 :
+    gameDifficulty == Difficulty.NORMAL ? 15 :
+    gameDifficulty == Difficulty.HARD ? 20 :
+    gameDifficulty == Difficulty.HELL ? 40 :
+    gameDifficulty == Difficulty.INSANE ? 60 :
+    0;
+
 define autoTuneDmgDltLimit:
     gameDifficulty == Difficulty.EASY ? 40 :
     gameDifficulty == Difficulty.NORMAL ? 50 :
@@ -1377,7 +1385,6 @@ define autoTuneDmgDltLimit:
     0;
 
 globalvar define autoTuneDmgDlt!;
-
 globalvar define enemyDeathCount! = [0,0,0,0];  // for debug
 globalvar define playerDeathCount! = 0;  // for debug
 
@@ -1400,11 +1407,12 @@ if(
     else if(enemyType == EnemyType.Boss){
         upValue = 10.0;
     }
-    upValue *= (gameDifficulty * 0.4);  //dbgHudTxt(<"upValue <0>", upValue>);
+    upValue *= (gameDifficulty * 0.3);
     autoTuneDmgDlt += upValue;
     autoTuneDmgDlt = autoTuneDmgDlt > autoTuneDmgDltLimit ? autoTuneDmgDltLimit : autoTuneDmgDlt;
 
     enemyDeathCount[ep.enemyType - 1] ++;
+    // dbgLogFile(<"autoTuneDmgDlt = <0>, upValue = <1>, enemyDeathCount[<2>] = <3>", autoTuneDmgDlt, upValue, ep.enemyType - 1, enemyDeathCount[ep.enemyType - 1]>);
 }
 
 rule: "EnemyBot/DealtDamage/downTune"
@@ -1421,14 +1429,13 @@ if(
         downValue *= 1;
     }
     
-    downValue *= ((1 + Difficulty.INSANE - gameDifficulty) * 0.6);    //dbgHudTxt(<"downValue <0>", downValue>);
+    downValue *= ((1 + Difficulty.INSANE - gameDifficulty) * 0.5);
     autoTuneDmgDlt -= downValue;
     autoTuneDmgDlt = autoTuneDmgDlt < 0 ? 0 : autoTuneDmgDlt;
 
     playerDeathCount ++;
+    // dbgLogFile(<"autoTuneDmgDlt = <0>, downValue = <2>, playerDeathCount = <2>", autoTuneDmgDlt, downValue, playerDeathCount>);
 }
-
-define baseDealtDamage : 20;
 
 playervar define confirmDealtDamage!;
 

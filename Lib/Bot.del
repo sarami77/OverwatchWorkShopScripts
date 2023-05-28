@@ -584,8 +584,8 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         actionRangeMin = Bot_ActionRange_Close;
         actionRangeMax = Bot_ActionRange_Middle;
         secondaryFireButtonPressMin = 1.5;
-        ability2ButtonReleaseMax = 10;
-        ability2ButtonPressMax = 0.5;
+        ability1ButtonReleaseMax = 10;
+        ability2ButtonReleaseMax = 20;
         break;
 
         case Hero.Symmetra:
@@ -769,8 +769,8 @@ void SetMoveDir() playervar "SetMoveDir"{
                         AllLivingPlayers(TeamOf()),
                         (
                             ep != ae &&
-                            0 < ae.supportPrioloty &&
-                            IsInLineOfSight(EyePosition(ep), EyePosition(ae))
+                            0 < ae.supportPrioloty //&&
+                            // IsInLineOfSight(EyePosition(ep), EyePosition(ae))
                         )
                     ),
                     DistanceBetween(ep, ae)
@@ -920,7 +920,7 @@ void StartFacingTarget() playervar "StartFacingTarget"{
     ){
         StartFacing(
             ep, DirectionTowards(EyePosition(), aimPosition(target)),
-            300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+            facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
     }
     else{
         StopFacing(ep);
@@ -1518,6 +1518,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     StopMove(ep);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     PressButton(ep, Button.Ability1);
+                    Wait(0.1, WaitBehavior.AbortWhenFalse);
                     if(AbilityCooldown(ep, Button.Ability1) > 0){
                         break;
                     }
@@ -1573,6 +1574,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     StopMove(ep);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     PressButton(ep, Button.Ability1);
+                    Wait(0.1, WaitBehavior.AbortWhenFalse);
                     if(AbilityCooldown(ep, Button.Ability1) > 0){
                         break;
                     }
@@ -1581,6 +1583,39 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 StartHoldingButton(ep, Button.SecondaryFire);
                 // restore facing
                 StartFacingTarget();
+            }
+        }
+        // Sombra
+        else if(
+            HeroOf() == Hero.Sombra
+        ){
+            // set trance locator for fallback by low health and static
+            if(
+                ProbabilityTrue(50 + 50 * (1 - NormalizedHealth())) &&
+                AbilityCooldown(ep, Button.Ability2) <= 0 &&
+                !IsUsingAbility2()
+            ){
+                // try throw trance locator at backword
+                for(define tryCount! = 0; tryCount <= 3; tryCount++){
+                    StartFacingPlayerRetreatPosition(target, 5);
+                    StopMove(ep);
+                    Wait(0.5, WaitBehavior.AbortWhenFalse);
+                    PressButton(ep, Button.Ability2);
+                    Wait(0.1, WaitBehavior.AbortWhenFalse);
+                    if(AbilityCooldown(ep, Button.Ability2) > 0){
+                        break;
+                    }
+                }
+                // restore facing
+                StartFacingTarget();
+            }
+
+            // use trance locator by low health
+            if(
+                ProbabilityTrue(100 * (1 - NormalizedHealth())) &&
+                IsUsingAbility2()
+            ){
+                PressButton(ep, Button.Ability2);
             }
         }
         // WreckingBall
@@ -1598,6 +1633,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     StartFacingPlayerAbovePosition(target, 5);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     StartHoldingButton(ep, Button.SecondaryFire);
+                    Wait(0.1, WaitBehavior.AbortWhenFalse);
                     if(AbilityCooldown(ep, Button.SecondaryFire) > 0){
                         break;
                     }
@@ -2076,7 +2112,8 @@ void StartHoldinFirstButtonWhenNoFiring(define button!)"StartHoldinFirstButtonWh
     ){
         if(
             !IsFiringPrimary() &&
-            !IsFiringSecondary()
+            !IsFiringSecondary() &&
+            !IsUsingUltimate()
         ){
             if(actionState == ActionState.Attack){
                 StartHoldingButton(ep, FirstOf(attackButtons));

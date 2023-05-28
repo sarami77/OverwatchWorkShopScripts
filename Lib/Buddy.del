@@ -106,17 +106,22 @@ void SetFollowTarget()"SetFollowTarget"{
 }
 
 void TeleportToFollowTarget()"TeleportToFollowTarget"{
-    // teleport to facing direction from followTarget
-    define teleportPos! = BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRangeMin * 3);    // avoid map surface
-    teleportPos = ShiftedPosition(teleportPos, DirectionTowards(ep, followTarget), 1);
+    define teleportPos!;
     
     if(
         !IsGameInProgress() ||
+        IsOverTime() ||
         IsBelowAbyss(teleportPos)
     ){
-        // if abyss, teleport to followTarget
+        // direct teleport to followTarget
         teleportPos = followTarget;
     }
+    else{
+        // teleport to facing direction from followTarget
+        teleportPos = BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRangeMin * 3);
+        teleportPos = ShiftedPosition(teleportPos, DirectionTowards(ep, followTarget), 1);    // avoid map surface
+    }
+    
     // teleport
     Teleport(ep, teleportPos);
 }
@@ -180,7 +185,7 @@ if(
                 ep, DirectionTowards(EyePosition(),
                     HasSpawned(followTarget) ? EyePosition(followTarget) : PositionOf(followTarget),
                 ),
-                300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+                facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
             // start follow
             moveDirFB = hasLine ?
                 Forward() :
@@ -294,7 +299,7 @@ if(
             // facing to communicat target eyes
             StartFacing(
                 ep, DirectionTowards(EyePosition(), EyePosition(helloTarget)),
-                300, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+                facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
             // wait
             Wait(RandomReal(0.5, 1), WaitBehavior.AbortWhenFalse);
             // hello
@@ -367,10 +372,19 @@ if(
         }
         // say countdown and use ult
         else if(
-            ProbabilityTrue(25) &&
+            actionState != ActionState.Non &&
             IsAlive() &&
             UltimateChargePercent() >= DefaultPercentage() &&
-            actionState != ActionState.Non
+            ProbabilityTrue(
+                50 *
+                (
+                    1 -
+                    (
+                        NumberOfLivingPlayers(EnemyTeamOf()) /
+                        NumberOfPlayers(EnemyTeamOf())
+                    )
+                )
+            )
         ){
             // Communicate(ep, Communication.UltimateStatus);
             // Wait(3, WaitBehavior.AbortWhenFalse);
@@ -387,8 +401,8 @@ if(
                 AllLivingPlayers(playerTeam),
                 (
                     IsDummyBot(ae) &&
-                    UltimateChargePercent(ae) >= DefaultPercentage() &&
-                    DistanceBetween(ep, ae) <= 10
+                    ProbabilityTrue(50) &&
+                    UltimateChargePercent(ae) >= DefaultPercentage()
                 )
             );
             PressButton(rdyUltNearPlayers, Button.Ultimate);
