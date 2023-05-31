@@ -1368,25 +1368,52 @@ if(
 }
 
 // TAG EnemyBot/DealtDamage ----------
-define baseDealtDamage :
-    gameDifficulty == Difficulty.EASY ? 10 :
-    gameDifficulty == Difficulty.NORMAL ? 15 :
-    gameDifficulty == Difficulty.HARD ? 20 :
-    gameDifficulty == Difficulty.HELL ? 40 :
-    gameDifficulty == Difficulty.INSANE ? 60 :
+define autoTuneDmgDltInitial :
+    gameDifficulty == Difficulty.EASY ?     20 :
+    gameDifficulty == Difficulty.NORMAL ?   25 :
+    gameDifficulty == Difficulty.HARD ?     30 :
+    gameDifficulty == Difficulty.HELL ?     40 :
+    gameDifficulty == Difficulty.INSANE ?   50 :
     0;
 
 define autoTuneDmgDltLimit:
-    gameDifficulty == Difficulty.EASY ? 40 :
-    gameDifficulty == Difficulty.NORMAL ? 50 :
-    gameDifficulty == Difficulty.HARD ? 60 :
-    gameDifficulty == Difficulty.HELL ? 80 :
-    gameDifficulty == Difficulty.INSANE ? 100 :
+    gameDifficulty == Difficulty.EASY ?     40 :
+    gameDifficulty == Difficulty.NORMAL ?   50 :
+    gameDifficulty == Difficulty.HARD ?     60 :
+    gameDifficulty == Difficulty.HELL ?     80 :
+    gameDifficulty == Difficulty.INSANE ?   100 :
+    0;
+
+
+define upValueBase: 0.25;
+define upValueScale:
+    gameDifficulty == Difficulty.EASY ?     upValueBase * 1 :
+    gameDifficulty == Difficulty.NORMAL ?   upValueBase * 2 :
+    gameDifficulty == Difficulty.HARD ?     upValueBase * 3 :
+    gameDifficulty == Difficulty.HELL ?     upValueBase * 4 :
+    gameDifficulty == Difficulty.INSANE ?   upValueBase * 5 :
+    0;
+
+define downValueBase: 0.5;
+define downValueScale:
+    gameDifficulty == Difficulty.EASY ?     downValueBase * 5 :
+    gameDifficulty == Difficulty.NORMAL ?   downValueBase * 4 :
+    gameDifficulty == Difficulty.HARD ?     downValueBase * 3 :
+    gameDifficulty == Difficulty.HELL ?     downValueBase * 2 :
+    gameDifficulty == Difficulty.INSANE ?   downValueBase * 1 :
     0;
 
 globalvar define autoTuneDmgDlt!;
 globalvar define enemyDeathCount! = [0,0,0,0];  // for debug
 globalvar define playerDeathCount! = 0;  // for debug
+
+rule: "EnemyBot/DealtDamage/init"
+Event.OngoingGlobal
+if(
+    gameDifficulty != Difficulty.NO_VOTE
+){
+    autoTuneDmgDlt = autoTuneDmgDltInitial;
+}
 
 rule: "EnemyBot/DealtDamage/upTune"
 Event.OnDeath
@@ -1407,7 +1434,8 @@ if(
     else if(enemyType == EnemyType.Boss){
         upValue = 10.0;
     }
-    upValue *= (gameDifficulty * 0.3);
+
+    upValue *= upValueScale;
     autoTuneDmgDlt += upValue;
     autoTuneDmgDlt = autoTuneDmgDlt > autoTuneDmgDltLimit ? autoTuneDmgDltLimit : autoTuneDmgDlt;
 
@@ -1429,9 +1457,9 @@ if(
         downValue *= 1;
     }
     
-    downValue *= ((1 + Difficulty.INSANE - gameDifficulty) * 0.5);
+    downValue *= downValueScale;
     autoTuneDmgDlt -= downValue;
-    autoTuneDmgDlt = autoTuneDmgDlt < 0 ? 0 : autoTuneDmgDlt;
+    autoTuneDmgDlt = autoTuneDmgDlt < autoTuneDmgDltInitial ? autoTuneDmgDltInitial : autoTuneDmgDlt;
 
     playerDeathCount ++;
     // dbgLogFile(<"autoTuneDmgDlt = <0>, downValue = <2>, playerDeathCount = <2>", autoTuneDmgDlt, downValue, playerDeathCount>);
@@ -1440,10 +1468,8 @@ if(
 playervar define confirmDealtDamage!;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
-    // set base damage
-    confirmDealtDamage = baseDealtDamage;
-    // apply auto tune
-    confirmDealtDamage += autoTuneDmgDlt;
+    // set auto tune damage
+    confirmDealtDamage = autoTuneDmgDlt;
     // apply enemy type scale
     confirmDealtDamage *= eachDealtDamageScale;
     // apply team balance
