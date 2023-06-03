@@ -242,16 +242,13 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
     target = 0;
     heroName = "";
 
-    if(enemyType == EnemyType.Zombie){
-        actionRangeMin = Bot_ActionRange_Melee;
-        actionRangeMax = Bot_ActionRange_Melee;
-        return;
-    }
-
     // default routine
     aimScatter = 0.5;
     actionRangeMin = Bot_ActionRange_Melee;
     actionRangeMax = Bot_ActionRange_Melee;
+
+    if(enemyType == EnemyType.Zombie) return;
+
     canFireButtonCombination = false;
     hasDoubleJumpButtonAbility = false;
     supportPrioloty = 0.0;
@@ -1083,8 +1080,6 @@ if(
     routineInitCompleted &&
     IsAlive()
 ){
-    WaitRandomForDistributeServerLoad();
-
     define tryFindTarget! = false;
     
     // target not Sighted
@@ -1152,6 +1147,7 @@ if(
     CallAttackNearBot();
 
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    WaitRandomForDistributeServerLoad();
     LoopIfConditionIsTrue();
 }
 
@@ -1179,8 +1175,6 @@ if(
     actionState != ActionState.Non &&
     Victim() == target
 ){
-    WaitRandomForDistributeServerLoad();
-
     // find next target
     FindTarget();
     // apply next state
@@ -1195,8 +1189,6 @@ if(
     actionState == ActionState.Support &&
     NormalizedHealth(target) >= NormalizedHealthFullScale
 ){
-    WaitRandomForDistributeServerLoad();
-
     // find next target
     FindTarget();
     // apply next state
@@ -1208,45 +1200,31 @@ Event.OnDamageTaken
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    actionState != ActionState.Non &&
     Attacker() != ep
 ){
-    WaitRandomForDistributeServerLoad();
-
-    // change target by target helth
     if(
+        // set target in Non
+        actionState == ActionState.Non ||
+        // change target by target helth
         ProbabilityTrue(50 * NormalizedHealth(target))
     ){
         // set target by attacker
         target = Attacker();
-    }
-    // apply next state
-    SetActionState(ep, GetNextActionState());
 
-    // call attack by near bots
-    CallAttackNearBot();
+        // apply next state
+        SetActionState(ep, GetNextActionState());
+
+        // call attack by near bots
+        CallAttackNearBot();
+    }
 
     // reduce overrun
-    Wait(3.0, WaitBehavior.IgnoreCondition);
-}
-
-rule: "Bot/ActionState/CallAttackByDamageTaken"
-Event.OnDamageTaken
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    actionState == ActionState.Non &&
-    Attacker() != ep
-){
-    WaitRandomForDistributeServerLoad();
-
-    // set target by attacker
-    target = Attacker();
-    // apply next state
-    SetActionState(ep, GetNextActionState());
-
-    // call attack by near bots
-    CallAttackNearBot();
+    Wait(
+        actionState == ActionState.Non ?
+            1.0 :
+            3.0,
+        WaitBehavior.IgnoreCondition
+    );
 }
 
 globalvar define isCallAttackCoolingDown1! = false;
@@ -1270,7 +1248,7 @@ void CallAttackNearBot()"CallAttackNearBot"{
         // get near idle bot
         define nearFriends = FilteredArray(
             PlayersWithinRadius(
-                ep, 30, TeamOf(), RadiusLOS.Off
+                ep, Bot_ActionRange_CanFind, TeamOf(), RadiusLOS.Off
             ),
             (
                 ae != ep &&
@@ -1312,8 +1290,6 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Non
 ){
-    WaitRandomForDistributeServerLoad();
-
     // stop button
     enableButtonControl = false;
 
@@ -1327,6 +1303,7 @@ if(
     PolingHeroUniqueAction();
 
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    WaitRandomForDistributeServerLoad();
     LoopIfConditionIsTrue();
 }
 
@@ -1341,8 +1318,6 @@ if(
         actionState == ActionState.Support
     )
 ){
-    WaitRandomForDistributeServerLoad();
-
     // start button control
     enableButtonControl = true;
 
@@ -1359,6 +1334,7 @@ if(
     PolingHeroUniqueAction();
 
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    WaitRandomForDistributeServerLoad();
     LoopIfConditionIsTrue();
 }
 
@@ -2021,7 +1997,9 @@ void StartButtonControl(define bc){
                             1 -
                             (
                                 NumberOfLivingPlayers(EnemyTeamOf()) /
-                                NumberOfPlayers(EnemyTeamOf())
+                                CountOf(PlayersWithinRadius(target, Bot_ActionRange_Close, EnemyTeamOf(), RadiusLOS.Off))
+                                // CountOf(PlayersInViewAngle(ep, EnemyTeamOf(), 90))
+                                // NumberOfPlayers(EnemyTeamOf())
                             )
                         )
                     )
