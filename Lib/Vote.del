@@ -2,7 +2,7 @@ import "Debug.del";
 
 // TAG Vote ----------
 playervar define operationText!;
-playervar define voteDifficulty!;
+playervar define voteGameDifficulty!;
 
 define DifficultyNum: 6;
 
@@ -15,84 +15,69 @@ enum Difficulty{
     INSANE = 5
 }
 
-define GameDifficultyScale()"GameDifficultyScale"{
-    return gameDifficulty / Difficulty.INSANE;
+define DifficultyText(define inputDifficulty):
+    inputDifficulty == Difficulty.NO_VOTE ? "NO VOTE(0)" :
+    inputDifficulty == Difficulty.EASY ?    "EASY(1)" :
+    inputDifficulty == Difficulty.NORMAL ?  "NORMAL(2)" :
+    inputDifficulty == Difficulty.HARD ?    "HARD(3)" :
+    inputDifficulty == Difficulty.HELL ?    "HELL(4)" :
+    inputDifficulty == Difficulty.INSANE ?  "INSANE(5)" :
+    null;
+
+define voteGameDifficultyText(define inputDifficulty!) playervar "voteGameDifficultyText"{
+    return DifficultyText(inputDifficulty);
 }
 
-define GameDifficultyText(define difficulty)"GameDifficultyText"{
-    define text! = "";
-    switch(difficulty){
-        case Difficulty.NO_VOTE:
-        text = "NO VOTE(0)";
-        break;
-        case Difficulty.EASY:
-        text = "EASY(1)";
-        break;
-        case Difficulty.NORMAL:
-        text = "NORMAL(2)";
-        break;
-        case Difficulty.HARD:
-        text = "HARD(3)";
-        break;
-        case Difficulty.HELL:
-        text = "HELL(4)";
-        break;
-        case Difficulty.INSANE:
-        text = "INSANE(5)";
-        break;
-    }
-    return text;
+define confirmGameDifficultyText(define inputDifficulty!) globalvar "confirmGameDifficultyText"{
+    return DifficultyText(inputDifficulty);
 }
 
-void UpdateOperationText()"UpdateOperationText"{
+void UpdateVoteOperationText()"UpdateVoteOperationText"{
     DestroyHudText(operationText);
     operationText = CreateHudText(ep,
         null, <"You can vote for game difficulty until game starts.\n\rPress interact buton <0> to switch vote difficulty.\n\r  Your vote = <1>",
-            ButtonGuide(Button.Interact), GameDifficultyText(voteDifficulty)>, null,
+            ButtonGuide(Button.Interact), voteGameDifficultyText(voteGameDifficulty)>, null,
         Location.Left, 100,
         Color.White, Color.Yellow, Color.White,
         HudTextRev.String, Spectators.DefaultVisibility);
-
 }
 
-rule: "Vote/showOperation"
+rule: "Vote/showVoteOperation"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     HasSpawned() &&
-    !IsDummyBot() &&
     IsInSetup()
 ){
-    UpdateOperationText();
+    UpdateVoteOperationText();
 }
 
-rule: "Vote/hideOperation"
+rule: "Vote/hideVoteOperation"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     HasSpawned() &&
-    !IsDummyBot() &&
     !IsInSetup()
 ){
     DestroyHudText(operationText);
 }
 
-rule: "Vote/switchVote"
+rule: "Vote/switchVoteGameDifficulty"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
+    HasSpawned() &&
     IsInSetup() &&
-    IsButtonHeld(ep, Button.Interact) &&
-    !IsDummyBot()
+    IsButtonHeld(ep, Button.Interact)
 ){
-    voteDifficulty ++;
-    voteDifficulty = voteDifficulty > Difficulty.INSANE ? Difficulty.NO_VOTE : voteDifficulty;
-    UpdateOperationText();
+    voteGameDifficulty ++;
+    voteGameDifficulty = voteGameDifficulty > Difficulty.INSANE ? Difficulty.NO_VOTE : voteGameDifficulty;
+    UpdateVoteOperationText();
 }
 
-globalvar define gameDifficulty;
+globalvar define confirmGameDifficulty;
 
-rule: "Vote/confirmVote"
+rule: "Vote/confirmGameDifficulty"
 Event.OngoingGlobal
 if(
     IsGameInProgress()
@@ -101,7 +86,7 @@ if(
     define votedList! = [];
     for(define idx! = 0; idx < NumberOfPlayers(playerTeam); idx++){
         define player! = PlayersInSlot(idx, playerTeam);
-        votedList[CountOf(votedList)] = player.voteDifficulty;
+        votedList[CountOf(votedList)] = player.voteGameDifficulty;
     }
 
     // set zero to voteTotalList
@@ -126,62 +111,67 @@ if(
     }
 
     // set most voted index difficulty
-    gameDifficulty = mostVoteIdx;
+    confirmGameDifficulty = mostVoteIdx;
         
-    if(gameDifficulty == Difficulty.NO_VOTE){
-        gameDifficulty = Difficulty.NORMAL;
+    if(confirmGameDifficulty == Difficulty.NO_VOTE){
+        confirmGameDifficulty = Difficulty.NORMAL;
     }
     
     // dbgHudTxt(<"gameDifficulty = <0>", gameDifficulty>);
 }
 
-rule: "Vote/showGameDifficuly"
+define DifficultyTextColor(define inputDifficulty):
+    confirmGameDifficulty == Difficulty.EASY ? Color.Blue :
+    confirmGameDifficulty == Difficulty.NORMAL ? Color.Green :
+    confirmGameDifficulty == Difficulty.HARD ? Color.Yellow :
+    confirmGameDifficulty == Difficulty.HELL ? Color.Red :
+    confirmGameDifficulty == Difficulty.INSANE ? warningIconColor :
+    null;
+
+rule: "Vote/showConfirmGameDifficuly"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam  &&
     HasSpawned() &&
-    gameDifficulty != Difficulty.NO_VOTE
+    confirmGameDifficulty != Difficulty.NO_VOTE
 ){
     CreateHudText(ep,
-        null, <"game difficulty = <0>", GameDifficultyText(gameDifficulty)>, null,
+        null, <"game difficulty = <0>", confirmGameDifficultyText(confirmGameDifficulty)>, null,
         Location.Left, -999,
         Color.White, 
-            gameDifficulty == Difficulty.EASY ? Color.Blue :
-            gameDifficulty == Difficulty.NORMAL ? Color.Green :
-            gameDifficulty == Difficulty.HARD ? Color.Yellow :
-            gameDifficulty == Difficulty.HELL ? Color.Red :
-            gameDifficulty == Difficulty.INSANE ? warningIconColor :
-            null,
+        DifficultyTextColor(confirmGameDifficulty),
         Color.White,
         HudTextRev.StringAndColor, Spectators.VisibleNever);
 }
 
-rule: "Vote/showGameDifficulyForSpectators"
+rule: "Vote/showConfirmGameDifficulyForSpectators"
 Event.OngoingGlobal
 if(
-    gameDifficulty != Difficulty.NO_VOTE
+    confirmGameDifficulty != Difficulty.NO_VOTE
 ){
     CreateHudText(null,
-        null, <"game difficulty = <0>", GameDifficultyText(gameDifficulty)>, null,
+        null, <"●game difficulty = <0>", confirmGameDifficultyText(confirmGameDifficulty)>, null,
         Location.Left, -999,
         Color.White, 
-            gameDifficulty == Difficulty.EASY ? Color.Blue :
-            gameDifficulty == Difficulty.NORMAL ? Color.Green :
-            gameDifficulty == Difficulty.HARD ? Color.Yellow :
-            gameDifficulty == Difficulty.HELL ? Color.Red :
-            gameDifficulty == Difficulty.INSANE ? warningIconColor :
-            null,
+        DifficultyTextColor(confirmGameDifficulty),
         Color.White,
         HudTextRev.StringAndColor, Spectators.VisibleAlways);
 }
 
 // TAG Debug ----------
-disabled rule: "Debug/Vote/forceVote"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    IsInSetup() &&
-    IsDummyBot()
-){
-    voteDifficulty = Difficulty.EASY;
-}
+// rule: "Debug/Vote/dummyVote"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == playerTeam &&
+//     IsInSetup() &&
+//     IsDummyBot()
+// ){
+//     StartHoldingButton(ep, Button.Interact);
+//     Wait(0.1);
+//     StopHoldingButton(ep, Button.Interact);
+//     // PressButton(ep, Button.Interact);
+    
+//     dbgHudTxt(<"PressButton <0>", ep>);
+//     Wait(RandomInteger(3, 6));
+//     LoopIfConditionIsTrue();
+// }
