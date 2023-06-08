@@ -377,8 +377,8 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         actionRangeMax = Bot_ActionRange_Close;
         canFireButtonCombination = true;
         supportPrioloty = 0.75;
-        primaryFireButtonReleaseMax = 10;
-        secondaryFireButtonReleaseMax = 30;
+        primaryFireButtonReleaseMax = 20;
+        secondaryFireButtonPressMax = 30;
         ability2ButtonReleaseMax = 1;
         supportButtons = [
             Button.SecondaryFire,
@@ -543,8 +543,8 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         heroName = "Reinhardt";
         actionRangeMin = Bot_ActionRange_Melee;
         actionRangeMax = Bot_ActionRange_Melee;
-        primaryFireButtonReleaseMax = 10;
-        secondaryFireButtonReleaseMax = 30;
+        primaryFireButtonReleaseMax = 20;
+        secondaryFireButtonPressMax = 30;
         break;
 
         case Hero.Roadhog:
@@ -766,8 +766,7 @@ void SetMoveDir() playervar "SetMoveDir"{
                         AllLivingPlayers(TeamOf()),
                         (
                             ep != ae &&
-                            0 < ae.supportPrioloty //&&
-                            // IsInLineOfSight(EyePosition(ep), EyePosition(ae))
+                            0 < ae.supportPrioloty
                         )
                     ),
                     DistanceBetween(ep, ae)
@@ -799,14 +798,15 @@ void SetMoveDir() playervar "SetMoveDir"{
                 // over time
                 IsOverTime()
             ) ?
-                // on object player num is low
-                NumberOfPlayers(TeamOf()) * 0.5 :
-                0
-                    >=
-                        CountOf(AllPlayersOnObjective(TeamOf()))
-        ) //&&
-        // can find object
-        // IsInLineOfSight(EyePosition(ep), objPos)
+                // all players num half
+                NumberOfPlayers(TeamOf()) / 2
+            :
+                // min payload speed with escort player num
+                1
+            >
+                // on object player num
+                NumberOfPlayersOnObjective(TeamOf())
+        )
     ){
         define dirToObject! = LocalVectorOf(DirectionTowards(ep, objPos), ep, Transformation.Rotation);
         moveDirFB = Vector(0, 0, ZOf(dirToObject));
@@ -1435,7 +1435,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                                     IsUsingUltimate(ae) ||
                                     NormalizedHealth(ae) <= 0.25
                                 ) &&
-                                IsInLineOfSight(ep, ae)
+                                CanFindLine(ae)
                             )
                         )
                     );
@@ -1542,13 +1542,16 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         ){
             // fallback by graple hook
             if(
-                ProbabilityTrue(50) &&
-                DistanceBetween(ep, target) <= Bot_ActionRange_Middle &&
-                AbilityCooldown(ep, Button.Ability1) <= 0
+                AbilityCooldown(ep, Button.Ability1) <= 0 &&
+                DistanceBetween(ep, target) < Bot_ActionRange_Middle &&
+                IsBlockedBetween(
+                    EyePosition(ep),
+                    EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * 16)
+                )
             ){
                 // try use graple at backword
                 for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    StartFacingPlayerRetreatPosition(target, 5);
+                    StartFacingPlayerRetreatPosition(target, RandomReal(2, 5));
                     StopMove(ep);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     PressButton(ep, Button.Ability1);
@@ -2034,8 +2037,6 @@ void StartButtonControl(define bc){
                 );
 
                 StopHoldingButton(ep, bc[ButtonControl.button]);
-
-                StartHoldinFirstButtonWhenNoFiring(bc[ButtonControl.button]);
             }
         }
         // release-repeat action
@@ -2065,15 +2066,13 @@ void StartButtonControl(define bc){
                     PressButton(ep, bc[ButtonControl.button]);
                     Wait(0.25, WaitBehavior.AbortWhenFalse);
                 }
-
-                StartHoldinFirstButtonWhenNoFiring(bc[ButtonControl.button]);
             }
         }
         // else
     }
 }
 
-rule: "Bot/ButtonControl/releaseIsRepeaFiring"
+rule: "Bot/ButtonControl/releaseIsRepeatFiring"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
@@ -2085,24 +2084,29 @@ if(
     isRepeatFiring = false;
 }
 
-void StartHoldinFirstButtonWhenNoFiring(define button!)"StartHoldinFirstButtonWhenNoFiring"{
+rule: "Bot/ButtonControl/compensateFire"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    actionState != ActionState.Non
+){
     if(
-        button == Button.PrimaryFire ||
-        button == Button.SecondaryFire
+        // is idling fire
+        !IsFiringPrimary() &&
+        !IsFiringSecondary() &&
+        !IsUsingAbility1() &&
+        !IsUsingAbility2() &&
+        !IsUsingUltimate()
     ){
-        if(
-            !IsFiringPrimary() &&
-            !IsFiringSecondary() &&
-            !IsUsingUltimate()
-        ){
-            if(actionState == ActionState.Attack){
-                StartHoldingButton(ep, FirstOf(attackButtons));
-            }
-            else if(actionState == ActionState.Support){
-                StartHoldingButton(ep, FirstOf(supportButtons));
-            }
+        if(actionState == ActionState.Attack){
+            StartHoldingButton(ep, FirstOf(attackButtons));
+        }
+        else if(actionState == ActionState.Support){
+            StartHoldingButton(ep, FirstOf(supportButtons));
         }
     }
+    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
 }
 
 // TAG Bot/ButtonControl/PrimaryFire ----------
