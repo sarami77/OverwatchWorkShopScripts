@@ -167,11 +167,11 @@ define buddyAssetList:
 
 define buddyAssetNoLotteryList: [
     // fix hero asset
-    0,
-    1,
+    0, 0,
+    1, 1,
 
     // random hero asset
-    10,
+    10, 10,
     11,
     12,
     13
@@ -491,7 +491,7 @@ define enemyAssetList:
         // debug asset
         [   // assetNo 30
             // tank boss with damage elite
-            [EnemyType.Elite,       Hero.Widowmaker,      13]
+            [EnemyType.Elite,       Hero.Reaper,      13]
         ]
     ];
 
@@ -636,7 +636,7 @@ playervar define eachMaxSpawnInterval!;
 playervar define eachMinSpawnInterval!;
 playervar define eachChargeUltInterval!;
 playervar define eachBodyScale!;
-define basicSpawnTimeMin: 6;
+define basicSpawnTimeMin: 8;
 define minionSpawnTimeMin: basicSpawnTimeMin * 1;
 define eliteSpawnTimeMin: basicSpawnTimeMin * 2;
 define generalBossSpawnTimeMin: basicSpawnTimeMin * 4;
@@ -654,7 +654,7 @@ if(
     // setEnemyType
     if(enemyType == EnemyType.Minion){
         StartForcingDummyBotName(ep, "Minion.");
-        watchUpdateRate =       10;
+        watchUpdateRate =       8;
         eachBodyScale =         0.7;
         StartScalingPlayer(ep,              eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep,    1.5, false);
@@ -668,7 +668,7 @@ if(
     }
     else if(enemyType == EnemyType.Elite){
         StartForcingDummyBotName(ep, "Elite.");
-        watchUpdateRate =       6;
+        watchUpdateRate =       4;
         eachBodyScale =         1.0;
         StartScalingPlayer(ep,              eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep,    1.0, false);
@@ -687,8 +687,8 @@ if(
         StartScalingPlayer(ep,              eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep,    0.5, false);
         SetMaxHealth(ep,        500);
-        SetHealingDealt(ep,     250);
-        SetHealingReceived(ep,  250);
+        SetHealingDealt(ep,     200);
+        SetHealingReceived(ep,  200);
         eachDealtDamageScale =  2.0;
         eachChargeUltInterval = 15;
         eachMinSpawnInterval =  generalBossSpawnTimeMin;
@@ -701,8 +701,8 @@ if(
         StartScalingPlayer(ep,              eachBodyScale, false);
         StartModifyingHeroVoiceLines(ep,    0.1, false);
         SetMaxHealth(ep,        1000);
-        SetHealingDealt(ep,     250);
-        SetHealingReceived(ep,  250);
+        SetHealingDealt(ep,     200);
+        SetHealingReceived(ep,  200);
         eachDealtDamageScale =  2.0;
         eachChargeUltInterval = 15;
         eachMinSpawnInterval =  generalBossSpawnTimeMin;
@@ -783,7 +783,7 @@ if(
 // TAG EnemyBot/Teleport ----------
 playervar define teleportPosition!;
 globalvar define commonTeleportPosition!;
-define teleportAreaSize: 10;
+define teleportAreaSize: Bot_ActionRange_Close;
 
 Player ClosestPlayerFromObject()"ClosestPlayerFromObject"{
     return FirstOf(
@@ -814,7 +814,7 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
                 (
                     DirectionTowards(teleportToTarget, currentObjectPosition)
                         *
-                    DistanceBetween(teleportToTarget, currentObjectPosition) * 0.40
+                    DistanceBetween(teleportToTarget, currentObjectPosition) * 0.25
                 )
                     +
                 RandomPosition(
@@ -855,7 +855,6 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
                     (teleportAreaSize)
                 )
             );
-        
         if(
             teleportPosition != 0 &&
             // Has line to target
@@ -878,28 +877,33 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
     return setSuccess;
 }
 
-globalvar define additinalTeleportAreaSize;
-define teleportAreaSizeOffset: Bot_ActionRange_Far;
+define teleportAreaOffsetFromPayload: Bot_ActionRange_Far;
+define teleportAreaExtendScale: 0.5;
 define IsPlayerOnObject: ([] != AllPlayersOnObjective(playerTeam));
+globalvar define teleportAreaExtendSize;
 
 Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
     define setSuccess! = false;
     define teleportToTarget! = CurrentObjectOnPosition();
-    
+
+    // If there is a wall in the payload direction and the offset distance of the teleport area is not enough,
+    //   increase the teleport area size by the shortfall.    
     if(
         payloadDirection != 0 &&
         IsPlayerOnObject
     ){
-        // get bloacked position of payload ahead
-        define blockedHead! = BlockedPositon(teleportToTarget, payloadDirection, teleportAreaSizeOffset);
-        // increase teleportAreaSize by cut off distance for spam payload block by teleport
-        additinalTeleportAreaSize = teleportAreaSizeOffset - DistanceBetween(teleportToTarget, blockedHead);
-        additinalTeleportAreaSize *= 0.5;
-        // change teleportTarget to payload ahead blocked position
-        teleportToTarget = blockedHead;
+        // get blocked position of payload ahead
+        define blockedPositionPayloadAhead! = BlockedPositon(teleportToTarget, payloadDirection, teleportAreaOffsetFromPayload);
+        // get cut off distance
+        teleportAreaExtendSize = teleportAreaOffsetFromPayload - DistanceBetween(teleportToTarget, blockedPositionPayloadAhead);
+        // convert to extend size by multi scale
+        teleportAreaExtendSize *= teleportAreaExtendScale;
+        // change teleportTarget to blocked position of payload ahead from payload positon
+        teleportToTarget = blockedPositionPayloadAhead;
     }
     else{
-        additinalTeleportAreaSize = 0;
+        // clear extend size by no cut off
+        teleportAreaExtendSize = 0;
     }
 
     for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
@@ -909,9 +913,9 @@ Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjec
                 teleportToTarget
                     +
                 RandomPosition(
-                    (teleportAreaSize + additinalTeleportAreaSize),
-                    (teleportAreaSize + additinalTeleportAreaSize),
-                    (teleportAreaSize + additinalTeleportAreaSize)
+                    (teleportAreaSize + teleportAreaExtendSize),
+                    (teleportAreaSize + teleportAreaExtendSize),
+                    (teleportAreaSize + teleportAreaExtendSize)
                 )
             );
 
@@ -1407,38 +1411,38 @@ if(
 
 // TAG EnemyBot/DealtDamage ----------
 define autoTuneDmgDltInitial :
-    gameDifficulty == Difficulty.EASY ?     20 :
-    gameDifficulty == Difficulty.NORMAL ?   25 :
-    gameDifficulty == Difficulty.HARD ?     30 :
-    gameDifficulty == Difficulty.HELL ?     40 :
-    gameDifficulty == Difficulty.INSANE ?   50 :
+    confirmGameDifficulty == Difficulty.EASY ?     20 :
+    confirmGameDifficulty == Difficulty.NORMAL ?   25 :
+    confirmGameDifficulty == Difficulty.HARD ?     30 :
+    confirmGameDifficulty == Difficulty.HELL ?     40 :
+    confirmGameDifficulty == Difficulty.INSANE ?   50 :
     0;
 
 define autoTuneDmgDltLimit:
-    gameDifficulty == Difficulty.EASY ?     40 :
-    gameDifficulty == Difficulty.NORMAL ?   50 :
-    gameDifficulty == Difficulty.HARD ?     60 :
-    gameDifficulty == Difficulty.HELL ?     80 :
-    gameDifficulty == Difficulty.INSANE ?   100 :
+    confirmGameDifficulty == Difficulty.EASY ?     40 :
+    confirmGameDifficulty == Difficulty.NORMAL ?   50 :
+    confirmGameDifficulty == Difficulty.HARD ?     60 :
+    confirmGameDifficulty == Difficulty.HELL ?     80 :
+    confirmGameDifficulty == Difficulty.INSANE ?   100 :
     0;
 
 
 define upValueBase: 0.3;
 define upValueScale:
-    gameDifficulty == Difficulty.EASY ?     upValueBase * 1 :
-    gameDifficulty == Difficulty.NORMAL ?   upValueBase * 2 :
-    gameDifficulty == Difficulty.HARD ?     upValueBase * 3 :
-    gameDifficulty == Difficulty.HELL ?     upValueBase * 4 :
-    gameDifficulty == Difficulty.INSANE ?   upValueBase * 5 :
+    confirmGameDifficulty == Difficulty.EASY ?     upValueBase * 1 :
+    confirmGameDifficulty == Difficulty.NORMAL ?   upValueBase * 2 :
+    confirmGameDifficulty == Difficulty.HARD ?     upValueBase * 3 :
+    confirmGameDifficulty == Difficulty.HELL ?     upValueBase * 4 :
+    confirmGameDifficulty == Difficulty.INSANE ?   upValueBase * 5 :
     0;
 
 define downValueBase: 0.6;
 define downValueScale:
-    gameDifficulty == Difficulty.EASY ?     downValueBase * 5 :
-    gameDifficulty == Difficulty.NORMAL ?   downValueBase * 4 :
-    gameDifficulty == Difficulty.HARD ?     downValueBase * 3 :
-    gameDifficulty == Difficulty.HELL ?     downValueBase * 2 :
-    gameDifficulty == Difficulty.INSANE ?   downValueBase * 1 :
+    confirmGameDifficulty == Difficulty.EASY ?     downValueBase * 5 :
+    confirmGameDifficulty == Difficulty.NORMAL ?   downValueBase * 4 :
+    confirmGameDifficulty == Difficulty.HARD ?     downValueBase * 3 :
+    confirmGameDifficulty == Difficulty.HELL ?     downValueBase * 2 :
+    confirmGameDifficulty == Difficulty.INSANE ?   downValueBase * 1 :
     0;
 
 globalvar define autoTuneDmgDlt!;
@@ -1448,7 +1452,7 @@ globalvar define playerDeathCount! = 0;  // for debug
 rule: "EnemyBot/DealtDamage/init"
 Event.OngoingGlobal
 if(
-    gameDifficulty != Difficulty.NO_VOTE
+    confirmGameDifficulty != Difficulty.NO_VOTE
 ){
     autoTuneDmgDlt = autoTuneDmgDltInitial;
 }
@@ -1653,7 +1657,7 @@ if(
 
     // debug cyclic action
     // while(true){
-    //     gameDifficulty = RandomValueInArray([
+    //     confirmGameDifficulty = RandomValueInArray([
     //         // Difficulty.EASY,
     //         // Difficulty.NORMAL,
     //         Difficulty.HARD
