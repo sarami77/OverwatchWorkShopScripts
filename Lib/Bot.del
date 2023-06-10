@@ -758,6 +758,7 @@ void SetMoveDir() playervar "SetMoveDir"{
             false &&
         actionState == ActionState.Attack
     ){
+        // find healer
         define healerPlayer! = 
             FirstOf(
                 SortedArray(
@@ -773,14 +774,37 @@ void SetMoveDir() playervar "SetMoveDir"{
             );
         
         if(healerPlayer != null){
-            define dirToHealer! = LocalVectorOf(DirectionTowards(ep, healerPlayer), ep, Transformation.Rotation);
-            moveDirFB = Vector(0, 0, ZOf(dirToHealer));
-            moveDirLR = Vector(XOf(dirToHealer), 0, 0);
+            // move to healer
+            define dirToPleyer! = LocalVectorOf(DirectionTowards(ep, healerPlayer), ep, Transformation.Rotation);
+            moveDirFB = Vector(0, 0, ZOf(dirToPleyer));
+            moveDirLR = Vector(XOf(dirToPleyer), 0, 0);
         }
         else{
-            // retreat to back
-            moveDirFB = Backward();
-            moveDirLR = NoDirection();
+            // find friend
+            define friendPlayer! = 
+                FirstOf(
+                    SortedArray(
+                        FilteredArray(
+                            AllLivingPlayers(TeamOf()),
+                            (
+                                ep != ae
+                            )
+                        ),
+                        DistanceBetween(ep, ae)
+                    )
+                );
+
+            if(friendPlayer != null){
+                // move to friend
+                define dirToPleyer! = LocalVectorOf(DirectionTowards(ep, healerPlayer), ep, Transformation.Rotation);
+                moveDirFB = Vector(0, 0, ZOf(dirToPleyer));
+                moveDirLR = Vector(XOf(dirToPleyer), 0, 0);
+            }
+            else{
+                // move to back
+                moveDirFB = Backward();
+                moveDirLR = NoDirection();
+            }
         }
 
         // dbgWldTxt(ep, "need heal");
@@ -800,6 +824,9 @@ void SetMoveDir() playervar "SetMoveDir"{
                 // all players num half
                 NumberOfPlayers(TeamOf()) / 2
             :
+                // // max payload speed with escort player num
+                // 3
+                
                 // min payload speed with escort player num
                 1
             >
