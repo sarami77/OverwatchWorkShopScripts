@@ -239,7 +239,7 @@ if(
 }
 
 void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
-    target = 0;
+    aimTarget = 0;
     heroName = "";
 
     // default routine
@@ -747,7 +747,7 @@ void SetMoveDir() playervar "SetMoveDir"{
         return;
     }
 
-    define distToTarget! = DistanceBetween(ep, target);
+    define distToTarget! = DistanceBetween(ep, aimTarget);
     define objPos! = CurrentObjectOnPosition();
 
     // move to healer for heal
@@ -939,12 +939,12 @@ void StopMove(define player) playervar "StopMove"{
 // TAG Bot/Aimming ----------
 void StartFacingTarget() playervar "StartFacingTarget"{
     if(
-        target != 0 &&
-        HasSpawned(target) &&
-        IsAlive(target)
+        aimTarget != 0 &&
+        HasSpawned(aimTarget) &&
+        IsAlive(aimTarget)
     ){
         StartFacing(
-            ep, DirectionTowards(EyePosition(), aimPosition(target)),
+            ep, DirectionTowards(EyePosition(), aimPosition(aimTarget)),
             facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
     }
     else{
@@ -967,7 +967,7 @@ define aimPosition(define player!):
 // TAG Bot/ActionState/StateControl ----------
 playervar define watchUpdateRate = 2.0;
 playervar define actionState;
-playervar define target;
+playervar define aimTarget;
 
 define CanFindRange(define player) :
     DistanceBetween(ep, player) <= Bot_ActionRange_CanFind;
@@ -1048,9 +1048,9 @@ void FindTarget()"FindTarget"{
         Wait(0.1, WaitBehavior.AbortWhenFalse);
     }
 
-    target = candidateTarget;
+    aimTarget = candidateTarget;
 
-    if(target == 0){
+    if(aimTarget == 0){
         StopFacing(ep);
     }
 }
@@ -1060,12 +1060,12 @@ define GetNextActionState()"GetNextActionState"{
     // has target
     if(
         IsAlive() &&
-        target != 0 &&
-        HasSpawned(target)
+        aimTarget != 0 &&
+        HasSpawned(aimTarget)
     ){
         // target is friend
         if(
-            TeamOf() == TeamOf(target)
+            TeamOf() == TeamOf(aimTarget)
         ){
             // Attack state
             nextActionState = ActionState.Support;
@@ -1112,7 +1112,7 @@ if(
     
     // target not Sighted
     if(
-        !IsSighted(target)
+        !IsSighted(aimTarget)
     ){
         tryFindTarget = true;
     }
@@ -1123,9 +1123,9 @@ if(
     ){
         if(
             // heal target completed
-            NormalizedHealth(target) >= NormalizedHealthFullScale ||
+            NormalizedHealth(aimTarget) >= NormalizedHealthFullScale ||
             !(
-                IsAlive(target) ||  // target alive
+                IsAlive(aimTarget) ||  // target alive
                 CanResurrect(ep)    // can resurrect
             )
         ){
@@ -1136,7 +1136,7 @@ if(
             // by no support prioloty
             ProbabilityTrue(100 * (1 - supportPrioloty)) ||
             // by support target health
-            ProbabilityTrue(100 * NormalizedHealth(target))                
+            ProbabilityTrue(100 * NormalizedHealth(aimTarget))                
         ){
             // change target 
             tryFindTarget = true;
@@ -1146,7 +1146,7 @@ if(
     else{
         if(
             // target dead
-            !IsAlive(target)
+            !IsAlive(aimTarget)
         ){
             // change target 
             tryFindTarget = true;
@@ -1155,7 +1155,7 @@ if(
             // by support prioloty
             ProbabilityTrue(100 * supportPrioloty) ||
             // by attack target health
-            ProbabilityTrue(50 * NormalizedHealth(target))
+            ProbabilityTrue(50 * NormalizedHealth(aimTarget))
         ){
             // change target 
             tryFindTarget = true;
@@ -1187,7 +1187,7 @@ if(
     Victim() == ep
 ){
     // reset target
-    target = 0;
+    aimTarget = 0;
     while(actionState != ActionState.Non){
         // apply next state
         SetActionState(ep, ActionState.Non);
@@ -1201,7 +1201,7 @@ if(
     isBotEnableTeam &&
     IsDummyBot() &&
     actionState != ActionState.Non &&
-    Victim() == target
+    Victim() == aimTarget
 ){
     // find next target
     FindTarget();
@@ -1215,7 +1215,7 @@ if(
     isBotEnableTeam &&
     IsDummyBot() &&
     actionState == ActionState.Support &&
-    NormalizedHealth(target) >= NormalizedHealthFullScale
+    NormalizedHealth(aimTarget) >= NormalizedHealthFullScale
 ){
     // find next target
     FindTarget();
@@ -1234,10 +1234,10 @@ if(
         // set target in Non
         actionState == ActionState.Non ||
         // change target by target helth
-        ProbabilityTrue(50 * NormalizedHealth(target))
+        ProbabilityTrue(50 * NormalizedHealth(aimTarget))
     ){
         // set target by attacker
-        target = Attacker();
+        aimTarget = Attacker();
 
         // apply next state
         SetActionState(ep, GetNextActionState());
@@ -1288,7 +1288,7 @@ void CallAttackNearBot()"CallAttackNearBot"{
 
         for(define nearFriendsIndex! = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
             // set target
-            nearFriends[nearFriendsIndex].target = ep.target;
+            nearFriends[nearFriendsIndex].aimTarget = ep.aimTarget;
             // set attack 
             SetActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
         }
@@ -1401,10 +1401,10 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         // melee
         while(
             actionState == ActionState.Attack &&
-            target != 0 &&
-            DistanceBetween(ep, target) <= meleeRange &&
+            aimTarget != 0 &&
+            DistanceBetween(ep, aimTarget) <= meleeRange &&
             (
-                Health(target) <= meleeDamage * 2 ||
+                Health(aimTarget) <= meleeDamage * 2 ||
                 enemyType == EnemyType.Zombie
             )
         ){
@@ -1494,7 +1494,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 SetWeapon(ep, 1);
                 if(
                     // by target health
-                    ProbabilityTrue(100 * NormalizedHealth(target))
+                    ProbabilityTrue(100 * NormalizedHealth(aimTarget))
                 ){
                     // damage boost
                     StopHoldingButton(ep, Button.PrimaryFire);
@@ -1518,7 +1518,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             ){
                 // try throw trance locator at backword
                 for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    StartFacingPlayerRetreatPosition(target, 5);
+                    StartFacingPlayerRetreatPosition(aimTarget, 5);
                     StopMove(ep);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     PressButton(ep, Button.Ability2);
@@ -1547,7 +1547,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             if(
                 ProbabilityTrue(75 * NormalizedHealth()) &&
                 AbilityCooldown(ep, Button.Ability2) <= 0 &&
-                DistanceBetween(ep, target) > Bot_ActionRange_Close
+                DistanceBetween(ep, aimTarget) > Bot_ActionRange_Close
             ){
                 // try use shadow step 
                 for(define tryCount! = 0; tryCount <= 3; tryCount++){
@@ -1570,7 +1570,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             ){
                 // try use lift on own below
                 for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    StartFacingPlayerBetweenBelowPosition(target, 0.01);
+                    StartFacingPlayerBetweenBelowPosition(aimTarget, 0.01);
                     StopMove(ep);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     PressButton(ep, Button.Ability1);
@@ -1589,7 +1589,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         ){
             if(
                 ProbabilityTrue(50) &&
-                DistanceBetween(ep, target) <= Bot_ActionRange_Close
+                DistanceBetween(ep, aimTarget) <= Bot_ActionRange_Close
             ){
                 // change to melee arm
                 SetWeapon(ep, 2);
@@ -1597,7 +1597,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 while(
                     // continue melee mode condition
                     ProbabilityTrue(95) &&
-                    DistanceBetween(ep, target) <= Bot_ActionRange_Close
+                    DistanceBetween(ep, aimTarget) <= Bot_ActionRange_Close
                 ){
                     // move foward for melee
                     moveDirFB = Forward();
@@ -1620,7 +1620,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             // fallback by graple hook
             if(
                 AbilityCooldown(ep, Button.Ability1) <= 0 &&
-                DistanceBetween(ep, target) < Bot_ActionRange_Middle &&
+                DistanceBetween(ep, aimTarget) < Bot_ActionRange_Middle &&
                 IsBlockedBetween(
                     EyePosition(ep),
                     EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * 16)
@@ -1628,7 +1628,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             ){
                 // try use graple at backword
                 for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    StartFacingPlayerRetreatPosition(target, RandomReal(2, 5));
+                    StartFacingPlayerRetreatPosition(aimTarget, RandomReal(2, 5));
                     StopMove(ep);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     PressButton(ep, Button.Ability1);
@@ -1655,7 +1655,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             ){
                 // try use graple at target above
                 for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    StartFacingPlayerAbovePosition(target, 5);
+                    StartFacingPlayerAbovePosition(aimTarget, 5);
                     Wait(0.5, WaitBehavior.AbortWhenFalse);
                     StartHoldingButton(ep, Button.SecondaryFire);
                     Wait(0.1, WaitBehavior.AbortWhenFalse);
@@ -1766,7 +1766,7 @@ if(
         // decrease move speed if multi position attack mode
         if(multiPosAttack) moveSpeed -= 0.01;
         // wait for arrival target
-        define dist! = DistanceBetween(ep, target);
+        define dist! = DistanceBetween(ep, aimTarget);
         dist = dist <= 5 ? 5 : dist;
         Wait(dist * (moveSpeed), WaitBehavior.AbortWhenFalse);
         // stop move if not multi position attack mode
@@ -1819,7 +1819,7 @@ if(
         StopHoldingButton(ep, Button.PrimaryFire);
         StopHoldingButton(ep, Button.SecondaryFire);
         for(define tryCount! = 0; tryCount <= 3; tryCount++){
-            StartFacingPlayerBetweenBelowPosition(target, 0.5);
+            StartFacingPlayerBetweenBelowPosition(aimTarget, 0.5);
             Wait(0.25, WaitBehavior.IgnoreCondition);
 
             if(ProbabilityTrue(isRotateProb)){
@@ -1864,7 +1864,7 @@ if(
     if(isPositionAimSecondary){
         StopHoldingButton(ep, Button.PrimaryFire);
         for(define tryCount! = 0; tryCount <= 3; tryCount++){
-            StartFacingPlayerBetweenBelowPosition(target, 0.25);
+            StartFacingPlayerBetweenBelowPosition(aimTarget, 0.25);
             Wait(0.25, WaitBehavior.IgnoreCondition);
             
             PressButton(ep, Button.SecondaryFire);
@@ -2046,7 +2046,7 @@ void StartButtonControl(define bc){
                             1 -
                             (
                                 NumberOfLivingPlayers(EnemyTeamOf()) /
-                                CountOf(PlayersWithinRadius(target, Bot_ActionRange_Close, EnemyTeamOf(), RadiusLOS.Off))
+                                CountOf(PlayersWithinRadius(aimTarget, Bot_ActionRange_Close, EnemyTeamOf(), RadiusLOS.Off))
                                 // CountOf(PlayersInViewAngle(ep, EnemyTeamOf(), 90))
                                 // NumberOfPlayers(EnemyTeamOf())
                             )
