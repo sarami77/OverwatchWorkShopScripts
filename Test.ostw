@@ -21,74 +21,99 @@ Event.OngoingGlobal
 
 globalvar define waitTime = 1;
 
-rule: "DebugCode"
+rule: "TriggerAction"
 Event.OngoingGlobal
 if(
     initCompleted
 ){
-    dbgHudTxt("DebugCode");   
-
-    CreateHudText(ap,
-        null, <"<0>", InputBindingString(Button.Reload)>, null,
-        Location.Left, 1,
-        Color.White, Color.Yellow, Color.White,
-        HudTextRev.String, Spectators.DefaultVisibility);
-
-    
-
-    define pList = [
-        Hero.Reaper,
-        Hero.Reaper,
-        Hero.Reaper,
-        Hero.Widowmaker,
-        Hero.Widowmaker,
-        Hero.Widowmaker
-    ];
-    
-    CreateBotsByHeroList(pList, playerTeam);
-    CreateBotsByHeroList(pList, enemyTeam);
-    Wait(0.5);
-
-    SetRespawnMaxTime(ap, 5);
-    SetDamageDealt(ap, 0);
     startCyclicAction = true;
 }
-
 
 // Test Code -----------------------------------------------
 globalvar define startCyclicAction;
 
-rule: "CyclicAction"
+rule: "CyclicGlobalAction"
 Event.OngoingGlobal
 if(
     startCyclicAction
 ){
-    define pos = Vector(0,3,0);
     while(true){
-        define playes = ap;
-        for(define idx = 0; idx < CountOf(playes); idx++){
-            ApplyImpulse(playes[idx],
-                VectorTowards(playes[idx], pos),
-                DistanceBetween(playes[idx], pos) * 2,
-                Relative.ToWorld, ContraryMotion.Cancel);
-        }
-        Wait(15);
+        define pList = [
+            Hero.Ashe,
+            RandomDamageHero,
+            RandomTankHero,
+            RandomTankHero,
+            RandomSupportHero,
+            RandomSupportHero
+        ];
+        define eList = [
+            Hero.Ashe,
+            RandomDamageHero,
+            RandomTankHero,
+            RandomTankHero,
+            RandomSupportHero,
+            RandomSupportHero
+        ];
+        DestroyBots(playerTeam);
+        DestroyBots(enemyTeam);
+        CreateBotsByHeroList(pList, playerTeam);
+        CreateBotsByHeroList(eList, enemyTeam);
+        SetRespawnMaxTime(ap, MaxValue());
+        SetDamageDealt(ap, 50);
+        // SetStatus(ap, null, Status.Unkillable, MaxValue());
+
+        Wait(120);
     }
 }
 
-rule: "CyclicAction"
-Event.OngoingGlobal
+rule: "CyclicPlayerAction"
+Event.OngoingPlayer
 if(
-    startCyclicAction
+    startCyclicAction &&
+    NormalizedHealth() < 1 &&
+    IsAlive()
 ){
     while(true){
-        // SetAbilityCooldown(ap, Button.Ability1, 0);
-        SetAbilityCooldown(ap, Button.Ability2, 0);
+        // WaitUntil(
+        //     (
+        //         NumberOfLivingPlayers(playerTeam) <= 0 ||
+        //         NumberOfLivingPlayers(enemyTeam)  <= 0
+        //     ),
+        //     MaxValue()
+        // );
+        // SetAbilityCooldown(ep, Button.Ability2, 0);
+        // SetAbilityCharge(ep, Button.Ability2, 2);
+        // PressButton(ep, Button.Ability2);
+        // Wait(tuneVal);
+        // CancelPrimaryAction(ap);
+        
+            Wait(NormalizedHealth() * 1, WaitBehavior.AbortWhenFalse);
+            dbgPlyEft(ep);
 
+    }
+}
 
+rule: "CyclicPlayerAction"
+Event.OngoingPlayer
+if(
+    startCyclicAction &&
+    ep != hp
+){
+    Wait(1);
+    while(true){
+        WaitUntil(
+            (
+                NumberOfLivingPlayers(playerTeam) <= 0 ||
+                NumberOfLivingPlayers(enemyTeam)  <= 0
+            ),
+            MaxValue()
+        );
+        Wait(3);
+        Respawn(ap);
         Wait(1);
     }
 }
+
 
 // killCount -----------------------------------------------
 globalvar define killCountTeam1;
