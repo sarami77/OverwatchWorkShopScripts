@@ -481,6 +481,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         actionRangeMax = Bot_ActionRange_Far;
         hasDoubleJumpButtonAbility = true;
         supportPrioloty = 1.0;
+        ability2ButtonReleaseMax = 40;          // to suppress over use life grip (Prefer PolingHeroUniqueAction)
         supportButtons = [
             Button.PrimaryFire,
             Button.Ability1,
@@ -1430,7 +1431,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         PressButton(ep, Button.Reload);
     }
     else{
-        // in combat
+        // is out of ammo
         if(
             isOutOfAmmo
         ){
@@ -1445,15 +1446,16 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
     ){
         // melee
         while(
-            actionState == ActionState.Attack &&
             aimTarget != 0 &&
+            actionState == ActionState.Attack &&
             DistanceBetween(ep, aimTarget) <= meleeRange &&
             (
+                // can kill by melee helath
                 Health(aimTarget) <= meleeDamage * 2 ||
                 enemyType == EnemyType.Zombie
             )
         ){
-            // melee by punch
+            // melee
             PressButton(ep, Button.Melee);
             Wait(0.5, WaitBehavior.AbortWhenFalse);
         }
@@ -1470,6 +1472,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 AbilityCooldown(ep, Button.Ability1) <= 0 &&
                 DistanceBetween(ep, aimTarget) < Bot_ActionRange_Close
             ){
+                // use corch gun
                 PressButton(ep, Button.Ability1);
             }
 
@@ -1479,13 +1482,14 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             ){
                 // stop buton control for reduce reload cancel by fire
                 enableButtonControl = false;
-                // reload until full load
-                for(define tryCount! = 0; tryCount <= 6; tryCount++){
-                    Wait(0.5, WaitBehavior.IgnoreCondition);    // wait stop repeat fire
-                    PressButton(ep, Button.Reload);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+                PressButton(ep, Button.Reload);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+                // check reload cancel until full load
+                while(IsReloading()){
+                    Wait(0.5, WaitBehavior.IgnoreCondition);
                     if(
-                        MaxAmmo(ep, 0) <= Ammo(ep, 0) ||
-                        ProbabilityTrue(25 * (Ammo(ep, 0) / MaxAmmo(ep, 0)))  // by ammo charge
+                        ProbabilityTrue(25 * (Ammo(ep, 0) / MaxAmmo(ep, 0)))  // reload cancel by ammo charge
                     ){
                         break;
                     }
@@ -1499,8 +1503,8 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             HeroOf() == Hero.Ana
         ){
             if(
-                ProbabilityTrue(50) &&
-                UltimateChargePercent(ep) >= 100
+                ProbabilityTrue(50 * EnemyDensityRateOfAimTarget(Bot_ActionRange_Close)) &&
+                UltimateChargePercent() >= 100
             ){
                 // get ultimate ready or ultimate using or low helath player
                 define boostTarget! = 
@@ -1519,16 +1523,11 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     );
 
                 if(boostTarget != null){
-                    // try use boost to boostTarget
-                    for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                        StartFacingPlayer(boostTarget);
-                        Wait(0.5, WaitBehavior.IgnoreCondition);     
-                        PressButton(ep, Button.Ultimate);
-                        Wait(0.1, WaitBehavior.IgnoreCondition);
-                        if(!IsUsingUltimate()){
-                            break;
-                        }
-                    }
+                    // use nano boost
+                    StartFacingPlayer(boostTarget);
+                    Wait(0.5, WaitBehavior.IgnoreCondition);     
+                    PressButton(ep, Button.Ultimate);
+                    Wait(0.1, WaitBehavior.IgnoreCondition);
                     // restore facing
                     StartFacingTarget();
                 }
@@ -1547,7 +1546,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 SetWeapon(ep, 1);
                 if(
                     // by target health
-                    ProbabilityTrue(100 * NormalizedHealth(aimTarget))
+                    ProbabilityTrue(75 * NormalizedHealth(aimTarget))
                 ){
                     // damage boost
                     StopHoldingButton(ep, Button.PrimaryFire);
@@ -1569,17 +1568,12 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 AbilityCooldown(ep, Button.Ability2) <= 0 &&
                 !IsUsingAbility2()
             ){
-                // try throw trance locator at backword
-                for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    StartFacingPlayerRetreatPosition(aimTarget, 5);
-                    StopMove(ep);
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
-                    PressButton(ep, Button.Ability2);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                    if(AbilityCooldown(ep, Button.Ability2) > 0){
-                        break;
-                    }
-                }
+                // throw trance locator at backword
+                StartFacingPlayerRetreatPosition(aimTarget, 5);
+                StopMove(ep);
+                Wait(0.5, WaitBehavior.IgnoreCondition);
+                PressButton(ep, Button.Ability2);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
                 // restore facing
                 StartFacingTarget();
             }
@@ -1602,37 +1596,37 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 AbilityCooldown(ep, Button.Ability2) <= 0 &&
                 DistanceBetween(ep, aimTarget) > Bot_ActionRange_Close
             ){
-                // try use shadow step 
-                for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    PressButton(ep, Button.Ability2);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                    PressButton(ep, Button.PrimaryFire);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                    if(AbilityCooldown(ep, Button.Ability2) > 0){
-                        break;
-                    }
-                }
+                // use shadow step
+                PressButton(ep, Button.Ability2);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+                PressButton(ep, Button.PrimaryFire);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
             }
         }
         // LifeWeever
         else if(
             HeroOf() == Hero.Lifeweaver
         ){
+            // use life grip by aim target low health
+            if(
+                ProbabilityTrue(100 * (1 - NormalizedHealth(aimTarget))) &&
+                AbilityCooldown(ep, Button.Ability2) <= 0 &&
+                actionState == ActionState.Support
+            ){
+                // use life grip
+                PressButton(ep, Button.Ability2);
+            }
+
             if(
                 ProbabilityTrue(50) &&
                 AbilityCooldown(ep, Button.Ability1) <= 0
             ){
-                // try use lift on own below
-                for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    StopMove(ep);
-                    StartFacingPlayerBetweenBelowPosition(aimTarget, 0.01);
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
-                    PressButton(ep, Button.Ability1);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                    if(AbilityCooldown(ep, Button.Ability1) > 0){
-                        break;
-                    }
-                }
+                // use lift on own below
+                StopMove(ep);
+                StartFacingPlayerBetweenBelowPosition(aimTarget, 0.01);
+                Wait(0.5, WaitBehavior.IgnoreCondition);
+                PressButton(ep, Button.Ability1);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
                 // restore facing
                 StartFacingTarget();
             }
@@ -1673,24 +1667,20 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         ){
             // fallback by graple hook
             if(
+                ProbabilityTrue(75) &&
                 AbilityCooldown(ep, Button.Ability1) <= 0 &&
-                DistanceBetween(ep, aimTarget) < Bot_ActionRange_Middle &&
+                DistanceBetween(ep, aimTarget) < Bot_ActionRange_Close &&
                 IsBlockedBetween(
                     EyePosition(ep),
                     EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * 16)
                 )
             ){
-                // try use graple at backword
-                for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    StopMove(ep);
-                    StartFacingPlayerRetreatPosition(aimTarget, RandomReal(2, 5));
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
-                    PressButton(ep, Button.Ability1);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                    if(AbilityCooldown(ep, Button.Ability1) > 0){
-                        break;
-                    }
-                }
+                // use graple at backword
+                StopMove(ep);
+                StartFacingPlayerRetreatPosition(aimTarget, RandomReal(2, 5));
+                Wait(0.5, WaitBehavior.IgnoreCondition);
+                PressButton(ep, Button.Ability1);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
                 // restore aiming
                 StartHoldingButton(ep, Button.SecondaryFire);
                 // restore facing
@@ -1703,24 +1693,20 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         ){
             // use graple hook and tackle
             if(
-                ProbabilityTrue(50) &&
+                ProbabilityTrue(75) &&
                 AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
                 IsBlockedBetween(
                     EyePosition(ep),
-                    EyePosition(ep) + (FacingDirectionOf(ep)) * 20)
+                    EyePosition(ep) + (VectorWithOutY(FacingDirectionOf(ep)) * 20)
+                )
             ){
                 // stop buton control for reduce ball form cancel by fire
                 enableButtonControl = false;
-                // try use graple at target above
-                for(define tryCount! = 0; tryCount <= 3; tryCount++){
-                    StartFacingPlayerAbovePosition(aimTarget, 5);
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
-                    StartHoldingButton(ep, Button.SecondaryFire);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                    if(IsFiringSecondary() > 0){
-                        break;
-                    }
-                }
+                // use graple at target above
+                StartFacingPlayerAbovePosition(aimTarget, 5);
+                Wait(0.5, WaitBehavior.IgnoreCondition);
+                StartHoldingButton(ep, Button.SecondaryFire);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
                 // restore facing
                 StartFacingTarget();
                 // restor buton control
@@ -1729,7 +1715,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
 
             // use pile driver
             if(
-                ProbabilityTrue(50) &&
+                ProbabilityTrue(75) &&
                 AbilityCooldown(ep, Button.Crouch) <= 0 &&
                 IsButtonHeld(ep, Button.Crouch)
             ){
@@ -1880,19 +1866,15 @@ if(
     if(isPositionAimUltmate){
         // stop buton control for reduce cancel
         enableButtonControl = false;
-        for(define tryCount! = 0; tryCount <= 3; tryCount++){
-            StartFacingPlayerBetweenBelowPosition(aimTarget, 0.5);
-            Wait(0.5, WaitBehavior.IgnoreCondition);
-            if(ProbabilityTrue(isRotateProb)){
-                PressButton(ep, Button.Ultimate);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-            }
-            PressButton(ep, Button.PrimaryFire);
+        // place ult on ground
+        StartFacingPlayerBetweenBelowPosition(aimTarget, 0.5);
+        Wait(0.5, WaitBehavior.IgnoreCondition);
+        if(ProbabilityTrue(isRotateProb)){
+            PressButton(ep, Button.Ultimate);
             Wait(0.1, WaitBehavior.IgnoreCondition);
-            if(UltimateChargePercent() < DefaultPercentage()){
-                break;
-            }
         }
+        PressButton(ep, Button.PrimaryFire);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
         // restore facing
         StartFacingTarget();
         // restore buton control
@@ -1928,15 +1910,11 @@ if(
         // stop buton control for reduce cancel
         enableButtonControl = false;
         StopHoldingButton(ep, Button.PrimaryFire);
-        for(define tryCount! = 0; tryCount <= 3; tryCount++){
-            StartFacingPlayerBetweenBelowPosition(aimTarget, 0.25);
-            Wait(0.5, WaitBehavior.IgnoreCondition);
-            
-            PressButton(ep, Button.SecondaryFire);
-            if(AbilityCooldown(ep, Button.SecondaryFire) > 0){
-                break;
-            }
-        }
+        // place ability on ground
+        StartFacingPlayerBetweenBelowPosition(aimTarget, 0.25);
+        Wait(0.5, WaitBehavior.IgnoreCondition);
+        PressButton(ep, Button.SecondaryFire);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
         // restore facing
         StartFacingTarget();
         // restore buton control
