@@ -468,7 +468,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         heroName = "Lucio";
         actionRangeMin = Bot_ActionRange_Close;
         actionRangeMax = Bot_ActionRange_Middle;
-        ability1ButtonReleaseMax = 20;
+        ability1ButtonReleaseMax = 40;          // to suppress over use cross fade (Prefer PolingHeroUniqueAction)
         supportPrioloty = 0.5;
         supportButtons = [
             Button.Ability1,
@@ -780,14 +780,18 @@ void SetMoveDir() playervar "SetMoveDir"{
         
         // found near support player
         if(
-            nearSupportPlayer != null
+            nearSupportPlayer != null &&
+            DistanceBetween(ep, nearSupportPlayer) > Bot_ActionRange_Close
         ){
             // set moveTarget by near support player
             moveTarget = nearSupportPlayer;
             moveDirFB = NoDirection();
             moveDirLR = NoDirection();
         }
-        else{
+        // not found support player 
+        else if(
+            nearSupportPlayer == null
+        ){
             // find near guard player (not suppor role)
             define guardPlayers = [];
             for(define playersIndex! = 0; playersIndex < CountOf(livingFriends); playersIndex ++){
@@ -808,7 +812,7 @@ void SetMoveDir() playervar "SetMoveDir"{
             // found near guard player and far
             if(
                 nearGuardPlayer != null &&
-                DistanceBetween(ep, nearGuardPlayer) > ActionRange.Close
+                DistanceBetween(ep, nearGuardPlayer) > Bot_ActionRange_Close
             ){
                 // set moveTarget by near support player
                 moveTarget = nearGuardPlayer;
@@ -1138,7 +1142,8 @@ void SetActionState(define player, define nextActionState!) "SetActionState"{
     if(nextActionState != player.actionState){
         // reset for button control reload
         enableButtonControl = false;
-        Wait(0.001, WaitBehavior.IgnoreCondition);
+        // run disable button control rule
+        Wait(0.1, WaitBehavior.IgnoreCondition);
         // set next state
         player.actionState = nextActionState;        
     }
@@ -1469,8 +1474,9 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         ){
             // fallback by corch gun
             if(
+                ProbabilityTrue(75) &&
                 AbilityCooldown(ep, Button.Ability1) <= 0 &&
-                DistanceBetween(ep, aimTarget) < Bot_ActionRange_Close
+                DistanceBetween(ep, aimTarget) < Bot_ActionRange_Middle
             ){
                 // use corch gun
                 PressButton(ep, Button.Ability1);
@@ -1631,6 +1637,36 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 StartFacingTarget();
             }
         }
+        // Lucio
+        else if(
+            HeroOf() == Hero.Lucio
+        ){
+            // use cross fade, change mode to heal from speed in support state
+            if(
+                actionState == ActionState.Support &&
+                IsInAlternateForm()
+            ){
+                PressButton(ep, Button.Ability1);
+            }
+            // use cross fade, change mode to speed from heal in attack state
+            else if(
+                actionState == ActionState.Attack &&
+                !IsInAlternateForm()
+            ){
+                PressButton(ep, Button.Ability1);
+            }
+
+            // move forward for heal
+            if(
+                actionState == ActionState.Support &&
+                ProbabilityTrue(150 * (1 - NormalizedHealth(aimTarget))) 
+            ){
+                // move foward for melee
+                moveDirFB = Forward();
+                moveDirLR = NoDirection();
+                StartMove(ep);
+            }
+        }
         // Torbjorn
         else if(
             HeroOf() == Hero.Torbjorn
@@ -1669,7 +1705,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             if(
                 ProbabilityTrue(75) &&
                 AbilityCooldown(ep, Button.Ability1) <= 0 &&
-                DistanceBetween(ep, aimTarget) < Bot_ActionRange_Close &&
+                DistanceBetween(ep, aimTarget) < Bot_ActionRange_Middle &&
                 IsBlockedBetween(
                     EyePosition(ep),
                     EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * 16)
@@ -2175,7 +2211,7 @@ if(
     isRepeatFiring = false;
 }
 
-rule: "Bot/ButtonControl/compensateFire"
+disabled rule: "Bot/ButtonControl/compensateFire"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
@@ -2183,6 +2219,8 @@ if(
     actionState != ActionState.Non
 ){
     if(
+        // has aimTarget
+        aimTarget != 0 &&
         // is idling fire
         !IsFiringPrimary() &&
         !IsFiringSecondary() &&
@@ -2191,9 +2229,11 @@ if(
         !IsUsingUltimate()
     ){
         if(actionState == ActionState.Attack){
+            StopHoldingButton(ep, FirstOf(supportButtons));
             StartHoldingButton(ep, FirstOf(attackButtons));
         }
         else if(actionState == ActionState.Support){
+            StopHoldingButton(ep, FirstOf(attackButtons));
             StartHoldingButton(ep, FirstOf(supportButtons));
         }
     }
