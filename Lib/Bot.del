@@ -363,8 +363,8 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         actionRangeMin = Bot_ActionRange_Close;
         actionRangeMax = Bot_ActionRange_Far;
         primaryFireButtonReleaseMax = 1;        // to more use primary fire when assault mode
-        ability1ButtonReleaseMin = 8;           // to suppress cancel assault mode
-        ability1ButtonReleaseMax = 10;          // to suppress cancel assault mode
+        ability1ButtonReleaseMin = 40;          // to suppress cancel assault mode
+        ability1ButtonReleaseMax = 40;          // to suppress cancel assault mode (Prefer PolingHeroUniqueAction)
         ultimateButtonReleaseMax = 30;          // to suppress over use artillery
         break;
 
@@ -555,8 +555,8 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         secondaryFireButtonReleaseMax = 10;     // to suppress over use guard (on nemesis form)
         secondaryFireButtonPressMin = 2;        // to more keep guard (on nemesis form)
         secondaryFireButtonPressMax = 4;        // to more keep guard (on nemesis form)
-        ability1ButtonReleaseMin = 8;           // to suppress cancel nemesis form
-        ability1ButtonReleaseMax = 16;          // to suppress cancel nemesis form
+        ability1ButtonReleaseMin = 40;          // to suppress cancel nemesis form
+        ability1ButtonReleaseMax = 40;          // to suppress cancel nemesis form (Prefer PolingHeroUniqueAction)
         break;
 
         case Hero.Reaper:
@@ -846,7 +846,6 @@ void SetMoveDir() playervar "SetMoveDir"{
             :
                 // // max payload speed with escort player num
                 // 3
-                
                 // min payload speed with escort player num
                 1
             >
@@ -1468,6 +1467,30 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         if(enemyType == EnemyType.Zombie) return;
 
         // hero unique action
+        // Bastion
+        else if(
+            HeroOf() == Hero.Bastion
+        ){
+            if(
+                AbilityCooldown(ep, Button.Ability1) <= 0 &&
+                !IsUsingAbility1()
+            ){
+                PressButton(ep, Button.Ability1);
+            }
+        }
+
+        // Ramattra
+        else if(
+            HeroOf() == Hero.Ramattra
+        ){
+            if(
+                AbilityCooldown(ep, Button.Ability1) <= 0 &&
+                !IsUsingAbility1()
+            ){
+                PressButton(ep, Button.Ability1);
+            }
+        }
+
         // Ashe
         else if(
             HeroOf() == Hero.Ashe
@@ -1475,11 +1498,16 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             // fallback by corch gun
             if(
                 ProbabilityTrue(75) &&
-                AbilityCooldown(ep, Button.Ability1) <= 0 &&
-                DistanceBetween(ep, aimTarget) < Bot_ActionRange_Middle
+                DistanceBetween(ep, aimTarget) < Bot_ActionRange_Close
             ){
-                // use corch gun
-                PressButton(ep, Button.Ability1);
+                if(AbilityCooldown(ep, Button.Ability1) <= 0){
+                    // use corch gun
+                    PressButton(ep, Button.Ability1);
+                }
+                else if(ProbabilityTrue(50)){
+                    // fallback by non aiming
+                    StopHoldingButton(ep, Button.SecondaryFire);
+                }
             }
 
             if(
@@ -1704,23 +1732,29 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             // fallback by graple hook
             if(
                 ProbabilityTrue(75) &&
-                AbilityCooldown(ep, Button.Ability1) <= 0 &&
-                DistanceBetween(ep, aimTarget) < Bot_ActionRange_Middle &&
+                DistanceBetween(ep, aimTarget) < Bot_ActionRange_Close &&
                 IsBlockedBetween(
                     EyePosition(ep),
                     EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * 16)
                 )
             ){
-                // use graple at backword
-                StopMove(ep);
-                StartFacingPlayerRetreatPosition(aimTarget, RandomReal(2, 5));
-                Wait(0.5, WaitBehavior.IgnoreCondition);
-                PressButton(ep, Button.Ability1);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-                // restore aiming
-                StartHoldingButton(ep, Button.SecondaryFire);
-                // restore facing
-                StartFacingTarget();
+                if(AbilityCooldown(ep, Button.Ability1) <= 0){
+                    // use graple at backword
+                    StopMove(ep);
+                    StartFacingPlayerRetreatPosition(aimTarget, RandomReal(2, 5));
+                    Wait(0.5, WaitBehavior.IgnoreCondition);
+                    PressButton(ep, Button.Ability1);
+                    Wait(0.1, WaitBehavior.IgnoreCondition);
+                    // restore aiming
+                    StartHoldingButton(ep, Button.SecondaryFire);
+                    // restore facing
+                    StartFacingTarget();
+                }
+                else if(ProbabilityTrue(50)){
+                    // fallback by non aiming fire
+                    StopHoldingButton(ep, Button.SecondaryFire);
+                    StartHoldingButton(ep, Button.PrimaryFire);
+                }
             }
         }
         // WreckingBall
