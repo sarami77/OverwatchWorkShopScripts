@@ -285,50 +285,60 @@ if(
             ProbabilityTrue(50)
         ){
             define helloTarget!;
-            // get not dummy player
+            // get player at random
             helloTarget = 
                 RandomValueInArray(
                     FilteredArray(
                         AllPlayers(playerTeam),
                         (
-                            !IsDummyBot(ae)
-                        )));
+                            !IsDummyBot(ae) &&
+                            IsInLineOfSight(ep, ae)
+                        )
+                    )
+                );
 
             if(helloTarget == null){
-                // get any one from all
+                // get bot any one 
                 helloTarget = 
                     RandomValueInArray(
-                        AllPlayers(playerTeam)
+                        FilteredArray(
+                            AllPlayers(playerTeam),
+                            (
+                                IsInLineOfSight(ep, ae)
+                            )
+                        )
                     );
             }
-            AbortIf(helloTarget == null);
-            // facing to communicat target eyes
-            StartFacing(
-                ep, DirectionTowards(EyePosition(), EyePosition(helloTarget)),
-                facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
-            // wait
-            Wait(RandomReal(0.5, 1), WaitBehavior.AbortWhenFalse);
-            // hello
-            Communicate(ep, Communication.Hello);
 
-            if(
-                ProbabilityTrue(50)
-            ){
-                // with T-bagging or jumping
-                define pressButton! = RandomValueInArray([Button.Jump, Button.Crouch, Button.Melee]);
-                define tbagInterval! = RandomReal(0.1, 0.3);
-                while(
-                    ProbabilityTrue(90)
+            if(helloTarget != null){
+                // facing to communicat target eyes
+                StartFacing(
+                    ep, DirectionTowards(EyePosition(), EyePosition(helloTarget)),
+                    facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+                // wait
+                Wait(RandomReal(0.25, 1), WaitBehavior.AbortWhenFalse);
+                // hello
+                Communicate(ep, Communication.Hello);
+
+                if(
+                    ProbabilityTrue(50)
                 ){
-                    StartHoldingButton(ep, pressButton);
-                    Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
-                    StopHoldingButton(ep, pressButton);
-                    Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
+                    // with T-bagging or jumping
+                    define pressButton! = RandomValueInArray([Button.Jump, Button.Crouch, Button.Melee]);
+                    define tbagInterval! = RandomReal(0.1, 0.3);
+                    while(
+                        ProbabilityTrue(90)
+                    ){
+                        StartHoldingButton(ep, pressButton);
+                        Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
+                        StopHoldingButton(ep, pressButton);
+                        Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
+                    }
                 }
+                // wait
+                Wait(RandomReal(0.5, 1), WaitBehavior.AbortWhenFalse);
+                StopFacing();
             }
-            // wait
-            Wait(RandomReal(0.5, 1), WaitBehavior.AbortWhenFalse);
-            StopFacing();
         }
     }
     else{
