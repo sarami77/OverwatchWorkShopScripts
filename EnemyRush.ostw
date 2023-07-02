@@ -669,7 +669,7 @@ if(
 ){
     // setEnemyType
     if(enemyType == EnemyType.Minion){
-        StartForcingDummyBotName(ep, "Minion.");
+        StartForcingDummyBotName(ep, "Minion");
         watchUpdateRate =       16;
         eachBodyScale =         0.7;
         StartScalingPlayer(ep, eachBodyScale, false);
@@ -683,7 +683,7 @@ if(
         eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeScaleMinToMax;
     }
     else if(enemyType == EnemyType.Elite){
-        StartForcingDummyBotName(ep, "Elite.");
+        StartForcingDummyBotName(ep, "Elite");
         watchUpdateRate =       4;
         eachBodyScale =         1.0;
         StartScalingPlayer(ep, eachBodyScale, false);
@@ -697,7 +697,7 @@ if(
         eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeScaleMinToMax;
     }
     else if(enemyType == EnemyType.General){
-        StartForcingDummyBotName(ep, "General.");
+        StartForcingDummyBotName(ep, "General");
         watchUpdateRate =       2;
         eachBodyScale =         1.5;
         StartScalingPlayer(ep, eachBodyScale, false);
@@ -711,7 +711,7 @@ if(
         eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeScaleMinToMax;
     }
     else if(enemyType == EnemyType.Boss){
-        StartForcingDummyBotName(ep, "Boss.");
+        StartForcingDummyBotName(ep, "Boss");
         watchUpdateRate =       2;
         eachBodyScale =         2.5;
         StartScalingPlayer(ep, eachBodyScale, false);
@@ -728,6 +728,16 @@ if(
         Wait(0.1, WaitBehavior.IgnoreCondition);
         AddHealthPoolToPlayer(ep, HealthType.Armor, MaxHealth(ep) * 0.5, true, false);
         AddHealthPoolToPlayer(ep, HealthType.Shields, MaxHealth(ep) * 0.5, true, false);
+    }
+
+    if(IsThreatEnemyType(ep)){
+        StartForcingPlayerOutlines(
+            ep,
+            AllPlayers(playerTeam),
+            true,
+            Color.Orange,
+            OutlineType.Default
+        ); 
     }
 
     // enemy bot can't retreat
@@ -757,9 +767,9 @@ if(
 define enemyColor: Color.Team1;
 playervar define skullIcon!;
 
-define IsThreatEnemyType():
-    enemyType == EnemyType.General ||
-    enemyType == EnemyType.Boss;
+define IsThreatEnemyType(define player):
+    player.enemyType == EnemyType.General ||
+    player.enemyType == EnemyType.Boss;
 
 define isInCombat:
     actionState != ActionState.Non &&
@@ -768,40 +778,40 @@ define isInCombat:
         !IsInSpawnRoom()
     );
 
-rule: "EnemyBot/Effect/showSkullIconByTakenDamage"
-Event.OnDamageTaken
-if(
-    TeamOf() == enemyTeam &&
-    IsThreatEnemyType() &&
-    Attacker() != ep
-){
-    // show skull icon
-    ShowSkullIcon();
-}
+// rule: "EnemyBot/Effect/showSkullIconByTakenDamage"
+// Event.OnDamageTaken
+// if(
+//     TeamOf() == enemyTeam &&
+//     IsThreatEnemyType(ep) &&
+//     Attacker() != ep
+// ){
+//     // show skull icon
+//     ShowSkullIcon();
+// }
 
-rule: "EnemyBot/Effect/hideSkullIcon"
-Event.OnDeath
-if(
-    TeamOf() == enemyTeam &&
-    IsThreatEnemyType()
-){
-    // hide skull icon
-    HideSkullIcon();
-}
+// rule: "EnemyBot/Effect/hideSkullIcon"
+// Event.OnDeath
+// if(
+//     TeamOf() == enemyTeam &&
+//     IsThreatEnemyType(ep)
+// ){
+//     // hide skull icon
+//     HideSkullIcon();
+// }
 
-void ShowSkullIcon()"ShowSkullIcon"{
-    if(skullIcon == 0){
-        skullIcon = CreateIcon(AllPlayers(playerTeam), ep, Icon.Skull,
-            IconRev.VisibleToPositionAndColor, warningIconColor, true);
-    }
-    Wait(2.0, WaitBehavior.RestartWhenTrue);
-    HideSkullIcon();
-}
+// void ShowSkullIcon()"ShowSkullIcon"{
+//     if(skullIcon == 0){
+//         skullIcon = CreateIcon(AllPlayers(playerTeam), ep, Icon.Skull,
+//             IconRev.VisibleToPositionAndColor, warningIconColor, true);
+//     }
+//     Wait(2.0, WaitBehavior.RestartWhenTrue);
+//     HideSkullIcon();
+// }
 
-void HideSkullIcon()"HideSkullIcon"{
-    DestroyIcon(skullIcon);
-    skullIcon = 0;
-}
+// void HideSkullIcon()"HideSkullIcon"{
+//     DestroyIcon(skullIcon);
+//     skullIcon = 0;
+// }
 
 // TAG EnemyBot/Teleport ----------
 playervar define teleportPosition!;
@@ -1022,7 +1032,7 @@ Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCo
 
 define showTeleportBeamTime: 0.5;
 
-void PlayTeleportEffect(define isBefore!, define isCombatTeleport!) playervar "PlayTeleportEffect"{
+void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "PlayTeleportEffect"{
     // if before teleport
     if(isBefore){
         // play teleport shadow to own position
@@ -1035,7 +1045,7 @@ void PlayTeleportEffect(define isBefore!, define isCombatTeleport!) playervar "P
         // define fromSky! = true;
         telBeam = CreateBeamEffect(AllPlayers(),
             BeamType.BadBeam,
-            isCombatTeleport ? 
+            isBeamFromBody ? 
                 BodyPosition(ep) :
                 teleportPosition + Vector(0, 30, 0),
             teleportPosition + PositionOffset(),
@@ -1055,7 +1065,7 @@ void PlayTeleportEffect(define isBefore!, define isCombatTeleport!) playervar "P
 
 playervar define telBeam!;
 
-void TeleportWithEffect(define isCombatTeleport!) playervar "TeleportWithEffect"{
+void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
     if(teleportPosition == 0){
         return;
     }
@@ -1075,11 +1085,11 @@ void TeleportWithEffect(define isCombatTeleport!) playervar "TeleportWithEffect"
     Wait(waitTeleportInterval, WaitBehavior.AbortWhenFalse);
 
     // show pre teleport effect
-    PlayTeleportEffect(true, isCombatTeleport);
+    PlayTeleportEffect(true, isBeamFromBody);
     // Teleport
     Teleport(ep, teleportPosition);
     // show teleport effect
-    PlayTeleportEffect(false, isCombatTeleport);
+    PlayTeleportEffect(false, isBeamFromBody);
     // hide teleport beam effect
     DestroyEffect(telBeam);
 }
@@ -1145,24 +1155,31 @@ if(
     IsAlive() &&
     !IsInSpawnRoom()
 ){
-    for(define checkTeleportConditionCount! = 0; checkTeleportConditionCount < checkTeleportConditionMaxCount; checkTeleportConditionCount ++){
+    for(define checkConditionCount! = 0; checkConditionCount < checkTeleportConditionMaxCount; checkConditionCount ++){
         Wait(1, WaitBehavior.AbortWhenFalse);
         // check not teleport condition
         if(
-            // enemy not found
-            IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf())) &&
-            (
-                DistanceBetween(ep, CurrentObjectPosition()) <= Bot_ActionRange_Far ||      // near object
-                !IsPlayerOnObject                                                           // player not on object
+            // not
+            !(
+                // teleport condition
+                // enemy not found
+                !IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf())) ||
+                (
+                    // far from object
+                    DistanceBetween(ep, CurrentObjectPosition()) > Bot_ActionRange_CanFind &&
+                    // player on object
+                    IsPlayerOnObject                                                               
+                )
             )
         ){
+            // keep position
             // reset count up
             LoopIfConditionIsTrue();
         }
-        // count up
+        // count up checkConditionCount
     }
 
-    // when over checkTeleportConditionMaxCount 
+    // when over checkConditionCount 
     // teleport
     HybridTeleport();
 
@@ -1212,9 +1229,7 @@ if(
             FilteredArray(
                 AllDeadPlayers(enemyTeam),
                 (
-                    ae.enemyType == EnemyType.Minion || 
-                    ae.enemyType == EnemyType.Elite ||
-                    ae.enemyType == EnemyType.General
+                    ae.enemyType != EnemyType.Boss
                 )
             )
         );
@@ -1282,7 +1297,7 @@ Event.OngoingPlayer
 if(
     IsGameInProgress() &&
     TeamOf() == enemyTeam &&
-    IsThreatEnemyType()
+    IsThreatEnemyType(ep)
 ){
     // set default interval
     combatTeleportInterval = ObjectProgressScaledInterval(10, 20, 5);
@@ -1341,7 +1356,7 @@ rule: "EnemyBot/EnemyAbility/moreUltimate"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    IsThreatEnemyType() &&
+    IsThreatEnemyType(ep) &&
     IsAlive() &&
     actionState != ActionState.Non &&
     !IsUsingUltimate()
@@ -1786,8 +1801,8 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("spawn Rush Interval", spawnRushInterval, spawnRushInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("combat Teleport Interval",
-            FirstOf(FilteredArray(AllPlayers(enemyTeam), (ae.enemyType == EnemyType.General || ae.enemyType == EnemyType.Boss))).combatTeleportInterval,
-            FirstOf(FilteredArray(AllPlayers(enemyTeam), (ae.enemyType == EnemyType.General || ae.enemyType == EnemyType.Boss))).combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
+            FirstOf(FilteredArray(AllPlayers(enemyTeam), IsThreatEnemyType(ae))).combatTeleportInterval,
+            FirstOf(FilteredArray(AllPlayers(enemyTeam), IsThreatEnemyType(ae))).combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("more Ult Prob", moreUltProb, moreUltProb <= 0 ? Color.Team1 : Color.Yellow);
     }
 }
