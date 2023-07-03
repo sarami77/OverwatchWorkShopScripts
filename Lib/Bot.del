@@ -302,12 +302,11 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
     jumpButtonPressMin = 0;
     jumpButtonPressMax = 1;
 
-    define hero! = HeroOf();
+    define hero! = DuplicatingHeroOf();
     if(
-        hero == Hero.Echo &&
-        IsDuplicating()
+        hero == null
     ){
-        hero = HeroBeingDuplicated();
+        hero = HeroOf();
     }
     
     switch(hero){
@@ -1512,10 +1511,12 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         ){
             // fallback by corch gun
             if(
-                ProbabilityTrue(75) &&
-                DistanceBetween(ep, aimTarget) < ActionRange.Close
+                ProbabilityTrue(50) &&
+                DistanceBetween(ep, aimTarget) <= ActionRange.Close
             ){
-                if(AbilityCooldown(ep, Button.Ability1) <= 0){
+                if(
+                    AbilityCooldown(ep, Button.Ability1) <= 0
+                ){
                     // use corch gun
                     PressButton(ep, Button.Ability1);
                 }
@@ -1753,14 +1754,16 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         ){
             // fallback by graple hook
             if(
-                ProbabilityTrue(75) &&
-                DistanceBetween(ep, aimTarget) < ActionRange.Close &&
-                IsBlockedBetween(
-                    EyePosition(ep),
-                    EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * 16)
-                )
+                ProbabilityTrue(50) &&
+                DistanceBetween(ep, aimTarget) <= ActionRange.Close
             ){
-                if(AbilityCooldown(ep, Button.Ability1) <= 0){
+                if(
+                    AbilityCooldown(ep, Button.Ability1) <= 0 &&
+                    IsBlockedBetween(
+                        EyePosition(ep),
+                        EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * 16)
+                    )
+                ){
                     // use graple at backword
                     StopMove(ep);
                     StartFacingPlayerRetreatPosition(aimTarget, RandomReal(2, 5));
@@ -1812,8 +1815,6 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 Wait(0.1, WaitBehavior.IgnoreCondition);
                 // restore facing
                 StartFacingTarget();
-                // restor buton control
-                // enableButtonControl = true;
             }
 
             // use pile driver
@@ -1851,10 +1852,15 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
     }
 }
 
-void AbortIfNotDepEcho()"AbortIfNotDepEcho"{
-    if(HeroOf() == Hero.Echo){
-        AbortIf(!IsDuplicating());
+define DuplicatingHeroOf() "DuplicatingHeroOf"{
+    define hero! = null;
+    if(
+        HeroOf() == Hero.Echo &&
+        IsDuplicating()
+    ){
+        hero = HeroBeingDuplicated(ep);
     }
+    return hero;
 }
 
 rule: "Bot/HeroUniqueAction/positionMoveUltmate"
@@ -1864,8 +1870,6 @@ if(
     IsDummyBot() &&
     IsUsingUltimate()
 ){
-    AbortIfNotDepEcho();
-
     define isPositionMoveUltmate!;
     define waitForStartMove!;
     define moveSpeed!;
@@ -1875,7 +1879,7 @@ if(
     // postion move hero
     if(
         HeroOf() == Hero.Doomfist ||
-        HeroBeingDuplicated() == Hero.Doomfist
+        DuplicatingHeroOf() == Hero.Doomfist
     ){
         isPositionMoveUltmate = true;
         waitForStartMove = 0.5;
@@ -1885,7 +1889,7 @@ if(
     }
     else if(
         HeroOf() == Hero.Bastion ||
-        HeroBeingDuplicated() == Hero.Bastion
+        DuplicatingHeroOf() == Hero.Bastion
     ){
         isPositionMoveUltmate = true;
         waitForStartMove = 1.0;
@@ -1895,7 +1899,7 @@ if(
     }
     else if(
         HeroOf() == Hero.Junkrat ||
-        HeroBeingDuplicated() == Hero.Junkrat
+        DuplicatingHeroOf() == Hero.Junkrat
     ){
         isPositionMoveUltmate = true;
         waitForStartMove = 1.5;
@@ -1948,22 +1952,20 @@ if(
     UltimateChargePercent() >= DefaultPercentage() &&
     IsButtonHeld(ep, Button.Ultimate)
 ){
-    AbortIfNotDepEcho();
-
     define isPositionAimUltmate!;
     define isRotateProb!;
     
     // postion aim hero
     if(
         HeroOf() == Hero.Baptiste ||
-        HeroBeingDuplicated() == Hero.Baptiste
+        DuplicatingHeroOf() == Hero.Baptiste
     ){
         isPositionAimUltmate = true;
         isRotateProb = 10;
     }
     else if(
         HeroOf() == Hero.Symmetra ||
-        HeroBeingDuplicated() == Hero.Symmetra
+        DuplicatingHeroOf() == Hero.Symmetra
     ){
         isPositionAimUltmate = true;
         isRotateProb = 50;
@@ -1996,13 +1998,11 @@ if(
     AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
     IsButtonHeld(ep, Button.SecondaryFire)
 ){
-    AbortIfNotDepEcho();
-
     define isPositionAimSecondary!;
 
     if(
         HeroOf() == Hero.Ramattra ||
-        HeroBeingDuplicated() == Hero.Ramattra
+        DuplicatingHeroOf() == Hero.Ramattra
     ){
         if(
             // is omnic form
@@ -2035,13 +2035,11 @@ if(
     IsDummyBot() &&
     IsFiringSecondary()
 ){
-    AbortIfNotDepEcho();
-
     define isPositionFixSecondary!;
 
     if(
         HeroOf() == Hero.WreckingBall ||
-        HeroBeingDuplicated() == Hero.WreckingBall
+        DuplicatingHeroOf() == Hero.WreckingBall
     ){
         if(IsFiringSecondary()){
             isPositionFixSecondary = true;       
