@@ -249,13 +249,16 @@ if(
 }
 
 playervar define prevNorHealth! = 1.0;
-playervar define prevMatchTime! = 0;
+playervar define prevMatchTime! = MaxValue();
 
-define ChangedNormalizedHealth(): NormalizedHealth() - prevNorHealth;
+define ChangedNormalizedHealth():
+    NormalizedHealth() - prevNorHealth;
 
 define IsEnemyTeamKilled(): 
     NumberOfPlayers(enemyTeam) > 0 &&
     NumberOfLivingPlayers(enemyTeam) <= 0;
+
+define communicateTriggerProb: 20;
 
 rule: "Buddy/communicate"
 Event.OngoingPlayer
@@ -269,261 +272,259 @@ if(
     
     Wait(
         RandomReal(2, 4),
-        WaitBehavior.AbortWhenFalse);
+        WaitBehavior.AbortWhenFalse
+    );
 
     if(
-        // all commnication prob
-        ProbabilityTrue(100)
-    ){
-        if(
+        (
+            // not in combat
+            actionState == ActionState.Non &&
             (
-                // not in combat
-                actionState == ActionState.Non &&
-                (
-                    // in setup
-                    IsInSetup() ||
-                    // in spanwn room 
-                    IsInSpawnRoom()
-                )
+                // in setup
+                IsInSetup() ||
+                // in spanwn room 
+                IsInSpawnRoom()
             )
+        )
+    ){
+        // say about greeting
+        if(
+            // hello prob
+            ProbabilityTrue(communicateTriggerProb)
         ){
-            // say about greeting
-            if(
-                // hello prob
-                ProbabilityTrue(25)
-            ){
-                define helloTarget!;
-                // get player at random
+            define helloTarget!;
+            // get player at random
+            helloTarget = 
+                RandomValueInArray(
+                    FilteredArray(
+                        AllPlayers(playerTeam),
+                        (
+                            !IsDummyBot(ae) &&
+                            IsInLineOfSight(ep, ae)
+                        )
+                    )
+                );
+
+            if(helloTarget == null){
+                // get bot any one 
                 helloTarget = 
                     RandomValueInArray(
                         FilteredArray(
                             AllPlayers(playerTeam),
                             (
-                                !IsDummyBot(ae) &&
                                 IsInLineOfSight(ep, ae)
                             )
                         )
                     );
+            }
 
-                if(helloTarget == null){
-                    // get bot any one 
-                    helloTarget = 
-                        RandomValueInArray(
-                            FilteredArray(
-                                AllPlayers(playerTeam),
-                                (
-                                    IsInLineOfSight(ep, ae)
-                                )
-                            )
-                        );
-                }
+            if(helloTarget != null){
+                // facing to communicat target eyes
+                StartFacing(
+                    ep, DirectionTowards(EyePosition(), EyePosition(helloTarget)),
+                    facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+                // wait for turning
+                Wait(RandomReal(0.25, 1), WaitBehavior.AbortWhenFalse);
+                // hello
+                Communicate(ep, Communication.Hello);
 
-                if(helloTarget != null){
-                    // facing to communicat target eyes
-                    StartFacing(
-                        ep, DirectionTowards(EyePosition(), EyePosition(helloTarget)),
-                        facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
-                    // wait for turning
-                    Wait(RandomReal(0.25, 1), WaitBehavior.AbortWhenFalse);
-                    // hello
-                    Communicate(ep, Communication.Hello);
-
-                    if(
-                        ProbabilityTrue(50)
+                if(
+                    ProbabilityTrue(50)
+                ){
+                    // with T-bagging or jumping
+                    define pressButton! = RandomValueInArray([Button.Jump, Button.Crouch, Button.Melee]);
+                    define tbagInterval! = RandomReal(0.1, 0.3);
+                    while(
+                        ProbabilityTrue(90)
                     ){
-                        // with T-bagging or jumping
-                        define pressButton! = RandomValueInArray([Button.Jump, Button.Crouch, Button.Melee]);
-                        define tbagInterval! = RandomReal(0.1, 0.3);
-                        while(
-                            ProbabilityTrue(90)
-                        ){
-                            StartHoldingButton(ep, pressButton);
-                            Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
-                            StopHoldingButton(ep, pressButton);
-                            Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
-                        }
+                        StartHoldingButton(ep, pressButton);
+                        Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
+                        StopHoldingButton(ep, pressButton);
+                        Wait(tbagInterval, WaitBehavior.AbortWhenFalse);
                     }
-                    // wait
-                    Wait(RandomReal(0.5, 3), WaitBehavior.AbortWhenFalse);
-                    StopFacing();
                 }
-
+                // wait
+                Wait(RandomReal(0.5, 3), WaitBehavior.AbortWhenFalse);
+                StopFacing();
             }
         }
-        else{
-            // say about game
+        // else
+    }
+    else{
+        // say about game
 
-            // say thanks
-            if(
-                (
-                    // heal by not spawn room
-                    !IsInSpawnRoom() &&
-                    // according healed health
-                    ProbabilityTrue(150 * ChangedNormalizedHealth())
-                ) ||
-                // enemy team kill
-                (
-                    ProbabilityTrue(50) &&
-                    IsEnemyTeamKilled()
-
-                ) ||
-                // check point reached (remain time added)
-                (
-                    ProbabilityTrue(50) &&
-                    MatchTime() - prevMatchTime >= 60
-                )
-            ){
-                Communicate(ep, Communication.Thanks);
-            }
-            // say need heal
-            else if(
-                // by health low
-                ProbabilityTrue(100 * (1 - NormalizedHealth())) &&
-                // is alive
-                IsAlive()
-            ){
-                Communicate(ep, Communication.NeedHealing);
-            }
-            // say help
-            else if(
-                // by lost health high
-                ProbabilityTrue(-150 * ChangedNormalizedHealth()) &&
-                // is alive
-                IsAlive()
-            ){
-                Communicate(ep, Communication.NeedHelp);
-            }
-            // say countdown and use ult
-            else if(
-                // use ult prob
-                ProbabilityTrue(50 * EnemyDensityRateOfAimTarget(ActionRange.Close)) &&
-                // is alive
-                IsAlive() &&
-                // in combat
-                actionState != ActionState.Non &&
-                // ult ready
-                UltimateChargePercent() >= DefaultPercentage()
-            ){
-                Communicate(ep, Communication.Countdown);
-                Wait(3, WaitBehavior.AbortWhenFalse);
-                while(UltimateChargePercent() >= DefaultPercentage()){
-                    PressButton(ep, Button.Ultimate);
-                    Wait(0.1, WaitBehavior.AbortWhenFalse);
-                    PressButton(ep, Button.PrimaryFire);
-                    Wait(0.1, WaitBehavior.AbortWhenFalse);
-                }
-                // sync ult attack
-                define rdyUltNearPlayers! = FilteredArray(
-                    AllLivingPlayers(playerTeam),
-                    (
-                        IsDummyBot(ae) &&
-                        ProbabilityTrue(75) &&
-                        UltimateChargePercent(ae) >= DefaultPercentage()
-                    )
-                );
-                PressButton(rdyUltNearPlayers, Button.Ultimate);
+        // say thanks
+        if(
+            // healed
+            (
+                // according healed health
+                ProbabilityTrue(communicateTriggerProb * 6 * ChangedNormalizedHealth()) &&
+                // heal by not spawn room
+                !IsInSpawnRoom()
+            ) ||
+            // enemy team kill
+            (
+                ProbabilityTrue(communicateTriggerProb) &&
+                // enemy team killed
+                IsEnemyTeamKilled()
+            ) ||
+            // check point reached
+            (
+                ProbabilityTrue(communicateTriggerProb) &&
+                // remain time added
+                MatchTime() - prevMatchTime >= 60
+            )
+        ){
+            Communicate(ep, Communication.Thanks);
+        }
+        // say need heal
+        else if(
+            // by health low
+            ProbabilityTrue(communicateTriggerProb * 4 * (1 - NormalizedHealth())) &&
+            // is alive
+            IsAlive()
+        ){
+            Communicate(ep, Communication.NeedHealing);
+        }
+        // say help
+        else if(
+            // by lost health high
+            ProbabilityTrue(communicateTriggerProb * 6 * -ChangedNormalizedHealth()) &&
+            // is alive
+            IsAlive()
+        ){
+            Communicate(ep, Communication.NeedHelp);
+        }
+        // say countdown and use ult
+        else if(
+            // use ult prob
+            ProbabilityTrue(communicateTriggerProb * 2 * EnemyDensityRateOfAimTarget(ActionRange.Close)) &&
+            // is alive
+            IsAlive() &&
+            // in combat
+            actionState != ActionState.Non &&
+            // ult ready
+            UltimateChargePercent() >= DefaultPercentage()
+        ){
+            Communicate(ep, Communication.Countdown);
+            Wait(3, WaitBehavior.AbortWhenFalse);
+            while(UltimateChargePercent() >= DefaultPercentage()){
+                PressButton(ep, Button.Ultimate);
                 Wait(0.1, WaitBehavior.AbortWhenFalse);
-                PressButton(rdyUltNearPlayers, Button.PrimaryFire);
+                PressButton(ep, Button.PrimaryFire);
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
             }
-            // say fallback
-            else if(
-                ProbabilityTrue(50) &&
-                // player team member 50% dead
-                (NumberOfLivingPlayers(playerTeam) / NumberOfPlayers(playerTeam)) <= 0.5
-            ){
-                Communicate(ep, Communication.FallBack);
+            // sync ult attack
+            define rdyUltNearPlayers! = FilteredArray(
+                AllLivingPlayers(playerTeam),
+                (
+                    IsDummyBot(ae) &&
+                    ProbabilityTrue(75) &&
+                    UltimateChargePercent(ae) >= DefaultPercentage()
+                )
+            );
+            PressButton(rdyUltNearPlayers, Button.Ultimate);
+            Wait(0.1, WaitBehavior.AbortWhenFalse);
+            PressButton(rdyUltNearPlayers, Button.PrimaryFire);
+        }
+        // say fallback
+        else if(
+            ProbabilityTrue(communicateTriggerProb) &&
+            // player team member 50% dead
+            (NumberOfLivingPlayers(playerTeam) / NumberOfPlayers(playerTeam)) <= 0.5
+        ){
+            Communicate(ep, Communication.FallBack);
+        }
+        // say push
+        else if(
+            ProbabilityTrue(communicateTriggerProb) &&
+            // enemy team member 50% dead
+            (NumberOfLivingPlayers(enemyTeam) / NumberOfPlayers(enemyTeam)) <= 0.5
+        ){
+            Communicate(ep, Communication.PushForward);
+        }
+        // say sorry
+        else if(
+            ProbabilityTrue(communicateTriggerProb) &&
+            // dead
+            IsDead()
+        ){
+            Communicate(ep, Communication.Sorry);
+        }
+        // say about objective
+        else if(
+            ProbabilityTrue(communicateTriggerProb) &&
+            IsOnObjective()
+        ){
+            if(ProbabilityTrue(DefaultPercentage() / 3)){
+                Communicate(ep, Communication.GroupUp);
             }
-            // say push
-            else if(
-                ProbabilityTrue(50) &&
-                // enemy team member 50% dead
-                (NumberOfLivingPlayers(enemyTeam) / NumberOfPlayers(enemyTeam)) <= 0.5
-            ){
-                Communicate(ep, Communication.PushForward);
+            else if(ProbabilityTrue(DefaultPercentage() / 2)){
+                Communicate(ep, Communication.Defending);
             }
-            // say sorry
-            else if(
-                ProbabilityTrue(50) &&
-                // dead
-                IsDead()
-            ){
-                Communicate(ep, Communication.Sorry);
+            else{
+                Communicate(ep, Communication.Go);
             }
-            // say ult charge progress
-            else if(
-                // according ult charge
-                ProbabilityTrue(0.5 * UltimateChargePercent())
+        }
+        // say other message
+        else if(ProbabilityTrue(communicateTriggerProb)){
+            if(
+                actionState == ActionState.Non
             ){
-                Communicate(ep, Communication.UltimateStatus);
-            }
-            // say about objective
-            else if(
-                ProbabilityTrue(50) &&
-                IsOnObjective()
-            ){
-                if(ProbabilityTrue(100 / 3)){
-                    Communicate(ep, Communication.GroupUp);
-                }
-                else if(ProbabilityTrue(100 / 2)){
-                    Communicate(ep, Communication.Defending);
-                }
-                else{
+                // say about follow/move
+                if(ProbabilityTrue(DefaultPercentage() / 3)){
                     Communicate(ep, Communication.Go);
                 }
+                else if(ProbabilityTrue(DefaultPercentage() / 2)){
+                    Communicate(ep, Communication.GoingIn);
+                }
+                else{
+                    Communicate(ep, Communication.WithYou);
+                }
             }
-            // say other message
-            else if(ProbabilityTrue(30)){
-                if(
-                    actionState == ActionState.Non
-                ){
-                    // say about follow/move
-                    if(ProbabilityTrue(100 / 3)){
-                        Communicate(ep, Communication.Go);
-                    }
-                    else if(ProbabilityTrue(100 / 2)){
-                        Communicate(ep, Communication.GoingIn);
-                    }
-                    else{
-                        Communicate(ep, Communication.WithYou);
-                    }
+            else if(
+                actionState == ActionState.Attack
+            ){
+                // say about attack
+                if(ProbabilityTrue(DefaultPercentage() / 2)){
+                    Communicate(ep, Communication.Attacking);
                 }
-                else if(
-                    actionState == ActionState.Attack
-                ){
-                    // say about attack
-                    if(ProbabilityTrue(100 / 2)){
-                        Communicate(ep, Communication.Attacking);
-                    }
-                    else{
-                        Communicate(ep, Communication.Incoming);
-                    }
+                else{
+                    Communicate(ep, Communication.Incoming);
                 }
-                else if(
-                    actionState == ActionState.Support
-                ){
-                    // say about support
-                    if(ProbabilityTrue(100 / 2)){
-                        Communicate(ep, Communication.WithYou);
-                    }
-                    else{
-                        Communicate(ep, Communication.YouAreWelcome);
-                    }
+            }
+            else if(
+                actionState == ActionState.Support
+            ){
+                // say about support
+                if(ProbabilityTrue(DefaultPercentage() / 2)){
+                    Communicate(ep, Communication.WithYou);
+                }
+                else{
+                    Communicate(ep, Communication.YouAreWelcome);
                 }
             }
         }
+        // say ult charge progress
+        else if(
+            // according ult charge
+            ProbabilityTrue(communicateTriggerProb * 2 * (UltimateChargePercent() / DefaultPercentage()))
+        ){
+            Communicate(ep, Communication.UltimateStatus);
+        }
     }
+
 
     LoopIfConditionIsTrue();
 }
 
-
-rule: "Buddy/resetDamage"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    IsDummyBot() &&
-    IsInSpawnRoom()
-){
-    // reset prev damage for not say thanks
-    prevNorHealth = 1;
-}
+// rule: "Buddy/resetDamage"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == playerTeam &&
+//     IsDummyBot() &&
+//     IsInSpawnRoom()
+// ){
+//     // reset prev damage for not say thanks
+//     prevNorHealth = 1;
+// }
