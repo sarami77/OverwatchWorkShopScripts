@@ -1148,7 +1148,7 @@ define GetNextActionState()"GetNextActionState"{
     return nextActionState;
 }
 
-void SetActionState(define player, define nextActionState!) "SetActionState"{
+void SetActionState(define player!, define nextActionState!) "SetActionState"{
     // if state changed
     if(nextActionState != player.actionState){
         // reset for button control reload
@@ -1160,7 +1160,7 @@ void SetActionState(define player, define nextActionState!) "SetActionState"{
     }
 }
 
-define IsSighted(in define player):
+define IsSighted(in define player!):
         player != 0 &&
         TeamOf(ep) == TeamOf(player) ?
             IsSightedAsFriend(player) :
@@ -1306,18 +1306,13 @@ if(
 
         // apply next state
         SetActionState(ep, GetNextActionState());
-
-        // call attack by near bots
-        CallAttackNearBot();
     }
 
+    // call attack by near bots
+    CallAttackNearBot();
+
     // reduce overrun
-    Wait(
-        actionState == ActionState.Non ?
-            1.0 :
-            3.0,
-        WaitBehavior.IgnoreCondition
-    );
+    Wait(3.0, WaitBehavior.IgnoreCondition);
 }
 
 globalvar define isCallAttackCoolingDown1! = false;
@@ -1326,16 +1321,22 @@ globalvar define isCallAttackCoolingDown2! = false;
 void CallAttackNearBot()"CallAttackNearBot"{
     // check cooldown for reduce overrun
     if(TeamOf() == Team.Team1){
-        if(isCallAttackCoolingDown1) return;
+        if(isCallAttackCoolingDown1){
+            return;
+        }
         isCallAttackCoolingDown1 = true;
     }
     else{
-        if(isCallAttackCoolingDown2) return;
+        if(isCallAttackCoolingDown2){
+            return;
+        }
         isCallAttackCoolingDown2 = true;
     }
 
-    // in attack
-    if( 
+    if(
+        // has aim target
+        aimTarget != 0 &&
+        // in attack
         actionState == ActionState.Attack
     ){
         // get near idle bot
