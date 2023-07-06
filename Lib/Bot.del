@@ -843,7 +843,7 @@ void SetMoveDir() playervar "SetMoveDir"{
         (
             (
                 // enemy close win
-                IsCloseWin(EnemyTeamOf()) ||
+                IsCloseWin(EnemyTeamOf(ep)) ||
                 // over time
                 IsOverTime()
             ) ?
@@ -1040,6 +1040,11 @@ define CanFindRange(in define player) :
 define CanFindLine(in define player) :
     IsInLineOfSight(EyePosition(ep), EyePosition(player), BarrierLOS.NoBarriersBlock);
 
+define IsSighted(in define player!):
+    TeamOf(ep) == TeamOf(player)        ? IsSightedAsFriend(player) :
+    TeamOf(ep) == EnemyTeamOf(player)   ? IsSightedAsEnemy(player) :
+        false;
+
 define IsSightedAsEnemy(in define player):
         TeamOf(ep) != TeamOf(player) &&
         HasSpawned(player) &&
@@ -1054,7 +1059,7 @@ define IsSightedAsEnemy(in define player):
 define IsSightedAsFriend(in define player):
         TeamOf(ep) == TeamOf(player) &&
         HasSpawned(player) &&
-        (IsAlive(player) || CanResurrect(player)) &&
+        (IsAlive(player) || CanResurrect(ep)) &&
         CanFindRange(player) &&
         (CanFindLine(player) || CanSwiftStep(player));
 
@@ -1062,7 +1067,7 @@ define FindAttackTarget()"FindAttackTarget"{
     return FirstOf(
         SortedArray(
             FilteredArray(
-                AllPlayers(EnemyTeamOf()),
+                AllPlayers(EnemyTeamOf(ep)),
                 IsSightedAsEnemy(ae)
             ),
             DistanceBetween(ep, ae)
@@ -1159,12 +1164,6 @@ void SetActionState(define player!, define nextActionState!) "SetActionState"{
         player.actionState = nextActionState;        
     }
 }
-
-define IsSighted(in define player!):
-        player != 0 &&
-        TeamOf(ep) == TeamOf(player) ?
-            IsSightedAsFriend(player) :
-            IsSightedAsEnemy(player);
 
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
@@ -2088,10 +2087,10 @@ define BallTackleDirection()"BallTackleDirection"{
         SpeedOf() >= 10
     ){
         // nearest enemy of grapple crow pos
-        dir = VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf()));
+        dir = VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep)));
     }
     else{
-        dir = -VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf()));
+        dir = -VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep)));
     }
     return dir;
 }
@@ -2120,8 +2119,8 @@ define buttonControlPressScale: 1.0;
 define buttonControlReleaseScale: 1.0;
 
 define EnemyDensityRateOfAimTarget(in define dist):
-    CountOf(PlayersWithinRadius(aimTarget, dist, EnemyTeamOf(), RadiusLOS.Off)) /
-    NumberOfPlayers(EnemyTeamOf());
+    CountOf(PlayersWithinRadius(aimTarget, dist, EnemyTeamOf(ep), RadiusLOS.Off)) /
+    NumberOfPlayers(EnemyTeamOf(ep));
 
 // can's implment as function
 void StartButtonControl(in define bc){
