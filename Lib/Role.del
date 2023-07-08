@@ -1,0 +1,285 @@
+import "Debug.del";
+
+// TAG Role ----------
+playervar define roleOperationText!;
+playervar define selectRole!;
+
+define RoleNum: 6;
+
+enum Role{
+    NO_ROLE,
+    MEDIC,
+    SPRINTER,
+    BIRD_MAN,
+    HEAVY_TANK,
+    SURVIVOR,
+    KILLER,
+    FIXED_TURRET,
+    TECHNICIAN,
+    RAGE,
+    SHOT_CALL,
+    FAST_CHARGE,
+    SUPER_ULT
+}
+
+define RoleText(in define inputRole!):
+    inputRole == Role.NO_ROLE ?     "NO ROLE" :
+    inputRole == Role.MEDIC ?       "MEDIC" :
+    inputRole == Role.SPRINTER ?    "SPRINTER" :
+    inputRole == Role.BIRD_MAN ?    "BIRD MAN" :
+    inputRole == Role.HEAVY_TANK ?  "HEAVY TANK" :
+    inputRole == Role.SURVIVOR ?    "SURVIVOR" :
+    inputRole == Role.KILLER ?      "KILLER" :
+    inputRole == Role.FIXED_TURRET ?"FIXED TURRET" :
+    inputRole == Role.TECHNICIAN ?  "TECHNICIAN" :
+    inputRole == Role.RAGE ?        "RAGE" :
+    inputRole == Role.SHOT_CALL ?   "SHOT CALL" :
+    inputRole == Role.FAST_CHARGE ? "FAST CHARGE" :
+    inputRole == Role.SUPER_ULT ?   "SUPER ULT" :
+    null;
+
+void UpdateRoleOperationText()"UpdateRoleOperationText"{
+    DestroyHudText(roleOperationText[0]);
+    DestroyHudText(roleOperationText[1]);
+
+    roleOperationText[0] = CreateHudText(ep,
+        null,
+        IsInSpawnRoom()
+            ? 
+                <"You can change mod role while in spawn room.\n\rPress melee key <0> to select role.\n\rYour mod role = <1>",
+                    ButtonGuide(Button.Melee), RoleText(selectRole)>
+            :
+                <"Your mod role = <0>",
+                    RoleText(selectRole)>,
+        null,
+        Location.Left, 101,
+        null, Color.SkyBlue, null,
+        HudTextRev.StringAndColor, Spectators.DefaultVisibility);
+
+    roleOperationText[1] = CreateHudText(ep,
+        null, RoleDetailText(selectRole), null,
+        Location.Left, 102,
+        null, Color.SkyBlue, null,
+        HudTextRev.StringAndColor, Spectators.DefaultVisibility);
+}
+
+define RoleDetailText(in define inputRole!):
+    inputRole == Role.NO_ROLE ?
+        "No modified" :
+    inputRole == Role.MEDIC ?
+        "+ deal heal 120%\n\r"+
+        "- max health 70%" :
+    inputRole == Role.SPRINTER ?
+        "+ move speed 120%\n\r"+
+        "- max health 70%" :
+    inputRole == Role.BIRD_MAN ?
+        "+ gravity 10%\n\r"+
+        "- max health 50%" :
+    inputRole == Role.HEAVY_TANK ?
+        "+ max health 300%\n\r"+
+        "- move speed 70%\n\r"+
+        "- receive heal 10%" :
+    inputRole == Role.SURVIVOR ?
+        "+ receive heal 150%\n\r"+
+        "- deal damge 50%" :
+    inputRole == Role.KILLER ?
+        "+ deal Damage 120%\n\r"+
+        "- max health 70%" :
+    inputRole == Role.FIXED_TURRET ?
+        "+ max health 150%\n\r"+
+        "+ deal damage 150% when stop\n\r"+
+        "- deal damage 50% when moving" :
+    inputRole == Role.TECHNICIAN ?
+        "+ reset cooldown ability2 when enemy kill\n\r"+
+        "- deal damage 70%" :
+    inputRole == Role.RAGE ?
+        "+ gain 20% ult charge when teammate dead\n\r"+
+        "- max health 70%" :
+    inputRole == Role.SHOT_CALL ?
+        "+ teammate ult full charge when use own ult\n\r"+
+        "- losing ult charge 1% by 3 second" :
+    inputRole == Role.FAST_CHARGE ?
+        "+ gaing ult charge 1% by 1 second\n\r"+
+        "- deal damage 50% when ult\n\r"+
+        "- deal heal 50% when ult\n\r"+
+        "- moving speed 70% when ult" :
+    inputRole == Role.SUPER_ULT ?
+        "+ deal damage 150% when ult\n\r"+
+        "+ deal heal 150% when ult\n\r"+
+        "+ moving speed 150% when ult\n\r"+
+        "- losing ult charge 1% by 3 second" :
+    null;
+
+void UpdateRoleParamater()"UpdateRoleParamater"{
+    define maxHealth = DefaultPercentage();
+    define dealDamage = DefaultPercentage();
+    define dealHeal = DefaultPercentage();
+    define receiveHeal = DefaultPercentage();
+    define moveSpeed = DefaultPercentage();
+    define gravity = DefaultPercentage();
+    
+    switch(selectRole){
+        case Role.MEDIC:
+        dealHeal = 120;
+        maxHealth = 70;
+        break;
+
+        case Role.SPRINTER:
+        moveSpeed = 120;
+        maxHealth = 70;
+        break;
+
+        case Role.BIRD_MAN:
+        gravity = 10;
+        maxHealth = 50;
+        break;
+
+        case Role.HEAVY_TANK:
+        maxHealth = 300;
+        moveSpeed = 70;
+        receiveHeal = 10;
+        break;
+
+        case Role.SURVIVOR:
+        receiveHeal = 150;
+        dealDamage = 50;
+        break;
+
+        case Role.KILLER:
+        dealDamage = 120;
+        maxHealth = 70;
+        break;
+
+        case Role.FIXED_TURRET:
+        maxHealth = 150;
+        break;
+
+        case Role.TECHNICIAN:
+        dealDamage = 70;
+        break;
+
+        case Role.RAGE:
+        maxHealth = 70;
+        break;
+
+        case Role.FAST_CHARGE:
+        break;
+
+        case Role.SUPER_ULT:
+        break;
+    }
+
+    SetMaxHealth(ep, maxHealth);
+    SetDamageDealt(ep, dealDamage);
+    SetHealingDealt(ep, dealHeal);
+    SetHealingReceived(ep, receiveHeal);
+    SetGravity(ep, gravity);
+    SetMoveSpeed(ep, moveSpeed);
+    Wait(0.1);
+    Heal(ep, null, MaxValue());
+}
+
+rule: "Role/updateRoleOperationEnterSR"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    HasSpawned() &&
+    IsInSpawnRoom()
+){
+    UpdateRoleOperationText();
+}
+
+rule: "Role/updateRoleOperationExitSR"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    HasSpawned() &&
+    !IsInSpawnRoom()
+){
+    UpdateRoleOperationText();
+}
+
+rule: "Role/switchRole"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsInSpawnRoom() &&
+    IsAlive() &&
+    IsButtonHeld(ep, Button.Melee)
+){
+    selectRole ++;
+    selectRole = selectRole > Role.SUPER_ULT ? Role.NO_ROLE : selectRole;
+    UpdateRoleOperationText();
+    UpdateRoleParamater();
+}
+
+rule: "Role/FIXED_TURRET/updateRoleParamaterByIsMoving"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    selectRole == Role.FIXED_TURRET &&
+    IsMoving()
+){
+    SetDamageDealt(ep, 50);
+}
+
+rule: "Role/FIXED_TURRET/updateRoleParamaterByNotIsMoving"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    selectRole == Role.FIXED_TURRET &&
+    !IsMoving()
+){
+    SetDamageDealt(ep, 150);
+}
+
+rule: "Role/TECHNICIAN/resetAbility2ByEnemyKill"
+Event.OnElimination
+if(
+    TeamOf() == playerTeam &&
+    selectRole == Role.TECHNICIAN
+){
+    SetAbilityCooldown(ep, Button.Ability2, 0);
+}
+
+globalvar define deadPlayerCount = 0;
+
+rule: "Role/RAGE/gainUltChargeByTeammateDead"
+Event.OnDeath
+if(
+    TeamOf() == playerTeam
+){
+    define playerArray! = FilteredArray(AllPlayers(playerTeam), ae.selectRole == Role.RAGE);
+    for(define index! = 0; index < CountOf(playerArray); index++){
+        define player! = playerArray[index];
+        SetUltimateCharge(player, UltimateChargePercent(player)  + 20);
+    }
+}
+
+rule: "Role/SHOT_CALL/gainUltChargeByTeammateDead"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsUsingUltimate()
+){
+    define playerArray! = FilteredArray(AllPlayers(playerTeam), ae != ep);
+    for(define index! = 0; index < CountOf(playerArray); index++){
+        define player! = playerArray[index];
+        SetUltimateCharge(player, UltimateChargePercent(player)  + 100);
+    }
+}
+
+// TAG Debug ----------
+// rule: "Debug/Role/dummyRole"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == playerTeam &&
+//     IsInSetup() &&
+//     IsDummyBot()
+// ){
+//     StartHoldingButton(ep, Button.Interact);
+//     Wait(0.1);
+//     StopHoldingButton(ep, Button.Interact);
+//     Wait(RandomInteger(1, 5));
+//     LoopIfConditionIsTrue();
+// }
