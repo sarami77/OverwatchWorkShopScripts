@@ -5,8 +5,8 @@ playervar define selectRole!;
 playervar define roleName!;
 playervar define roleDetail!;
 
-enum Role{
-    CHANGING = 0,
+enum RoleType{
+    INIT = 0,
     NO_ROLE,
     MEDIC,
     KILLER,
@@ -24,6 +24,21 @@ enum Role{
     SUPER_ULT,
     ZOMBIE,
     LAST
+}
+
+enum RoleTrigger{
+    ACTIVATE,
+    DEACTIVATE,
+    STOP,
+    MOVING,
+    MELEE,
+    USING_ULT,
+    NOT_USING_ULT,
+    CHARGING_ULT,
+    LOST_HEALTH,
+    ELEMINATION,
+    DEATH,
+    TEAMMATE_DEATH
 }
 
 playervar define roleOperationText!;
@@ -53,17 +68,7 @@ void UpdateRoleOperationText()"UpdateRoleOperationText"{
         ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString, Color.SkyBlue, Spectators.VisibleAlways);
 }
 
-rule: "Role/init"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    !IsDummyBot() &&
-    HasSpawned()
-){
-    selectRole = Role.NO_ROLE;
-}
-
-rule: "Role/updateRoleOperation_EnterSpawnRoom"
+rule: "Role/updateRoleOperationTextOnEnterSpawnRoom"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
@@ -73,7 +78,7 @@ if(
     UpdateRoleOperationText();
 }
 
-rule: "Role/updateRoleOperation_ExitSpawnRoom"
+rule: "Role/updateRoleOperationTextOnExitSpawnRoom"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
@@ -83,647 +88,624 @@ if(
     UpdateRoleOperationText();
 }
 
+rule: "Role/init"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    !IsDummyBot() &&
+    HasSpawned()
+){
+    selectRole = RoleType.NO_ROLE;
+
+    DoRoleAction(selectRole, RoleTrigger.ACTIVATE);
+    UpdateRoleOperationText();
+}
+
 rule: "Role/switchRole"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     !IsDummyBot() &&
-    IsInSpawnRoom() &&
-    IsButtonHeld(ep, Button.Melee)
+    // IsInSpawnRoom() &&
+    IsButtonHeld(ep, Button.Melee) &&
+                                        IsButtonHeld(ep, Button.Jump)
 ){
-    define nextRole! = selectRole < Role.LAST - 1 ? selectRole + 1 : Role.NO_ROLE;
-    selectRole = Role.CHANGING;
-    Wait(0.1, WaitBehavior.IgnoreCondition);    // reset param
-    selectRole = nextRole;
+    // do role deactivate action
+    DoRoleAction(selectRole, RoleTrigger.DEACTIVATE);
+
+    selectRole = selectRole < RoleType.LAST - 1 ? selectRole + 1 : RoleType.NO_ROLE;
+
+    // do role activate action
+    DoRoleAction(selectRole, RoleTrigger.ACTIVATE);
+
+    // update text
     UpdateRoleOperationText();
 }
 
-disabled rule: "Role/randomSelectRoleForBot"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    IsDummyBot() &&
-    HasSpawned()
-){
-    if(selectRole == Role.CHANGING){
-        if(!IsGameInProgress()){
-            Wait(RandomInteger(3, 10), WaitBehavior.IgnoreCondition);
-        }
-        selectRole = RandomValueInArray([
-            Role.NO_ROLE,
-            Role.NO_ROLE,
-            Role.NO_ROLE,
-            Role.MEDIC,
-            Role.KILLER,
-            Role.ASSASSIN,
-            Role.SPRINTER,
-            Role.BIRD_MAN,
-            Role.HEAVY_ARMOR,
-            Role.FIXED_TURRET,
-            Role.COMBAT_TECHNIC,
-            Role.DANGER_AVOIDANCE,
-            Role.SAVIOR,
-            Role.RAGE,
-            Role.SHOT_CALL,
-            Role.FAST_CHARGE,
-            Role.SUPER_ULT,
-            Role.ZOMBIE
-        ]);
-        UpdateRoleOperationText();
-    }
-}
-
-// NO_ROLE ----------------------------
 define NL: "\n\r";
 
-rule: "Role/NO_ROLE/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.NO_ROLE
-){
-    roleName = "NO MOD";
-    roleDetail = 
-        "No modified";
-}
-
-// MEDIC ----------------------------
-rule: "Role/MEDIC/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.MEDIC
-){
-    roleName = "MEDIC";
-    roleDetail = 
-        "+ deal heal 150%"+ NL +
-        "- deal damage 50%";
-    SetHealingDealt(ep, 150);
-    SetDamageDealt(ep, 50);
-}
-
-rule: "Role/MEDIC/deactivate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole != Role.MEDIC
-){
-    SetHealingDealt(ep, DefaultPercentage());
-    SetDamageDealt(ep, DefaultPercentage());
-}
-
-// KILLER ----------------------------
-rule: "Role/KILLER/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.KILLER
-){
-    roleName = "KILLER";
-    roleDetail = 
-        "+ deal damage 150%"+ NL +
-        "- receive heal 50%";
-    SetDamageDealt(ep, 150);
-    SetHealingReceived(ep, 50);
-}
-
-rule: "Role/KILLER/deactivate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole != Role.KILLER
-){
-    SetDamageDealt(ep, DefaultPercentage());
-    SetHealingReceived(ep, DefaultPercentage());
-}
-
-// SPRINTER ----------------------------
-rule: "Role/SPRINTER/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.SPRINTER
-){
-    roleName = "SPRINTER";
-    roleDetail = 
-        "+ move speed 150%"+ NL +
-        "- max health 50%";
-    SetMoveSpeed(ep, 150);
-    SetMaxHealth(ep, 50);
-}
-
-rule: "Role/SPRINTER/deactivate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole != Role.SPRINTER
-){
-    SetMoveSpeed(ep, DefaultPercentage());
-    SetMaxHealth(ep, DefaultPercentage());
-}
-
-// BIRD_MAN ----------------------------
-rule: "Role/BIRD_MAN/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.BIRD_MAN
-){
-    roleName = "BIRD MAN";
-    roleDetail = 
-        "+ gravity 10%"+ NL +
-        "- max health 50%";
-    SetGravity(ep, 10);
-    SetMaxHealth(ep, 50);
-}
-
-rule: "Role/BIRD_MAN/deactivate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole != Role.BIRD_MAN
-){
-    SetGravity(ep, DefaultPercentage());
-    SetMaxHealth(ep, DefaultPercentage());
-}
-
-// HEAVY_ARMOR ----------------------------
-rule: "Role/HEAVY_ARMOR/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.HEAVY_ARMOR
-){
-    roleName = "HEAVY ARMOR";
-    roleDetail = 
-        "+ max health 300%"+ NL +
-        "- move speed 50%"+ NL +
-        "- receive heal 20%";
-    SetMaxHealth(ep, 300);
-    SetMoveSpeed(ep, 50);
-    SetHealingReceived(ep, 20);
-}
-
-rule: "Role/BIRD_MAN/deactivate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole != Role.HEAVY_ARMOR
-){
-    SetMaxHealth(ep, DefaultPercentage());
-    SetMoveSpeed(ep, DefaultPercentage());
-    SetHealingReceived(ep, DefaultPercentage());
-}
-
-// ASSASSIN ----------------------------
-rule: "Role/ASSASSIN/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.ASSASSIN
-){
-    roleName = "ASSASSIN";
-    roleDetail = 
-        "+ deal damage 130%"+ NL +
-        "+ move speed 130%"+ NL +
-        "- max Health 50%";
-    SetDamageDealt(ep, 130);
-    SetMoveSpeed(ep, 130);
-    SetMaxHealth(ep, 50);
-}
-
-rule: "Role/ASSASSIN/deactivate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole != Role.ASSASSIN
-){
-    SetDamageDealt(ep, DefaultPercentage());
-    SetMoveSpeed(ep, DefaultPercentage());
-    SetMaxHealth(ep, DefaultPercentage());
-}
-
-// FIXED_TURRET ----------------------------
-rule: "Role/FIXED_TURRET/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.FIXED_TURRET
-){
-    roleName = "FIXED TURRET";
-    roleDetail = 
-        "+ in stop, deal damage 150%"+ NL +
-        "+ in stop, max health 200%"+ NL +
-        "- in moving, deal damage 30%";
-}
-
-rule: "Role/FIXED_TURRET/deactivate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole != Role.FIXED_TURRET
-){
-    SetDamageDealt(ep, DefaultPercentage());
-    SetMaxHealth(ep, DefaultPercentage());
-}
-
-rule: "Role/FIXED_TURRET/stop"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.FIXED_TURRET &&
-    !IsMoving()
-){
-    Wait(0.2, WaitBehavior.AbortWhenFalse);
-    SetDamageDealt(ep, 150);
-    SetMaxHealth(ep, 200);
-}
-
-rule: "Role/FIXED_TURRET/moving"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.FIXED_TURRET &&
-    IsMoving()
-){
-    Wait(0.2, WaitBehavior.AbortWhenFalse);
-    SetDamageDealt(ep, 30);
-    SetMaxHealth(ep, DefaultPercentage());
-}
-
-// COMBAT_TECHNIC ----------------------------
-rule: "Role/COMBAT_TECHNIC/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.COMBAT_TECHNIC
-){
-    roleName = "COMBAT TECHNIC";
-    roleDetail = 
-        "+ in enemy kill, reset cooldown right ability2"+ NL +
-        "- deal damage 70%";
-    SetDamageDealt(ep, 70);
-}
-
-rule: "Role/COMBAT_TECHNIC/deactivate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole != Role.COMBAT_TECHNIC
-){
-    SetDamageDealt(ep, DefaultPercentage());
-}
-
-rule: "Role/COMBAT_TECHNIC/resetCooldown"
-Event.OnElimination
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.COMBAT_TECHNIC
-){
-    SetAbilityCooldown(ep, Button.Ability2, 0);
-    SetAbilityCharge(ep, Button.Ability2, 1);
-}
-
-// DANGER_AVOIDANCE ----------------------------
-rule: "Role/DANGER_AVOIDANCE/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.DANGER_AVOIDANCE
-){
-    roleName = "DANGER AVOIDANCE";
-    roleDetail = 
-        "+ in lost 50% health, reset cooldown left ability1"+ NL +
-        "- receive heal 70%";
-    SetHealingReceived(ep, 70);
-}
-
-rule: "Role/DANGER_AVOIDANCE/deactivate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole != Role.DANGER_AVOIDANCE
-){
-    SetHealingReceived(ep, DefaultPercentage());
-}
-
-rule: "Role/DANGER_AVOIDANCE/resetCooldown"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.DANGER_AVOIDANCE &&
-    NormalizedHealth() <= 0.5
-){
-    SetAbilityCooldown(ep, Button.Ability1, 0);
-    SetAbilityCharge(ep, Button.Ability1, 1);
-    Wait(3, WaitBehavior.IgnoreCondition);  // interval
-}
-
-// SAVIOR ----------------------------
-rule: "Role/SAVIOR/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.SAVIOR
-){
-    roleName = "SAVIOR";
-    roleDetail = 
-        "+ in press melee key, revive near dead teammate"+ NL +
-        "- in revive, consume 50% ult charge";
-}
-
-rule: "Role/SAVIOR/revive"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.SAVIOR &&
-    IsAlive() &&
-    UltimateChargePercent() >= 50 &&
-    IsButtonHeld(ep, Button.Melee)
-){
-    define player! = 
-        FirstOf(
-            SortedArray(
-                FilteredArray(
-                    !IsDummyBot()
-                        ?
-                            PlayersInViewAngle(
-                                ep,
-                                TeamOf(),
-                                90
-                            )
-                        :
-                            AllPlayers(TeamOf())
-                    ,
-                    (
-                        IsDead(ae) &&
-                        DistanceBetween(ep, ae) <= 5
-                    )
-                ),
-                DistanceBetween(ep, ae)
+void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
+    // common trigger action
+    if(
+        trigger == RoleTrigger.TEAMMATE_DEATH
+    ){
+        define playerArray! = FilteredArray(
+            AllPlayers(playerTeam),
+            (
+                ae != ep &&
+                ae.selectRole == RoleType.RAGE
             )
         );
-    if(
-        player != null
+        for(define index! = 0; index < CountOf(playerArray); index++){
+            define player! = playerArray[index];
+            SetUltimateCharge(player, UltimateChargePercent(player) + 30);
+        }
+    }
+    // each role trigger action
+    else if(
+        selectRole == RoleType.NO_ROLE
     ){
-        Resurrect(player);
-        SmallMessage(ep, "Revived "+ player);
-        SmallMessage(player, "Revived by"+ ep);
-        PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, player, 1.5);
-        PlayEffect(AllPlayers(playerTeam), PlayEffect.BuffExplosionSound, null, player, 100);
-        SetUltimateCharge(ep, UltimateChargePercent() - 50);
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "NO MOD";
+            roleDetail = 
+                "No modified";
+        }
+    }
+    else if(
+        selectRole == RoleType.MEDIC
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "MEDIC";
+            roleDetail = 
+                "+ deal heal 150%"+ NL +
+                "- deal damage 50%";
+            SetHealingDealt(ep, 150);
+            SetDamageDealt(ep, 50);
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE
+        ){
+            SetHealingDealt(ep, DefaultPercentage());
+            SetDamageDealt(ep, DefaultPercentage());
+        }
+    }
+    else if(
+        selectRole == RoleType.KILLER
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "KILLER";
+            roleDetail = 
+                "+ deal damage 150%"+ NL +
+                "- receive heal 50%";
+            SetDamageDealt(ep, 150);
+            SetHealingReceived(ep, 50);
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE
+        ){
+            SetDamageDealt(ep, DefaultPercentage());
+            SetHealingReceived(ep, DefaultPercentage());
+        }
+    }
+    else if(
+        selectRole == RoleType.SPRINTER
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "SPRINTER";
+            roleDetail = 
+                "+ move speed 150%"+ NL +
+                "- max health 50%";
+            SetMoveSpeed(ep, 150);
+            SetMaxHealth(ep, 50);
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE
+        ){
+            SetMoveSpeed(ep, DefaultPercentage());
+            SetMaxHealth(ep, DefaultPercentage());
+        }
+    }
+    else if(
+        selectRole == RoleType.BIRD_MAN
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "BIRD MAN";
+            roleDetail = 
+                "+ gravity 10%"+ NL +
+                "- max health 50%";
+            SetGravity(ep, 10);
+            SetMaxHealth(ep, 50);
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE
+        ){
+            SetGravity(ep, DefaultPercentage());
+            SetMaxHealth(ep, DefaultPercentage());
+        }
+    }
+    else if(
+        selectRole == RoleType.HEAVY_ARMOR
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "HEAVY ARMOR";
+            roleDetail = 
+                "+ max health 300%"+ NL +
+                "- move speed 50%"+ NL +
+                "- receive heal 20%";
+            SetMaxHealth(ep, 300);
+            SetMoveSpeed(ep, 50);
+            SetHealingReceived(ep, 20);
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE
+        ){
+            SetMaxHealth(ep, DefaultPercentage());
+            SetMoveSpeed(ep, DefaultPercentage());
+            SetHealingReceived(ep, DefaultPercentage());
+        }
+    }
+    else if(
+        selectRole == RoleType.ASSASSIN
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "ASSASSIN";
+            roleDetail = 
+                "+ deal damage 130%"+ NL +
+                "+ move speed 130%"+ NL +
+                "- max Health 50%";
+            SetDamageDealt(ep, 130);
+            SetMoveSpeed(ep, 130);
+            SetMaxHealth(ep, 50);
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE
+        ){
+            SetDamageDealt(ep, DefaultPercentage());
+            SetMoveSpeed(ep, DefaultPercentage());
+            SetMaxHealth(ep, DefaultPercentage());
+        }
+    }
+    else if(
+        selectRole == RoleType.FIXED_TURRET
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "FIXED TURRET";
+            roleDetail = 
+                "+ in stop, deal damage 150%"+ NL +
+                "+ in stop, max health 200%"+ NL +
+                "- in moving, deal damage 30%";
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE
+        ){
+            SetDamageDealt(ep, DefaultPercentage());
+            SetMaxHealth(ep, DefaultPercentage());
+        }
+        else if(
+            trigger == RoleTrigger.STOP
+        ){
+            Wait(0.2, WaitBehavior.AbortWhenFalse);
+            SetDamageDealt(ep, 150);
+            SetMaxHealth(ep, 200);
+        }
+        else if(
+            trigger == RoleTrigger.MOVING
+        ){
+            Wait(0.2, WaitBehavior.AbortWhenFalse);
+            SetDamageDealt(ep, 30);
+            SetMaxHealth(ep, DefaultPercentage());
+        }
+    }
+    else if(
+        selectRole == RoleType.COMBAT_TECHNIC
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "COMBAT TECHNIC";
+            roleDetail = 
+                "+ in kill enemy, reset cooldown ability2 & secondary fire ability"+ NL +
+                "- deal damage 70%";
+            SetDamageDealt(ep, 70);
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE
+        ){
+            SetDamageDealt(ep, DefaultPercentage());
+        }
+        else if(
+            trigger == RoleTrigger.ELEMINATION
+        ){
+            SetAbilityCooldown(ep, Button.Ability2, 0);
+            if(AbilityCharge(ep, Button.Ability2) <= 0)
+                SetAbilityCharge(ep, Button.Ability2, 1);
+
+            SetAbilityCooldown(ep, Button.SecondaryFire, 0);
+            if(AbilityCharge(ep, Button.SecondaryFire) <= 0)
+                SetAbilityCharge(ep, Button.SecondaryFire, 1);
+        }
+    }
+    else if(
+        selectRole == RoleType.DANGER_AVOIDANCE
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "DANGER AVOIDANCE";
+            roleDetail = 
+                "+ in lost 50% health, reset cooldown ability1 & jump ability"+ NL +
+                "- receive heal 70%";
+            SetHealingReceived(ep, 70);
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE
+        ){
+            SetHealingReceived(ep, DefaultPercentage());
+        }
+        else if(
+            trigger == RoleTrigger.LOST_HEALTH
+        ){
+            SetAbilityCooldown(ep, Button.Ability1, 0);
+            if(AbilityCharge(ep, Button.Ability1) <= 0)
+                SetAbilityCharge(ep, Button.Ability1, 1);
+
+            SetAbilityCooldown(ep, Button.Jump, 0);
+            if(AbilityCharge(ep, Button.Jump) <= 0)
+                SetAbilityCharge(ep, Button.Jump, 1);
+        }
+    }
+    else if(
+        selectRole == RoleType.SAVIOR
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "SAVIOR";
+            roleDetail = 
+                "+ in use melee, revive near dead teammate"+ NL +
+                "- in revive, consume 50% ult charge";
+        }
+        else if(
+            trigger == RoleTrigger.MELEE
+        ){
+            if(
+                IsAlive()
+            ){
+                define player! = 
+                    FirstOf(
+                        SortedArray(
+                            FilteredArray(
+                                PlayersInViewAngle(
+                                    ep,
+                                    TeamOf(),
+                                    90
+                                ),
+                                (
+                                    IsDead(ae) &&
+                                    DistanceBetween(ep, ae) <= 5
+                                )
+                            ),
+                            DistanceBetween(ep, ae)
+                        )
+                    );
+                if(
+                    player != null
+                ){
+                    Resurrect(player);
+                    SmallMessage(ep, "Revived "+ player);
+                    SmallMessage(player, "Revived by"+ ep);
+                    PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, player, 1.5);
+                    PlayEffect(AllPlayers(playerTeam), PlayEffect.BuffExplosionSound, null, player, 100);
+                    SetUltimateCharge(ep, UltimateChargePercent() - 50);
+                }
+            }
+        }
+    }
+    else if(
+        selectRole == RoleType.RAGE
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "RAGE";
+            roleDetail = 
+                "+ in dead teammate, gain 30% ult charge"+ NL +
+                "- in every 2 second, lose 1% ult charge";
+        }
+        else if(
+            trigger == RoleTrigger.CHARGING_ULT
+        ){
+            Wait(2, WaitBehavior.AbortWhenFalse);
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+    }
+    else if(
+        selectRole == RoleType.SHOT_CALL
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "SHOT CALL";
+            roleDetail = 
+                "+ in use own ult, all teammates gain ult full charge"+ NL +
+                "- in every 3 second, lose 1% ult charge";
+        }
+        else if(
+            trigger == RoleTrigger.USING_ULT
+        ){
+            define playerArray! = FilteredArray(
+                AllPlayers(playerTeam),
+                (
+                    ae != ep &&
+                    ae.selectRole != RoleType.SHOT_CALL
+                )
+            );
+            for(define index! = 0; index < CountOf(playerArray); index++){
+                define player! = playerArray[index];
+                SetUltimateCharge(player, 100);
+                SmallMessage(player, "gained ult full charge by "+ ep);
+
+                // bot use ult bt syc attack
+                if(
+                    IsDummyBot(player) &&
+                    ProbabilityTrue(50)
+                ){
+                    PressButton(player, Button.Ultimate);
+                    PressButton(player, Button.PrimaryFire);
+                }
+            }
+        }
+        else if(
+            trigger == RoleTrigger.CHARGING_ULT
+        ){
+            Wait(3, WaitBehavior.AbortWhenFalse);
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+    }
+    else if(
+        selectRole == RoleType.FAST_CHARGE
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "FAST CHARGE";
+            roleDetail = 
+                "+ in every 1 second, gain 3% ult charge"+ NL +
+                "- receive heal 50%"+ NL +
+                "- deal heal 50%"+ NL +
+                "- max health 70%";
+            SetHealingReceived(ep, 50);
+            SetHealingDealt(ep, 50);
+            SetMaxHealth(ep, 70);
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE
+        ){
+            SetHealingReceived(ep, DefaultPercentage());
+            SetHealingDealt(ep, DefaultPercentage());
+            SetMaxHealth(ep, DefaultPercentage());
+        }
+        else if(
+            trigger == RoleTrigger.CHARGING_ULT
+        ){
+            Wait(1, WaitBehavior.AbortWhenFalse);
+            SetUltimateCharge(ep, UltimateChargePercent() + 3);
+        }
+    }
+    else if(
+        selectRole == RoleType.SUPER_ULT
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "SUPER ULT";
+            roleDetail = 
+                "+ in using ult, deal damage 300%"+ NL +
+                "+ in using ult, deal heal 200%"+ NL +
+                "+ in using ult, move speed 200%"+ NL +
+                "+ in using ult, gravity 25%"+ NL +
+                "+ in using ult, unstopable stateus"+ NL +
+                "- in every 3 second, lose 1% ult charge ";
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE ||
+            trigger == RoleTrigger.NOT_USING_ULT
+        ){
+            SetDamageDealt(ep, DefaultPercentage());
+            SetHealingDealt(ep, DefaultPercentage());
+            SetMoveSpeed(ep, DefaultPercentage());
+            SetGravity(ep, DefaultPercentage());
+            ClearStatus(ep, Status.PhasedOut);
+        }
+        else if(
+            trigger == RoleTrigger.USING_ULT
+        ){
+            SetDamageDealt(ep, 300);
+            SetHealingDealt(ep, 200);
+            SetMoveSpeed(ep, 200);
+            SetGravity(ep, 25);
+            SetStatus(ep, null, Status.PhasedOut, MaxValue());
+        }
+        else if(
+            trigger == RoleTrigger.CHARGING_ULT
+        ){
+            Wait(3, WaitBehavior.AbortWhenFalse);
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+    }
+    else if(
+        selectRole == RoleType.ZOMBIE
+    ){
+        if(
+            trigger == RoleTrigger.ACTIVATE
+        ){
+            roleName = "ZOMBIE";
+            roleDetail = 
+                "+ in dead & not over time, revive after 5 seconds"+ NL +
+                "- max health 50%" + NL +
+                "- receive heal 50%";
+            SetMaxHealth(ep, 50);
+            SetHealingReceived(ep, 50);
+        }
+        else if(
+            trigger == RoleTrigger.DEACTIVATE
+        ){
+            SetMaxHealth(ep, DefaultPercentage());
+            SetHealingReceived(ep, DefaultPercentage());
+        }
+        else if(
+            trigger == RoleTrigger.DEATH
+        ){
+            if(
+                !IsOverTime()
+            ){
+                Wait(5, WaitBehavior.AbortWhenFalse);
+                if(IsDeadByAbyss()){
+                    Teleport(ep, NearestWalkablePosition(ep));
+                    Wait(0.1, WaitBehavior.AbortWhenFalse);
+                }
+                Resurrect(ep);
+            }
+        }
     }
 }
 
-// RAGE ----------------------------
-rule: "Role/RAGE/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.RAGE
-){
-    roleName = "RAGE";
-    roleDetail = 
-        "+ in teammate dead, gain 30% ult charge"+ NL +
-        "- in every 2 second, lose 1% ult charge";
-}
-
-rule: "Role/RAGE/gainUltCharge"
+// role trigger list ---------------------------------
+// common trigger action
+rule: "RoleTrigger/TEAMMATE_DEATH"
 Event.OnDeath
 if(
     TeamOf() == playerTeam
 ){
-    define playerArray! = FilteredArray(
-        AllPlayers(playerTeam),
-        (
-            ae != ep &&
-            ae.selectRole == Role.RAGE
-        )
-    );
-    for(define index! = 0; index < CountOf(playerArray); index++){
-        define player! = playerArray[index];
-        SetUltimateCharge(player, UltimateChargePercent(player) + 30);
-    }
+    DoRoleAction(selectRole, RoleTrigger.TEAMMATE_DEATH);
 }
 
-rule: "Role/RAGE/loseUltCharge"
+// each role trigger action
+rule: "RoleTrigger/STOP"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    selectRole == Role.RAGE &&
-    UltimateChargePercent(ep) < DefaultPercentage()
+    !IsMoving() &&
+    (
+        selectRole == RoleType.FIXED_TURRET
+    )
 ){
-    Wait(2, WaitBehavior.AbortWhenFalse);
-    SetUltimateCharge(ep, UltimateChargePercent(ep) - 1);
-    Loop();
+    DoRoleAction(selectRole, RoleTrigger.STOP);
 }
 
-// SHOT_CALL ----------------------------
-rule: "Role/SHOT_CALL/activate"
+rule: "RoleTrigger/MOVING"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    selectRole == Role.SHOT_CALL
+    IsMoving() &&
+    (
+        selectRole == RoleType.FIXED_TURRET
+    )
 ){
-    roleName = "SHOT CALL";
-    roleDetail = 
-        "+ in use own ult, all teammates gain ult full charge"+ NL +
-        "- in every 3 second, lose 1% ult charge";
+    DoRoleAction(selectRole, RoleTrigger.MOVING);
 }
 
-rule: "Role/SHOT_CALL/gainUltCharge"
+rule: "RoleTrigger/MELEE"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    selectRole == Role.SHOT_CALL &&
-    IsUsingUltimate()
+    UltimateChargePercent() >= 50 &&
+    IsButtonHeld(ep, Button.Melee) &&
+    (
+        selectRole == RoleType.SAVIOR
+    )
 ){
-    define playerArray! = FilteredArray(
-        AllPlayers(playerTeam),
-        (
-            ae != ep &&
-            ae.selectRole != Role.SHOT_CALL
-        )
-    );
-    for(define index! = 0; index < CountOf(playerArray); index++){
-        define player! = playerArray[index];
-        SetUltimateCharge(player, 100);
-        SmallMessage(player, "gained ult full charge by "+ ep);
-
-        // bot use ult bt sync
-        if(
-            IsDummyBot(player) &&
-            ProbabilityTrue(50)
-        ){
-            PressButton(player, Button.Ultimate);
-            PressButton(player, Button.PrimaryFire);
-        }
-    }
+    DoRoleAction(selectRole, RoleTrigger.MELEE);
 }
 
-rule: "Role/SHOT_CALL/loseUltCharge"
+rule: "RoleTrigger/USING_ULT"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    selectRole == Role.SHOT_CALL &&
-    UltimateChargePercent(ep) < DefaultPercentage()
+    IsUsingUltimate() &&
+    (
+        selectRole == RoleType.SHOT_CALL ||
+        selectRole == RoleType.SUPER_ULT
+    ) 
 ){
-    Wait(3, WaitBehavior.AbortWhenFalse);
-    SetUltimateCharge(ep, UltimateChargePercent(ep) - 1);
-    Loop();
+    DoRoleAction(selectRole, RoleTrigger.USING_ULT);
 }
 
-// FAST_CHARGE ----------------------------
-rule: "Role/FAST_CHARGE/activate"
+rule: "RoleTrigger/NOT_USING_ULT"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    selectRole == Role.FAST_CHARGE
+    !IsUsingUltimate() &&
+    (
+        selectRole == RoleType.SUPER_ULT
+    )
 ){
-    roleName = "FAST CHARGE";
-    roleDetail = 
-        "+ in every 1 second, gain 3% ult charge"+ NL +
-        "- receive heal 50%"+ NL +
-        "- deal heal 50%"+ NL +
-        "- max health 70%";
-    SetHealingReceived(ep, 50);
-    SetHealingDealt(ep, 50);
-    SetMaxHealth(ep, 70);
+    DoRoleAction(selectRole, RoleTrigger.NOT_USING_ULT);
 }
 
-rule: "Role/FAST_CHARGE/deactivate"
+rule: "RoleTrigger/ULT_CHARGE"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    selectRole != Role.FAST_CHARGE
+    UltimateChargePercent(ep) < DefaultPercentage() &&
+    (
+        selectRole == RoleType.RAGE ||
+        selectRole == RoleType.SHOT_CALL ||
+        selectRole == RoleType.FAST_CHARGE ||
+        selectRole == RoleType.SUPER_ULT
+    )
 ){
-    SetHealingReceived(ep, DefaultPercentage());
-    SetHealingDealt(ep, DefaultPercentage());
-    SetMaxHealth(ep, DefaultPercentage());
+    DoRoleAction(selectRole, RoleTrigger.CHARGING_ULT);
+    LoopIfConditionIsTrue();
 }
 
-rule: "Role/FAST_CHARGE/gainUltCharge"
+rule: "RoleTrigger/LOST_HEALTH"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    selectRole == Role.FAST_CHARGE &&
-    UltimateChargePercent(ep) < DefaultPercentage()
+    NormalizedHealth() <= 0.5 &&
+    (
+        selectRole == RoleType.DANGER_AVOIDANCE
+    )
 ){
-    Wait(1, WaitBehavior.AbortWhenFalse);
-    SetUltimateCharge(ep, UltimateChargePercent(ep) + 3);
-    Loop();
+    DoRoleAction(selectRole, RoleTrigger.LOST_HEALTH);
 }
 
-// SUPER_ULT ----------------------------
-rule: "Role/SUPER_ULT/activate"
-Event.OngoingPlayer
+rule: "RoleTrigger/ELEMINATION"
+Event.OnElimination
 if(
     TeamOf() == playerTeam &&
-    selectRole == Role.SUPER_ULT
+    (
+        selectRole == RoleType.COMBAT_TECHNIC
+    )
 ){
-    roleName = "SUPER ULT";
-    roleDetail = 
-        "+ in using ult, deal damage 300%"+ NL +
-        "+ in using ult, deal heal 200%"+ NL +
-        "+ in using ult, move speed 200%"+ NL +
-        "+ in using ult, gravity 25%"+ NL +
-        "+ in using ult, unstopable stateus"+ NL +
-        "- in every 3 second, lose 1% ult charge ";
+    DoRoleAction(selectRole, RoleTrigger.ELEMINATION);
 }
 
-rule: "Role/SUPER_ULT/deactivate"
-Event.OngoingPlayer
+rule: "RoleTrigger/DEATH"
+Event.OnDeath
 if(
     TeamOf() == playerTeam &&
-    selectRole != Role.SUPER_ULT
+    (
+        selectRole == RoleType.ZOMBIE
+    )
 ){
-    SetDamageDealt(ep, DefaultPercentage());
-    SetHealingDealt(ep, DefaultPercentage());
-    SetMoveSpeed(ep, DefaultPercentage());
-    SetGravity(ep, DefaultPercentage());
-    ClearStatus(ep, Status.PhasedOut);
+    DoRoleAction(selectRole, RoleTrigger.DEATH);
 }
 
-rule: "Role/SUPER_ULT/isUsingUltimate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.SUPER_ULT &&
-    IsUsingUltimate()
-){
-    SetDamageDealt(ep, 300);
-    SetHealingDealt(ep, 200);
-    SetMoveSpeed(ep, 200);
-    SetGravity(ep, 25);
-    SetStatus(ep, null, Status.PhasedOut, MaxValue());
-}
-
-rule: "Role/SUPER_ULT/notIsUsingUltimate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.SUPER_ULT &&
-    !IsUsingUltimate()
-){
-    SetDamageDealt(ep, DefaultPercentage());
-    SetHealingDealt(ep, DefaultPercentage());
-    SetMoveSpeed(ep, DefaultPercentage());
-    SetGravity(ep, DefaultPercentage());
-    ClearStatus(ep, Status.PhasedOut);
-}
-
-rule: "Role/SUPER_ULT/loseUltCharge"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.SUPER_ULT &&
-    UltimateChargePercent(ep) < DefaultPercentage()
-){
-    Wait(3, WaitBehavior.AbortWhenFalse);
-    SetUltimateCharge(ep, UltimateChargePercent(ep) - 1);
-    Loop();
-}
-
-// ZOMBIE ----------------------------
-define DefaultRespawnTime(): 10;
-
-rule: "Role/ZOMBIE/activate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.ZOMBIE
-){
-    roleName = "ZOMBIE";
-    roleDetail = 
-        "+ in dead & not over time, revive after 5 seconds"+ NL +
-        "- max health 50%" + NL +
-        "- receive heal 50%";
-    SetMaxHealth(ep, 50);
-    SetHealingReceived(ep, 50);
-}
-
-rule: "Role/ZOMBIE/deactivate"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole != Role.ZOMBIE
-){
-    SetMaxHealth(ep, DefaultPercentage());
-    SetHealingReceived(ep, DefaultPercentage());
-}
-
-rule: "Role/ZOMBIE/revive"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    selectRole == Role.ZOMBIE &&
-    !IsOverTime() &&
-    IsDead()
-){
-    Wait(5, WaitBehavior.AbortWhenFalse);
-    if(IsDeadByAbyss()){
-        Teleport(ep, NearestWalkablePosition(ep));
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
-    }
-    Resurrect(ep);
-}
