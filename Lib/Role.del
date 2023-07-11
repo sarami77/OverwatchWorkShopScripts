@@ -50,18 +50,18 @@ void UpdateRoleOperationText()"UpdateRoleOperationText"{
 
     roleOperationText = [];
 
-        roleOperationText[0] = CreateHudText(ep, null,
-            (
-                IsInSpawnRoom() &&
-                !IsDummyBot()
-            ) ? 
-                <"You can change mod while in spawn room.\n\rPress melee key <0> to select mod.\n\rYour mod = <1>", ButtonGuide(Button.Melee), roleName> :
-                <"Your mod = <0>", roleName>,
-            null, Location.Left, 101, null, Color.SkyBlue, null, HudTextRev.String, Spectators.VisibleNever);
+    roleOperationText[0] = CreateHudText(ep, null,
+        (
+            IsInSpawnRoom() &&
+            !IsDummyBot()
+        ) ? 
+            <"You can change mod while in spawn room.\n\rPress melee key <0> to select mod.\n\rYour mod = <1>", ButtonGuide(Button.Melee), roleName> :
+            <"Your mod = <0>", roleName>,
+        null, Location.Left, 101, null, Color.SkyBlue, null, HudTextRev.String, Spectators.VisibleNever);
 
-        roleOperationText[1] = CreateHudText(ep, null,
-            roleDetail,
-            null, Location.Left, 102, null, Color.SkyBlue, null, HudTextRev.String, Spectators.VisibleNever);
+    roleOperationText[1] = CreateHudText(ep, null,
+        roleDetail,
+        null, Location.Left, 102, null, Color.SkyBlue, null, HudTextRev.String, Spectators.VisibleNever);
 
     roleOperationText[2] = CreateInWorldText(AllPlayers(playerTeam),
         roleName,
@@ -120,6 +120,43 @@ if(
     // update text
     UpdateRoleOperationText();
 }
+
+// rule: "Role/applyRoleForBot"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == playerTeam &&
+//     IsDummyBot() &&
+//     !IsAssemblingHeroes()
+// ){
+//     selectRole = RandomValueInArray([
+//         RoleType.NO_ROLE,
+//         RoleType.NO_ROLE,
+//         RoleType.NO_ROLE,
+//         RoleType.MEDIC,
+//         RoleType.KILLER,
+//         RoleType.ASSASSIN,
+//         RoleType.SPRINTER,
+//         RoleType.BIRD_MAN,
+//         RoleType.HEAVY_ARMOR,
+//         RoleType.FIXED_TURRET,
+//         RoleType.COMBAT_TECHNIC,
+//         RoleType.DANGER_AVOIDANCE,
+//         RoleType.SAVIOR,
+//         RoleType.SAVIOR,
+//         RoleType.SAVIOR,
+//         RoleType.RAGE,
+//         RoleType.SHOT_CALL,
+//         RoleType.FAST_CHARGE,
+//         RoleType.SUPER_ULT,
+//         RoleType.ZOMBIE
+//     ]);
+
+//     // do role activate action
+//     DoRoleAction(selectRole, RoleTrigger.ACTIVATE);
+
+//     // update text
+//     UpdateRoleOperationText();
+// }
 
 define NL: "\n\r";
 
@@ -319,9 +356,9 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
         ){
             roleName = "COMBAT TECHNIC";
             roleDetail = 
-                "+ in kill enemy, reset cooldown ability2 & secondary fire ability"+ NL +
-                "- deal damage 70%";
-            SetDamageDealt(ep, 70);
+                "+ in finalblow enemy, reset cooldown ability2 & secondary fire ability"+ NL +
+                "- deal damage 50%";
+            SetDamageDealt(ep, 50);
         }
         else if(
             trigger == RoleTrigger.DEACTIVATE
@@ -338,6 +375,8 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             SetAbilityCooldown(ep, Button.SecondaryFire, 0);
             if(AbilityCharge(ep, Button.SecondaryFire) <= 0)
                 SetAbilityCharge(ep, Button.SecondaryFire, 1);
+
+            Wait(3, WaitBehavior.IgnoreCondition);
         }
     }
     else if(
@@ -349,8 +388,8 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             roleName = "DANGER AVOIDANCE";
             roleDetail = 
                 "+ in lost 50% health, reset cooldown ability1 & jump ability"+ NL +
-                "- receive heal 70%";
-            SetHealingReceived(ep, 70);
+                "- receive heal 50%";
+            SetHealingReceived(ep, 50);
         }
         else if(
             trigger == RoleTrigger.DEACTIVATE
@@ -367,6 +406,8 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             SetAbilityCooldown(ep, Button.Jump, 0);
             if(AbilityCharge(ep, Button.Jump) <= 0)
                 SetAbilityCharge(ep, Button.Jump, 1);
+
+            Wait(3, WaitBehavior.IgnoreCondition);
         }
     }
     else if(
@@ -407,8 +448,8 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
                     player != null
                 ){
                     Resurrect(player);
-                    SmallMessage(ep, "Revived "+ player);
-                    SmallMessage(player, "Revived by"+ ep);
+                    SmallMessage(ep, "Revived "+ player + HeroIconString(HeroOf(player)));
+                    SmallMessage(player, "Revived by "+ ep + HeroIconString(HeroOf(ep)));
                     PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, player, 1.5);
                     PlayEffect(AllPlayers(playerTeam), PlayEffect.BuffExplosionSound, null, player, 100);
                     SetUltimateCharge(ep, UltimateChargePercent() - 50);
@@ -425,12 +466,12 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             roleName = "RAGE";
             roleDetail = 
                 "+ in dead teammate, gain 30% ult charge"+ NL +
-                "- in every 4 second, lose 1% ult charge";
+                "- in every 2 second, lose 1% ult charge";
         }
         else if(
             trigger == RoleTrigger.CHARGING_ULT
         ){
-            Wait(4, WaitBehavior.AbortWhenFalse);
+            Wait(2, WaitBehavior.AbortWhenFalse);
             SetUltimateCharge(ep, UltimateChargePercent() - 1);
         }
     }
@@ -442,8 +483,8 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
         ){
             roleName = "SHOT CALL";
             roleDetail = 
-                "+ in use own ult, all teammates gain ult full charge"+ NL +
-                "- in every 4 second, lose 1% ult charge";
+                "+ in use ult, all teammates gain ult full charge"+ NL +
+                "- in every 3 second, lose 1% ult charge";
         }
         else if(
             trigger == RoleTrigger.USING_ULT
@@ -458,8 +499,8 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             for(define index! = 0; index < CountOf(playerArray); index++){
                 define player! = playerArray[index];
                 SetUltimateCharge(player, 100);
-                SmallMessage(player, "gained ult full charge by "+ ep);
-
+                SmallMessage(player, "gained ult full charge by "+ ep + HeroIconString(HeroOf()));
+                
                 // bot use ult bt syc attack
                 if(
                     IsDummyBot(player) &&
@@ -473,7 +514,7 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
         else if(
             trigger == RoleTrigger.CHARGING_ULT
         ){
-            Wait(4, WaitBehavior.AbortWhenFalse);
+            Wait(3, WaitBehavior.AbortWhenFalse);
             SetUltimateCharge(ep, UltimateChargePercent() - 1);
         }
     }
@@ -486,19 +527,19 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             roleName = "FAST CHARGE";
             roleDetail = 
                 "+ in every 1 second, gain 3% ult charge"+ NL +
-                "- receive heal 50%"+ NL +
-                "- deal heal 50%"+ NL +
-                "- max health 70%";
-            SetHealingReceived(ep, 50);
+                "- max health 50%"+ NL +
+                "- deal damage 50%"+ NL +
+                "- deal heal 50%";
+            SetMaxHealth(ep, 50);
+            SetDamageDealt(ep, 50);
             SetHealingDealt(ep, 50);
-            SetMaxHealth(ep, 70);
         }
         else if(
             trigger == RoleTrigger.DEACTIVATE
         ){
-            SetHealingReceived(ep, DefaultPercentage());
-            SetHealingDealt(ep, DefaultPercentage());
             SetMaxHealth(ep, DefaultPercentage());
+            SetDamageDealt(ep, DefaultPercentage());
+            SetHealingDealt(ep, DefaultPercentage());
         }
         else if(
             trigger == RoleTrigger.CHARGING_ULT
@@ -515,36 +556,36 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
         ){
             roleName = "SUPER ULT";
             roleDetail = 
-                "+ in using ult, deal damage 300%"+ NL +
-                "+ in using ult, deal heal 200%"+ NL +
+                "+ in using ult, invincible status"+ NL +
+                "+ in using ult, deal damage 400%"+ NL +
+                "+ in using ult, deal heal 400%"+ NL +
                 "+ in using ult, move speed 200%"+ NL +
                 "+ in using ult, gravity 25%"+ NL +
-                "+ in using ult, unstopable stateus"+ NL +
-                "- in every 4 second, lose 1% ult charge ";
+                "- in every 3 second, lose 1% ult charge ";
         }
         else if(
             trigger == RoleTrigger.DEACTIVATE ||
             trigger == RoleTrigger.NOT_USING_ULT
         ){
+            ClearStatus(ep, Status.PhasedOut);
             SetDamageDealt(ep, DefaultPercentage());
             SetHealingDealt(ep, DefaultPercentage());
             SetMoveSpeed(ep, DefaultPercentage());
             SetGravity(ep, DefaultPercentage());
-            ClearStatus(ep, Status.PhasedOut);
         }
         else if(
             trigger == RoleTrigger.USING_ULT
         ){
-            SetDamageDealt(ep, 300);
-            SetHealingDealt(ep, 200);
+            SetStatus(ep, null, Status.PhasedOut, MaxValue());
+            SetDamageDealt(ep, 400);
+            SetHealingDealt(ep, 400);
             SetMoveSpeed(ep, 200);
             SetGravity(ep, 25);
-            SetStatus(ep, null, Status.PhasedOut, MaxValue());
         }
         else if(
             trigger == RoleTrigger.CHARGING_ULT
         ){
-            Wait(4, WaitBehavior.AbortWhenFalse);
+            Wait(3, WaitBehavior.AbortWhenFalse);
             SetUltimateCharge(ep, UltimateChargePercent() - 1);
         }
     }
@@ -556,7 +597,8 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
         ){
             roleName = "ZOMBIE";
             roleDetail = 
-                "+ in dead & not over time, revive after 5 seconds"+ NL +
+                "+ in dead, auto revive after 5 seconds"+ NL +
+                "- in over time, can not auto revive"+ NL +
                 "- max health 50%" + NL +
                 "- receive heal 50%";
             SetMaxHealth(ep, 50);
@@ -626,7 +668,10 @@ Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     UltimateChargePercent() >= 50 &&
-    IsButtonHeld(ep, Button.Melee) &&
+    (
+        (!IsDummyBot() && IsButtonHeld(ep, Button.Melee)) ||
+        (IsDummyBot() && IsButtonHeld(ep, Button.PrimaryFire))
+    ) &&
     (
         selectRole == RoleType.SAVIOR
     )

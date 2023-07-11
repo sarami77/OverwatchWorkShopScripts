@@ -56,7 +56,7 @@ if(
     IsInSetup()
 ){
     // SetMatchTime(90);
-    SetMatchTime(40);
+    SetMatchTime(30);
     // SetMatchTime(15);
 }
 
@@ -650,10 +650,10 @@ playervar define eachMinSpawnInterval!;
 playervar define eachChargeUltInterval!;
 playervar define eachBodyScale!;
 define basicSpawnTimeMin: 
-    confirmGameDifficulty == Difficulty.EASY ?     10.0 :
-    confirmGameDifficulty == Difficulty.NORMAL ?   9.0 :
-    confirmGameDifficulty == Difficulty.HARD ?     8.0 :
-    confirmGameDifficulty == Difficulty.HELL ?     6.0 :
+    confirmGameDifficulty == Difficulty.EASY ?     8.0 :
+    confirmGameDifficulty == Difficulty.NORMAL ?   7.0 :
+    confirmGameDifficulty == Difficulty.HARD ?     6.0 :
+    confirmGameDifficulty == Difficulty.HELL ?     5.0 :
     confirmGameDifficulty == Difficulty.INSANE ?   4.0 :
     0;
 
@@ -1469,18 +1469,18 @@ if(
 // TAG EnemyBot/DealtDamage ----------
 define autoTuneDmgDltInitial :
     confirmGameDifficulty == Difficulty.EASY ?     20 :
-    confirmGameDifficulty == Difficulty.NORMAL ?   25 :
-    confirmGameDifficulty == Difficulty.HARD ?     30 :
-    confirmGameDifficulty == Difficulty.HELL ?     40 :
-    confirmGameDifficulty == Difficulty.INSANE ?   50 :
+    confirmGameDifficulty == Difficulty.NORMAL ?   30 :
+    confirmGameDifficulty == Difficulty.HARD ?     40 :
+    confirmGameDifficulty == Difficulty.HELL ?     50 :
+    confirmGameDifficulty == Difficulty.INSANE ?   60 :
     0;
 
 define autoTuneDmgDltLimit:
     confirmGameDifficulty == Difficulty.EASY ?     40 :
-    confirmGameDifficulty == Difficulty.NORMAL ?   50 :
-    confirmGameDifficulty == Difficulty.HARD ?     60 :
-    confirmGameDifficulty == Difficulty.HELL ?     80 :
-    confirmGameDifficulty == Difficulty.INSANE ?   100 :
+    confirmGameDifficulty == Difficulty.NORMAL ?   60 :
+    confirmGameDifficulty == Difficulty.HARD ?     80 :
+    confirmGameDifficulty == Difficulty.HELL ?     100 :
+    confirmGameDifficulty == Difficulty.INSANE ?   120 :
     0;
 
 define upValueBase: 0.5;
@@ -1492,7 +1492,7 @@ define upValueScale:
     confirmGameDifficulty == Difficulty.INSANE ?   upValueBase * 5 :
     0;
 
-define downValueBase: 0.4;
+define downValueBase: 0.5;
 define downValueScale:
     confirmGameDifficulty == Difficulty.EASY ?     downValueBase * 5 :
     confirmGameDifficulty == Difficulty.NORMAL ?   downValueBase * 4 :
@@ -1754,6 +1754,15 @@ globalvar define debugHuds!;
 define Last():
     CountOf(debugHuds);
 
+define HumanPlayerNum():
+    CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae)));
+
+define FirstEnemyOf(in define enemyType):
+    FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == enemyType));
+
+define FirstThreatEnemy():
+    FirstOf(FilteredArray(AllPlayers(enemyTeam), IsThreatEnemyType(ae)));
+
 // show debug icon and hud
 void ShowDebugHud(define player!)"ShowDebugHud"{
     if(
@@ -1771,10 +1780,10 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugMode == DebugMode.ShowParam ||
         debugMode == DebugMode.WithRecord
     ){
-        debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Red);
-        debugHuds[Last()] = CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Red);
+        debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad, Color.Orange);
-        debugHuds[Last()] = CreateDebugHud("human player Num", CountOf(FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae))), Color.Team2);
+        debugHuds[Last()] = CreateDebugHud("human player Num", HumanPlayerNum(), HumanPlayerNum() <= 1 ? Color.Team2 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
     }
 
@@ -1796,15 +1805,15 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
 
         debugHuds[Last()] = CreateDebugHud("spawn Time scale", spawnTimeScale, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("spawn Interval", <"<0>, <1>, <2>, <3>",
-            FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Minion)).confirmSpawnInterval,
-            FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Elite)).confirmSpawnInterval,
-            FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.General)).confirmSpawnInterval,
-            FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == EnemyType.Boss)).confirmSpawnInterval>, Color.Team1);
+            FirstEnemyOf(EnemyType.Minion).confirmSpawnInterval,
+            FirstEnemyOf(EnemyType.Elite).confirmSpawnInterval,
+            FirstEnemyOf(EnemyType.General).confirmSpawnInterval,
+            FirstEnemyOf(EnemyType.Boss).confirmSpawnInterval>, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("spawn Rush Interval", spawnRushInterval, spawnRushInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("combat Teleport Interval",
-            FirstOf(FilteredArray(AllPlayers(enemyTeam), IsThreatEnemyType(ae))).combatTeleportInterval,
-            FirstOf(FilteredArray(AllPlayers(enemyTeam), IsThreatEnemyType(ae))).combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
+            FirstThreatEnemy().combatTeleportInterval,
+            FirstThreatEnemy().combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("more Ult Prob", moreUltProb, moreUltProb <= 0 ? Color.Team1 : Color.Yellow);
     }
 }
