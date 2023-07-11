@@ -1,13 +1,13 @@
 import "Debug.del";
 
-// TAG Role ----------
-playervar define selectRole!;
-playervar define roleName!;
-playervar define roleDetail!;
+// TAG HeroMod ----------
+playervar define selectHeroMod!;
+playervar define heroModName!;
+playervar define heroModDetail!;
 
-enum RoleType{
+enum HeroModType{
     INIT = 0,
-    NO_ROLE,
+    NO_HEROMOD,
     MEDIC,
     KILLER,
     ASSASSIN,
@@ -18,6 +18,7 @@ enum RoleType{
     COMBAT_TECHNIC,
     DANGER_AVOIDANCE,
     SAVIOR,
+    CHARGING_POWER,
     RAGE,
     SHOT_CALL,
     FAST_CHARGE,
@@ -26,9 +27,10 @@ enum RoleType{
     LAST
 }
 
-enum RoleTrigger{
+enum HeroModTrigger{
     ACTIVATE,
     DEACTIVATE,
+    TIME_PASSED,
     STOP,
     MOVING,
     MELEE,
@@ -41,67 +43,65 @@ enum RoleTrigger{
     TEAMMATE_DEATH
 }
 
-playervar define roleOperationText!;
+playervar define heromodOperationText!;
 
-void UpdateRoleOperationText()"UpdateRoleOperationText"{
-    DestroyHudText(roleOperationText[0]);
-    DestroyHudText(roleOperationText[1]);
-    DestroyInWorldText(roleOperationText[2]);
+void UpdateHeroModAllText()"UpdateHeroModAllText"{
+    DestroyHudText(heromodOperationText[0]);
+    DestroyHudText(heromodOperationText[1]);
+    DestroyInWorldText(heromodOperationText[2]);
 
-    roleOperationText = [];
-
-    roleOperationText[0] = CreateHudText(ep, null,
+    heromodOperationText[0] = CreateHudText(ep, null,
         (
             IsInSpawnRoom() &&
             !IsDummyBot()
         ) ? 
-            <"You can change mod while in spawn room.\n\rPress melee key <0> to select mod.\n\rYour mod = <1>", ButtonGuide(Button.Melee), roleName> :
-            <"Your mod = <0>", roleName>,
-        null, Location.Left, 101, null, Color.SkyBlue, null, HudTextRev.String, Spectators.VisibleNever);
+            <"You can change hero mod while in spawn room.\n\rPress melee key <0> to select mod.\n\rYour hero mod = <1>", ButtonGuide(Button.Melee), heroModName> :
+            <"Your hero mod = <0>", heroModName>,
+        null, Location.Left, 101, null, Color.Blue, null, HudTextRev.String, Spectators.VisibleNever);
 
-    roleOperationText[1] = CreateHudText(ep, null,
-        roleDetail,
+    heromodOperationText[1] = CreateHudText(ep, null,
+        heroModDetail,
         null, Location.Left, 102, null, Color.SkyBlue, null, HudTextRev.String, Spectators.VisibleNever);
 
-    roleOperationText[2] = CreateInWorldText(AllPlayers(playerTeam),
-        roleName,
+    heromodOperationText[2] = CreateInWorldText(AllPlayers(playerTeam),
+        heroModName,
         ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString, Color.SkyBlue, Spectators.VisibleAlways);
 }
 
-rule: "Role/updateRoleOperationTextOnEnterSpawnRoom"
+rule: "HeroMod/updateHeroModAllTextOnEnterSpawnRoom"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     !IsDummyBot() &&
     IsInSpawnRoom()
 ){
-    UpdateRoleOperationText();
+    UpdateHeroModAllText();
 }
 
-rule: "Role/updateRoleOperationTextOnExitSpawnRoom"
+rule: "HeroMod/updateHeroModAllTextOnExitSpawnRoom"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     !IsDummyBot() &&
     !IsInSpawnRoom()
 ){
-    UpdateRoleOperationText();
+    UpdateHeroModAllText();
 }
 
-rule: "Role/init"
+rule: "HeroMod/init"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     !IsDummyBot() &&
     HasSpawned()
 ){
-    selectRole = RoleType.NO_ROLE;
+    selectHeroMod = HeroModType.NO_HEROMOD;
 
-    DoRoleAction(selectRole, RoleTrigger.ACTIVATE);
-    UpdateRoleOperationText();
+    DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE);
+    UpdateHeroModAllText();
 }
 
-rule: "Role/switchRole"
+rule: "HeroMod/switchHeroMod"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
@@ -109,67 +109,67 @@ if(
     IsInSpawnRoom() &&
     IsButtonHeld(ep, Button.Melee)
 ){
-    // do role deactivate action
-    DoRoleAction(selectRole, RoleTrigger.DEACTIVATE);
+    // do heromod deactivate action
+    DoHeroModAction(selectHeroMod, HeroModTrigger.DEACTIVATE);
 
-    selectRole = selectRole < RoleType.LAST - 1 ? selectRole + 1 : RoleType.NO_ROLE;
+    selectHeroMod = selectHeroMod < HeroModType.LAST - 1 ? selectHeroMod + 1 : HeroModType.NO_HEROMOD;
 
-    // do role activate action
-    DoRoleAction(selectRole, RoleTrigger.ACTIVATE);
+    // do heromod activate action
+    DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE);
 
     // update text
-    UpdateRoleOperationText();
+    UpdateHeroModAllText();
 }
 
-// rule: "Role/applyRoleForBot"
+// rule: "HeroMod/applyHeroModForBot"
 // Event.OngoingPlayer
 // if(
 //     TeamOf() == playerTeam &&
 //     IsDummyBot() &&
 //     !IsAssemblingHeroes()
 // ){
-//     selectRole = RandomValueInArray([
-//         RoleType.NO_ROLE,
-//         RoleType.NO_ROLE,
-//         RoleType.NO_ROLE,
-//         RoleType.MEDIC,
-//         RoleType.KILLER,
-//         RoleType.ASSASSIN,
-//         RoleType.SPRINTER,
-//         RoleType.BIRD_MAN,
-//         RoleType.HEAVY_ARMOR,
-//         RoleType.FIXED_TURRET,
-//         RoleType.COMBAT_TECHNIC,
-//         RoleType.DANGER_AVOIDANCE,
-//         RoleType.SAVIOR,
-//         RoleType.SAVIOR,
-//         RoleType.SAVIOR,
-//         RoleType.RAGE,
-//         RoleType.SHOT_CALL,
-//         RoleType.FAST_CHARGE,
-//         RoleType.SUPER_ULT,
-//         RoleType.ZOMBIE
+//     selectHeroMod = RandomValueInArray([
+//         HeroModType.NO_HEROMOD,
+//         HeroModType.NO_HEROMOD,
+//         HeroModType.NO_HEROMOD,
+//         HeroModType.MEDIC,
+//         HeroModType.KILLER,
+//         HeroModType.ASSASSIN,
+//         HeroModType.SPRINTER,
+//         HeroModType.BIRD_MAN,
+//         HeroModType.HEAVY_ARMOR,
+//         HeroModType.FIXED_TURRET,
+//         HeroModType.COMBAT_TECHNIC,
+//         HeroModType.DANGER_AVOIDANCE,
+//         HeroModType.SAVIOR,
+//         HeroModType.SAVIOR,
+//         HeroModType.SAVIOR,
+//         HeroModType.RAGE,
+//         HeroModType.SHOT_CALL,
+//         HeroModType.FAST_CHARGE,
+//         HeroModType.SUPER_ULT,
+//         HeroModType.ZOMBIE
 //     ]);
 
-//     // do role activate action
-//     DoRoleAction(selectRole, RoleTrigger.ACTIVATE);
+//     // do heromod activate action
+//     DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE);
 
 //     // update text
-//     UpdateRoleOperationText();
+//     UpdateHeroModAllText();
 // }
 
 define NL: "\n\r";
 
-void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
+void DoHeroModAction(define heromod!, define trigger!)"DoHeroModAction"{
     // common trigger action
     if(
-        trigger == RoleTrigger.TEAMMATE_DEATH
+        trigger == HeroModTrigger.TEAMMATE_DEATH
     ){
         define playerArray! = FilteredArray(
             AllPlayers(playerTeam),
             (
                 ae != ep &&
-                ae.selectRole == RoleType.RAGE
+                ae.selectHeroMod == HeroModType.RAGE
             )
         );
         for(define index! = 0; index < CountOf(playerArray); index++){
@@ -177,106 +177,106 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             SetUltimateCharge(player, UltimateChargePercent(player) + 30);
         }
     }
-    // each role trigger action
+    // each heromod trigger action
     else if(
-        selectRole == RoleType.NO_ROLE
+        selectHeroMod == HeroModType.NO_HEROMOD
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "NO MOD";
-            roleDetail = 
+            heroModName = "NO MOD";
+            heroModDetail = 
                 "No modified";
         }
     }
     else if(
-        selectRole == RoleType.MEDIC
+        selectHeroMod == HeroModType.MEDIC
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "MEDIC";
-            roleDetail = 
+            heroModName = "MEDIC";
+            heroModDetail = 
                 "+ deal heal 150%"+ NL +
                 "- deal damage 50%";
             SetHealingDealt(ep, 150);
             SetDamageDealt(ep, 50);
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             SetHealingDealt(ep, DefaultPercentage());
             SetDamageDealt(ep, DefaultPercentage());
         }
     }
     else if(
-        selectRole == RoleType.KILLER
+        selectHeroMod == HeroModType.KILLER
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "KILLER";
-            roleDetail = 
+            heroModName = "KILLER";
+            heroModDetail = 
                 "+ deal damage 150%"+ NL +
                 "- receive heal 50%";
             SetDamageDealt(ep, 150);
             SetHealingReceived(ep, 50);
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             SetDamageDealt(ep, DefaultPercentage());
             SetHealingReceived(ep, DefaultPercentage());
         }
     }
     else if(
-        selectRole == RoleType.SPRINTER
+        selectHeroMod == HeroModType.SPRINTER
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "SPRINTER";
-            roleDetail = 
+            heroModName = "SPRINTER";
+            heroModDetail = 
                 "+ move speed 150%"+ NL +
                 "- max health 50%";
             SetMoveSpeed(ep, 150);
             SetMaxHealth(ep, 50);
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             SetMoveSpeed(ep, DefaultPercentage());
             SetMaxHealth(ep, DefaultPercentage());
         }
     }
     else if(
-        selectRole == RoleType.BIRD_MAN
+        selectHeroMod == HeroModType.BIRD_MAN
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "BIRD MAN";
-            roleDetail = 
+            heroModName = "BIRD MAN";
+            heroModDetail = 
                 "+ gravity 10%"+ NL +
                 "- max health 50%";
             SetGravity(ep, 10);
             SetMaxHealth(ep, 50);
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             SetGravity(ep, DefaultPercentage());
             SetMaxHealth(ep, DefaultPercentage());
         }
     }
     else if(
-        selectRole == RoleType.HEAVY_ARMOR
+        selectHeroMod == HeroModType.HEAVY_ARMOR
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "HEAVY ARMOR";
-            roleDetail = 
+            heroModName = "HEAVY ARMOR";
+            heroModDetail = 
                 "+ max health 300%"+ NL +
                 "- move speed 50%"+ NL +
                 "- receive heal 20%";
@@ -285,7 +285,7 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             SetHealingReceived(ep, 20);
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             SetMaxHealth(ep, DefaultPercentage());
             SetMoveSpeed(ep, DefaultPercentage());
@@ -293,13 +293,13 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
         }
     }
     else if(
-        selectRole == RoleType.ASSASSIN
+        selectHeroMod == HeroModType.ASSASSIN
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "ASSASSIN";
-            roleDetail = 
+            heroModName = "ASSASSIN";
+            heroModDetail = 
                 "+ deal damage 130%"+ NL +
                 "+ move speed 130%"+ NL +
                 "- max Health 50%";
@@ -308,7 +308,7 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             SetMaxHealth(ep, 50);
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             SetDamageDealt(ep, DefaultPercentage());
             SetMoveSpeed(ep, DefaultPercentage());
@@ -316,32 +316,32 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
         }
     }
     else if(
-        selectRole == RoleType.FIXED_TURRET
+        selectHeroMod == HeroModType.FIXED_TURRET
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "FIXED TURRET";
-            roleDetail = 
+            heroModName = "FIXED TURRET";
+            heroModDetail = 
                 "+ in stop, deal damage 150%"+ NL +
                 "+ in stop, max health 200%"+ NL +
                 "- in moving, deal damage 30%";
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             SetDamageDealt(ep, DefaultPercentage());
             SetMaxHealth(ep, DefaultPercentage());
         }
         else if(
-            trigger == RoleTrigger.STOP
+            trigger == HeroModTrigger.STOP
         ){
             Wait(0.2, WaitBehavior.AbortWhenFalse);
             SetDamageDealt(ep, 150);
             SetMaxHealth(ep, 200);
         }
         else if(
-            trigger == RoleTrigger.MOVING
+            trigger == HeroModTrigger.MOVING
         ){
             Wait(0.2, WaitBehavior.AbortWhenFalse);
             SetDamageDealt(ep, 30);
@@ -349,24 +349,26 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
         }
     }
     else if(
-        selectRole == RoleType.COMBAT_TECHNIC
+        selectHeroMod == HeroModType.COMBAT_TECHNIC
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "COMBAT TECHNIC";
-            roleDetail = 
-                "+ in finalblow enemy, reset cooldown ability2 & secondary fire ability"+ NL +
+            heroModName = "COMBAT TECHNIC";
+            heroModDetail = 
+                "+ in finalblow enemy, reset cooldown ability2"+ NL +
+                "+ in finalblow enemy, reset cooldown secondary fire ability"+ NL +
+                "- reset re-trigger has 3 seconds interval"+ NL +
                 "- deal damage 50%";
             SetDamageDealt(ep, 50);
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             SetDamageDealt(ep, DefaultPercentage());
         }
         else if(
-            trigger == RoleTrigger.ELEMINATION
+            trigger == HeroModTrigger.ELEMINATION
         ){
             SetAbilityCooldown(ep, Button.Ability2, 0);
             if(AbilityCharge(ep, Button.Ability2) <= 0)
@@ -380,24 +382,26 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
         }
     }
     else if(
-        selectRole == RoleType.DANGER_AVOIDANCE
+        selectHeroMod == HeroModType.DANGER_AVOIDANCE
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "DANGER AVOIDANCE";
-            roleDetail = 
-                "+ in lost 50% health, reset cooldown ability1 & jump ability"+ NL +
+            heroModName = "DANGER AVOIDANCE";
+            heroModDetail = 
+                "+ in lost 50% health, reset cooldown ability1"+ NL +
+                "+ in lost 50% health, reset cooldown jump ability"+ NL +
+                "- reset re-trigger has 3 seconds interval"+ NL +
                 "- receive heal 50%";
             SetHealingReceived(ep, 50);
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             SetHealingReceived(ep, DefaultPercentage());
         }
         else if(
-            trigger == RoleTrigger.LOST_HEALTH
+            trigger == HeroModTrigger.LOST_HEALTH
         ){
             SetAbilityCooldown(ep, Button.Ability1, 0);
             if(AbilityCharge(ep, Button.Ability1) <= 0)
@@ -411,18 +415,18 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
         }
     }
     else if(
-        selectRole == RoleType.SAVIOR
+        selectHeroMod == HeroModType.SAVIOR
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "SAVIOR";
-            roleDetail = 
+            heroModName = "SAVIOR";
+            heroModDetail = 
                 "+ in use melee, revive near dead teammate"+ NL +
                 "- in revive, consume 50% ult charge";
         }
         else if(
-            trigger == RoleTrigger.MELEE
+            trigger == HeroModTrigger.MELEE
         ){
             if(
                 IsAlive()
@@ -458,42 +462,80 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
         }
     }
     else if(
-        selectRole == RoleType.RAGE
+        selectHeroMod == HeroModType.CHARGING_POWER
+    ){
+        define modParam1!;
+
+        if(
+            trigger == HeroModTrigger.ACTIVATE
+        ){
+            heroModName = "CHARGING POWER";
+            heroModDetail = 
+                "+ more ult charges, more deal damage (now "+ modParam1 +"/200%)"+ NL +
+                "+ more ult charges, more move speed (now "+ modParam1 +"/150%)"+ NL +
+                "- in dead, lose all ult charge";
+        }
+        else if(
+            trigger == HeroModTrigger.DEACTIVATE
+        ){
+            SetDamageDealt(ep, DefaultPercentage());
+            SetMoveSpeed(ep, DefaultPercentage());
+        }
+        else if(
+            trigger == HeroModTrigger.TIME_PASSED
+        ){
+            modParam1 = DefaultPercentage() + (UltimateChargePercent() * 0.5);
+            SetDamageDealt(ep, modParam1);
+            SetMoveSpeed(ep, modParam1);
+            heroModDetail = 
+                "+ more ult charges, more deal damage (now "+ modParam1 +"%/150%)"+ NL +
+                "+ more ult charges, more move speed (now "+ modParam1 +"%/150%)"+ NL +
+                "- in dead, lose all ult charge";
+            Wait(3, WaitBehavior.AbortWhenFalse);
+        }
+        else if(
+            trigger == HeroModTrigger.DEATH
+        ){
+            SetUltimateCharge(ep, 0);
+        }
+    }
+    else if(
+        selectHeroMod == HeroModType.RAGE
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "RAGE";
-            roleDetail = 
+            heroModName = "RAGE";
+            heroModDetail = 
                 "+ in dead teammate, gain 30% ult charge"+ NL +
                 "- in every 2 second, lose 1% ult charge";
         }
         else if(
-            trigger == RoleTrigger.CHARGING_ULT
+            trigger == HeroModTrigger.CHARGING_ULT
         ){
             Wait(2, WaitBehavior.AbortWhenFalse);
             SetUltimateCharge(ep, UltimateChargePercent() - 1);
         }
     }
     else if(
-        selectRole == RoleType.SHOT_CALL
+        selectHeroMod == HeroModType.SHOT_CALL
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "SHOT CALL";
-            roleDetail = 
+            heroModName = "SHOT CALL";
+            heroModDetail = 
                 "+ in use ult, all teammates gain ult full charge"+ NL +
                 "- in every 3 second, lose 1% ult charge";
         }
         else if(
-            trigger == RoleTrigger.USING_ULT
+            trigger == HeroModTrigger.USING_ULT
         ){
             define playerArray! = FilteredArray(
                 AllPlayers(playerTeam),
                 (
                     ae != ep &&
-                    ae.selectRole != RoleType.SHOT_CALL
+                    ae.selectHeroMod != HeroModType.SHOT_CALL
                 )
             );
             for(define index! = 0; index < CountOf(playerArray); index++){
@@ -512,20 +554,20 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             }
         }
         else if(
-            trigger == RoleTrigger.CHARGING_ULT
+            trigger == HeroModTrigger.CHARGING_ULT
         ){
             Wait(3, WaitBehavior.AbortWhenFalse);
             SetUltimateCharge(ep, UltimateChargePercent() - 1);
         }
     }
     else if(
-        selectRole == RoleType.FAST_CHARGE
+        selectHeroMod == HeroModType.FAST_CHARGE
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "FAST CHARGE";
-            roleDetail = 
+            heroModName = "FAST CHARGE";
+            heroModDetail = 
                 "+ in every 1 second, gain 3% ult charge"+ NL +
                 "- max health 50%"+ NL +
                 "- deal damage 50%"+ NL +
@@ -535,27 +577,27 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             SetHealingDealt(ep, 50);
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             SetMaxHealth(ep, DefaultPercentage());
             SetDamageDealt(ep, DefaultPercentage());
             SetHealingDealt(ep, DefaultPercentage());
         }
         else if(
-            trigger == RoleTrigger.CHARGING_ULT
+            trigger == HeroModTrigger.CHARGING_ULT
         ){
             Wait(1, WaitBehavior.AbortWhenFalse);
             SetUltimateCharge(ep, UltimateChargePercent() + 3);
         }
     }
     else if(
-        selectRole == RoleType.SUPER_ULT
+        selectHeroMod == HeroModType.SUPER_ULT
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "SUPER ULT";
-            roleDetail = 
+            heroModName = "SUPER ULT";
+            heroModDetail = 
                 "+ in using ult, invincible status"+ NL +
                 "+ in using ult, deal damage 400%"+ NL +
                 "+ in using ult, deal heal 400%"+ NL +
@@ -564,8 +606,8 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
                 "- in every 3 second, lose 1% ult charge ";
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE ||
-            trigger == RoleTrigger.NOT_USING_ULT
+            trigger == HeroModTrigger.DEACTIVATE ||
+            trigger == HeroModTrigger.NOT_USING_ULT
         ){
             ClearStatus(ep, Status.PhasedOut);
             SetDamageDealt(ep, DefaultPercentage());
@@ -574,7 +616,7 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             SetGravity(ep, DefaultPercentage());
         }
         else if(
-            trigger == RoleTrigger.USING_ULT
+            trigger == HeroModTrigger.USING_ULT
         ){
             SetStatus(ep, null, Status.PhasedOut, MaxValue());
             SetDamageDealt(ep, 400);
@@ -583,20 +625,20 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             SetGravity(ep, 25);
         }
         else if(
-            trigger == RoleTrigger.CHARGING_ULT
+            trigger == HeroModTrigger.CHARGING_ULT
         ){
             Wait(3, WaitBehavior.AbortWhenFalse);
             SetUltimateCharge(ep, UltimateChargePercent() - 1);
         }
     }
     else if(
-        selectRole == RoleType.ZOMBIE
+        selectHeroMod == HeroModType.ZOMBIE
     ){
         if(
-            trigger == RoleTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE
         ){
-            roleName = "ZOMBIE";
-            roleDetail = 
+            heroModName = "ZOMBIE";
+            heroModDetail = 
                 "+ in dead, auto revive after 5 seconds"+ NL +
                 "- in over time, can not auto revive"+ NL +
                 "- max health 50%" + NL +
@@ -605,13 +647,13 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
             SetHealingReceived(ep, 50);
         }
         else if(
-            trigger == RoleTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             SetMaxHealth(ep, DefaultPercentage());
             SetHealingReceived(ep, DefaultPercentage());
         }
         else if(
-            trigger == RoleTrigger.DEATH
+            trigger == HeroModTrigger.DEATH
         ){
             if(
                 !IsOverTime()
@@ -627,43 +669,55 @@ void DoRoleAction(define role!, define trigger!)"DoRoleAction"{
     }
 }
 
-// role trigger list ---------------------------------
+// heromod trigger list ---------------------------------
 // common trigger action
-rule: "RoleTrigger/TEAMMATE_DEATH"
+rule: "HeroModTrigger/TEAMMATE_DEATH"
 Event.OnDeath
 if(
     TeamOf() == playerTeam &&
     ep != Attacker()
 ){
-    DoRoleAction(selectRole, RoleTrigger.TEAMMATE_DEATH);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.TEAMMATE_DEATH);
 }
 
-// each role trigger action
-rule: "RoleTrigger/STOP"
+// each heromod trigger action
+rule: "HeroModTrigger/TIME_PASSED"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    (
+        selectHeroMod == HeroModType.CHARGING_POWER
+    )
+){
+    DoHeroModAction(selectHeroMod, HeroModTrigger.TIME_PASSED);
+    LoopIfConditionIsTrue();
+}
+
+rule: "HeroModTrigger/STOP"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     !IsMoving() &&
     (
-        selectRole == RoleType.FIXED_TURRET
+        selectHeroMod == HeroModType.FIXED_TURRET
     )
 ){
-    DoRoleAction(selectRole, RoleTrigger.STOP);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.STOP);
 }
 
-rule: "RoleTrigger/MOVING"
+rule: "HeroModTrigger/MOVING"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     IsMoving() &&
     (
-        selectRole == RoleType.FIXED_TURRET
+        selectHeroMod == HeroModType.FIXED_TURRET
     )
 ){
-    DoRoleAction(selectRole, RoleTrigger.MOVING);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.MOVING);
 }
 
-rule: "RoleTrigger/MELEE"
+rule: "HeroModTrigger/MELEE"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
@@ -673,84 +727,85 @@ if(
         (IsDummyBot() && IsButtonHeld(ep, Button.PrimaryFire))
     ) &&
     (
-        selectRole == RoleType.SAVIOR
+        selectHeroMod == HeroModType.SAVIOR
     )
 ){
-    DoRoleAction(selectRole, RoleTrigger.MELEE);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.MELEE);
 }
 
-rule: "RoleTrigger/USING_ULT"
+rule: "HeroModTrigger/USING_ULT"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     IsUsingUltimate() &&
     (
-        selectRole == RoleType.SHOT_CALL ||
-        selectRole == RoleType.SUPER_ULT
+        selectHeroMod == HeroModType.SHOT_CALL ||
+        selectHeroMod == HeroModType.SUPER_ULT
     ) 
 ){
-    DoRoleAction(selectRole, RoleTrigger.USING_ULT);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.USING_ULT);
 }
 
-rule: "RoleTrigger/NOT_USING_ULT"
+rule: "HeroModTrigger/NOT_USING_ULT"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     !IsUsingUltimate() &&
     (
-        selectRole == RoleType.SUPER_ULT
+        selectHeroMod == HeroModType.SUPER_ULT
     )
 ){
-    DoRoleAction(selectRole, RoleTrigger.NOT_USING_ULT);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.NOT_USING_ULT);
 }
 
-rule: "RoleTrigger/ULT_CHARGE"
+rule: "HeroModTrigger/ULT_CHARGE"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     UltimateChargePercent(ep) < DefaultPercentage() &&
     (
-        selectRole == RoleType.RAGE ||
-        selectRole == RoleType.SHOT_CALL ||
-        selectRole == RoleType.FAST_CHARGE ||
-        selectRole == RoleType.SUPER_ULT
+        selectHeroMod == HeroModType.RAGE ||
+        selectHeroMod == HeroModType.SHOT_CALL ||
+        selectHeroMod == HeroModType.FAST_CHARGE ||
+        selectHeroMod == HeroModType.SUPER_ULT
     )
 ){
-    DoRoleAction(selectRole, RoleTrigger.CHARGING_ULT);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.CHARGING_ULT);
     LoopIfConditionIsTrue();
 }
 
-rule: "RoleTrigger/LOST_HEALTH"
+rule: "HeroModTrigger/LOST_HEALTH"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     NormalizedHealth() <= 0.5 &&
     (
-        selectRole == RoleType.DANGER_AVOIDANCE
+        selectHeroMod == HeroModType.DANGER_AVOIDANCE
     )
 ){
-    DoRoleAction(selectRole, RoleTrigger.LOST_HEALTH);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.LOST_HEALTH);
 }
 
-rule: "RoleTrigger/ELEMINATION"
+rule: "HeroModTrigger/ELEMINATION"
 Event.OnElimination
 if(
     TeamOf() == playerTeam &&
     (
-        selectRole == RoleType.COMBAT_TECHNIC
+        selectHeroMod == HeroModType.COMBAT_TECHNIC
     )
 ){
-    DoRoleAction(selectRole, RoleTrigger.ELEMINATION);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.ELEMINATION);
 }
 
-rule: "RoleTrigger/DEATH"
+rule: "HeroModTrigger/DEATH"
 Event.OnDeath
 if(
     TeamOf() == playerTeam &&
     (
-        selectRole == RoleType.ZOMBIE
+        selectHeroMod == HeroModType.CHARGING_POWER ||
+        selectHeroMod == HeroModType.ZOMBIE
     )
 ){
-    DoRoleAction(selectRole, RoleTrigger.DEATH);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.DEATH);
 }
 
