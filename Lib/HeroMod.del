@@ -24,6 +24,7 @@ enum HeroModType{
     SHOT_CALL,
     FAST_CHARGE,
     SUPER_ULT,
+    STRAFING_REQUEST,
     ZOMBIE,
     LAST
 }
@@ -469,7 +470,10 @@ void DoHeroModAction(define heromod!, define trigger!)"DoHeroModAction"{
             trigger == HeroModTrigger.ACTIVATE
         ){
             heroModName = "REVENGER";
-            heroModDetail = "";                 // set by TIME_PASSED trigger
+            heroModDetail = 
+                "+ more lost health, more deal damage (now "+ status +"%/200%)"+ NL +
+                "+ more lost health, more move speed (now "+ status +"%/200%)"+ NL +
+                "- receive heal 50%";
             SetHealingReceived(ep, 50);
         }
         else if(
@@ -501,7 +505,10 @@ void DoHeroModAction(define heromod!, define trigger!)"DoHeroModAction"{
             trigger == HeroModTrigger.ACTIVATE
         ){
             heroModName = "POWER CHARGING";
-            heroModDetail = "";                 // set by TIME_PASSED trigger
+            heroModDetail = 
+                "+ more ult charges, more deal damage (now "+ status +"%/150%)"+ NL +
+                "+ more ult charges, more move speed (now "+ status +"%/150%)"+ NL +
+                "- in dead, lose all ult charge";
         }
         else if(
             trigger == HeroModTrigger.DEACTIVATE
@@ -625,32 +632,45 @@ void DoHeroModAction(define heromod!, define trigger!)"DoHeroModAction"{
         ){
             heroModName = "SUPER ULT";
             heroModDetail = 
-                "+ in end of using ult, more gain ult full charge by 50% probility"+ NL +
-                "+ in using ult, invincible status"+ NL +
-                "+ in using ult, deal damage 400%"+ NL +
-                "+ in using ult, deal heal 400%"+ NL +
-                "+ in using ult, move speed 200%"+ NL +
-                "+ in using ult, gravity 25%"+ NL +
+                "+ in ult end, more gain ult full charge by 50% probility"+ NL +
+                "+ in ult using, invincible status"+ NL +
+                "+ in ult using, deal damage 400%"+ NL +
+                "+ in ult using, deal heal 400%"+ NL +
+                "+ in ult using, move speed 200%"+ NL +
+                "+ in ult using, gravity 25%"+ NL +
                 "- in every 3 second, lose 1% ult charge ";
         }
         else if(
-            trigger == HeroModTrigger.DEACTIVATE ||
-            trigger == HeroModTrigger.NOT_USING_ULT
+            trigger == HeroModTrigger.DEACTIVATE
         ){
             ClearStatus(ep, Status.PhasedOut);
             SetDamageDealt(ep, DefaultPercentage());
             SetHealingDealt(ep, DefaultPercentage());
             SetMoveSpeed(ep, DefaultPercentage());
             SetGravity(ep, DefaultPercentage());
-            if(
-                ProbabilityTrue(50)
-            ){
-                SetUltimateCharge(ep, 100);
+        }
+        else if(
+            trigger == HeroModTrigger.NOT_USING_ULT
+        ){
+            if(isUltUsed){
+                isUltUsed = false;
+                ClearStatus(ep, Status.PhasedOut);
+                SetDamageDealt(ep, DefaultPercentage());
+                SetHealingDealt(ep, DefaultPercentage());
+                SetMoveSpeed(ep, DefaultPercentage());
+                SetGravity(ep, DefaultPercentage());
+                if(
+                    ProbabilityTrue(50)
+                ){
+                    SetUltimateCharge(ep, 100);
+                }
             }
         }
         else if(
             trigger == HeroModTrigger.USING_ULT
         ){
+            isUltUsed = true;
+            
             SetStatus(ep, null, Status.PhasedOut, MaxValue());
             SetDamageDealt(ep, 400);
             SetHealingDealt(ep, 400);
@@ -661,7 +681,9 @@ void DoHeroModAction(define heromod!, define trigger!)"DoHeroModAction"{
             trigger == HeroModTrigger.CHARGING_ULT
         ){
             Wait(3, WaitBehavior.AbortWhenFalse);
-            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+            if(UltimateChargePercent() < DefaultPercentage()){
+                SetUltimateCharge(ep, UltimateChargePercent() - 1);
+            }
         }
     }
     else if(
@@ -700,9 +722,158 @@ void DoHeroModAction(define heromod!, define trigger!)"DoHeroModAction"{
             }
         }
     }
+    else if(
+        selectHeroMod == HeroModType.STRAFING_REQUEST
+    ){
+        if(
+            trigger == HeroModTrigger.ACTIVATE
+        ){
+            heroModName = "STRAFING REQUEST";
+            heroModDetail = 
+                "+ in use ult, strafing fire support incoming to aim position"+ NL +
+                "- in every 3 second, lose 1% ult charge ";
+        }
+        else if(
+            trigger == HeroModTrigger.CHARGING_ULT
+        ){
+            Wait(3, WaitBehavior.AbortWhenFalse);
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+        else if(
+            trigger == HeroModTrigger.USING_ULT
+        ){
+            define strafReqAttackDistance! = 30;
+            define strafReqAttackTime! = 2;
+            define strafReqAttackInterval = 0.05;
+            define strafReqScatterRange! = 5;
+            define strafReqDamageRange! = 5;
+            define strafReqDamage! = 200;
+
+            // play set sound
+            PlayEffect(
+                ep, PlayEffect.DebuffImpactSound,
+                Color.White, ep, MaxValue());
+
+            // set position and angle
+            define targetPosition! = BelowPosition(AimingPosition());
+            define approachingAngle! = DirectionTowards(
+                targetPosition, ClosestPlayerTo(
+                    targetPosition,
+                    Team.Team2
+                )
+            );
+            approachingAngle = VectorWithOutY(approachingAngle);
+                                                                            
+            // set start point
+            define startPosition! = 
+                targetPosition + 
+                    // add random direction
+                    -approachingAngle *
+                    // add static distance
+                    (strafReqAttackDistance / 2);
+            // set end point
+            define endPosition! = 
+                targetPosition + 
+                    // add random direction
+                    approachingAngle *
+                    // add static distance
+                    (strafReqAttackDistance / 2);
+
+            // set landing zone text
+            define effectAndText! = [];
+            CreateInWorldText(
+                AllPlayers(), <"<0> <1> <2>", ep, HeroIconString(HeroOf()), "STRAFING REQUEST">,
+                targetPosition + PositionOffset(), basicInWorldTextSize, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
+                Color.White, Spectators.DefaultVisibility);
+            effectAndText [1] = LastTextID();
+
+            // set effect
+            // landing zone blast range
+            define landPosition;
+            define landPosition2!;
+            CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
+                landPosition, strafReqScatterRange, EffectRev.VisibleToPositionAndRadius);
+            effectAndText [2] = LastCreatedEntity();
+            // landing zone position
+            CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
+                targetPosition, 0.2, EffectRev.VisibleToPositionAndRadius);
+            effectAndText [3] = LastCreatedEntity(); 
+
+            // play landing animation
+            landPosition = startPosition;
+            UpdateEveryFrame(landPosition);
+            ChaseVariableOverTime(
+                landPosition, endPosition,
+                strafReqAttackTime,
+                TimeChaseReevaluation.DestinationAndDuration);
+            Wait(strafReqAttackTime, WaitBehavior.IgnoreCondition);
+            StopChasingVariable(landPosition);
+            DestroyEffect(effectAndText[2]);
+
+            // start attack
+            // create Ballistic
+            CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
+                landPosition2, landPosition2 - (approachingAngle * 200) + (Up() * 200),
+                Color.White, EffectRev.VisibleToPositionAndRadius);
+            effectAndText [4] = LastCreatedEntity(); 
+
+            // play landed animation
+            landPosition = startPosition;
+            UpdateEveryFrame(landPosition);
+            ChaseVariableOverTime(
+                landPosition, endPosition,
+                strafReqAttackTime,
+                TimeChaseReevaluation.DestinationAndDuration);
+
+            for(define count! = strafReqAttackTime / strafReqAttackInterval; count > 0; count --){
+                // WaitUntil(!isServerOverLoading(), 1);
+
+                // set landed point
+                landPosition2 =
+                    landPosition + 
+                    RandomPosition(
+                        strafReqScatterRange / 1.5,
+                        0,
+                        strafReqScatterRange / 1.5
+                    );
+
+                // damage
+                Damage(
+                    PlayersWithinRadius(
+                        landPosition2, strafReqDamageRange,
+                        enemyTeam, RadiusLOS.Off
+                    ),
+                    ep, strafReqDamage
+                );
+
+                // play blast sound
+                PlayEffect(
+                    AllPlayers(), PlayEffect.RingExplosionSound,
+                    Color.White,
+                    landPosition2,
+                    MaxLength());
+
+                // play blast
+                PlayEffect(
+                    AllPlayers(), PlayEffect.BadExplosion,
+                    Color.White,
+                    landPosition2,
+                    strafReqDamageRange);
+                    
+                Wait(0.05, WaitBehavior.IgnoreCondition);
+            }
+
+            StopChasingVariable(landPosition);
+            DestroyInWorldText(effectAndText [1]);
+            DestroyEffect(effectAndText [3]);
+            DestroyEffect(effectAndText [4]);
+        }
+    }
 }
 
 // heromod trigger list ---------------------------------
+playervar define isUltUsed!;
+
 // common trigger action
 rule: "HeroModTrigger/TEAMMATE_DEATH"
 Event.OnDeath
@@ -774,7 +945,8 @@ if(
     IsUsingUltimate() &&
     (
         selectHeroMod == HeroModType.SHOT_CALL ||
-        selectHeroMod == HeroModType.SUPER_ULT
+        selectHeroMod == HeroModType.SUPER_ULT ||
+        selectHeroMod == HeroModType.STRAFING_REQUEST
     ) 
 ){
     DoHeroModAction(selectHeroMod, HeroModTrigger.USING_ULT);
@@ -800,7 +972,8 @@ if(
     (
         selectHeroMod == HeroModType.SHOT_CALL ||
         selectHeroMod == HeroModType.FAST_CHARGE ||
-        selectHeroMod == HeroModType.SUPER_ULT
+        selectHeroMod == HeroModType.SUPER_ULT ||
+        selectHeroMod == HeroModType.STRAFING_REQUEST
     )
 ){
     DoHeroModAction(selectHeroMod, HeroModTrigger.CHARGING_ULT);
