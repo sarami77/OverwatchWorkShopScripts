@@ -24,7 +24,7 @@ enum HeroModType{
     SHOT_CALL,
     FAST_CHARGE,
     SUPER_ULT,
-    STRAFING_REQUEST,
+    // STRAFING_REQUEST,
     ZOMBIE,
     LAST
 }
@@ -123,44 +123,43 @@ if(
     UpdateHeroModAllText();
 }
 
-// rule: "HeroMod/applyHeroModForBot"
-// Event.OngoingPlayer
-// if(
-//     TeamOf() == playerTeam &&
-//     IsDummyBot() &&
-//     !IsAssemblingHeroes()
-// ){
-//     selectHeroMod = RandomValueInArray([
-//         HeroModType.NO_HERO_MOD,
-//         HeroModType.NO_HERO_MOD,
-//         HeroModType.NO_HERO_MOD,
-//         HeroModType.MEDIC,
-//         HeroModType.KILLER,
-//         HeroModType.ASSASSIN,
-//         HeroModType.SPRINTER,
-//         HeroModType.BIRD_MAN,
-//         HeroModType.HEAVY_ARMOR,
-//         HeroModType.FIXED_TURRET,
-//         HeroModType.TECHNICIAN,
-//         HeroModType.SURVIVALIST,
-//         HeroModType.SAVIOR,
-//         HeroModType.SAVIOR,
-//         HeroModType.SAVIOR,
-//         HeroModType.RAGE,
-//         HeroModType.SHOT_CALL,
-//         HeroModType.FAST_CHARGE,
-//         HeroModType.SUPER_ULT,
-//         HeroModType.ZOMBIE
-//     ]);
+disabled rule: "HeroMod/applyHeroModForBot"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    !IsAssemblingHeroes()
+){
+    selectHeroMod = RandomValueInArray([
+        HeroModType.NO_HERO_MOD,
+        HeroModType.MEDIC,
+        HeroModType.KILLER,
+        HeroModType.ASSASSIN,
+        HeroModType.SPRINTER,
+        HeroModType.BIRD_MAN,
+        HeroModType.HEAVY_ARMOR,
+        HeroModType.FIXED_TURRET,
+        HeroModType.TECHNICIAN,
+        HeroModType.SURVIVALIST,
+        HeroModType.SAVIOR,
+        HeroModType.REVENGER,
+        HeroModType.POWER_CHARGING,
+        HeroModType.RAGE,
+        HeroModType.SHOT_CALL,
+        HeroModType.FAST_CHARGE,
+        HeroModType.SUPER_ULT,
+        // HeroModType.STRAFING_REQUEST,
+        HeroModType.ZOMBIE
+    ]);
 
-//     // do heromod activate action
-//     DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE);
+    // do heromod activate action
+    DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE);
 
-//     // update text
-//     UpdateHeroModAllText();
-// }
+    // update text
+    UpdateHeroModAllText();
+}
 
-void DoHeroModAction(define heromod!, define trigger!)"DoHeroModAction"{
+void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModAction"{
     // common trigger action
     if(
         trigger == HeroModTrigger.TEAMMATE_DEATH
@@ -723,7 +722,8 @@ void DoHeroModAction(define heromod!, define trigger!)"DoHeroModAction"{
         }
     }
     else if(
-        selectHeroMod == HeroModType.STRAFING_REQUEST
+        // selectHeroMod == HeroModType.STRAFING_REQUEST
+        false
     ){
         if(
             trigger == HeroModTrigger.ACTIVATE
@@ -781,23 +781,20 @@ void DoHeroModAction(define heromod!, define trigger!)"DoHeroModAction"{
 
             // set landing zone text
             define effectAndText! = [];
-            CreateInWorldText(
+            effectAndText[1] = CreateInWorldText(
                 AllPlayers(), <"<0> <1> <2>", ep, HeroIconString(HeroOf()), "STRAFING REQUEST">,
                 targetPosition + PositionOffset(), basicInWorldTextSize, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
                 Color.White, Spectators.DefaultVisibility);
-            effectAndText [1] = LastTextID();
 
             // set effect
             // landing zone blast range
-            define landPosition;
+            define landPosition!;
             define landPosition2!;
-            CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
+            effectAndText [2] = CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
                 landPosition, strafReqScatterRange, EffectRev.VisibleToPositionAndRadius);
-            effectAndText [2] = LastCreatedEntity();
             // landing zone position
-            CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
+            effectAndText [3] = CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
                 targetPosition, 0.2, EffectRev.VisibleToPositionAndRadius);
-            effectAndText [3] = LastCreatedEntity(); 
 
             // play landing animation
             landPosition = startPosition;
@@ -808,14 +805,14 @@ void DoHeroModAction(define heromod!, define trigger!)"DoHeroModAction"{
                 TimeChaseReevaluation.DestinationAndDuration);
             Wait(strafReqAttackTime, WaitBehavior.IgnoreCondition);
             StopChasingVariable(landPosition);
+            
             DestroyEffect(effectAndText[2]);
 
             // start attack
             // create Ballistic
-            CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
+            effectAndText [4] = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
                 landPosition2, landPosition2 - (approachingAngle * 200) + (Up() * 200),
                 Color.White, EffectRev.VisibleToPositionAndRadius);
-            effectAndText [4] = LastCreatedEntity(); 
 
             // play landed animation
             landPosition = startPosition;
@@ -945,8 +942,8 @@ if(
     IsUsingUltimate() &&
     (
         selectHeroMod == HeroModType.SHOT_CALL ||
-        selectHeroMod == HeroModType.SUPER_ULT ||
-        selectHeroMod == HeroModType.STRAFING_REQUEST
+        selectHeroMod == HeroModType.SUPER_ULT// ||
+        //selectHeroMod == HeroModType.STRAFING_REQUEST
     ) 
 ){
     DoHeroModAction(selectHeroMod, HeroModTrigger.USING_ULT);
@@ -972,8 +969,8 @@ if(
     (
         selectHeroMod == HeroModType.SHOT_CALL ||
         selectHeroMod == HeroModType.FAST_CHARGE ||
-        selectHeroMod == HeroModType.SUPER_ULT ||
-        selectHeroMod == HeroModType.STRAFING_REQUEST
+        selectHeroMod == HeroModType.SUPER_ULT// ||
+        //selectHeroMod == HeroModType.STRAFING_REQUEST
     )
 ){
     DoHeroModAction(selectHeroMod, HeroModTrigger.CHARGING_ULT);
