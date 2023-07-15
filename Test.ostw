@@ -105,8 +105,82 @@ rule: "RestartTeamFormation"
 Event.OngoingPlayer
 if(
     ep == hp &&
-    IsUsingUltimate()    
+    IsFiringPrimary()
 ){
+            Wait(3, WaitBehavior.IgnoreCondition);
+            // config value
+            define strafReqAttackDistance! = 40;
+            define strafReqAttackTime! = 2;
+            define strafReqAttackInterval = 0.05;
+            define strafReqScatterRange! = 3;
+            define strafReqDamageRange! = 5;
+            define strafReqDamage! = 150;
+            // set attack point from aimming position
+            define attackPosition! = BelowPosition(AimingPosition());
+            define enteringAngle! = 
+                VectorWithOutY(
+                    DirectionTowards(
+                        attackPosition, ClosestPlayerTo(
+                            attackPosition,
+                            enemyTeam
+                        )
+                    )
+                );
+            // set start/end position
+            define startPosition! = 
+                attackPosition + 
+                    -enteringAngle *
+                    (strafReqAttackDistance / 2);
+            define endPosition! = 
+                attackPosition + 
+                    enteringAngle *
+                    (strafReqAttackDistance / 2);
+            // create Ballistic
+            define landPosition;
+            define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
+                endPosition - (enteringAngle * 200) + (Up() * 200), landPosition,
+                Color.White, EffectRev.VisibleToPositionAndRadius);
+            // move landRangePosition
+            define landRangePosition = startPosition;
+            ChaseVariableOverTime(
+                landRangePosition, endPosition,
+                strafReqAttackTime,
+                TimeChaseReevaluation.DestinationAndDuration);
+            // blast animation
+            for(define count! = strafReqAttackTime / strafReqAttackInterval; count > 0; count --){
+                // set landed point
+                landPosition =
+                    landRangePosition + 
+                    RandomPosition(
+                        strafReqScatterRange / 1.5,
+                        0,
+                        strafReqScatterRange / 1.5
+                    );
+                // play blast sound
+                PlayEffect(
+                    AllPlayers(), PlayEffect.RingExplosionSound,
+                    Color.White,
+                    landPosition,
+                    MaxLength());
+                // play blast
+                PlayEffect(
+                    AllPlayers(), PlayEffect.BadExplosion,
+                    Color.White,
+                    landPosition,
+                    strafReqDamageRange);
+                // damage
+                Damage(
+                    PlayersWithinRadius(
+                        landPosition, strafReqDamageRange,
+                        enemyTeam, RadiusLOS.Off
+                    ),
+                    ep, strafReqDamage
+                );
+                Wait(0.05, WaitBehavior.IgnoreCondition);
+            }
+
+            StopChasingVariable(landRangePosition);
+            DestroyEffect(ballisticEffect);
 }
 
 

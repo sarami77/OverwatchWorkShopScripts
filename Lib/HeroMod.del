@@ -24,7 +24,7 @@ enum HeroModType{
     SHOT_CALL,
     FAST_CHARGE,
     SUPER_ULT,
-    // STRAFING_REQUEST,
+    STRAFING_REQUEST,
     ZOMBIE,
     LAST
 }
@@ -722,8 +722,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         }
     }
     else if(
-        // selectHeroMod == HeroModType.STRAFING_REQUEST
-        false
+        selectHeroMod == HeroModType.STRAFING_REQUEST
     ){
         if(
             trigger == HeroModTrigger.ACTIVATE
@@ -742,128 +741,83 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         else if(
             trigger == HeroModTrigger.USING_ULT
         ){
-            define strafReqAttackDistance! = 30;
+            // set attack point from aimming position
+            define attackPosition! = BelowPosition(AimingPosition());
+
+            Wait(1.5, WaitBehavior.IgnoreCondition);
+
+            // config value
+            define strafReqAttackDistance! = 40;
             define strafReqAttackTime! = 2;
             define strafReqAttackInterval = 0.05;
-            define strafReqScatterRange! = 5;
+            define strafReqScatterRange! = 3;
             define strafReqDamageRange! = 5;
-            define strafReqDamage! = 200;
+            define strafReqDamage! = 150;
 
-            // play set sound
-            PlayEffect(
-                ep, PlayEffect.DebuffImpactSound,
-                Color.White, ep, MaxValue());
-
-            // set position and angle
-            define targetPosition! = BelowPosition(AimingPosition());
-            define approachingAngle! = DirectionTowards(
-                targetPosition, ClosestPlayerTo(
-                    targetPosition,
-                    Team.Team2
-                )
-            );
-            approachingAngle = VectorWithOutY(approachingAngle);
-                                                                            
-            // set start point
+            define enteringAngle! = 
+                VectorWithOutY(
+                    DirectionTowards(
+                        attackPosition,
+                        ClosestPlayerTo(
+                            attackPosition,
+                            enemyTeam
+                        )
+                    )
+                );
+            // set start/end position
             define startPosition! = 
-                targetPosition + 
-                    // add random direction
-                    -approachingAngle *
-                    // add static distance
+                attackPosition + 
+                    -enteringAngle *
                     (strafReqAttackDistance / 2);
-            // set end point
             define endPosition! = 
-                targetPosition + 
-                    // add random direction
-                    approachingAngle *
-                    // add static distance
+                attackPosition + 
+                    enteringAngle *
                     (strafReqAttackDistance / 2);
-
-            // set landing zone text
-            define effectAndText! = [];
-            effectAndText[1] = CreateInWorldText(
-                AllPlayers(), <"<0> <1> <2>", ep, HeroIconString(HeroOf()), "STRAFING REQUEST">,
-                targetPosition + PositionOffset(), basicInWorldTextSize, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-                Color.White, Spectators.DefaultVisibility);
-
-            // set effect
-            // landing zone blast range
-            define landPosition!;
-            define landPosition2!;
-            effectAndText [2] = CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
-                landPosition, strafReqScatterRange, EffectRev.VisibleToPositionAndRadius);
-            // landing zone position
-            effectAndText [3] = CreateEffect(AllPlayers(), Effect.Sphere, Color.Red,
-                targetPosition, 0.2, EffectRev.VisibleToPositionAndRadius);
-
-            // play landing animation
-            landPosition = startPosition;
-            UpdateEveryFrame(landPosition);
-            ChaseVariableOverTime(
-                landPosition, endPosition,
-                strafReqAttackTime,
-                TimeChaseReevaluation.DestinationAndDuration);
-            Wait(strafReqAttackTime, WaitBehavior.IgnoreCondition);
-            StopChasingVariable(landPosition);
-            
-            DestroyEffect(effectAndText[2]);
-
-            // start attack
             // create Ballistic
-            effectAndText [4] = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
-                landPosition2, landPosition2 - (approachingAngle * 200) + (Up() * 200),
+            define landPosition;
+            define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
+                endPosition - (enteringAngle * 200) + (Up() * 200), landPosition,
                 Color.White, EffectRev.VisibleToPositionAndRadius);
-
-            // play landed animation
-            landPosition = startPosition;
-            UpdateEveryFrame(landPosition);
+            // move landRangePosition
+            define landRangePosition = startPosition;
             ChaseVariableOverTime(
-                landPosition, endPosition,
+                landRangePosition, endPosition,
                 strafReqAttackTime,
                 TimeChaseReevaluation.DestinationAndDuration);
-
-            for(define count! = strafReqAttackTime / strafReqAttackInterval; count > 0; count --){
-                // WaitUntil(!isServerOverLoading(), 1);
-
+            // blast animation
+            for(define count = strafReqAttackTime / strafReqAttackInterval; count > 0; count --){
                 // set landed point
-                landPosition2 =
-                    landPosition + 
+                landPosition =
+                    landRangePosition + 
                     RandomPosition(
                         strafReqScatterRange / 1.5,
                         0,
                         strafReqScatterRange / 1.5
                     );
-
-                // damage
-                Damage(
-                    PlayersWithinRadius(
-                        landPosition2, strafReqDamageRange,
-                        enemyTeam, RadiusLOS.Off
-                    ),
-                    ep, strafReqDamage
-                );
-
                 // play blast sound
                 PlayEffect(
                     AllPlayers(), PlayEffect.RingExplosionSound,
                     Color.White,
-                    landPosition2,
+                    landPosition,
                     MaxLength());
-
                 // play blast
                 PlayEffect(
                     AllPlayers(), PlayEffect.BadExplosion,
                     Color.White,
-                    landPosition2,
+                    landPosition,
                     strafReqDamageRange);
-                    
-                Wait(0.05, WaitBehavior.IgnoreCondition);
+                // damage
+                Damage(
+                    PlayersWithinRadius(
+                        landPosition, strafReqDamageRange,
+                        enemyTeam, RadiusLOS.Off
+                    ),
+                    ep, strafReqDamage
+                );
+                Wait(strafReqAttackInterval, WaitBehavior.IgnoreCondition);
             }
-
-            StopChasingVariable(landPosition);
-            DestroyInWorldText(effectAndText [1]);
-            DestroyEffect(effectAndText [3]);
-            DestroyEffect(effectAndText [4]);
+            StopChasingVariable(landRangePosition);
+            DestroyEffect(ballisticEffect);
         }
     }
 }
@@ -942,8 +896,8 @@ if(
     IsUsingUltimate() &&
     (
         selectHeroMod == HeroModType.SHOT_CALL ||
-        selectHeroMod == HeroModType.SUPER_ULT// ||
-        //selectHeroMod == HeroModType.STRAFING_REQUEST
+        selectHeroMod == HeroModType.SUPER_ULT ||
+        selectHeroMod == HeroModType.STRAFING_REQUEST
     ) 
 ){
     DoHeroModAction(selectHeroMod, HeroModTrigger.USING_ULT);
@@ -969,8 +923,8 @@ if(
     (
         selectHeroMod == HeroModType.SHOT_CALL ||
         selectHeroMod == HeroModType.FAST_CHARGE ||
-        selectHeroMod == HeroModType.SUPER_ULT// ||
-        //selectHeroMod == HeroModType.STRAFING_REQUEST
+        selectHeroMod == HeroModType.SUPER_ULT ||
+        selectHeroMod == HeroModType.STRAFING_REQUEST
     )
 ){
     DoHeroModAction(selectHeroMod, HeroModTrigger.CHARGING_ULT);
