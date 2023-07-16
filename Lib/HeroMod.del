@@ -16,15 +16,16 @@ enum HeroModType{
     LIGHT_ARMOR,
     HEAVY_ARMOR,
     FIXED_TURRET,
-    TECHNICIAN,
-    SURVIVALIST,
     REVENGER,
     POWER_CHARGING,
+    HEALING_AMPOULE,
+    SAVIOR,
+    TECHNICIAN,
+    SURVIVALIST,
     RAGE,
     SHOT_CALL,
     FAST_CHARGE,
     SUPER_ULT,
-    SAVIOR,
     STRAFING_REQUEST,
     TITAN_FORM,
     ZOMBIE,
@@ -442,6 +443,53 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         }
     }
     else if(
+        selectHeroMod == HeroModType.HEALING_AMPOULE
+    ){
+        if(
+            trigger == HeroModTrigger.ACTIVATE
+        ){
+            heroModName = "HEALING AMPOULE";
+            heroModDetail = 
+                "+ in use melee to teammate, deal 300 heal to teammate"+ NL +
+                "- in heal, consume 20% ult charge";
+        }
+        else if(
+            trigger == HeroModTrigger.MELEE
+        ){
+            define consumeUltCharge! = 20;
+            if(
+                IsAlive() &&
+                UltimateChargePercent() >= consumeUltCharge
+            ){
+                define target! = 
+                    FirstOf(
+                        SortedArray(
+                            FilteredArray(
+                                PlayersInViewAngle(ep, playerTeam, 45),
+                                (
+                                    IsAlive(ae) &&
+                                    NormalizedHealth(ae) < 1.0 &&
+                                    DistanceBetween(ep, ae) <= 3
+                                )
+                            ),
+                            DistanceBetween(ep, ae)
+                        )
+                    );
+                if(
+                    target != null
+                ){
+                    Heal(target, ep, 300);
+                    SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
+                    PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
+                    PlayEffect(AllPlayers(playerTeam), PlayEffect.BuffExplosionSound, null, target, 100);
+                    SmallMessage(ep, "Healed "+ target + HeroIconString(HeroOf(target)));
+                    SmallMessage(target, "Healed by "+ ep + HeroIconString(HeroOf(ep)));
+                }
+            }
+        }
+    }
+
+    else if(
         selectHeroMod == HeroModType.SAVIOR
     ){
         if(
@@ -449,36 +497,39 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "SAVIOR";
             heroModDetail = 
-                "+ in use melee, revive near dead teammate"+ NL +
+                "+ in use melee to dead teammate, revive teammate"+ NL +
                 "- in revive, consume 50% ult charge";
         }
         else if(
             trigger == HeroModTrigger.MELEE
         ){
+            define consumeUltCharge! = 50;
             if(
-                IsAlive()
+                IsAlive() &&
+                UltimateChargePercent() >= consumeUltCharge
             ){
-                define player! = 
+                define target! = 
                     FirstOf(
                         SortedArray(
                             FilteredArray(
-                                AllDeadPlayers(playerTeam),
+                                PlayersInViewAngle(ep, playerTeam, 45),
                                 (
-                                    DistanceBetween(ep, ae) <= 5
+                                    IsDead(ae) &&
+                                    DistanceBetween(ep, ae) <= 3
                                 )
                             ),
                             DistanceBetween(ep, ae)
                         )
                     );
                 if(
-                    player != null
+                    target != null
                 ){
-                    Resurrect(player);
-                    SmallMessage(ep, "Revived "+ player + HeroIconString(HeroOf(player)));
-                    SmallMessage(player, "Revived by "+ ep + HeroIconString(HeroOf(ep)));
-                    PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, player, 1.5);
-                    PlayEffect(AllPlayers(playerTeam), PlayEffect.BuffExplosionSound, null, player, 100);
-                    SetUltimateCharge(ep, UltimateChargePercent() - 50);
+                    Resurrect(target);
+                    SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
+                    PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
+                    PlayEffect(AllPlayers(playerTeam), PlayEffect.BuffExplosionSound, null, target, 100);
+                    SmallMessage(ep, "Revived "+ target + HeroIconString(HeroOf(target)));
+                    SmallMessage(target, "Revived by "+ ep + HeroIconString(HeroOf(ep)));
                 }
             }
         }
@@ -486,8 +537,6 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
     else if(
         selectHeroMod == HeroModType.REVENGER
     ){
-        define status!;
-
         if(
             trigger == HeroModTrigger.ACTIVATE ||
             trigger == HeroModTrigger.TIME_PASSED
@@ -498,15 +547,15 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
                 SetHealingReceived(ep, 50);
             }
 
+            define status!  = DefaultPercentage() + RoundToInteger(((1 - NormalizedHealth()) * 100));
             if(
                 trigger == HeroModTrigger.TIME_PASSED
             ){
                 Wait(1, WaitBehavior.AbortWhenFalse);
-                status = DefaultPercentage() + RoundToInteger(((1 - NormalizedHealth()) * 100));
                 SetDamageDealt(ep, status);
                 SetMoveSpeed(ep, status);             
             }
-
+            
             heroModName = "REVENGER";
             heroModDetail = 
                 "+ more lost health, more deal damage (now "+ status +"%/200%)"+ NL +
@@ -516,25 +565,23 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         else if(
             trigger == HeroModTrigger.DEACTIVATE
         ){
+            SetHealingReceived(ep, DefaultPercentage());
             SetMaxHealth(ep, DefaultPercentage());
             SetMoveSpeed(ep, DefaultPercentage());
-            SetHealingReceived(ep, DefaultPercentage());
         }
     }
     else if(
         selectHeroMod == HeroModType.POWER_CHARGING
     ){
-        define status!;
-
         if(
             trigger == HeroModTrigger.ACTIVATE ||
             trigger == HeroModTrigger.TIME_PASSED
         ){
+            define status! = DefaultPercentage() + RoundToInteger((UltimateChargePercent() * 0.5));
             if(
                 trigger == HeroModTrigger.TIME_PASSED
             ){
                 Wait(1, WaitBehavior.AbortWhenFalse);
-                status = DefaultPercentage() + RoundToInteger((UltimateChargePercent() * 0.5));
                 SetDamageDealt(ep, status);
                 SetMoveSpeed(ep, status);
             }
@@ -726,16 +773,19 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         else if(
             trigger == HeroModTrigger.USING_ULT
         ){
+            CancelPrimaryAction();
             define tianScale = 2.5;
             define prevHero = HeroOf();
             ForcePlayerHero(ep, Hero.Reinhardt);
             SetMaxHealth(ep, 1000);
             SetDamageDealt(ep, 300);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+            Heal(ep, null, MaxValue());
             for(define scale = 1; scale < tianScale; scale += 0.1){
                 StartScalingPlayer(ep, scale);
                 Wait(0.1, WaitBehavior.IgnoreCondition);
             }
-            
+
             for(define remainSecond = 15; remainSecond > 0; remainSecond--){
                 if(IsDead()){
                     break;
@@ -748,11 +798,11 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
                 Wait(1, WaitBehavior.IgnoreCondition);
             }
 
-            StopForcingHero(ep);
             for(define scale = tianScale; scale > 1.0; scale -= 0.1){
                 StartScalingPlayer(ep, scale);
                 Wait(0.1, WaitBehavior.IgnoreCondition);
             }
+            SetUltimateCharge(ep, 0);
             SetMaxHealth(ep, DefaultPercentage());
             SetDamageDealt(ep, DefaultPercentage());
             ForcePlayerHero(ep, prevHero);
@@ -828,7 +878,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             define strafReqAttackInterval = 0.05;
             define strafReqScatterRange! = 3;
             define strafReqDamageRange! = 5;
-            define strafReqDamage! = 150;
+            define strafReqDamage! = 180;
 
             define enteringAngle! = 
                 VectorWithOutY(
@@ -953,12 +1003,12 @@ rule: "HeroModTrigger/MELEE"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    UltimateChargePercent() >= 50 &&
     (
-        (!IsDummyBot() && IsButtonHeld(ep, Button.Melee)) ||
-        (IsDummyBot() && IsButtonHeld(ep, Button.PrimaryFire))
+        (!IsDummyBot() && IsMeleeing()) ||
+        (IsDummyBot() && IsFiringPrimary())
     ) &&
     (
+        selectHeroMod == HeroModType.HEALING_AMPOULE ||
         selectHeroMod == HeroModType.SAVIOR
     )
 ){
