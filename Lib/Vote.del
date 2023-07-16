@@ -6,22 +6,23 @@ playervar define voteGameDifficulty!;
 
 define DifficultyNum: 6;
 
-enum Difficulty{
-    NO_VOTE = 0,
-    EASY = 1,
-    NORMAL = 2,
-    HARD = 3,
-    HELL = 4,
-    INSANE = 5
+enum GameDifficulty{
+    NO_VOTE,
+    EASY,
+    NORMAL,
+    HARD,
+    HELL,
+    INSANE,
+    LAST
 }
 
 define DifficultyText(in define inputDifficulty!):
-    inputDifficulty == Difficulty.NO_VOTE ? "NO VOTE(0)" :
-    inputDifficulty == Difficulty.EASY ?    "EASY(1)" :
-    inputDifficulty == Difficulty.NORMAL ?  "NORMAL(2)" :
-    inputDifficulty == Difficulty.HARD ?    "HARD(3)" :
-    inputDifficulty == Difficulty.HELL ?    "HELL(4)" :
-    inputDifficulty == Difficulty.INSANE ?  "INSANE(5)" :
+    inputDifficulty == GameDifficulty.NO_VOTE ? "NO VOTE" :
+    inputDifficulty == GameDifficulty.EASY ?    "EASY" :
+    inputDifficulty == GameDifficulty.NORMAL ?  "NORMAL" :
+    inputDifficulty == GameDifficulty.HARD ?    "HARD" :
+    inputDifficulty == GameDifficulty.HELL ?    "HELL" :
+    inputDifficulty == GameDifficulty.INSANE ?  "INSANE" :
     null;
 
 define VoteGameDifficultyText(define inputDifficulty!) playervar "VoteGameDifficultyText"{
@@ -35,8 +36,11 @@ define ConfirmGameDifficultyText(define inputDifficulty!) globalvar "ConfirmGame
 void UpdateVoteOperationText()"UpdateVoteOperationText"{
     DestroyHudText(operationText);
     operationText = CreateHudText(ep,
-        null, <"You can vote game difficulty until game starts.\n\rPress interact key <0> to select vote difficulty.\n\r●Your vote = <1>",
-            ButtonGuide(Button.Interact), VoteGameDifficultyText(voteGameDifficulty)>, null,
+        null, <"You can vote game difficulty until game starts.\n\rPress interact key <2> to select vote difficulty.\n\r●Your vote = <0> <1>",
+            VoteGameDifficultyText(voteGameDifficulty),
+            <"(<0>/<1>)", voteGameDifficulty, GameDifficulty.LAST - 1>,
+            ButtonGuide(Button.Interact)
+        >, null,
         Location.Left, 100,
         null, Color.Yellow, null,
         HudTextRev.StringAndColor, Spectators.DefaultVisibility);
@@ -71,14 +75,14 @@ if(
     IsButtonHeld(ep, Button.Interact)
 ){
     voteGameDifficulty ++;
-    voteGameDifficulty = voteGameDifficulty > Difficulty.INSANE ? Difficulty.NO_VOTE : voteGameDifficulty;
+    voteGameDifficulty = voteGameDifficulty > GameDifficulty.INSANE ? GameDifficulty.NO_VOTE : voteGameDifficulty;
     UpdateVoteOperationText();
 }
 
 globalvar define confirmGameDifficulty!;
 
 globalvar define settingGameDifficulty! = 
-    WorkshopSettingInteger("Game Settings", "Game Difficulty (Override voting difficulty when set above 0)", Difficulty.NO_VOTE + 0, Difficulty.NO_VOTE + 0, Difficulty.INSANE + 0, 0);
+    WorkshopSettingInteger("Game Settings", "Game Difficulty (Override voting difficulty when set above 0)", GameDifficulty.NO_VOTE + 0, GameDifficulty.NO_VOTE + 0, GameDifficulty.INSANE + 0, 0);
 
 rule: "Vote/confirmGameDifficulty"
 Event.OngoingGlobal
@@ -90,7 +94,7 @@ if(
     for(define idx! = 0; idx < NumberOfPlayers(playerTeam); idx++){
         define player! = PlayersInSlot(idx, playerTeam);
         // not include NO_VOTE in votedList
-        if(player.voteGameDifficulty != Difficulty.NO_VOTE){
+        if(player.voteGameDifficulty != GameDifficulty.NO_VOTE){
             votedList[CountOf(votedList)] = player.voteGameDifficulty;
         }
     }
@@ -122,14 +126,14 @@ if(
     // override vote by host debug key
     if(
         IsButtonHeld(hp, Button.Interact) &&
-        hp.voteGameDifficulty != Difficulty.NO_VOTE
+        hp.voteGameDifficulty != GameDifficulty.NO_VOTE
     ){
         // set difficult from host's vote
         confirmGameDifficulty = hp.voteGameDifficulty;
     }
     // override vote by game setting
     else if(
-        settingGameDifficulty != Difficulty.NO_VOTE
+        settingGameDifficulty != GameDifficulty.NO_VOTE
     ){
         // set difficult from host's vote
         confirmGameDifficulty = settingGameDifficulty;
@@ -142,16 +146,16 @@ if(
     // set normal as default
     else{
         // set difficult to easy as default
-        confirmGameDifficulty = Difficulty.NORMAL;
+        confirmGameDifficulty = GameDifficulty.NORMAL;
     }
 }
 
 define DifficultyTextColor(define inputDifficulty):
-    confirmGameDifficulty == Difficulty.EASY ? Color.Blue :
-    confirmGameDifficulty == Difficulty.NORMAL ? Color.Green :
-    confirmGameDifficulty == Difficulty.HARD ? Color.Yellow :
-    confirmGameDifficulty == Difficulty.HELL ? Color.Red :
-    confirmGameDifficulty == Difficulty.INSANE ? warningIconColor :
+    confirmGameDifficulty == GameDifficulty.EASY ? Color.Blue :
+    confirmGameDifficulty == GameDifficulty.NORMAL ? Color.Green :
+    confirmGameDifficulty == GameDifficulty.HARD ? Color.Yellow :
+    confirmGameDifficulty == GameDifficulty.HELL ? Color.Red :
+    confirmGameDifficulty == GameDifficulty.INSANE ? warningIconColor :
     null;
 
 rule: "Vote/showConfirmGameDifficuly"
@@ -159,11 +163,13 @@ Event.OngoingPlayer
 if(
     TeamOf() == playerTeam  &&
     HasSpawned() &&
-    confirmGameDifficulty != Difficulty.NO_VOTE
+    confirmGameDifficulty != GameDifficulty.NO_VOTE
 ){
     CreateHudText(ep,
-        null, <"●game difficulty = <0>", ConfirmGameDifficultyText(confirmGameDifficulty)>, null,
-        Location.Left, -999,
+        null, <"●game difficulty = <0> <1>",
+            ConfirmGameDifficultyText(confirmGameDifficulty),
+            <"(<0>/<1>)", confirmGameDifficulty, GameDifficulty.LAST - 1>>,
+        null, Location.Left, -999,
         Color.White, 
         DifficultyTextColor(confirmGameDifficulty),
         Color.White,
@@ -173,11 +179,13 @@ if(
 rule: "Vote/showConfirmGameDifficulyForSpectators"
 Event.OngoingGlobal
 if(
-    confirmGameDifficulty != Difficulty.NO_VOTE
+    confirmGameDifficulty != GameDifficulty.NO_VOTE
 ){
     CreateHudText(null,
-        null, <"game difficulty = <0>", ConfirmGameDifficultyText(confirmGameDifficulty)>, null,
-        Location.Left, -999,
+        null, <"game difficulty = <0> <1>",
+            ConfirmGameDifficultyText(confirmGameDifficulty),
+            <"(<0>/<1>)", confirmGameDifficulty, GameDifficulty.LAST - 1>>,
+        null, Location.Left, -999,
         Color.White, 
         DifficultyTextColor(confirmGameDifficulty),
         Color.White,

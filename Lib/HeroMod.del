@@ -13,18 +13,20 @@ enum HeroModType{
     ASSASSIN,
     SPRINTER,
     BIRD_MAN,
+    LIGHT_ARMOR,
     HEAVY_ARMOR,
     FIXED_TURRET,
     TECHNICIAN,
     SURVIVALIST,
-    SAVIOR,
     REVENGER,
     POWER_CHARGING,
     RAGE,
     SHOT_CALL,
     FAST_CHARGE,
     SUPER_ULT,
+    SAVIOR,
     STRAFING_REQUEST,
+    TITAN_FORM,
     ZOMBIE,
     LAST
 }
@@ -57,8 +59,13 @@ void UpdateHeroModAllText()"UpdateHeroModAllText"{
             IsInSpawnRoom() &&
             !IsDummyBot()
         ) ? 
-            <"You can change hero mods anytime in spawn room.\n\rPress melee key <0> to select hero mod.\n\r●Your hero mod = <1>", ButtonGuide(Button.Melee), heroModName> :
-            <"●Your hero mod = <0>", heroModName>,
+            <"You can change hero mods anytime in spawn room.\n\rPress melee key <2> to select hero mod.\n\r●Your hero mod = <0> <1>",
+                heroModName,
+                <"(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1>,
+                ButtonGuide(Button.Melee)> :
+            <"You can change hero mods anytime in spawn room.\n\r●Your hero mod = <0> <1>",
+                heroModName,
+                <"(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1>>,
         null, Location.Left, 101, null, Color.Blue, null, HudTextRev.String, Spectators.DefaultVisibility);
 
     heroModOperationText[1] = CreateHudText(ep, null,
@@ -123,35 +130,14 @@ if(
     UpdateHeroModAllText();
 }
 
-disabled rule: "HeroMod/applyHeroModForBot"
+rule: "HeroMod/applyHeroModForBot"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     IsDummyBot() &&
     !IsAssemblingHeroes()
 ){
-    selectHeroMod = RandomValueInArray([
-        HeroModType.NO_HERO_MOD,
-        HeroModType.MEDIC,
-        HeroModType.KILLER,
-        HeroModType.ASSASSIN,
-        HeroModType.SPRINTER,
-        HeroModType.BIRD_MAN,
-        HeroModType.HEAVY_ARMOR,
-        HeroModType.FIXED_TURRET,
-        HeroModType.TECHNICIAN,
-        HeroModType.SURVIVALIST,
-        HeroModType.SAVIOR,
-        HeroModType.REVENGER,
-        HeroModType.POWER_CHARGING,
-        HeroModType.RAGE,
-        HeroModType.SHOT_CALL,
-        HeroModType.FAST_CHARGE,
-        HeroModType.SUPER_ULT,
-        // HeroModType.STRAFING_REQUEST,
-        HeroModType.ZOMBIE
-    ]);
-
+    selectHeroMod = RandomInteger(HeroModType.NO_HERO_MOD + 0, HeroModType.ZOMBIE + 0);
     // do heromod activate action
     DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE);
 
@@ -269,6 +255,31 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         }
     }
     else if(
+        selectHeroMod == HeroModType.LIGHT_ARMOR
+    ){
+        if(
+            trigger == HeroModTrigger.ACTIVATE
+        ){
+            heroModName = "LIGHT ARMOR";
+            heroModDetail = 
+                "+ max health 150%"+ NL +
+                "- move speed 80%"+ NL +
+                "- receive heal 50%";
+            SetMaxHealth(ep, 150);
+            SetMoveSpeed(ep, 80);
+            SetHealingReceived(ep, 50);
+            Heal(ep, null, MaxValue());
+        }
+        else if(
+            trigger == HeroModTrigger.DEACTIVATE
+        ){
+            SetMaxHealth(ep, DefaultPercentage());
+            SetMoveSpeed(ep, DefaultPercentage());
+            SetHealingReceived(ep, DefaultPercentage());
+        }
+    }
+
+    else if(
         selectHeroMod == HeroModType.HEAVY_ARMOR
     ){
         if(
@@ -282,6 +293,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             SetMaxHealth(ep, 300);
             SetMoveSpeed(ep, 50);
             SetHealingReceived(ep, 20);
+            Heal(ep, null, MaxValue());
         }
         else if(
             trigger == HeroModTrigger.DEACTIVATE
@@ -355,8 +367,8 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "TECHNICIAN";
             heroModDetail = 
-                "+ in finalblow enemy, reset cooldown ability2"+ NL +
-                "+ in finalblow enemy, reset cooldown secondary fire ability"+ NL +
+                "+ in kill enemy, reset cooldown ability2"+ NL +
+                "+ in kill enemy, reset cooldown secondary fire ability"+ NL +
                 "- reset re-trigger has 3 seconds interval"+ NL +
                 "- deal damage 50%";
             SetDamageDealt(ep, 50);
@@ -388,8 +400,8 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "SURVIVALIST";
             heroModDetail = 
-                "+ in lost 50% health, reset cooldown ability1"+ NL +
-                "+ in lost 50% health, reset cooldown jump ability"+ NL +
+                "+ in lost 50% health, auto use ability1 and reset cooldown"+ NL +
+                "+ in lost 50% health, auto use jump ability and reset cooldown"+ NL +
                 "- reset re-trigger has 3 seconds interval"+ NL +
                 "- receive heal 50%";
             SetHealingReceived(ep, 50);
@@ -402,13 +414,29 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         else if(
             trigger == HeroModTrigger.LOST_HEALTH
         ){
-            SetAbilityCooldown(ep, Button.Ability1, 0);
-            if(AbilityCharge(ep, Button.Ability1) <= 0)
-                SetAbilityCharge(ep, Button.Ability1, 1);
+            AbortIf(IsInSpawnRoom());
 
+            SetAbilityCooldown(ep, Button.Ability1, 0);
             SetAbilityCooldown(ep, Button.Jump, 0);
-            if(AbilityCharge(ep, Button.Jump) <= 0)
-                SetAbilityCharge(ep, Button.Jump, 1);
+
+            if(AbilityCharge(ep, Button.Ability1) <= 0) SetAbilityCharge(ep, Button.Ability1, 1);
+            if(AbilityCharge(ep, Button.Jump) <= 0) SetAbilityCharge(ep, Button.Jump, 1);
+
+            PressButton(ep, Button.Jump);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+            PressButton(ep, Button.Jump);
+
+            if(!IsUsingAbility1()){
+                PressButton(ep, Button.Ability1);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+            }
+
+            WaitUntil(!IsUsingAbility1(), 3);
+            SetAbilityCooldown(ep, Button.Ability1, 0);
+            SetAbilityCooldown(ep, Button.Jump, 0);
+
+            if(AbilityCharge(ep, Button.Jump) <= 0) SetAbilityCharge(ep, Button.Jump, 1);
+            if(AbilityCharge(ep, Button.Ability1) <= 0) SetAbilityCharge(ep, Button.Ability1, 1);
 
             Wait(3, WaitBehavior.IgnoreCondition);
         }
@@ -434,13 +462,8 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
                     FirstOf(
                         SortedArray(
                             FilteredArray(
-                                PlayersInViewAngle(
-                                    ep,
-                                    TeamOf(),
-                                    90
-                                ),
+                                AllDeadPlayers(playerTeam),
                                 (
-                                    IsDead(ae) &&
                                     DistanceBetween(ep, ae) <= 5
                                 )
                             ),
@@ -466,14 +489,29 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         define status!;
 
         if(
-            trigger == HeroModTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE ||
+            trigger == HeroModTrigger.TIME_PASSED
         ){
+            if(
+                trigger == HeroModTrigger.ACTIVATE
+            ){
+                SetHealingReceived(ep, 50);
+            }
+
+            if(
+                trigger == HeroModTrigger.TIME_PASSED
+            ){
+                Wait(1, WaitBehavior.AbortWhenFalse);
+                status = DefaultPercentage() + RoundToInteger(((1 - NormalizedHealth()) * 100));
+                SetDamageDealt(ep, status);
+                SetMoveSpeed(ep, status);             
+            }
+
             heroModName = "REVENGER";
             heroModDetail = 
                 "+ more lost health, more deal damage (now "+ status +"%/200%)"+ NL +
                 "+ more lost health, more move speed (now "+ status +"%/200%)"+ NL +
                 "- receive heal 50%";
-            SetHealingReceived(ep, 50);
         }
         else if(
             trigger == HeroModTrigger.DEACTIVATE
@@ -482,18 +520,6 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             SetMoveSpeed(ep, DefaultPercentage());
             SetHealingReceived(ep, DefaultPercentage());
         }
-        else if(
-            trigger == HeroModTrigger.TIME_PASSED
-        ){
-            status = DefaultPercentage() + RoundToInteger(((1 - NormalizedHealth()) * 100));
-            SetDamageDealt(ep, status);
-            SetMoveSpeed(ep, status);
-            heroModDetail = 
-                "+ more lost health, more deal damage (now "+ status +"%/200%)"+ NL +
-                "+ more lost health, more move speed (now "+ status +"%/200%)"+ NL +
-                "- receive heal 50%";
-            Wait(1, WaitBehavior.AbortWhenFalse);
-        }
     }
     else if(
         selectHeroMod == HeroModType.POWER_CHARGING
@@ -501,8 +527,18 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         define status!;
 
         if(
-            trigger == HeroModTrigger.ACTIVATE
+            trigger == HeroModTrigger.ACTIVATE ||
+            trigger == HeroModTrigger.TIME_PASSED
         ){
+            if(
+                trigger == HeroModTrigger.TIME_PASSED
+            ){
+                Wait(1, WaitBehavior.AbortWhenFalse);
+                status = DefaultPercentage() + RoundToInteger((UltimateChargePercent() * 0.5));
+                SetDamageDealt(ep, status);
+                SetMoveSpeed(ep, status);
+            }
+
             heroModName = "POWER CHARGING";
             heroModDetail = 
                 "+ more ult charges, more deal damage (now "+ status +"%/150%)"+ NL +
@@ -514,18 +550,6 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             SetDamageDealt(ep, DefaultPercentage());
             SetMoveSpeed(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.TIME_PASSED
-        ){
-            status = DefaultPercentage() + RoundToInteger((UltimateChargePercent() * 0.5));
-            SetDamageDealt(ep, status);
-            SetMoveSpeed(ep, status);
-            heroModDetail = 
-                "+ more ult charges, more deal damage (now "+ status +"%/150%)"+ NL +
-                "+ more ult charges, more move speed (now "+ status +"%/150%)"+ NL +
-                "- in dead, lose all ult charge";
-            Wait(1, WaitBehavior.AbortWhenFalse);
         }
         else if(
             trigger == HeroModTrigger.DEATH
@@ -562,6 +586,12 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
                 "- in every 3 second, lose 1% ult charge";
         }
         else if(
+            trigger == HeroModTrigger.CHARGING_ULT
+        ){
+            Wait(3, WaitBehavior.AbortWhenFalse);
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+        else if(
             trigger == HeroModTrigger.USING_ULT
         ){
             define playerArray! = FilteredArray(
@@ -585,12 +615,6 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
                     PressButton(player, Button.PrimaryFire);
                 }
             }
-        }
-        else if(
-            trigger == HeroModTrigger.CHARGING_ULT
-        ){
-            Wait(3, WaitBehavior.AbortWhenFalse);
-            SetUltimateCharge(ep, UltimateChargePercent() - 1);
         }
     }
     else if(
@@ -640,29 +664,32 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
                 "- in every 3 second, lose 1% ult charge ";
         }
         else if(
-            trigger == HeroModTrigger.DEACTIVATE
+            trigger == HeroModTrigger.DEACTIVATE ||
+            trigger == HeroModTrigger.NOT_USING_ULT
         ){
             ClearStatus(ep, Status.PhasedOut);
             SetDamageDealt(ep, DefaultPercentage());
             SetHealingDealt(ep, DefaultPercentage());
             SetMoveSpeed(ep, DefaultPercentage());
             SetGravity(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.NOT_USING_ULT
-        ){
-            if(isUltUsed){
+            if(
+                trigger == HeroModTrigger.NOT_USING_ULT &&
+                isUltUsed
+            ){
                 isUltUsed = false;
-                ClearStatus(ep, Status.PhasedOut);
-                SetDamageDealt(ep, DefaultPercentage());
-                SetHealingDealt(ep, DefaultPercentage());
-                SetMoveSpeed(ep, DefaultPercentage());
-                SetGravity(ep, DefaultPercentage());
                 if(
                     ProbabilityTrue(50)
                 ){
                     SetUltimateCharge(ep, 100);
                 }
+            }
+        }
+        else if(
+            trigger == HeroModTrigger.CHARGING_ULT
+        ){
+            Wait(3, WaitBehavior.AbortWhenFalse);
+            if(UltimateChargePercent() < DefaultPercentage()){
+                SetUltimateCharge(ep, UltimateChargePercent() - 1);
             }
         }
         else if(
@@ -676,6 +703,18 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             SetMoveSpeed(ep, 200);
             SetGravity(ep, 25);
         }
+    }
+    else if(
+        selectHeroMod == HeroModType.TITAN_FORM
+    ){
+        if(
+            trigger == HeroModTrigger.ACTIVATE
+        ){
+            heroModName = "TITAN FORM";
+            heroModDetail = 
+                "+ in use ult, transform to titan and rampage while 15 second"+ NL +
+                "- in every 3 second, lose 1% ult charge ";
+        }
         else if(
             trigger == HeroModTrigger.CHARGING_ULT
         ){
@@ -683,6 +722,41 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             if(UltimateChargePercent() < DefaultPercentage()){
                 SetUltimateCharge(ep, UltimateChargePercent() - 1);
             }
+        }
+        else if(
+            trigger == HeroModTrigger.USING_ULT
+        ){
+            define tianScale = 2.5;
+            define prevHero = HeroOf();
+            ForcePlayerHero(ep, Hero.Reinhardt);
+            SetMaxHealth(ep, 1000);
+            SetDamageDealt(ep, 300);
+            for(define scale = 1; scale < tianScale; scale += 0.1){
+                StartScalingPlayer(ep, scale);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+            }
+            
+            for(define remainSecond = 15; remainSecond > 0; remainSecond--){
+                if(IsDead()){
+                    break;
+                }
+                if(UltimateChargePercent() < DefaultPercentage()){
+                    SetUltimateCharge(ep, UltimateChargePercent() + 22);
+                }
+                SetAbilityCooldown(ep, Button.Ability1, 0);
+                SetAbilityCooldown(ep, Button.Ability2, 0);
+                Wait(1, WaitBehavior.IgnoreCondition);
+            }
+
+            StopForcingHero(ep);
+            for(define scale = tianScale; scale > 1.0; scale -= 0.1){
+                StartScalingPlayer(ep, scale);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+            }
+            SetMaxHealth(ep, DefaultPercentage());
+            SetDamageDealt(ep, DefaultPercentage());
+            ForcePlayerHero(ep, prevHero);
+            StopForcingHero(ep);
         }
     }
     else if(
@@ -736,7 +810,9 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             trigger == HeroModTrigger.CHARGING_ULT
         ){
             Wait(3, WaitBehavior.AbortWhenFalse);
-            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+            if(UltimateChargePercent() < DefaultPercentage()){
+                SetUltimateCharge(ep, UltimateChargePercent() - 1);
+            }
         }
         else if(
             trigger == HeroModTrigger.USING_ULT
@@ -841,8 +917,8 @@ Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     (
-        selectHeroMod == HeroModType.REVENGER ||
-        selectHeroMod == HeroModType.POWER_CHARGING
+        selectHeroMod == HeroModType.POWER_CHARGING ||
+        selectHeroMod == HeroModType.REVENGER
     )
 ){
     DoHeroModAction(selectHeroMod, HeroModTrigger.TIME_PASSED);
@@ -897,7 +973,8 @@ if(
     (
         selectHeroMod == HeroModType.SHOT_CALL ||
         selectHeroMod == HeroModType.SUPER_ULT ||
-        selectHeroMod == HeroModType.STRAFING_REQUEST
+        selectHeroMod == HeroModType.STRAFING_REQUEST ||
+        selectHeroMod == HeroModType.TITAN_FORM
     ) 
 ){
     DoHeroModAction(selectHeroMod, HeroModTrigger.USING_ULT);
@@ -915,7 +992,7 @@ if(
     DoHeroModAction(selectHeroMod, HeroModTrigger.NOT_USING_ULT);
 }
 
-rule: "HeroModTrigger/ULT_CHARGE"
+rule: "HeroModTrigger/CHARGING_ULT"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
@@ -924,6 +1001,7 @@ if(
         selectHeroMod == HeroModType.SHOT_CALL ||
         selectHeroMod == HeroModType.FAST_CHARGE ||
         selectHeroMod == HeroModType.SUPER_ULT ||
+        selectHeroMod == HeroModType.TITAN_FORM ||
         selectHeroMod == HeroModType.STRAFING_REQUEST
     )
 ){
