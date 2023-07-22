@@ -9,16 +9,16 @@ enum HeroModType{
     INIT = 0,
     NO_HERO_MOD,
     MEDIC,
-    KILLER,
+    HIT_MAN,
     ASSASSIN,
     SPRINTER,
     BIRD_MAN,
     LIGHT_ARMOR,
     HEAVY_ARMOR,
     FIXED_TURRET,
-    REVENGER,
+    ADRENALINE_RUSH,
     POWER_CHARGING,
-    HEALING_AMPOULE,
+    HEALING_SYRINGE,
     SAVIOR,
     TECHNICIAN,
     SURVIVALIST,
@@ -60,11 +60,11 @@ void UpdateHeroModAllText()"UpdateHeroModAllText"{
             IsInSpawnRoom() &&
             !IsDummyBot()
         ) ? 
-            <"You can change mods in respawn area anytime.\n\rPress melee key <2> to select mod.\n\r●Your mod = <0> <1>",
+            <"You can change mod in respawn area anytime.\n\rPress melee key <2> to select mod.\n\r●Your mod = <0> <1>",
                 heroModName,
                 <"(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1>,
                 ButtonGuide(Button.Melee)> :
-            <"You can change mods in respawn area anytime.\n\r●Your mod = <0> <1>",
+            <"You can change mod in respawn area anytime.\n\r●Your mod = <0> <1>",
                 heroModName,
                 <"(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1>>,
         null, Location.Left, 101, null, Color.Blue, null, HudTextRev.String, Spectators.DefaultVisibility);
@@ -196,12 +196,12 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         }
     }
     else if(
-        selectHeroMod == HeroModType.KILLER
+        selectHeroMod == HeroModType.HIT_MAN
     ){
         if(
             trigger == HeroModTrigger.ACTIVATE
         ){
-            heroModName = "KILLER";
+            heroModName = "HIT MAN";
             heroModDetail = 
                 "+ deal damage 150%"+ NL +
                 "- receive heal 50%";
@@ -443,20 +443,21 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         }
     }
     else if(
-        selectHeroMod == HeroModType.HEALING_AMPOULE
+        selectHeroMod == HeroModType.HEALING_SYRINGE
     ){
         if(
             trigger == HeroModTrigger.ACTIVATE
         ){
-            heroModName = "HEALING AMPOULE";
+            heroModName = "HEALING SYRINGE";
             heroModDetail = 
-                "+ in use melee to teammate, deal 500 heal to teammate instantly"+ NL +
-                "- in heal, consume 15% ult charge";
+                "+ in use melee, receive 200 health instantly"+ NL +
+                "+ in use melee to teammate, deal 500 health to teammate instantly"+ NL +
+                "- in receive/deal health, consume 20% ult charge";
         }
         else if(
             trigger == HeroModTrigger.MELEE
         ){
-            define consumeUltCharge! = 15;
+            define consumeUltCharge! = 20;
             if(
                 IsAlive() &&
                 UltimateChargePercent() >= consumeUltCharge
@@ -481,9 +482,15 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
                     Heal(target, ep, 500);
                     SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
                     PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
-                    PlayEffect(AllPlayers(playerTeam), PlayEffect.BuffExplosionSound, null, target, 100);
+                    PlayEffect([ep,target], PlayEffect.BuffExplosionSound, null, target, 100);
                     SmallMessage(ep, "Healed "+ target + HeroIconString(HeroOf(target)));
                     SmallMessage(target, "Healed by "+ ep + HeroIconString(HeroOf(ep)));
+                }
+                else if(NormalizedHealth(ep) < 1.0){
+                    Heal(ep, ep, 200);
+                    SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
+                    PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, ep, 1.5);
+                    PlayEffect(ep, PlayEffect.BuffExplosionSound, null, ep, 100);
                 }
             }
         }
@@ -539,7 +546,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
                     Resurrect(target);
                     SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
                     PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
-                    PlayEffect(AllPlayers(playerTeam), PlayEffect.BuffExplosionSound, null, target, 100);
+                    PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
                     SmallMessage(ep, "Revived "+ target + HeroIconString(HeroOf(target)));
                     SmallMessage(target, "Revived by "+ ep + HeroIconString(HeroOf(ep)));
                 }
@@ -547,7 +554,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         }
     }
     else if(
-        selectHeroMod == HeroModType.REVENGER
+        selectHeroMod == HeroModType.ADRENALINE_RUSH
     ){
         if(
             trigger == HeroModTrigger.ACTIVATE ||
@@ -560,7 +567,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             }
 
             define status!  = DefaultPercentage() + RoundToInteger(((1 - NormalizedHealth()) * 100));
-            heroModName = "REVENGER";
+            heroModName = "ADRENALINE RUSH";
             heroModDetail = 
                 "+ more lost health, more deal damage (now "+ status +"%/200%)"+ NL +
                 "+ more lost health, more move speed (now "+ status +"%/200%)"+ NL +
@@ -664,6 +671,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
                 define player! = playerArray[index];
                 SetUltimateCharge(player, 100);
                 SmallMessage(player, "gained ult full charge by "+ ep + HeroIconString(HeroOf()));
+                PlayEffect(player, PlayEffect.BuffExplosionSound, null, player, 100);
                 
                 // bot use ult bt syc attack
                 if(
@@ -772,6 +780,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             heroModName = "TITAN FORM";
             heroModDetail = 
                 "+ in use ult, transform to titan and rampage while 15 second"+ NL +
+                "+ titan has 400% deal damage and ability fast charge "+ NL +
                 "- in every 3 second, lose 1% ult charge ";
         }
         else if(
@@ -790,7 +799,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             define prevHero = HeroOf();
             ForcePlayerHero(ep, Hero.Reinhardt);
             SetMaxHealth(ep, 1000);
-            SetDamageDealt(ep, 300);
+            SetDamageDealt(ep, 400);
             Wait(0.1, WaitBehavior.IgnoreCondition);
             Heal(ep, null, MaxValue());
             for(define scale = 1; scale < tianScale; scale += 0.1){
@@ -981,7 +990,7 @@ if(
     (
         selectHeroMod == HeroModType.SAVIOR ||
         selectHeroMod == HeroModType.POWER_CHARGING ||
-        selectHeroMod == HeroModType.REVENGER
+        selectHeroMod == HeroModType.ADRENALINE_RUSH
     )
 ){
     DoHeroModAction(selectHeroMod, HeroModTrigger.TIME_PASSED);
@@ -1021,7 +1030,7 @@ if(
         (IsDummyBot() && IsFiringPrimary())
     ) &&
     (
-        selectHeroMod == HeroModType.HEALING_AMPOULE ||
+        selectHeroMod == HeroModType.HEALING_SYRINGE ||
         selectHeroMod == HeroModType.SAVIOR
     )
 ){

@@ -46,8 +46,11 @@ Event.OngoingGlobal
 if(
     IsAssemblingHeroes()
 ){
-    SetMatchTime(30);
-    // SetMatchTime(0);
+    SetMatchTime(40);
+    Wait(10, WaitBehavior.AbortWhenFalse);
+    if(HumanPlayerNum() <= 0){
+        SetMatchTime(0);
+    }
 }
 
 rule: "Initialize/shortenSetup"
@@ -55,8 +58,10 @@ Event.OngoingGlobal
 if(
     IsInSetup()
 ){
-    SetMatchTime(60);
-    // SetMatchTime(15);
+    SetMatchTime(50);
+    if(HumanPlayerNum() <= 0){
+        SetMatchTime(0);
+    }
 }
 
 // TAG Player ----------
@@ -661,11 +666,11 @@ playervar define eachMinSpawnInterval!;
 playervar define eachChargeUltInterval!;
 playervar define eachBodyScale!;
 define basicSpawnTimeMin: 
-    confirmGameDifficulty == GameDifficulty.EASY ?     8.0 :
-    confirmGameDifficulty == GameDifficulty.NORMAL ?   7.0 :
-    confirmGameDifficulty == GameDifficulty.HARD ?     6.0 :
-    confirmGameDifficulty == GameDifficulty.HELL ?     5.0 :
-    confirmGameDifficulty == GameDifficulty.INSANE ?   4.0 :
+    confirmGameDifficulty == GameDifficulty.EASY ?     9.0 :
+    confirmGameDifficulty == GameDifficulty.NORMAL ?   8.0 :
+    confirmGameDifficulty == GameDifficulty.HARD ?     7.0 :
+    confirmGameDifficulty == GameDifficulty.HELL ?     6.0 :
+    confirmGameDifficulty == GameDifficulty.INSANE ?   5.0 :
     0;
 
 define spawnTimeScaleMinToMax: 2.0;
@@ -1042,7 +1047,7 @@ Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCo
     return true;
 }
 
-define showTeleportBeamTime: 0.5;
+define showTeleportBeamTime: 0.7;
 
 void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "PlayTeleportEffect"{
     // if before teleport
@@ -1109,7 +1114,9 @@ void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
 define forceActiveTeleport: 40;
 define teleportToCommonPositionProb: 50;
 
-void HybridTeleport()"HybridTeleport"{
+void HybridTeleport(define isBeamFromBody!)"HybridTeleport"{
+    define isHasPosition! = false;
+
     if(
         // during Object attacks
         IsPlayerOnObject ||
@@ -1117,30 +1124,37 @@ void HybridTeleport()"HybridTeleport"{
         ProbabilityTrue(forceActiveTeleport)
     ){
         if(
-            // probability
+            // is boss class type
+            IsThreatEnemyType(ep) &&
+            // payload near destination
+            IsCloseWin(playerTeam)
+        ){
+            // set teleport position to object
+            teleportPosition = CurrentObjectOnPosition();
+            isHasPosition = true;
+        }
+        else if(
+            // force use common pos probability
             ProbabilityTrue(teleportToCommonPositionProb)
         ){
-            if(SetTeleportPositionToCommonPosition()){
-                TeleportWithEffect(false);
-            }
+            isHasPosition = SetTeleportPositionToCommonPosition();
         }
         else{
-            if(SetTeleportPositionToObjectAhead()){
-                TeleportWithEffect(false);
-            }
+            isHasPosition = SetTeleportPositionToObjectAhead();
         }
     }
     else{
         if(IsTeamOnDefense(TeamOf())){
-            if(SetTeleportPositionToPlayerFront()){
-                TeleportWithEffect(false);
-            }
+            isHasPosition = SetTeleportPositionToPlayerFront();
         }
         else{
-            if(SetTeleportPositionToPlayerAround()){
-                TeleportWithEffect(false);
-            }
+            isHasPosition = SetTeleportPositionToPlayerAround();
         }
+    }
+
+    if(isHasPosition){
+        // teleport to teleportPosition
+        TeleportWithEffect(isBeamFromBody);
     }
 }
 
@@ -1151,7 +1165,7 @@ if(
     IsGameInProgress() &&
     IsInSpawnRoom()
 ){
-    HybridTeleport();
+    HybridTeleport(false);
     // failsafe
     Wait(3, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
@@ -1193,7 +1207,7 @@ if(
 
     // when over checkConditionCount 
     // teleport
-    HybridTeleport();
+    HybridTeleport(false);
 
     LoopIfConditionIsTrue();
 }
@@ -1332,31 +1346,8 @@ if(
     }
 
     if(IsAlive()){
-        // action
-        if(
-            IsPlayerOnObject
-        ){
-            if(
-                // close win
-                IsCloseWin(playerTeam)
-            ){
-                // set teleport position to object
-                teleportPosition = CurrentObjectOnPosition();
-                TeleportWithEffect(true);
-            }
-            else{
-                if(SetTeleportPositionToObjectAhead()){
-                    // set teleport to object ahead
-                    TeleportWithEffect(true);
-                }
-            }
-        }
-        else{
-            if(SetTeleportPositionToPlayerFront()){
-                // set teleport to player front
-                TeleportWithEffect(true);
-            }
-        }
+        // show teleport beam from body
+        HybridTeleport(true);
     }
 
     LoopIfConditionIsTrue();
@@ -1494,7 +1485,7 @@ define autoTuneDmgDltLimit:
     confirmGameDifficulty == GameDifficulty.INSANE ?   100 :
     0;
 
-define upValueBase: 1;
+define upValueBase: 0.8;
 define upValueScale:
     confirmGameDifficulty == GameDifficulty.EASY ?     upValueBase * 1.0 :
     confirmGameDifficulty == GameDifficulty.NORMAL ?   upValueBase * 1.5 :
@@ -1503,13 +1494,13 @@ define upValueScale:
     confirmGameDifficulty == GameDifficulty.INSANE ?   upValueBase * 3.0 :
     0;
 
-define downValueBase: 1;
+define downValueBase: 2.0;
 define downValueScale:
-    confirmGameDifficulty == GameDifficulty.EASY ?     downValueBase * 3.0 :
-    confirmGameDifficulty == GameDifficulty.NORMAL ?   downValueBase * 3.0 :
-    confirmGameDifficulty == GameDifficulty.HARD ?     downValueBase * 3.0 :
-    confirmGameDifficulty == GameDifficulty.HELL ?     downValueBase * 3.0 :
-    confirmGameDifficulty == GameDifficulty.INSANE ?   downValueBase * 3.0 :
+    confirmGameDifficulty == GameDifficulty.EASY ?     downValueBase * 1.0 :
+    confirmGameDifficulty == GameDifficulty.NORMAL ?   downValueBase * 1.0 :
+    confirmGameDifficulty == GameDifficulty.HARD ?     downValueBase * 1.0 :
+    confirmGameDifficulty == GameDifficulty.HELL ?     downValueBase * 1.0 :
+    confirmGameDifficulty == GameDifficulty.INSANE ?   downValueBase * 1.0 :
     0;
 
 globalvar define autoTuneDmgDlt!;
