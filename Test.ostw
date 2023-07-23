@@ -60,7 +60,7 @@ if(
         
         // SetDamageDealt(AllPlayers(), 10);
         SetStatus(hp, null, Status.Unkillable, MaxValue());
-        SetRespawnMaxTime(ap, 0);
+        SetRespawnMaxTime(ap, 5);
         SetGravity(hp, 10);
 
         Wait(120);
@@ -78,7 +78,35 @@ if(
     }
 }
 
-disabled rule: "RestartTeamFormation"
+rule: "DebugCode"
+Event.OngoingPlayer
+if(
+    ep == hp &&
+    HasSpawned(ep)
+){
+    dbgHudTxt(<"DebugCode">);
+
+    define buttonList! = [
+        Button.Ability1
+        Button.Ability2,
+        Button.SecondaryFire,
+        Button.Jump,
+        Button.Crouch
+    ];
+
+    for(define index! = 0; index < CountOf(buttonList); index++){
+        AddAbilityStock(buttonList[index], 1);
+    }
+
+
+
+    Wait(1);
+    Loop();
+}
+
+
+// TeamFormation -----------------------------------------------
+disabled rule: "TeamFormation/restart"
 Event.OngoingPlayer
 if(
     startCyclicAction &&
@@ -96,72 +124,6 @@ if(
         Respawn(ap);
         Wait(1);
     }
-}
-
-playervar define power!;
-
-define maxPower: 500;
-
-rule: "ChargePower"
-Event.OnHealingDealt
-if(
-    TeamOf() == playerTeam &&
-    Healee() != ep &&
-    maxPower > power
-){
-    define gainPower = (EventHealing() * 0.5);
-    if(power + gainPower > maxPower){
-        power = maxPower;
-    }
-    else{
-        power = RoundToInteger(power +gainPower, Rounding.Down);
-    }
-}
-
-
-rule: "ReleasePower"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    IsMeleeing()
-){
-    define ballSize! = power / 200;
-    define ballSpeed! = 30 - (power / 50);
-    define ballDamage! = power;
-    define ballBlastRange! = ballSize * 2.5;
-    define ballBlastCount! = ballSize <= 3 ? ballSize : 3;
-    power = 0;
-
-    define ballPos = BodyPosition(ep);
-    define aimPos! = AimingPositionWithLimit(40);
-
-    define effects = CreateEffect(AllPlayers(), Effect.Sphere, Color.Yellow,
-        ballPos, ballSize, EffectRev.PositionAndRadius);
-    ChaseVariableAtRate(
-        ballPos, aimPos, ballSpeed,
-        RateChaseReevaluation.DestinationAndRate);
-
-    while(
-        // not
-        !(
-            // hit surface
-            DistanceBetween(ballPos, aimPos) <= (ballSize * 0.5) ||
-            // hit enemy
-            DistanceBetween(ballPos, ClosestPlayerTo(ballPos, enemyTeam)) <= (ballSize * 0.75)
-
-        )
-    ){
-        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Yellow, ballPos, ballSize * 1.5);
-        Wait(0.1, WaitBehavior.IgnoreCondition);
-    }
-    StopChasingVariable(ballPos);
-    DestroyEffect(effects);
-    
-    define targets! = PlayersWithinRadius(ballPos, ballBlastRange, enemyTeam, RadiusLOS.Off);
-    ApplyBlastImpulse(targets, ballPos, ballBlastRange);
-    Damage(targets, ep, ballDamage);
-    PlayContinuousBlast(Color.Yellow, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
-
 }
 
 // killCount -----------------------------------------------
@@ -239,7 +201,6 @@ Event.OngoingGlobal
     debugHuds[Last()] = CreateDebugHud("enemy team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team2);
     debugHuds[Last()] = CreateDebugHud("killCountTeam1", killCountTeam1, Color.Team1);
     debugHuds[Last()] = CreateDebugHud("killCountTeam2", killCountTeam2, Color.Team2);
-    debugHuds[Last()] = CreateDebugHud("power", hp.power, Color.Orange);
 }
 
 rule: "Debug/TuneVal/startIncreaseParam"
