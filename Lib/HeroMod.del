@@ -6,7 +6,7 @@ playervar define heroModName!;
 playervar define heroModDetail!;
 
 enum HeroModType{
-    INIT = 0,
+    INIT,
     NO_HERO_MOD,
     MEDIC,
     HIT_MAN,
@@ -28,6 +28,7 @@ enum HeroModType{
     SUPER_ULT,
     STRAFING_REQUEST,
     TITAN_FORM,
+    GRUDGE_FIRE_BALL,
     ZOMBIE,
     LAST
 }
@@ -35,14 +36,15 @@ enum HeroModType{
 enum HeroModTrigger{
     ACTIVATE,
     DEACTIVATE,
+    LONG_PRESS_MELEE_KEY,
     TIME_PASSED,
     STOP,
     MOVING,
-    MELEE,
     USING_ULT,
     NOT_USING_ULT,
     CHARGING_ULT,
     LOST_HEALTH,
+    DEAL_HEAL,
     ELEMINATION,
     DEATH,
     TEAMMATE_DEATH
@@ -60,13 +62,22 @@ void UpdateHeroModAllText()"UpdateHeroModAllText"{
             IsInSpawnRoom() &&
             !IsDummyBot()
         ) ? 
-            <"You can change mod in respawn area anytime.\n\rPress melee key <2> to select mod.\n\r●Your mod = <0> <1>",
+            <
+                "You can change mod in respawn area anytime.\n\rPress <2>/<3> to select mod.\n\r●Your mod = <0> <1>",
                 heroModName,
-                <"(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1>,
-                ButtonGuide(Button.Melee)> :
-            <"You can change mod in respawn area anytime.\n\r●Your mod = <0> <1>",
+                <
+                    "(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1
+                >,
+                ButtonGuide(Button.Jump),
+                ButtonGuide(Button.Crouch)>
+                    :
+            <
+                "You can change mod in respawn area anytime.\n\r●Your mod = <0> <1>",
                 heroModName,
-                <"(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1>>,
+                <
+                    "(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1
+                >
+            >,
         null, Location.Left, 101, null, Color.Blue, null, HudTextRev.String, Spectators.DefaultVisibility);
 
     heroModOperationText[1] = CreateHudText(ep, null,
@@ -107,7 +118,7 @@ if(
 ){
     selectHeroMod = HeroModType.NO_HERO_MOD;
 
-    DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE, null);
     UpdateHeroModAllText();
 }
 
@@ -117,15 +128,22 @@ if(
     TeamOf() == playerTeam &&
     !IsDummyBot() &&
     IsInSpawnRoom() &&
-    IsButtonHeld(ep, Button.Melee)
+    (
+        ( IsButtonHeld(ep, Button.Jump) && !IsButtonHeld(ep, Button.Crouch) ) ||
+        ( !IsButtonHeld(ep, Button.Jump) && IsButtonHeld(ep, Button.Crouch) )
+    )
 ){
     // do heromod deactivate action
-    DoHeroModAction(selectHeroMod, HeroModTrigger.DEACTIVATE);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.DEACTIVATE, null);
 
-    selectHeroMod = selectHeroMod < HeroModType.LAST - 1 ? selectHeroMod + 1 : HeroModType.NO_HERO_MOD;
+    // switch mod
+    selectHeroMod = 
+        IsButtonHeld(ep, Button.Jump) ?
+            selectHeroMod < HeroModType.LAST - 1 ? selectHeroMod + 1 : HeroModType.INIT + 1 :
+            selectHeroMod > HeroModType.INIT + 1 ? selectHeroMod - 1 : HeroModType.LAST - 1 ;
 
     // do heromod activate action
-    DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE, null);
 
     // update text
     UpdateHeroModAllText();
@@ -138,15 +156,17 @@ if(
     IsDummyBot() &&
     !IsAssemblingHeroes()
 ){
-    selectHeroMod = RandomInteger(HeroModType.NO_HERO_MOD + 0, HeroModType.ZOMBIE + 0);
+    selectHeroMod = RandomInteger(HeroModType.INIT + 1, HeroModType.LAST - 1);
     // do heromod activate action
-    DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE, null);
 
     // update text
     UpdateHeroModAllText();
 }
 
-void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModAction"{
+playervar define modStatus!;
+
+void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) playervar "DoHeroModAction"{
     // common trigger action
     if(
         trigger == HeroModTrigger.TEAMMATE_DEATH
@@ -335,9 +355,9 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "FIXED TURRET";
             heroModDetail = 
-                "+ in stop, deal damage 150%"+ NL +
-                "+ in stop, max health 200%"+ NL +
-                "- in moving, deal damage 30%";
+                "+ standing, deal damage 150%"+ NL +
+                "+ standing, max health 200%"+ NL +
+                "- moving, deal damage 30%";
         }
         else if(
             trigger == HeroModTrigger.DEACTIVATE
@@ -368,8 +388,8 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "TECHNICIAN";
             heroModDetail = 
-                "+ in kill enemy, reset cooldown ability2"+ NL +
-                "+ in kill enemy, reset cooldown secondary fire ability"+ NL +
+                "+ kill enemy, reset cooldown ability2"+ NL +
+                "+ kill enemy, reset cooldown secondary fire ability"+ NL +
                 "- reset re-trigger has 3 seconds interval"+ NL +
                 "- deal damage 50%";
             SetDamageDealt(ep, 50);
@@ -401,8 +421,8 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "SURVIVALIST";
             heroModDetail = 
-                "+ in lost 50% health, auto use ability1 and reset cooldown"+ NL +
-                "+ in lost 50% health, auto use jump ability and reset cooldown"+ NL +
+                "+ lost 50% health, auto use ability1 and reset cooldown"+ NL +
+                "+ lost 50% health, auto use jump ability and reset cooldown"+ NL +
                 "- reset re-trigger has 1.5 seconds interval"+ NL +
                 "- receive heal 50%";
             SetHealingReceived(ep, 50);
@@ -450,12 +470,12 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "HEALING SYRINGE";
             heroModDetail = 
-                "+ in use melee, receive 200 health instantly"+ NL +
-                "+ in use melee to teammate, deal 500 health to teammate instantly"+ NL +
-                "- in receive/deal health, consume 20% ult charge";
+                "+ long press melee key without teammate, heal 200 health of own instantly"+ NL +
+                "+ long press melee key to teammate, heal 500 health to teammate instantly"+ NL +
+                "- in heal/deal health, consume 20% ult charge";
         }
         else if(
-            trigger == HeroModTrigger.MELEE
+            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
         ){
             define consumeUltCharge! = 20;
             if(
@@ -504,7 +524,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "SAVIOR";
             heroModDetail = 
-                "+ in use melee to dead teammate, revive teammate"+ NL +
+                "+ long press melee key to dead teammate, revive teammate"+ NL +
                 "- in revive, consume 50% ult charge";
         }
         else if(
@@ -520,7 +540,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             Wait(2, WaitBehavior.AbortWhenFalse);
         }
         else if(
-            trigger == HeroModTrigger.MELEE
+            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
         ){
             define consumeUltCharge! = 50;
             if(
@@ -554,26 +574,112 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         }
     }
     else if(
+        selectHeroMod == HeroModType.GRUDGE_FIRE_BALL
+    ){
+        if(
+            trigger == HeroModTrigger.ACTIVATE ||
+            trigger == HeroModTrigger.TIME_PASSED
+        ){
+            heroModName = "GRUDGE FIRE BALL";
+            heroModDetail = 
+                "+ heal teammate, charging grudge power (now "+ modStatus +"% / 500%)"+ NL +
+                "+ long press melee key, release grudge power as fire ball and blast"+ NL +
+                "- receive heal 50%";
+
+            if(
+                trigger == HeroModTrigger.ACTIVATE
+            ){
+                SetHealingReceived(ep, 50);
+            }
+            else if(
+                trigger == HeroModTrigger.TIME_PASSED
+            ){
+                Wait(1, WaitBehavior.AbortWhenFalse);
+            }
+        }
+        else if(
+            trigger == HeroModTrigger.DEACTIVATE
+        ){
+            SetHealingReceived(ep, DefaultPercentage());
+        }
+        else if(
+            trigger == HeroModTrigger.DEAL_HEAL
+        ){
+            define maxPower! = 500;
+            AbortIf(maxPower <= modStatus);
+
+            define gainPower! = (eventPayload * 1.0);
+            if(modStatus + gainPower > maxPower){
+                modStatus = maxPower;
+            }
+            else{
+                modStatus = RoundToInteger(modStatus + gainPower, Rounding.Nearest);
+            }
+        }
+        else if(
+            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+        ){
+            define ballSize! = modStatus / 200;
+            define ballSpeed! = 30 - (modStatus / 50);
+            define ballDamage! = modStatus;
+            define ballBlastRange! = ballSize * 5.0;
+            define ballBlastCount! = ballSize * 2 <= 5 ? ballSize * 2 : 5;
+            modStatus = 0;
+
+            define ballPos = EyePosition();
+            define aimPos! = AimingPositionWithLimit(40);
+
+            define effects = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
+                ballPos, ballSize, EffectRev.PositionAndRadius);
+            ChaseVariableAtRate(
+                ballPos, aimPos, ballSpeed,
+                RateChaseReevaluation.DestinationAndRate);
+            PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 75);
+
+            while(
+                // not
+                !(
+                    // hit surface
+                    DistanceBetween(ballPos, aimPos) <= (ballSize * 0.5) ||
+                    // hit enemy
+                    DistanceBetween(ballPos, ClosestPlayerTo(ballPos, enemyTeam)) <= (ballSize < 1 ? 1 : ballSize)
+
+                )
+            ){
+                PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+            }
+            StopChasingVariable(ballPos);
+            DestroyEffect(effects);
+            
+            define targets! = PlayersWithinRadius(ballPos, ballBlastRange, enemyTeam, RadiusLOS.Off);
+            ApplyBlastImpulse(targets, ballPos, ballBlastRange);
+            Damage(targets, ep, ballDamage);
+            PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
+        }
+    }
+    else if(
         selectHeroMod == HeroModType.ADRENALINE_RUSH
     ){
         if(
             trigger == HeroModTrigger.ACTIVATE ||
             trigger == HeroModTrigger.TIME_PASSED
         ){
+            define status! = IsAlive() ? 
+                DefaultPercentage() + RoundToInteger(((1 - NormalizedHealth()) * 100)) :
+                100;
+            heroModName = "ADRENALINE RUSH";
+            heroModDetail = 
+                "+ more lost health, more deal damage (now "+ status +"% / 200%)"+ NL +
+                "+ more lost health, more move speed (now "+ status +"% / 200%)"+ NL +
+                "- receive heal 50%";
+
             if(
                 trigger == HeroModTrigger.ACTIVATE
             ){
                 SetHealingReceived(ep, 50);
             }
-
-            define status!  = DefaultPercentage() + RoundToInteger(((1 - NormalizedHealth()) * 100));
-            heroModName = "ADRENALINE RUSH";
-            heroModDetail = 
-                "+ more lost health, more deal damage (now "+ status +"%/200%)"+ NL +
-                "+ more lost health, more move speed (now "+ status +"%/200%)"+ NL +
-                "- receive heal 50%";
-
-            if(
+            else if(
                 trigger == HeroModTrigger.TIME_PASSED
             ){
                 SetDamageDealt(ep, status);
@@ -599,8 +705,8 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             define status! = DefaultPercentage() + RoundToInteger((UltimateChargePercent() * 0.5));
             heroModName = "POWER CHARGING";
             heroModDetail = 
-                "+ more ult charges, more deal damage (now "+ status +"%/150%)"+ NL +
-                "+ more ult charges, more move speed (now "+ status +"%/150%)"+ NL +
+                "+ more ult charges, more deal damage (now "+ status +"% / 150%)"+ NL +
+                "+ more ult charges, more move speed (now "+ status +"% / 150%)"+ NL +
                 "- in dead, lose all ult charge";
 
             if(
@@ -631,7 +737,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "RAGE";
             heroModDetail = 
-                "+ in dead teammate, gain 30% ult charge"+ NL +
+                "+ dead teammate, gain 30% ult charge"+ NL +
                 "- in dead, lose all ult charge";
         }
         else if(
@@ -648,7 +754,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "SHOT CALL";
             heroModDetail = 
-                "+ in use ult, all teammates gain ult full charge"+ NL +
+                "+ use ult, all teammates gain ult full charge"+ NL +
                 "- in every 3 second, lose 1% ult charge";
         }
         else if(
@@ -692,7 +798,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "FAST CHARGE";
             heroModDetail = 
-                "+ in every 1 second, gain 3% ult charge"+ NL +
+                "+ every 1 second, gain 3% ult charge"+ NL +
                 "- max health 50%"+ NL +
                 "- deal damage 50%"+ NL +
                 "- deal heal 50%";
@@ -722,13 +828,13 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "SUPER ULT";
             heroModDetail = 
-                "+ in ult end, more gain ult full charge by 50% probility"+ NL +
-                "+ in ult using, invincible status"+ NL +
-                "+ in ult using, deal damage 400%"+ NL +
-                "+ in ult using, deal heal 400%"+ NL +
-                "+ in ult using, move speed 200%"+ NL +
-                "+ in ult using, gravity 25%"+ NL +
-                "- in every 3 second, lose 1% ult charge ";
+                "+ ult end, more gain ult full charge by 50% probility"+ NL +
+                "+ ult using, invincible status"+ NL +
+                "+ ult using, deal damage 400%"+ NL +
+                "+ ult using, deal heal 400%"+ NL +
+                "+ ult using, move speed 200%"+ NL +
+                "+ ult using, gravity 25%"+ NL +
+                "- every 3 second, lose 1% ult charge ";
         }
         else if(
             trigger == HeroModTrigger.DEACTIVATE ||
@@ -739,6 +845,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             SetHealingDealt(ep, DefaultPercentage());
             SetMoveSpeed(ep, DefaultPercentage());
             SetGravity(ep, DefaultPercentage());
+
             if(
                 trigger == HeroModTrigger.NOT_USING_ULT &&
                 isUltUsed
@@ -779,9 +886,9 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "TITAN FORM";
             heroModDetail = 
-                "+ in use ult, transform to titan and rampage while 15 second"+ NL +
+                "+ use ult, transform to titan and rampage while 15 second"+ NL +
                 "+ titan has 400% deal damage and ability fast charge "+ NL +
-                "- in every 3 second, lose 1% ult charge ";
+                "- every 3 second, lose 1% ult charge ";
         }
         else if(
             trigger == HeroModTrigger.CHARGING_ULT
@@ -838,7 +945,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "ZOMBIE";
             heroModDetail = 
-                "+ in dead, auto revive after 5 seconds"+ NL +
+                "+ dead, auto revive after 5 seconds"+ NL +
                 "- in over time, can not auto revive"+ NL +
                 "- max health 50%" + NL +
                 "- receive heal 50%";
@@ -874,8 +981,8 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
         ){
             heroModName = "STRAFING REQUEST";
             heroModDetail = 
-                "+ in use ult, strafing fire support incoming to aim position"+ NL +
-                "- in every 3 second, lose 1% ult charge ";
+                "+ use ult, strafing fire support incoming to aim position"+ NL +
+                "- every 3 second, lose 1% ult charge ";
         }
         else if(
             trigger == HeroModTrigger.CHARGING_ULT
@@ -889,7 +996,7 @@ void DoHeroModAction(define heromod!, define trigger!) playervar "DoHeroModActio
             trigger == HeroModTrigger.USING_ULT
         ){
             // set attack point from aimming position
-            define attackPosition! = BelowPosition(AimingPosition());
+            define attackPosition! = BelowPosition(AimingPositionWithLimit(40));
 
             Wait(1.5, WaitBehavior.IgnoreCondition);
 
@@ -979,7 +1086,7 @@ if(
     TeamOf() == playerTeam &&
     ep != Attacker()
 ){
-    DoHeroModAction(selectHeroMod, HeroModTrigger.TEAMMATE_DEATH);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.TEAMMATE_DEATH, null);
 }
 
 // each heromod trigger action
@@ -990,10 +1097,11 @@ if(
     (
         selectHeroMod == HeroModType.SAVIOR ||
         selectHeroMod == HeroModType.POWER_CHARGING ||
-        selectHeroMod == HeroModType.ADRENALINE_RUSH
+        selectHeroMod == HeroModType.ADRENALINE_RUSH ||
+        selectHeroMod == HeroModType.GRUDGE_FIRE_BALL
     )
 ){
-    DoHeroModAction(selectHeroMod, HeroModTrigger.TIME_PASSED);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.TIME_PASSED, null);
     LoopIfConditionIsTrue();
 }
 
@@ -1006,7 +1114,7 @@ if(
         selectHeroMod == HeroModType.FIXED_TURRET
     )
 ){
-    DoHeroModAction(selectHeroMod, HeroModTrigger.STOP);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.STOP, null);
 }
 
 rule: "HeroModTrigger/MOVING"
@@ -1018,7 +1126,7 @@ if(
         selectHeroMod == HeroModType.FIXED_TURRET
     )
 ){
-    DoHeroModAction(selectHeroMod, HeroModTrigger.MOVING);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.MOVING, null);
 }
 
 rule: "HeroModTrigger/MELEE"
@@ -1031,10 +1139,12 @@ if(
     ) &&
     (
         selectHeroMod == HeroModType.HEALING_SYRINGE ||
-        selectHeroMod == HeroModType.SAVIOR
+        selectHeroMod == HeroModType.SAVIOR ||
+        selectHeroMod == HeroModType.GRUDGE_FIRE_BALL
     )
 ){
-    DoHeroModAction(selectHeroMod, HeroModTrigger.MELEE);
+    WaitLongPressConfirm();
+    DoHeroModAction(selectHeroMod, HeroModTrigger.LONG_PRESS_MELEE_KEY, null);
 }
 
 rule: "HeroModTrigger/USING_ULT"
@@ -1049,7 +1159,7 @@ if(
         selectHeroMod == HeroModType.TITAN_FORM
     ) 
 ){
-    DoHeroModAction(selectHeroMod, HeroModTrigger.USING_ULT);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.USING_ULT, null);
 }
 
 rule: "HeroModTrigger/NOT_USING_ULT"
@@ -1061,7 +1171,7 @@ if(
         selectHeroMod == HeroModType.SUPER_ULT
     )
 ){
-    DoHeroModAction(selectHeroMod, HeroModTrigger.NOT_USING_ULT);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.NOT_USING_ULT, null);
 }
 
 rule: "HeroModTrigger/CHARGING_ULT"
@@ -1077,7 +1187,7 @@ if(
         selectHeroMod == HeroModType.STRAFING_REQUEST
     )
 ){
-    DoHeroModAction(selectHeroMod, HeroModTrigger.CHARGING_ULT);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.CHARGING_ULT, null);
     LoopIfConditionIsTrue();
 }
 
@@ -1090,7 +1200,19 @@ if(
         selectHeroMod == HeroModType.SURVIVALIST
     )
 ){
-    DoHeroModAction(selectHeroMod, HeroModTrigger.LOST_HEALTH);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.LOST_HEALTH, null);
+}
+
+rule: "HeroModTrigger/DEAL_HEAL"
+Event.OnHealingDealt
+if(
+    TeamOf() == playerTeam &&
+    Healee() != ep &&
+    (
+        selectHeroMod == HeroModType.GRUDGE_FIRE_BALL
+    )
+){
+    DoHeroModAction(selectHeroMod, HeroModTrigger.DEAL_HEAL, EventHealing());
 }
 
 rule: "HeroModTrigger/ELEMINATION"
@@ -1101,7 +1223,7 @@ if(
         selectHeroMod == HeroModType.TECHNICIAN
     )
 ){
-    DoHeroModAction(selectHeroMod, HeroModTrigger.ELEMINATION);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.ELEMINATION, null);
 }
 
 rule: "HeroModTrigger/DEATH"
@@ -1114,6 +1236,6 @@ if(
         selectHeroMod == HeroModType.ZOMBIE
     )
 ){
-    DoHeroModAction(selectHeroMod, HeroModTrigger.DEATH);
+    DoHeroModAction(selectHeroMod, HeroModTrigger.DEATH, null);
 }
 

@@ -2,11 +2,12 @@ import "Debug.del";
 
 // TAG Vote ----------
 playervar define operationText!;
-playervar define voteGameDifficulty!;
+playervar define voteGameDifficulty! = GameDifficulty.NO_VOTE;
 
 define DifficultyNum: 6;
 
 enum GameDifficulty{
+    INIT,
     NO_VOTE,
     EASY,
     NORMAL,
@@ -36,10 +37,15 @@ define ConfirmGameDifficultyText(define inputDifficulty!) globalvar "ConfirmGame
 void UpdateVoteOperationText()"UpdateVoteOperationText"{
     DestroyHudText(operationText);
     operationText = CreateHudText(ep,
-        null, <"You can vote game difficulty until game starts.\n\rPress interact key <2> to select vote difficulty.\n\r●Your vote = <0> <1>",
+        null,
+        <
+            "You can vote game difficulty until game starts.\n\rPress <2>/<3> to select vote difficulty.\n\r●Your vote = <0> <1>",
             VoteGameDifficultyText(voteGameDifficulty),
-            <"(<0>/<1>)", voteGameDifficulty, GameDifficulty.LAST - 1>,
-            ButtonGuide(Button.Interact)
+            <
+                "(<0>/<1>)", voteGameDifficulty, GameDifficulty.LAST - 1
+            >,
+            ButtonGuide(Button.Ability2),
+            ButtonGuide(Button.Ability1)
         >, null,
         Location.Left, 100,
         null, Color.Yellow, null,
@@ -70,12 +76,21 @@ rule: "Vote/switchVoteGameDifficulty"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
+    !IsDummyBot() &&
     HasSpawned() &&
     IsInSetup() &&
-    IsButtonHeld(ep, Button.Interact)
+    (
+        ( IsButtonHeld(ep, Button.Ability2) && !IsButtonHeld(ep, Button.Ability1) ) ||
+        ( !IsButtonHeld(ep, Button.Ability2) && IsButtonHeld(ep, Button.Ability1) )
+    )
 ){
-    voteGameDifficulty ++;
-    voteGameDifficulty = voteGameDifficulty > GameDifficulty.INSANE ? GameDifficulty.NO_VOTE : voteGameDifficulty;
+    // switch vote
+    voteGameDifficulty = 
+        IsButtonHeld(ep, Button.Ability2) ?
+            voteGameDifficulty < GameDifficulty.LAST - 1 ? voteGameDifficulty + 1 : GameDifficulty.INIT + 1 :
+            voteGameDifficulty > GameDifficulty.INIT + 1 ? voteGameDifficulty - 1 : GameDifficulty.LAST - 1 ;
+
+    // update text
     UpdateVoteOperationText();
 }
 
@@ -99,30 +114,6 @@ if(
         }
     }
 
-                    // // set zero to voteTotalList
-                    // define voteTotalList! = [];
-                    // for(define idx! = 0; idx < DifficultyNum; idx++){
-                    //     voteTotalList[idx] = 0;
-                    // }
-
-                    // // sum voteTotalList
-                    // for(define idx! = 0; idx < CountOf(votedList); idx++){
-                    //     voteTotalList[votedList[idx]] ++;
-                    // }
-
-                    // // check most vote index
-                    // define mostVoteCount! = 0;
-                    // define mostVoteIdx! = 0;
-                    // for(define idx! = 1; idx < CountOf(voteTotalList); idx++){
-                    //     if(mostVoteCount < voteTotalList[idx]){
-                    //         mostVoteCount = voteTotalList[idx];
-                    //         mostVoteIdx = idx;
-                    //     }
-                    // }
-
-                    // set most voted index difficulty
-                    // confirmGameDifficulty = mostVoteIdx;
-    
     // override vote by host debug key
     if(
         IsButtonHeld(hp, Button.Interact) &&
@@ -163,12 +154,20 @@ Event.OngoingPlayer
 if(
     TeamOf() == playerTeam  &&
     HasSpawned() &&
-    confirmGameDifficulty != GameDifficulty.NO_VOTE
+    (
+        confirmGameDifficulty >= GameDifficulty.NO_VOTE + 1 &&
+        confirmGameDifficulty <= GameDifficulty.LAST - 1
+    )
 ){
     CreateHudText(ep,
-        null, <"●game difficulty = <0> <1>",
+        null,
+        <
+            "●game difficulty = <0> <1>",
             ConfirmGameDifficultyText(confirmGameDifficulty),
-            <"(<0>/<1>)", confirmGameDifficulty, GameDifficulty.LAST - 1>>,
+            <
+                "(<0>/<1>)", confirmGameDifficulty, GameDifficulty.LAST - 1
+            >
+        >,
         null, Location.Left, -999,
         Color.White, 
         DifficultyTextColor(confirmGameDifficulty),
@@ -179,12 +178,20 @@ if(
 rule: "Vote/showConfirmGameDifficulyForSpectators"
 Event.OngoingGlobal
 if(
-    confirmGameDifficulty != GameDifficulty.NO_VOTE
+    (
+        confirmGameDifficulty >= GameDifficulty.NO_VOTE + 1 &&
+        confirmGameDifficulty <= GameDifficulty.LAST - 1
+    )
 ){
     CreateHudText(null,
-        null, <"game difficulty = <0> <1>",
+        null,
+        <
+            "game difficulty = <0> <1>",
             ConfirmGameDifficultyText(confirmGameDifficulty),
-            <"(<0>/<1>)", confirmGameDifficulty, GameDifficulty.LAST - 1>>,
+            <
+                "(<0>/<1>)", confirmGameDifficulty, GameDifficulty.LAST - 1
+            >
+        >,
         null, Location.Left, -999,
         Color.White, 
         DifficultyTextColor(confirmGameDifficulty),
