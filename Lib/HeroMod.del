@@ -52,6 +52,9 @@ enum HeroModTrigger{
 
 playervar define heroModOperationText!;
 
+define HM_AscKey: Button.Ultimate;
+define HM_DisKey: Button.Ability2;
+
 void UpdateHeroModAllText()"UpdateHeroModAllText"{
     DestroyHudText(heroModOperationText[0]);
     DestroyHudText(heroModOperationText[1]);
@@ -68,8 +71,8 @@ void UpdateHeroModAllText()"UpdateHeroModAllText"{
                 <
                     "(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1
                 >,
-                ButtonGuide(Button.Jump),
-                ButtonGuide(Button.Crouch)>
+                ButtonGuide(HM_AscKey),
+                ButtonGuide(HM_DisKey)>
                     :
             <
                 "You can change mod in respawn area anytime.\n\r●Your mod = <0> <1>",
@@ -129,8 +132,8 @@ if(
     !IsDummyBot() &&
     IsInSpawnRoom() &&
     (
-        ( IsButtonHeld(ep, Button.Jump) && !IsButtonHeld(ep, Button.Crouch) ) ||
-        ( !IsButtonHeld(ep, Button.Jump) && IsButtonHeld(ep, Button.Crouch) )
+        ( IsButtonHeld(ep, HM_AscKey) && !IsButtonHeld(ep, HM_DisKey) ) ||
+        ( !IsButtonHeld(ep, HM_AscKey) && IsButtonHeld(ep, HM_DisKey) )
     )
 ){
     // do heromod deactivate action
@@ -138,7 +141,7 @@ if(
 
     // switch mod
     selectHeroMod = 
-        IsButtonHeld(ep, Button.Jump) ?
+        IsButtonHeld(ep, HM_AscKey) ?
             selectHeroMod < HeroModType.LAST - 1 ? selectHeroMod + 1 : HeroModType.INIT + 1 :
             selectHeroMod > HeroModType.INIT + 1 ? selectHeroMod - 1 : HeroModType.LAST - 1 ;
 
@@ -608,7 +611,7 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             define maxPower! = 500;
             AbortIf(maxPower <= modStatus);
 
-            define gainPower! = (eventPayload * 1.0);
+            define gainPower! = (eventPayload * 0.7);
             if(modStatus + gainPower > maxPower){
                 modStatus = maxPower;
             }
@@ -619,43 +622,50 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
         else if(
             trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
         ){
-            define ballSize! = modStatus / 200;
-            define ballSpeed! = 30 - (modStatus / 50);
-            define ballDamage! = modStatus;
-            define ballBlastRange! = ballSize * 5.0;
-            define ballBlastCount! = ballSize * 2 <= 5 ? ballSize * 2 : 5;
-            modStatus = 0;
-
-            define ballPos = EyePosition();
-            define aimPos! = AimingPositionWithLimit(40);
-
-            define effects = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
-                ballPos, ballSize, EffectRev.PositionAndRadius);
-            ChaseVariableAtRate(
-                ballPos, aimPos, ballSpeed,
-                RateChaseReevaluation.DestinationAndRate);
-            PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 75);
-
-            while(
-                // not
-                !(
-                    // hit surface
-                    DistanceBetween(ballPos, aimPos) <= (ballSize * 0.5) ||
-                    // hit enemy
-                    DistanceBetween(ballPos, ClosestPlayerTo(ballPos, enemyTeam)) <= (ballSize < 1 ? 1 : ballSize)
-
-                )
+            if(
+                IsAlive() &&
+                modStatus > 0
             ){
-                PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
+                define ballSize! = modStatus / 200;
+                define ballSpeed! = 30 - (modStatus / 50);
+                define ballDamage! = modStatus;
+                define ballBlastRange! = ballSize * 5.0;
+                define ballBlastCount! = ballSize * 2 <= 5 ? ballSize * 2 : 5;
+                modStatus = 0;
+
+                define ballPos = EyePosition();
+                define aimPos! = AimingPositionWithLimit(40);
+
+                define effects = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
+                    ballPos, ballSize, EffectRev.PositionAndRadius);
+                ChaseVariableAtRate(
+                    ballPos, aimPos, ballSpeed,
+                    RateChaseReevaluation.DestinationAndRate);
+
+                while(
+                    // not
+                    !(
+                        // hit surface
+                        DistanceBetween(ballPos, aimPos) <= (ballSize * 0.5) ||
+                        // hit enemy
+                        DistanceBetween(ballPos, ClosestPlayerTo(ballPos, enemyTeam)) <= (ballSize * 0.5 < 1 ? 1 : ballSize * 0.5)
+
+                    )
+                ){
+                    PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
+                    Wait(0.1, WaitBehavior.IgnoreCondition);
+                }
+                StopChasingVariable(ballPos);
+                DestroyEffect(effects);
+                
+                define targets! = PlayersWithinRadius(ballPos, ballBlastRange, enemyTeam, RadiusLOS.Off);
+                ApplyBlastImpulse(targets, ballPos, ballBlastRange);
+                Damage(targets, ep, ballDamage);
+                PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
             }
-            StopChasingVariable(ballPos);
-            DestroyEffect(effects);
-            
-            define targets! = PlayersWithinRadius(ballPos, ballBlastRange, enemyTeam, RadiusLOS.Off);
-            ApplyBlastImpulse(targets, ballPos, ballBlastRange);
-            Damage(targets, ep, ballDamage);
-            PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
+            else{
+                PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 75);
+            }
         }
     }
     else if(
@@ -1134,8 +1144,8 @@ Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     (
-        (!IsDummyBot() && IsMeleeing()) ||
-        (IsDummyBot() && IsFiringPrimary())
+        (!IsDummyBot() && IsButtonHeld(ep, Button.Melee)) ||
+        (IsDummyBot() && IsButtonHeld(ep, Button.PrimaryFire))
     ) &&
     (
         selectHeroMod == HeroModType.HEALING_SYRINGE ||
