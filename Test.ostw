@@ -58,9 +58,10 @@ if(
         CreateBotsByHeroList(eList, enemyTeam);
 
         
-        // SetDamageDealt(AllPlayers(), 10);
+        SetRespawnMaxTime(ap, 0);
+        // SetDamageDealt(ap, 10);
+
         SetStatus(hp, null, Status.Unkillable, MaxValue());
-        SetRespawnMaxTime(ap, 5);
         SetGravity(hp, 10);
 
         Wait(120);
@@ -82,26 +83,80 @@ rule: "DebugCode"
 Event.OngoingPlayer
 if(
     ep == hp &&
-    HasSpawned(ep)
+    HasSpawned(ep) &&
+    IsButtonHeld(ep, Button.PrimaryFire)
 ){
-    dbgHudTxt(<"DebugCode">);
-
-    define buttonList! = [
-        Button.Ability1
-        Button.Ability2,
-        Button.SecondaryFire,
-        Button.Jump,
-        Button.Crouch
-    ];
-
-    for(define index! = 0; index < CountOf(buttonList); index++){
-        AddAbilityStock(buttonList[index], 1);
-    }
-
-
-
-    Wait(1);
-    Loop();
+            // config value
+            define gunSurAimSpeed! = 25;
+            define gunSurAttackTime! = 1.5;
+            define gunSurAttackInterval = 0.10;
+            define gunSurScatterRange! = 3;
+            define gunSurDamageRange! = 2.0;
+            define gunSurDamage! = 80;
+            // create Ballistic
+            define landPosition;
+            define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
+                (Normalize(VectorWithOutY(RandomDirection())) * 100) + (Up() * 200), landPosition,
+                Color.Orange, EffectRev.VisibleToPositionAndRadius);
+            // move landRangePosition
+            define landRangePosition = 
+                PositionOf(
+                    FirstOf(
+                        SortedArray(
+                            AllLivingPlayers(EnemyTeamOf(ep)),
+                            DistanceBetween(ep, ae)
+                        )
+                    )
+                );
+            ChaseVariableAtRate(
+                landRangePosition,
+                PositionOf(
+                    FirstOf(
+                        SortedArray(
+                            AllLivingPlayers(EnemyTeamOf(ep)),
+                            DistanceBetween(ep, ae)
+                        )
+                    )
+                ),
+                gunSurAimSpeed,
+                RateChaseReevaluation.DestinationAndRate
+            );
+            // blast animation
+            for(define count = gunSurAttackTime / gunSurAttackInterval; count > 0; count --){
+                // set landed point
+                landPosition =
+                    landRangePosition + 
+                    RandomPosition(
+                        gunSurScatterRange / 1.5,
+                        0,
+                        gunSurScatterRange / 1.5
+                    );
+                // play blast sound
+                PlayEffect(
+                    AllPlayers(), PlayEffect.RingExplosionSound,
+                    Color .White,
+                    landPosition,
+                    MaxLength());
+                // play blast
+                PlayEffect(
+                    AllPlayers(), PlayEffect.GoodExplosion,
+                    Color.Orange,
+                    landPosition,
+                    gunSurDamageRange);
+                // damage
+                Damage(
+                    PlayersWithinRadius(
+                        landPosition, gunSurDamageRange,
+                        enemyTeam, RadiusLOS.Off
+                    ),
+                    ep, gunSurDamage
+                );
+                Wait(gunSurAttackInterval, WaitBehavior.IgnoreCondition);
+            }
+            StopChasingVariable(landRangePosition);
+            DestroyEffect(ballisticEffect);
+    
+    LoopIfConditionIsTrue();
 }
 
 
