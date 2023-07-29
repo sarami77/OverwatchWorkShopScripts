@@ -22,6 +22,7 @@ enum HeroModType{
     SAVIOR,
     TECHNICIAN,
     SURVIVALIST,
+    GUNSHIP_SUPPORT,
     RAGE,
     SHOT_CALL,
     FAST_CHARGE,
@@ -154,7 +155,7 @@ if(
     PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 75);
 }
 
-rule: "HeroMod/SetHeroModByRandomForBot"
+rule: "HeroMod/setHeroModByRandomForBot"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
@@ -162,6 +163,7 @@ if(
     !IsAssemblingHeroes()
 ){
     selectHeroMod = RandomInteger(HeroModType.INIT + 1, HeroModType.LAST - 1);
+
     // do heromod activate action
     DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE, null);
 
@@ -268,9 +270,9 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
         ){
             heroModName = "BIRD MAN";
             heroModDetail = 
-                "+ gravity 10%" + NL +
+                "+ gravity 5%" + NL +
                 "- max health 50%";
-            SetGravity(ep, 10);
+            SetGravity(ep, 5);
             SetMaxHealth(ep, 50);
         }
         else if(
@@ -480,6 +482,31 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             for(define index! = 0; index < CountOf(buttonList); index++){
                 AddAbilityStock(buttonList[index], 1);
             }
+        }
+    }
+    else if(
+        selectHeroMod == HeroModType.GUNSHIP_SUPPORT
+    ){
+        if(
+            trigger == HeroModTrigger.ACTIVATE
+        ){
+            heroModName = "GUNSHIP SUPPORT";
+            heroModDetail = 
+                "when lost 50% health," + NL + 
+                "  + gunship fire support incoming and attack near enemy" + NL + 
+                "  - has 8 seconds cooldown to re-trigger fire support" + NL + 
+                "- receive heal 50%";
+            SetHealingReceived(ep, 50);
+        }
+        else if(
+            trigger == HeroModTrigger.DEACTIVATE
+        ){
+            SetHealingReceived(ep, DefaultPercentage());
+        }
+        else if(
+            trigger == HeroModTrigger.LOST_HEALTH
+        ){
+            DoGunshipSupport();
         }
     }
     else if(
@@ -1015,7 +1042,7 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
         ){
             heroModName = "STRAFING REQUEST";
             heroModDetail = 
-                "+ when use ult, strafing fire support incoming to aim position" + NL +
+                "+ when use ult, strafing fire support incoming and attack aim position" + NL +
                 "- when every 3 second passed, lose 1% ult charge ";
         }
         else if(
@@ -1029,84 +1056,251 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
         else if(
             trigger == HeroModTrigger.USING_ULT
         ){
-            // set attack point from aimming position
-            define attackPosition! = BelowPosition(AimingPositionWithLimit(40));
-            Wait(1.5, WaitBehavior.IgnoreCondition);
-
-            // config value
-            define strafReqAttackDistance! = 40;
-            define strafReqAttackTime! = 2;
-            define strafReqAttackInterval = 0.05;
-            define strafReqScatterRange! = 3;
-            define strafReqDamageRange! = 5;
-            define strafReqDamage! = 180;
-
-            define enteringAngle! = 
-                VectorWithOutY(
-                    DirectionTowards(
-                        attackPosition,
-                        ClosestPlayerTo(
-                            attackPosition,
-                            EnemyTeamOf(ep)
-                        )
-                    )
-                );
-            // set start/end position
-            define startPosition! = 
-                attackPosition + 
-                    -enteringAngle *
-                    (strafReqAttackDistance / 2);
-            define endPosition! = 
-                attackPosition + 
-                    enteringAngle *
-                    (strafReqAttackDistance / 2);
-            // create Ballistic
-            define landPosition;
-            define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
-                endPosition - (enteringAngle * 200) + (Up() * 200), landPosition,
-                Color.White, EffectRev.VisibleToPositionAndRadius);
-            // move landRangePosition
-            define landRangePosition = startPosition;
-            ChaseVariableOverTime(
-                landRangePosition, endPosition,
-                strafReqAttackTime,
-                TimeChaseReevaluation.DestinationAndDuration);
-            // blast animation
-            for(define count = strafReqAttackTime / strafReqAttackInterval; count > 0; count --){
-                // set landed point
-                landPosition =
-                    landRangePosition + 
-                    RandomPosition(
-                        strafReqScatterRange / 1.5,
-                        0,
-                        strafReqScatterRange / 1.5
-                    );
-                // play blast sound
-                PlayEffect(
-                    AllPlayers(), PlayEffect.RingExplosionSound,
-                    Color.White,
-                    landPosition,
-                    MaxLength());
-                // play blast
-                PlayEffect(
-                    AllPlayers(), PlayEffect.BadExplosion,
-                    Color.White,
-                    landPosition,
-                    strafReqDamageRange);
-                // damage
-                Damage(
-                    PlayersWithinRadius(
-                        landPosition, strafReqDamageRange,
-                        EnemyTeamOf(ep), RadiusLOS.Off
-                    ),
-                    ep, strafReqDamage
-                );
-                Wait(strafReqAttackInterval, WaitBehavior.IgnoreCondition);
-            }
-            StopChasingVariable(landRangePosition);
-            DestroyEffect(ballisticEffect);
+            DoStrafingRequest();
         }
     }
+}
+
+// heromod packed action ---------------------------------
+void DoStrafingRequest() playervar "DoStrafingRequest"{
+    // set attack point from aimming position
+    define attackPosition! = BelowPosition(AimingPositionWithLimit(40));
+    Wait(1.5, WaitBehavior.IgnoreCondition);
+
+    // config value
+    define strafReqAttackDistance! = 40;
+    define strafReqAttackTime! = 2.0;
+    define strafReqAttackInterval = 0.05;
+    define strafReqScatterRange! = 3;
+    define strafReqDamageRange! = 5;
+    define strafReqDamage! = 180;
+
+    define enteringAngle! = 
+        VectorWithOutY(
+            DirectionTowards(
+                attackPosition,
+                ClosestPlayerTo(
+                    attackPosition,
+                    EnemyTeamOf(ep)
+                )
+            )
+        );
+    // set start/end position
+    define startPosition! = 
+        attackPosition + 
+            -enteringAngle *
+            (strafReqAttackDistance / 2);
+    define endPosition! = 
+        attackPosition + 
+            enteringAngle *
+            (strafReqAttackDistance / 2);
+    // move landRangePosition
+    define landRangePosition = startPosition;
+    ChaseVariableOverTime(
+        landRangePosition, endPosition,
+        strafReqAttackTime,
+        TimeChaseReevaluation.DestinationAndDuration);
+    // create ballistic
+    define landPosition;
+    define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
+        endPosition - (enteringAngle * 200) + (Up() * 200), landPosition,
+        Color.White, EffectRev.VisibleToPositionAndRadius);
+    // blast animation
+    for(define count = strafReqAttackTime / strafReqAttackInterval; count > 0; count --){
+        // set landed point
+        landPosition =
+            landRangePosition + 
+            RandomPosition(
+                strafReqScatterRange,
+                0,
+                strafReqScatterRange
+            );
+        // play blast sound
+        PlayEffect(
+            AllPlayers(), PlayEffect.RingExplosionSound,
+            Color.White,
+            landPosition,
+            MaxLength());
+        // play blast
+        PlayEffect(
+            AllPlayers(), PlayEffect.BadExplosion,
+            Color.White,
+            landPosition,
+            strafReqDamageRange);
+        // damage
+        Damage(
+            PlayersWithinRadius(
+                landPosition, strafReqDamageRange,
+                EnemyTeamOf(ep), RadiusLOS.Off
+            ),
+            ep, strafReqDamage
+        );
+        Wait(strafReqAttackInterval, WaitBehavior.IgnoreCondition);
+    }
+    StopChasingVariable(landRangePosition);
+    DestroyEffect(ballisticEffect);
+}
+
+void DoGunshipSupport() playervar "DoGunshipSupport" {
+    Wait(0.5, WaitBehavior.AbortWhenFalse);
+
+    // config value
+    define gunSurAttackTime! = 5;
+    define gunSurAttackInterval! = 0.3;
+    define gunSurScatterRange! = 1.5;
+    define gunSurDamageRange! = 2.5;
+    define gunSurDamage! = 100;
+
+    // create shell
+    define deployPosition! = PositionOf(ep) + (VectorWithOutY(RandomDirection()) * 50) + (Up() * 100);
+    define landPosition1!;
+    define landPosition2!;
+    define shellPosition1;
+    define shellPosition2;
+    define shellEffect1! = CreateEffect(AllPlayers(), Effect.Orb,
+        Color.White,
+        shellPosition1,
+        1, EffectRev.PositionAndRadius
+    );
+    define shellEffect2! = CreateEffect(AllPlayers(), Effect.Orb,
+        Color.White,
+        shellPosition2,
+        1, EffectRev.PositionAndRadius
+    );
+    // blast animation
+    define isFirstShot! = true;
+    for(define count = gunSurAttackTime / gunSurAttackInterval / 2; count > 0; count --){
+        // set landRangePosition
+        define landRangePosition = 
+            BelowPosition(
+                PositionOf(
+                    FirstOf(
+                        SortedArray(
+                            AllLivingPlayers(EnemyTeamOf(ep)),
+                            DistanceBetween(ep, ae)
+                        )
+                    )
+                )
+            );
+        
+        // set landed point
+        landPosition1 =
+            landRangePosition + 
+            RandomPosition(
+                gunSurScatterRange,
+                0,
+                gunSurScatterRange
+            );
+        // shell land animation
+        shellPosition1 = deployPosition;
+        ChaseVariableOverTime(
+            shellPosition1,
+            landPosition1,
+            gunSurAttackInterval * 2,
+            TimeChaseReevaluation.None
+        );
+        Wait(gunSurAttackInterval, WaitBehavior.IgnoreCondition);
+
+        // not first attack
+        if(!isFirstShot){
+            // blast animation2
+            // play blast sound
+            PlayEffect(
+                AllPlayers(), PlayEffect.RingExplosionSound,
+                Color .White,
+                landPosition2,
+                MaxLength());
+            // play blast
+            PlayEffect(
+                AllPlayers(), PlayEffect.GoodExplosion,
+                Color.Orange,
+                landPosition2,
+                gunSurDamageRange);
+            // damage
+            Damage(
+                PlayersWithinRadius(
+                    landPosition2, gunSurDamageRange,
+                    EnemyTeamOf(ep), RadiusLOS.Off
+                ),
+                ep, gunSurDamage
+            );
+        }
+        else{
+            isFirstShot = false;
+        }
+
+        // land animation2
+        // set landed point
+        landPosition2 =
+            landRangePosition + 
+            RandomPosition(
+                gunSurScatterRange,
+                0,
+                gunSurScatterRange
+            );
+        // shell land animation
+        shellPosition2 = deployPosition;
+        ChaseVariableOverTime(
+            shellPosition2,
+            landPosition2,
+            gunSurAttackInterval * 2,
+            TimeChaseReevaluation.None
+        );
+        Wait(gunSurAttackInterval, WaitBehavior.IgnoreCondition);
+        
+        // blast animation1
+        // play blast sound
+        PlayEffect(
+            AllPlayers(), PlayEffect.RingExplosionSound,
+            Color .White,
+            landPosition1,
+            MaxLength());
+        // play blast
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodExplosion,
+            Color.Orange,
+            landPosition1,
+            gunSurDamageRange);
+        // damage
+        Damage(
+            PlayersWithinRadius(
+                landPosition1, gunSurDamageRange,
+                EnemyTeamOf(ep), RadiusLOS.Off
+            ),
+            ep, gunSurDamage
+        );
+    }
+
+    Wait(gunSurAttackInterval, WaitBehavior.IgnoreCondition);
+
+    // final blast animation2
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color .White,
+        landPosition2,
+        MaxLength());
+    // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodExplosion,
+        Color.Orange,
+        landPosition2,
+        gunSurDamageRange);
+    // damage
+    Damage(
+        PlayersWithinRadius(
+            landPosition2, gunSurDamageRange,
+            EnemyTeamOf(ep), RadiusLOS.Off
+        ),
+        ep, gunSurDamage
+    );
+
+    StopChasingVariable(shellPosition1);
+    StopChasingVariable(shellPosition2);
+    DestroyEffect(shellEffect1);
+    DestroyEffect(shellEffect2);
+
+    Wait(8, WaitBehavior.IgnoreCondition);
 }
 
 // heromod trigger list ---------------------------------
@@ -1230,7 +1424,8 @@ if(
     TeamOf() == playerTeam &&
     NormalizedHealth() <= 0.5 &&
     (
-        selectHeroMod == HeroModType.SURVIVALIST
+        selectHeroMod == HeroModType.SURVIVALIST ||
+        selectHeroMod == HeroModType.GUNSHIP_SUPPORT
     )
 ){
     DoHeroModAction(selectHeroMod, HeroModTrigger.LOST_HEALTH, null);
