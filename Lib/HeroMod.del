@@ -51,87 +51,92 @@ enum HeroModTrigger{
     TEAMMATE_DEATH
 }
 
-playervar define heroModOperationText!;
+playervar define modOpeText!;
 
 define HM_AscKey: Button.Melee;
 define HM_DisKey: Button.Jump;
 
-void UpdateHeroModAllText()"UpdateHeroModAllText"{
-    DestroyHudText(heroModOperationText[0]);
-    DestroyHudText(heroModOperationText[1]);
-    DestroyInWorldText(heroModOperationText[2]);
+void UpdateHeroModText()"UpdateHeroModText"{
+    DestroyHudText(modOpeText[0]);
+    DestroyHudText(modOpeText[1]);
+    DestroyInWorldText(modOpeText[2]);
 
-    heroModOperationText[0] = CreateHudText(ep, null,
-        (
-            IsInSpawnRoom() &&
-            !IsDummyBot()
-        ) ? 
+    if(CanChangeHeroMod()){
+        modOpeText[0] = CreateHudText(ep, null,
             <
-                "You can change mod in respawn area anytime.\n\rPress <2>/<3> to select mod.\n\r●Your mod = <0> <1>",
+                "You can change mod.\n\rPress <2>/<3> to select mod.\n\r●Your mod = <0> <1>",
                 heroModName,
-                <
-                    "(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1
-                >,
+                <"(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1>,
                 ButtonGuide(HM_AscKey),
-                ButtonGuide(HM_DisKey)>
-                    :
+                ButtonGuide(HM_DisKey)
+            >,
+            null, Location.Left, 101, null, Color.Blue, null, HudTextRev.String, Spectators.DefaultVisibility);
+    }
+    else{
+        modOpeText[0] = CreateHudText(ep, null,
             <
                 "You can change mod in respawn area anytime.\n\r●Your mod = <0> <1>",
                 heroModName,
-                <
-                    "(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1
-                >
+                <"(<0>/<1>)", selectHeroMod, HeroModType.LAST - 1>
             >,
-        null, Location.Left, 101, null, Color.Blue, null, HudTextRev.String, Spectators.DefaultVisibility);
+            null, Location.Left, 101, null, Color.Blue, null, HudTextRev.String, Spectators.DefaultVisibility);
+    }
 
-    heroModOperationText[1] = CreateHudText(ep, null,
+    modOpeText[1] = CreateHudText(ep, null,
         heroModDetail,
-        null, Location.Left, 102, null, Color.SkyBlue, null, HudTextRev.StringAndColor, Spectators.DefaultVisibility);
+        null, Location.Left, 102, null, Color.White, null, HudTextRev.StringAndColor, Spectators.DefaultVisibility);
 
-    heroModOperationText[2] = CreateInWorldText(AllPlayers(),
+    modOpeText[2] = CreateInWorldText(AllPlayers(),
         heroModName,
         ep, basicInWorldTextSize, Clipping.ClipAgainstSurfaces, InworldTextRev.VisibleToPositionAndString, Color.SkyBlue, Spectators.DefaultVisibility);
 }
+
+define CanChangeHeroMod():
+    !IsDummyBot() &&
+    IsInSpawnRoom();
 
 rule: "HeroMod/updateHeroModAllTextOnEnterSpawnRoom"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    !IsDummyBot() &&
-    IsInSpawnRoom()
+    CanChangeHeroMod()
 ){
-    UpdateHeroModAllText();
+    UpdateHeroModText();
 }
 
 rule: "HeroMod/updateHeroModAllTextOnExitSpawnRoom"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    !IsDummyBot() &&
-    !IsInSpawnRoom()
+    !CanChangeHeroMod()
 ){
-    UpdateHeroModAllText();
+    UpdateHeroModText();
 }
 
-rule: "HeroMod/init"
+rule: "HeroMod/initSelectHeroMod"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    !IsDummyBot() &&
     HasSpawned()
 ){
-    selectHeroMod = HeroModType.NO_HERO_MOD;
+    if(!IsDummyBot()){
+        // select no mod as player
+        selectHeroMod = HeroModType.NO_HERO_MOD;
+    }
+    else{
+        // select random as dummy bot
+        selectHeroMod = RandomInteger(HeroModType.INIT + 1, HeroModType.LAST - 1);
+    }
 
     DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE, null);
-    UpdateHeroModAllText();
+    UpdateHeroModText();
 }
 
-rule: "HeroMod/switchHeroMod"
+rule: "HeroMod/switchSelectHeroMod"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
-    !IsDummyBot() &&
-    IsInSpawnRoom() &&
+    CanChangeHeroMod() &&
     (
         ( IsButtonHeld(ep, HM_AscKey) && !IsButtonHeld(ep, HM_DisKey) ) ||
         ( !IsButtonHeld(ep, HM_AscKey) && IsButtonHeld(ep, HM_DisKey) )
@@ -150,25 +155,9 @@ if(
     DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE, null);
 
     // update text
-    UpdateHeroModAllText();
+    UpdateHeroModText();
 
     PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 75);
-}
-
-rule: "HeroMod/setHeroModByRandomForBot"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam &&
-    IsDummyBot() &&
-    !IsAssemblingHeroes()
-){
-    selectHeroMod = RandomInteger(HeroModType.INIT + 1, HeroModType.LAST - 1);
-
-    // do heromod activate action
-    DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE, null);
-
-    // update text
-    UpdateHeroModAllText();
 }
 
 playervar define modStatus!;
@@ -819,11 +808,17 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             trigger == HeroModTrigger.CHARGING_ULT
         ){
             Wait(3, WaitBehavior.AbortWhenFalse);
-            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+            if(UltimateChargePercent() < DefaultPercentage()){
+                SetUltimateCharge(ep, UltimateChargePercent() - 1);
+            }
         }
         else if(
             trigger == HeroModTrigger.USING_ULT
         ){
+            AbortIf(
+                IsMechCalling(ep)
+            );
+
             define playerArray! = FilteredArray(
                 AllPlayers(playerTeam),
                 (
@@ -875,7 +870,12 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             trigger == HeroModTrigger.CHARGING_ULT
         ){
             Wait(1, WaitBehavior.AbortWhenFalse);
-            SetUltimateCharge(ep, UltimateChargePercent() + 3);
+            if(
+                IsGameInProgress() &&
+                UltimateChargePercent() < DefaultPercentage()
+            ){
+                SetUltimateCharge(ep, UltimateChargePercent() + 3);
+            }
         }
     }
     else if(
@@ -886,13 +886,13 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
         ){
             heroModName = "SUPER ULT";
             heroModDetail = 
-                "+ when ult using," + NL +
+                "when ult using," + NL +
                 "  + get invincible status" + NL +
                 "  + deal damage 400%" + NL +
                 "  + deal heal 400%" + NL +
                 "  + move speed 200%" + NL +
                 "  + gravity 25%" + NL +
-                "+ when ult end, more gain ult full charge by 50% probility" + NL +
+                "+ when ult end, gain more ult full charge by 50% probility" + NL +
                 "- when every 3 second passed, lose 1% ult charge";
         }
         else if(
@@ -1321,6 +1321,7 @@ rule: "HeroModTrigger/TIME_PASSED"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
+    IsGameInProgress() &&
     (
         selectHeroMod == HeroModType.SAVIOR ||
         selectHeroMod == HeroModType.POWER_CHARGING ||
