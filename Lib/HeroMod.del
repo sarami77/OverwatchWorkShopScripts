@@ -119,18 +119,52 @@ if(
     TeamOf() == playerTeam &&
     HasSpawned()
 ){
-    if(!IsDummyBot()){
+    if(
+        !IsDummyBot()
+    ){
+        // player
         // select no mod as player
         selectHeroMod = HeroModType.NO_HERO_MOD;
     }
     else{
-        // select random as dummy bot
-        selectHeroMod = RandomInteger(HeroModType.INIT + 1, HeroModType.LAST - 1);
+        // dummy bot
+        if(
+            !IsSupportHero(HeroOf())
+        ){
+            // not support hero
+            while(
+                selectHeroMod == 0 ||
+                IsTrueForAny(HealerMods(), selectHeroMod == ae)
+            ){
+                // select mod by random
+                selectHeroMod = RandomInteger(HeroModType.INIT + 1, HeroModType.LAST - 1);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+            }
+        }
+        else{
+            // support hero
+            if(
+                ProbabilityTrue(50)
+            ){
+                // select mod by HealerMods
+                selectHeroMod = RandomValueInArray(HealerMods());
+            }
+            else{
+                // select mod by random
+                selectHeroMod = RandomInteger(HeroModType.INIT + 1, HeroModType.LAST - 1);
+            }
+        }
     }
 
     DoHeroModAction(selectHeroMod, HeroModTrigger.ACTIVATE, null);
     UpdateHeroModText();
 }
+
+define HealerMods():
+    [
+        HeroModType.MEDIC,
+        HeroModType.GRUDGE_FIRE_BALL
+    ];
 
 rule: "HeroMod/switchSelectHeroMod"
 Event.OngoingPlayer
@@ -349,8 +383,8 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             heroModName = "FIXED TURRET";
             heroModDetail = 
                 "standing..." + NL +
-                "  + deal damage 150%" + NL +
-                "  + deal heal 150%" + NL +
+                "  + deal damage 200%" + NL +
+                "  + deal heal 200%" + NL +
                 "  + max health 200%" + NL +
                 "moving..." + NL +
                 "  - deal damage 50%" + NL +
@@ -366,8 +400,8 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             trigger == HeroModTrigger.STOP
         ){
             Wait(0.2, WaitBehavior.AbortWhenFalse);
-            SetDamageDealt(ep, 150);
-            SetHealingDealt(ep, 150);
+            SetDamageDealt(ep, 200);
+            SetHealingDealt(ep, 200);
             SetMaxHealth(ep, 200);
             if(IsDummyBot()){
                 SetStatus(ep, null, Status.Rooted, RandomInteger(1, 10));
@@ -653,52 +687,7 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
         else if(
             trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
         ){
-            if(
-                IsAlive() &&
-                modStatus > 0
-            ){
-                define ballSize! = modStatus / 200;
-                define ballSpeed! = 30 - (modStatus / 50);
-                define ballDamage! = modStatus;
-                define ballBlastRange! = ballSize * 5.0;
-                define ballBlastCount! = ballSize * 2 <= 5 ? ballSize * 2 : 5;
-                modStatus = 0;
-
-                define ballPos = EyePosition();
-                define aimPos! = AimingPositionWithLimit(40);
-
-                define effects = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
-                    ballPos, ballSize, EffectRev.PositionAndRadius);
-                ChaseVariableAtRate(
-                    ballPos, aimPos, ballSpeed,
-                    RateChaseReevaluation.DestinationAndRate);
-
-                define collisionSize! = ballSize * 0.5 < 1 ? 1 : ballSize * 0.5;
-
-                while(
-                    // not
-                    !(
-                        // hit surface
-                        DistanceBetween(ballPos, aimPos) <= collisionSize ||
-                        // hit enemy
-                        DistanceBetween(ballPos, ClosestPlayerTo(ballPos, EnemyTeamOf(ep))) <= collisionSize
-
-                    )
-                ){
-                    PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                }
-                StopChasingVariable(ballPos);
-                DestroyEffect(effects);
-                
-                define targets! = PlayersWithinRadius(ballPos, ballBlastRange, EnemyTeamOf(ep), RadiusLOS.Off);
-                ApplyBlastImpulse(targets, ballPos, ballBlastRange);
-                Damage(targets, ep, ballDamage);
-                PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
-            }
-            else{
-                PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 75);
-            }
+            DoGrudgeFireBall();
         }
     }
     else if(
@@ -1062,6 +1051,55 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
 }
 
 // heromod packed action ---------------------------------
+void DoGrudgeFireBall() playervar "DoGrudgeFireBall"{
+    if(
+        IsAlive() &&
+        modStatus > 0
+    ){
+        define ballSize! = modStatus / 200;
+        define ballSpeed! = 30 - (modStatus / 50);
+        define ballDamage! = modStatus;
+        define ballBlastRange! = ballSize * 5.0;
+        define ballBlastCount! = ballSize * 2 <= 5 ? ballSize * 2 : 5;
+        modStatus = 0;
+
+        define ballPos = EyePosition();
+        define aimPos! = AimingPositionWithLimit(40);
+
+        define effects = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
+            ballPos, ballSize, EffectRev.PositionAndRadius);
+        ChaseVariableAtRate(
+            ballPos, aimPos, ballSpeed,
+            RateChaseReevaluation.DestinationAndRate);
+
+        define collisionSize! = ballSize * 0.5 < 1 ? 1 : ballSize * 0.5;
+
+        while(
+            // not
+            !(
+                // hit surface
+                DistanceBetween(ballPos, aimPos) <= collisionSize ||
+                // hit enemy
+                DistanceBetween(ballPos, ClosestPlayerTo(ballPos, EnemyTeamOf(ep))) <= collisionSize
+
+            )
+        ){
+            PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+        }
+        StopChasingVariable(ballPos);
+        DestroyEffect(effects);
+        
+        define targets! = PlayersWithinRadius(ballPos, ballBlastRange, EnemyTeamOf(ep), RadiusLOS.Off);
+        ApplyBlastImpulse(targets, ballPos, ballBlastRange);
+        Damage(targets, ep, ballDamage);
+        PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
+    }
+    else{
+        PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 75);
+    }
+}
+
 void DoStrafingRequest() playervar "DoStrafingRequest"{
     // set attack point from aimming position
     define attackPosition! = BelowPosition(AimingPositionWithLimit(40));
@@ -1147,9 +1185,9 @@ void DoGunshipSupport() playervar "DoGunshipSupport" {
     // config value
     define gunSurAttackTime! = 5;
     define gunSurAttackInterval! = 0.3;
-    define gunSurScatterRange! = 1.5;
-    define gunSurDamageRange! = 2.5;
-    define gunSurDamage! = 100;
+    define gunSurScatterRange! = 2.0;
+    define gunSurDamageRange! = 3.0;
+    define gunSurDamage! = 130;
 
     // create shell
     define deployPosition! = PositionOf(ep) + (VectorWithOutY(RandomDirection()) * 50) + (Up() * 100);
@@ -1362,8 +1400,15 @@ Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     (
-        (!IsDummyBot() && IsButtonHeld(ep, Button.Melee)) ||
-        (IsDummyBot() && IsButtonHeld(ep, Button.PrimaryFire))
+        (
+            !IsDummyBot() &&
+            IsButtonHeld(ep, Button.Melee)
+        ) ||
+        (
+            IsDummyBot() &&
+            IsButtonHeld(ep, Button.PrimaryFire) &&
+            ProbabilityTrue(50)
+        )
     ) &&
     (
         selectHeroMod == HeroModType.HEALING_SYRINGE ||
