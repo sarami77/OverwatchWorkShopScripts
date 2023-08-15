@@ -104,22 +104,15 @@ define IsOverTime():
     MatchTime() <= 0;
 
 define TotalObjectProgress()"TotalObjectProgress"{
-    Number progress;
+    define progress!;
 
     if(!IsGameInProgress()){
-        progress = DefaultPercentage();
+        progress = 0;
     }
     else{
         define mode = CurrentGameMode();
-        if(mode == GameMode.Assault){
-            if(CurrentObjectNo() == 0){
-                progress = (PointCapturePercentage() * 0.5);
-            }
-            else{
-                progress = 50 + (PointCapturePercentage() * 0.5);
-            }
-        }
-        else if(mode == GameMode.Escort){
+
+        if(mode == GameMode.Escort){
             progress = PayloadProgressPercentage();
         }
         else if(mode == GameMode.Hybrid){
@@ -130,12 +123,47 @@ define TotalObjectProgress()"TotalObjectProgress"{
                 progress = 30 + (PayloadProgressPercentage() * 0.7);
             }
         }
-        else{
-            // errLog("ERROR ON TotalObjectProgress");
-        }
+
     }
     return progress;
 }
+
+
+define CurrentObjectOnPosition(): CurrentObjectPosition() + Vector(0, 3, 0);
+
+define CurrentObjectPosition()"CurrentObjectPosition"{
+    define mode! = CurrentGameMode();
+    define objNo = CurrentObjectNo();
+
+    define objPos!;
+    if(mode == GameMode.Escort){
+        objPos = PayloadPosition();
+    }
+    else if(mode == GameMode.Hybrid){
+        if(objNo == 0){
+            objPos = ObjectivePosition(objNo);
+        }
+        else{
+            objPos = PayloadPosition();
+        }
+    }
+
+    return objPos;
+}
+
+define CurrentObjectNo()"CurrentObjectNo"{
+    define curObjNo! = -1;
+    for(define objNo! = 0; objNo <= 3; objNo++){
+        if(!IsObjectiveComplete(objNo)){
+            curObjNo = objNo;
+            break;
+        }
+    }
+    return curObjNo;
+}
+
+define HumanPlayerNum(define team!):
+    CountOf(FilteredArray(AllPlayers(team), !IsDummyBot(ae)));
 
 // TAG Probability ----------
 define ProbabilityTrue(in define probability): RandomInteger(1, 100) <= probability;
@@ -417,49 +445,6 @@ define IsInSpawnRoomPosition(in define pos, in define team):
         )
     );
 
-define CurrentObjectOnPosition(): CurrentObjectPosition() + Vector(0, 3, 0);
-
-define CurrentObjectPosition()"CurrentObjectPosition"{
-    Vector objPos;
-    define mode! = CurrentGameMode();
-    define objNo = CurrentObjectNo();
-
-    if(mode == GameMode.Assault){
-        objPos = ObjectivePosition(objNo);
-    }
-    else if(mode == GameMode.Escort){
-        objPos = PayloadPosition();
-    }
-    else if(mode == GameMode.Hybrid){
-        if(!IsObjectiveComplete(0)){
-            objPos = ObjectivePosition(objNo);
-        }
-        else{
-            objPos = PayloadPosition();
-        }
-    }
-    else if(mode == GameMode.Push){
-        objPos = 0;
-    }
-    return objPos;
-}
-
-define CurrentObjectNo()"CurrentObjectNo"{
-    Number curObjNo;
-    if(!IsObjectiveComplete(0)){
-        curObjNo = 0;
-    }
-    else if(!IsObjectiveComplete(1)){
-        curObjNo = 1;
-    }
-    else if(!IsObjectiveComplete(2)){
-        curObjNo = 2;
-    }
-    else{
-        // errLog("ERROR ON CurrentObjectNo");
-    }
-    return curObjNo;
-}
 
 // TAG Player ----------
 define IsHostPlayerInGame(){

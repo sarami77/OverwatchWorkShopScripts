@@ -9,73 +9,83 @@ globalvar define playerTeam = Team.Team1;
 globalvar define enemyTeam =  Team.Team2;
 globalvar define initCompleted!;
 
-rule: "BuiltinGlobal"
+rule: "Builtin"
 Event.OngoingGlobal
 {
     // DisableInspectorRecording();
     Wait(6);
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
+
+    define list = [
+        Hero.Illari,
+        Hero.Illari,
+        Hero.Illari,
+        Hero.Illari,
+        Hero.Illari,
+        Hero.Illari,
+        Hero.Illari,
+        Hero.Illari,
+        Hero.Illari,
+        Hero.Illari,
+        Hero.Illari,
+        Hero.Illari
+    ];
+    
+    // DestroyBots(playerTeam);
+    // DestroyBots(enemyTeam);
+    // CreateBotsByHeroList(list, playerTeam);
+    // CreateBotsByHeroList(list, enemyTeam);
+    
+    SetRespawnMaxTime(ap, 10);
+    // SetDamageDealt(ap, 10);
+
+    SetStatus(hp, null, Status.Unkillable, MaxValue());
+
+
     initCompleted = true;
     dbgHudTxt("initCompleted");
 }
 
-rule: "TriggerAction"
-Event.OngoingGlobal
-if(
-    initCompleted
-){
-    startCyclicAction = true;
-}
-
-// Test Code -----------------------------------------------
+// TestCode -----------------------------------------------
 globalvar define startCyclicAction;
 
-rule: "CyclicBotAction"
+rule: "TestCode/OngoingGlobal"
 Event.OngoingGlobal
 if(
     startCyclicAction
 ){
-    while(true){
-        define list = [
-            Hero.Illari,
-            Hero.Illari,
-            Hero.Illari,
-            Hero.Illari,
-            Hero.Illari,
-            Hero.Illari,
-            Hero.Illari,
-            Hero.Illari,
-            Hero.Illari,
-            Hero.Illari,
-            Hero.Illari,
-            Hero.Illari
-        ];
-        
-        DestroyBots(playerTeam);
-        DestroyBots(enemyTeam);
-        CreateBotsByHeroList(list, playerTeam);
-        CreateBotsByHeroList(list, enemyTeam);
-        
-        SetRespawnMaxTime(ap, 10);
-        // SetDamageDealt(ap, 10);
-
-        SetStatus(hp, null, Status.Unkillable, MaxValue());
-        
-
-        Wait(300);
-    }
+    
 }
 
-rule: "DebugCode"
+globalvar define debugActionNo;
+
+rule: "TestCode/OngoingPlayer"
 Event.OngoingPlayer
 if(
     ep == hp &&
     HasSpawned(ep) &&
-    IsButtonHeld(ep, Button.Interact)
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Crouch)
 ){
-    define target = PlayersInSlot(1, playerTeam);
-    Communicate(target, Communication.Hello);
-    dbgPlyEft(target);
+    debugActionNo = debugActionNo <= 1 ? debugActionNo + 1 : 0;
+}
+
+rule: "TestCode/OngoingPlayer"
+Event.OngoingPlayer
+if(
+    ep == hp &&
+    HasSpawned(ep) &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Reload)
+){
+    if(debugActionNo == 0){
+        dbgHudTxt(<"ObjectivePosition = <0>", CurrentObjectNo()>);
+        Teleport(ep, ObjectivePosition(CurrentObjectNo()));
+    }
+    else if(debugActionNo == 1){
+        dbgHudTxt(<"PayloadPosition = <0>", PayloadPosition()>);
+        Teleport(ep, PayloadPosition());
+    }
 }
 
 
@@ -137,7 +147,6 @@ if(
     else
         slow = DefaultPercentage();
     SetSlowMotion(slow);
-    dbgMsg(<"setSlow <0>", slow>);
 }
 
 // Debug/TuneVal -----------------------------------------------
@@ -176,9 +185,7 @@ Event.OngoingGlobal
     debugHuds[Last()] = CreateDebugHud("killCountTeam1", killCountTeam1, Color.Team1);
     debugHuds[Last()] = CreateDebugHud("killCountTeam2", killCountTeam2, Color.Team2);
 
-    debugHuds[Last()] = CreateDebugHud("IsUsingAbility1", IsUsingAbility1(hp), Color.Yellow);
-    debugHuds[Last()] = CreateDebugHud("IsInAlternateForm(hp)", IsInAlternateForm(hp), Color.Yellow);
-    debugHuds[Last()] = CreateDebugHud("IsUsingUltimate(hp)", IsUsingUltimate(hp), Color.Yellow);
+    debugHuds[Last()] = CreateDebugHud("debugActionNo", debugActionNo, Color.Yellow);
 }
 
 rule: "Debug/TuneVal/startIncreaseParam"
