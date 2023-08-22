@@ -746,88 +746,87 @@ void SetMoveDir() playervar "SetMoveDir"{
     define distToTarget! = DistanceBetween(ep, aimTarget);
     define objPos! = CurrentObjectOnPosition();
 
-    // move to support player for heal
+    // move to healer for heal
     if(
         (
             enableRetreat
                 ?
             (
-                // lowHealth
-                ProbabilityTrue(100 * (1 - NormalizedHealth())) &&
                 // attack state
-                actionState == ActionState.Attack
+                actionState == ActionState.Attack &&
+                // lowHealth
+                ProbabilityTrue(150 * (1 - NormalizedHealth()))
             )
                 :
             false
         )
     
     ){
-        // find near support player
-        define livingFriends! = AllLivingPlayers(TeamOf());
+
         define supportPlayers! = [];
+        define notSupportPlayers! = [];
+        define livingFriends! = AllLivingPlayers(TeamOf());
+
+        // make support player list and not support player
         for(define playersIndex! = 0; playersIndex < CountOf(livingFriends); playersIndex ++){
             if(
-                ep != livingFriends[playersIndex] &&
-                IsSupportHero(HeroOf(livingFriends[playersIndex]))
+                // not self
+                ep != livingFriends[playersIndex]
             ){
-                supportPlayers[CountOf(supportPlayers)] = livingFriends[playersIndex];
+                if(IsSupportHero(HeroOf(livingFriends[playersIndex]))){
+                    // make support player list
+                    supportPlayers[CountOf(supportPlayers)] = livingFriends[playersIndex];
+                }
+                else{
+                    // make not support player list
+                    notSupportPlayers[CountOf(notSupportPlayers)] = livingFriends[playersIndex];
+                }
             }
         }
-        define nearSupportPlayer! = 
+
+        // find near healer
+        define nearHealer! = 
             FirstOf(
                 SortedArray(
                     supportPlayers,
                     DistanceBetween(ep, ae)
                 )
             );
-        
-        // found near support player
+
+        // find near guard as not support
+        define nearGuard! = 
+            FirstOf(
+                SortedArray(
+                    notSupportPlayers,
+                    DistanceBetween(ep, ae)
+                )
+            );
+
+        // found support player and far
         if(
-            nearSupportPlayer != null &&
-            DistanceBetween(ep, nearSupportPlayer) > ActionRange.Close
+            nearHealer != null &&
+            DistanceBetween(ep, nearHealer) > ActionRange.Close
         ){
-            // set moveTarget by near support player
-            moveTarget = nearSupportPlayer;
+            // set moveTarget by near healer
+            moveTarget = nearHealer;
             moveDirFB = NoDirection();
             moveDirLR = NoDirection();
         }
-        // not found support player 
+        // found guard player and far
         else if(
-            nearSupportPlayer == null
+            nearGuard != null &&
+            DistanceBetween(ep, nearGuard) > ActionRange.Close
         ){
-            // find near guard player (not suppor role)
-            define guardPlayers = [];
-            for(define playersIndex! = 0; playersIndex < CountOf(livingFriends); playersIndex ++){
-                if(
-                    ep != livingFriends[playersIndex]
-                ){
-                    guardPlayers[CountOf(supportPlayers)] = livingFriends[playersIndex];
-                }
-            }
-            define nearGuardPlayer! = 
-                FirstOf(
-                    SortedArray(
-                        guardPlayers,
-                        DistanceBetween(ep, ae)
-                    )
-                );
-
-            // found near guard player and far
-            if(
-                nearGuardPlayer != null &&
-                DistanceBetween(ep, nearGuardPlayer) > ActionRange.Close
-            ){
-                // set moveTarget by near support player
-                moveTarget = nearGuardPlayer;
-                moveDirFB = NoDirection();
-                moveDirLR = NoDirection();
-            }
-            else{
-                // set move to back
-                moveTarget = null;
-                moveDirFB = Backward();
-                moveDirLR = RandomValueInArray([NoDirection(), Right(), Left()]);
-            }
+            // set moveTarget by near guard
+            moveTarget = nearGuard;
+            moveDirFB = NoDirection();
+            moveDirLR = NoDirection();
+        }
+        else{
+            // set move to back
+            moveTarget = null;
+            moveDirFB = Backward();
+            moveDirLR = RandomValueInArray([NoDirection(), Right(), Left()]);
         }
     }
 
@@ -837,6 +836,7 @@ void SetMoveDir() playervar "SetMoveDir"{
         objPos != 0 &&
         // high health
         ProbabilityTrue(150 * NormalizedHealth()) &&
+        // payload escort player num is not enough
         (
             (
                 // enemy close win
@@ -844,15 +844,13 @@ void SetMoveDir() playervar "SetMoveDir"{
                 // over time
                 IsOverTime()
             ) ?
-                // all players num half
+                // half of team players num
                 NumberOfPlayers(TeamOf()) / 2
             :
-                // // max payload speed with escort player num
-                // 3
-                // min payload speed with escort player num
+                // one player
                 1
             >
-                // on object player num
+                // current on object players num
                 NumberOfPlayersOnObjective(TeamOf())
         )
     ){
@@ -863,10 +861,13 @@ void SetMoveDir() playervar "SetMoveDir"{
         moveDirLR = Vector(XOf(dirToObject), 0, 0);
     }
     
-    // move for combat
+    // move to enemy for combat
     else if(actionState != ActionState.Non){
         moveTarget = null;
+
+        // set distRate by actionState
         define distRate! = (actionState == ActionState.Attack) ? 1 : 0.5;
+
         // target is far and enemy density rate low
         if(
             enableRetreat
