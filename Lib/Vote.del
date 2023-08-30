@@ -163,6 +163,8 @@ if(
     }
 }
 
+playervar define GameDiffText!;
+
 define DifficultyTextColor(define inputDifficulty):
     confirmGameDifficulty == GameDifficulty.EASY ? Color.Blue :
     confirmGameDifficulty == GameDifficulty.NORMAL ? Color.Green :
@@ -171,21 +173,11 @@ define DifficultyTextColor(define inputDifficulty):
     confirmGameDifficulty == GameDifficulty.INSANE ? warningIconColor :
     null;
 
-rule: "Vote/showConfirmGameDifficuly"
-Event.OngoingPlayer
-if(
-    TeamOf() == playerTeam  &&
-    HasSpawned() &&
-    IsGameInProgress() &&
-    (
-        confirmGameDifficulty != GameDifficulty.NO_VOTE
-    )
-){
-    // delete opetation text
-    UpdateVoteOperationText();
+void UpdateConfirmGameDifficultyText()"UpdateConfirmGameDifficultyText"{
+    DestroyHudText(GameDiffText[0]);
 
     // show difficulty text
-    CreateHudText(ep,
+    GameDiffText[0] = CreateHudText(ep,
         null,
         <
             "●game difficulty = <0> <1>",
@@ -199,39 +191,53 @@ if(
         HudTextRev.StringAndColor, Spectators.VisibleNever);
 }
 
-rule: "Vote/showConfirmGameDifficulyForSpectators"
-Event.OngoingGlobal
+
+rule: "Vote/showConfirmGameDifficuly"
+Event.OngoingPlayer
 if(
+    TeamOf() == playerTeam  &&
+    HasSpawned() &&
     IsGameInProgress() &&
     (
         confirmGameDifficulty != GameDifficulty.NO_VOTE
     )
 ){
-    CreateHudText(null,
-        null,
-        <
-            "game difficulty = <0> <1>",
-            ConfirmGameDifficultyText(confirmGameDifficulty),
-            <"(<0>/<1>)", confirmGameDifficulty - 1, GameDifficulty.LAST - 2>
-        >,
-        null, Location.Left, -999,
-        Color.White, 
-        DifficultyTextColor(confirmGameDifficulty),
-        Color.White,
-        HudTextRev.StringAndColor, Spectators.VisibleAlways);
+    UpdateVoteOperationText();      // delete opetation text
+    UpdateConfirmGameDifficultyText();
 }
 
 // TAG Debug ----------
-// rule: "Debug/Vote/dummyVote"
-// Event.OngoingPlayer
-// if(
-//     TeamOf() == playerTeam &&
-//     IsInSetup() &&
-//     IsDummyBot()
-// ){
-//     StartHoldingButton(ep, Button.Interact);
-//     Wait(0.1);
-//     StopHoldingButton(ep, Button.Interact);
-//     Wait(RandomInteger(1, 5));
-//     LoopIfConditionIsTrue();
-// }
+rule: "Debug/increaseDifficulty"
+Event.OngoingPlayer
+Team.All
+if(
+    hp == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Melee) &&
+    IsButtonHeld(ep, Button.Ability2)
+){
+    WaitLongPressConfirm();
+    if(confirmGameDifficulty < GameDifficulty.INSANE){
+        confirmGameDifficulty ++;
+    }
+    UpdateConfirmGameDifficultyText();
+    LoopIfConditionIsTrue();
+}
+
+rule: "Debug/decreaseDifficulty"
+Event.OngoingPlayer
+Team.All
+if(
+    hp == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.Melee) &&
+    IsButtonHeld(ep, Button.Ability1)
+){
+    WaitLongPressConfirm();
+    if(confirmGameDifficulty > GameDifficulty.EASY){
+        confirmGameDifficulty --;
+    }
+    UpdateConfirmGameDifficultyText();
+    LoopIfConditionIsTrue();
+}
+
