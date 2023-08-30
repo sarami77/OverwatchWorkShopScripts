@@ -196,8 +196,6 @@ if(
     PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 75);
 }
 
-
-
 void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) playervar "DoHeroModAction"{
     // common trigger action
     if(
@@ -955,7 +953,7 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
         ){
             heroModName = "TITAN FORM";
             heroModDetail = 
-                "+ use ult to transform to titan and rampage until 20 second" + NL +
+                "+ use ult to transform to titan and rampage until 15 second" + NL +
                 "  * titan has super toughness, fast ability charge, wide range hammer attack" + NL +
                 "  * hero echo is excluded" + NL +
                 "- every 3 second passed to lose 1% ult charge";
@@ -964,13 +962,17 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             trigger == HeroModTrigger.CHARGING_ULT
         ){
             Wait(3, WaitBehavior.AbortWhenFalse);
-            if(UltimateChargePercent() < DefaultPercentage()){
+            if(
+                !isTransformed &&
+                UltimateChargePercent() < DefaultPercentage()
+            ){
                 SetUltimateCharge(ep, UltimateChargePercent() - 1);
             }
         }
         else if(
             trigger == HeroModTrigger.USING_ULT
         ){
+            isTransformed = true;
             CancelPrimaryAction();
             define prevHero! = HeroOf();
             ForcePlayerHero(ep, Hero.Reinhardt);
@@ -986,7 +988,7 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             }
             StartModifyingHeroVoiceLines(ep, 0.1, false);
 
-            for(define remainSecond! = 20; remainSecond > 0; remainSecond--){
+            for(define remainSecond! = 15; remainSecond > 0; remainSecond--){
                 if(IsDead()){
                     break;
                 }
@@ -1009,6 +1011,7 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             ForcePlayerHero(ep, prevHero);
             StopForcingHero(ep);
             SetHeroButtonControlPropety();
+            isTransformed = false;
         }
     }
     else if(
@@ -1029,13 +1032,17 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             trigger == HeroModTrigger.CHARGING_ULT
         ){
             Wait(3, WaitBehavior.AbortWhenFalse);
-            if(UltimateChargePercent() < DefaultPercentage()){
+            if(
+                !isTransformed &&
+                UltimateChargePercent() < DefaultPercentage()
+            ){
                 SetUltimateCharge(ep, UltimateChargePercent() - 1);
             }
         }
         else if(
             trigger == HeroModTrigger.USING_ULT
         ){
+            isTransformed = true;
             CancelPrimaryAction();
             define prevHero! = HeroOf();
             ForcePlayerHero(ep, Hero.Widowmaker);
@@ -1059,34 +1066,39 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             ForcePlayerHero(ep, prevHero);
             StopForcingHero(ep);
             SetHeroButtonControlPropety();
+            isTransformed = false;
         }
         else if(
             trigger == HeroModTrigger.USING_PRIMARY
         ){
-            DoBeamSniper();
+            if(isTransformed){
+                DoBeamSniper();
+            }
         }
         else if(
             trigger == HeroModTrigger.USING_SECONDARY
         ){
-            while(IsFiringSecondary()){
-                Wait(0.1, WaitBehavior.AbortWhenFalse);
-                WaitUntil(IsFiringPrimary(), 1.2);
-                // primary fire interrupted before charging fin
-                if(IsFiringPrimary()){
-                    continue;
-                }
-                // scorping ended
-                else if(!IsFiringSecondary()){
-                    Abort();
-                }
-                else if(IsFiringSecondary()){
-                    // charging fin
-                    beamCharging = true;
-                    // update aim pos
-                    while(beamCharging){
-                        // pre set aim pos
-                        beamAimPos = AimingPosition();
-                        Wait(0.1, WaitBehavior.AbortWhenFalse);
+            if(isTransformed){
+                while(IsFiringSecondary()){
+                    Wait(0.1, WaitBehavior.AbortWhenFalse);
+                    WaitUntil(IsFiringPrimary(), 1.2);
+                    // primary fire interrupted before charging fin
+                    if(IsFiringPrimary()){
+                        continue;
+                    }
+                    // scorping ended
+                    else if(!IsFiringSecondary()){
+                        Abort();
+                    }
+                    else if(IsFiringSecondary()){
+                        // charging fin
+                        beamCharging = true;
+                        // update aim pos
+                        while(beamCharging){
+                            // pre set aim pos
+                            beamAimPos = AimingPosition();
+                            Wait(0.1, WaitBehavior.AbortWhenFalse);
+                        }
                     }
                 }
             }
@@ -1094,7 +1106,9 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
         else if(
             trigger == HeroModTrigger.NOT_USING_SECONDARY
         ){
-            beamCharging = false;
+            if(isTransformed){
+                beamCharging = false;
+            }
         }
     }
 
@@ -1175,6 +1189,7 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
 // heromod variable ---------------------------------
 
 playervar define grudgePower!;      // GRUDGE_FIRE_BALL
+playervar define isTransformed!;    // TITAN_FORM, BEAM_SNIPER
 playervar define beamAimPos!;       // BEAM_SNIPER
 playervar define beamCharging!;     // BEAM_SNIPER
 
