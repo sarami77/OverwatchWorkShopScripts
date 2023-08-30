@@ -906,7 +906,7 @@ Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlay
 
 define teleportAreaOffsetFromPayload: ActionRange.Far;
 define teleportAreaExtendScale: 0.5;
-define IsPlayerOnObject: ([] != AllPlayersOnObjective(playerTeam));
+define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(playerTeam));
 globalvar define teleportAreaExtendSize;
 
 Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
@@ -1157,7 +1157,7 @@ if(
 
 define checkTeleportConditionMaxCount: 3;
 
-rule: "EnemyBot/Teleport/teleportForDefenceObject"
+rule: "EnemyBot/Teleport/teleportForDefendObject"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
@@ -1165,20 +1165,26 @@ if(
     IsAlive() &&
     !IsInSpawnRoom()
 ){
+    Wait(1, WaitBehavior.AbortWhenFalse);
+
     for(define checkConditionCount! = 0; checkConditionCount < checkTeleportConditionMaxCount; checkConditionCount ++){
-        Wait(1, WaitBehavior.AbortWhenFalse);
+        
         // check not teleport condition
         if(
             // not
             !(
-                // teleport condition
-                // enemy not found
-                !IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))) ||
+                // need defend object
                 (
-                    // far from object
-                    DistanceBetween(ep, CurrentObjectPosition()) > ActionRange.Far &&
                     // player on object
-                    IsPlayerOnObject                                                               
+                    IsPlayerOnObject &&
+                    // far from object
+                    DistanceBetween(ep, CurrentObjectPosition()) > ActionRange.CanFind
+                )
+                    ||
+                // enemy not found
+                (
+                    aimTarget != null &&
+                    !IsInLineOfSight(ep, aimTarget)
                 )
             )
         ){
@@ -1187,6 +1193,8 @@ if(
             LoopIfConditionIsTrue();
         }
         // count up checkConditionCount
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        WaitRandomForDistributeServerLoad();
     }
 
     // when over checkConditionCount 
