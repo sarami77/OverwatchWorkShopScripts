@@ -796,9 +796,18 @@ define isInCombat:
 // }
 
 // TAG EnemyBot/Teleport ----------
+define teleportAreaSize: ActionRange.Close;
+define teleportAreaOffsetDistFromPayload: ActionRange.CanFind;
+define teleportAreaExtendScaleByBlockedAhead: 0.25;
+define minSpaceToEnemyDistWhenTeleport: ActionRange.Close / 2;
+define forceRenewCommonTeleportPositionDist: ActionRange.Close / 2;
+define forceRenewCommonTeleportPositionProb: 3; //3;
+define forceReuseCommonTeleportPositionProb: 90;   //90;
+
+define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(playerTeam));
+
 playervar define teleportPosition!;
 globalvar define commonTeleportPosition!;
-define teleportAreaSize: ActionRange.Close;
 
 Player ClosestPlayerFromObject()"ClosestPlayerFromObject"{
     return FirstOf(
@@ -814,7 +823,32 @@ Player ClosestPlayerFromObject()"ClosestPlayerFromObject"{
     );
 }
 
-Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlayerFront"{
+define CanEncountPosition(define position!)"CanEncountPosition"{
+    define canEncount! = false;
+
+    if(
+        // position valid
+        position != 0
+                &&
+        // not close to near enemy
+        DistanceBetween(
+            ep,
+            ClosestPlayerTo(position, playerTeam)
+            ) >= minSpaceToEnemyDistWhenTeleport        
+                &&
+        // Has line to near enemy
+        IsInLineOfSight(
+            PositionOffsetY1() + position,
+            PositionOffsetY1() + PositionOf(ClosestPlayerTo(position, playerTeam)),
+            BarrierLOS.NoBarriersBlock)
+    ){
+        canEncount = true;
+    }
+
+    return canEncount;
+}
+
+void SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlayerFront"{
     define setSuccess! = false;
     define teleportToTarget! = ClosestPlayerFromObject();
 
@@ -840,93 +874,36 @@ Boolean SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlaye
             );
 
         if(
-            teleportPosition != 0
-                    &&
-            // not close to near enemy
-            DistanceBetween(teleportPosition, ClosestPlayerTo(teleportPosition, playerTeam)) >= ActionRange.Close
+            // can encount enemy
+            CanEncountPosition(teleportPosition)
         ){
             break;
         }
 
         Wait(0.1, WaitBehavior.AbortWhenFalse);
-        WaitRandomForDistributeServerLoad();
+        WaitRandomAfterServerFree();
     }
-
-    if(
-        teleportPosition != 0
-    ){
-        setSuccess = true;
-    }
-
-    return setSuccess;
 }
 
-Boolean SetTeleportPositionToPlayerAround() playervar "SetTeleportPositionToPlayerAround"{
-    define setSuccess! = false;
-    define teleportToTarget! = ClosestPlayerFromObject();
-
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
-        // select teleportPosition from current object around
-        teleportPosition = 
-            NearestWalkablePosition(
-                PositionOf(teleportToTarget)
-                    +
-                RandomPosition(
-                    (teleportAreaSize),
-                    (teleportAreaSize),
-                    (teleportAreaSize)
-                )
-            );
-        if(
-            teleportPosition != 0
-                    &&
-            // not close to near enemy
-            DistanceBetween(teleportPosition, ClosestPlayerTo(teleportPosition, playerTeam)) >= ActionRange.Close       
-                    &&
-            // Has line to near enemy
-            IsInLineOfSight(
-                PositionOffsetY1() + PositionOf(ClosestPlayerTo(teleportPosition, playerTeam)),
-                PositionOffsetY1() + teleportPosition,
-                BarrierLOS.NoBarriersBlock)
-
-        ){
-            break;
-        }
-
-        Wait(0.1, WaitBehavior.AbortWhenFalse);    
-        WaitRandomForDistributeServerLoad();
-    }
-
-    if(teleportPosition != 0){
-        setSuccess = true;
-    }
-
-    return setSuccess;
-}
-
-define teleportAreaOffsetFromPayload: ActionRange.Far;
-define teleportAreaExtendScale: 0.5;
-define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(playerTeam));
-globalvar define teleportAreaExtendSize;
-
-Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
+void SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
     define setSuccess! = false;
     define teleportToTarget! = CurrentObjectOnPosition();
+    define teleportAreaExtendSize!;
 
     // If there is a wall in the payload direction and the offset distance of the teleport area is not enough,
-    //   increase the teleport area size by the shortfall.    
+    //   increase the teleport area size by cut off distance
     if(
         payloadDirection != 0 &&
         IsPlayerOnObject
     ){
         // get blocked position of payload ahead
-        define blockedPositionPayloadAhead! = BlockedPositon(teleportToTarget, payloadDirection, teleportAreaOffsetFromPayload);
+        define blockedPositionPayloadAhead! = BlockedPositon(teleportToTarget, payloadDirection, teleportAreaOffsetDistFromPayload);
         // change teleportTarget to blocked position of payload ahead from payload positon
         teleportToTarget = blockedPositionPayloadAhead;
         // get cut off distance as teleportAreaExtendSize
-        teleportAreaExtendSize = teleportAreaOffsetFromPayload - DistanceBetween(teleportToTarget, blockedPositionPayloadAhead);
+        teleportAreaExtendSize = teleportAreaOffsetDistFromPayload - DistanceBetween(teleportToTarget, blockedPositionPayloadAhead);
         // convert to extend size by multi scale
-        teleportAreaExtendSize *= teleportAreaExtendScale;        
+        teleportAreaExtendSize *= teleportAreaExtendScaleByBlockedAhead;
     }
     else{
         // clear extend size by no cut off
@@ -947,87 +924,77 @@ Boolean SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjec
             );
 
         if(
-            teleportPosition != 0
-                    &&
-            // not close to near enemy
-            DistanceBetween(ep, ClosestPlayerTo(teleportPosition, playerTeam)) >= ActionRange.Close        
-                    &&
-            // Has line to near enemy
-            IsInLineOfSight(
-                PositionOffsetY1() + PositionOf(ClosestPlayerTo(teleportPosition, playerTeam)),
-                PositionOffsetY1() + teleportPosition,
-                BarrierLOS.NoBarriersBlock)
+            // can encount enemy
+            CanEncountPosition(teleportPosition)
         ){
             break;
         }
 
         Wait(0.1, WaitBehavior.AbortWhenFalse);
-        WaitRandomForDistributeServerLoad();
+        WaitRandomAfterServerFree();
     }
-
-    if(teleportPosition != 0){
-        setSuccess = true;
-    }
-
-    return setSuccess;
 }
 
-define forceRelocateCommonTeleportPositionDist: 3;
-define forceRelocateCommonTeleportPositionProb: 3;
+void SetTeleportPositionFromCommonPosition() playervar "SetTeleportPositionFromCommonPosition"{
+    define setSuccess! = false;
+    define teleportToTarget! = commonTeleportPosition;
 
-Boolean SetTeleportPositionToCommonPosition() playervar "SetTeleportPositionToCommonPosition"{
-    // set telPosNearTarget at closest player from commonTeleportPosition
-    if(
-        // update commonTeleportPosition conditions
-        // invalid commonTeleportPosition
-        commonTeleportPosition ==  0 ||
-        // force update Probability
-        ProbabilityTrue(forceRelocateCommonTeleportPositionProb) ||
-        // player too close from commonTeleportPosition
-        DistanceBetween(commonTeleportPosition, ClosestPlayerTo(commonTeleportPosition, playerTeam)) < forceRelocateCommonTeleportPositionDist ||
-        // has not line commonTeleportPosition to current object 
-        !IsInLineOfSight(
-            PositionOffsetY1() + CurrentObjectPosition(),
-            PositionOffsetY1() + commonTeleportPosition,
-            BarrierLOS.NoBarriersBlock
-        )
-    ){
-        // new select common position
-        // set teleport position to player around
-        if(SetTeleportPositionToObjectAhead()){
-            // save teleport position as common position
-            commonTeleportPosition = teleportPosition;
-        }
-        else{
-            // set teleport position from common position
-            teleportPosition =
-                NearestWalkablePosition(
-                    commonTeleportPosition
-                        +
-                    RandomPosition(
-                        teleportAreaSize,
-                        teleportAreaSize,
-                        teleportAreaSize
-                    )
-                );
-        }
-    }
-    else{
-        // set teleport position from common position
-        teleportPosition =
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        // select teleportPosition from teleportToTarget around
+        teleportPosition = 
             NearestWalkablePosition(
-                commonTeleportPosition
+                teleportToTarget
                     +
                 RandomPosition(
-                    teleportAreaSize,
-                    teleportAreaSize,
-                    teleportAreaSize
+                    (teleportAreaSize),
+                    (teleportAreaSize),
+                    (teleportAreaSize)
                 )
             );
+
+        if(
+            // can encount enemy
+            CanEncountPosition(teleportPosition)
+        ){
+            break;
+        }
+
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        WaitRandomAfterServerFree();
     }
-    
-    return true;
 }
+
+playervar define telBeam!;
+
+void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
+    if(teleportPosition == 0){
+        return;
+    }
+
+    WaitUntil(IsGameInProgress(), MaxValue());
+
+    define waitTeleportInterval! = 
+        IndexOfArrayValue(
+            FilteredArray(
+                AllPlayers(enemyTeam), IsInSpawnRoom(ae)
+            ),
+            ep
+        ) *
+        0.1;
+    // reduce over load by bot logic overlap
+    WaitUntilServerFree();
+    Wait(waitTeleportInterval, WaitBehavior.AbortWhenFalse);
+
+    // show pre teleport effect
+    PlayTeleportEffect(true, isBeamFromBody);
+    // Teleport
+    Teleport(ep, teleportPosition);
+    // show teleport effect
+    PlayTeleportEffect(false, isBeamFromBody);
+    // hide teleport beam effect
+    DestroyEffect(telBeam);
+}
+
 
 define showTeleportBeamTime: 0.7;
 
@@ -1065,82 +1032,83 @@ void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "Pla
     }
 }
 
-playervar define telBeam!;
+void DoTeleport(define isBeamFromBody!)"DoTeleport"{
+    
+    define objectPos! = CurrentObjectOnPosition();
 
-void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
-    if(teleportPosition == 0){
-        return;
-    }
-
-    WaitUntil(IsGameInProgress(), MaxValue());
-
-    define waitTeleportInterval! = 
-        IndexOfArrayValue(
-            FilteredArray(
-                AllPlayers(enemyTeam), IsInSpawnRoom(ae)
-            ),
-            ep
-        ) *
-        0.1;
-    // reduce over load by bot logic overlap
-    WaitRandomForDistributeServerLoad();
-    Wait(waitTeleportInterval, WaitBehavior.AbortWhenFalse);
-
-    // show pre teleport effect
-    PlayTeleportEffect(true, isBeamFromBody);
-    // Teleport
-    Teleport(ep, teleportPosition);
-    // show teleport effect
-    PlayTeleportEffect(false, isBeamFromBody);
-    // hide teleport beam effect
-    DestroyEffect(telBeam);
-}
-
-define forceActiveTeleport: 40;
-define teleportToCommonPositionProb: 50;
-
-void HybridTeleport(define isBeamFromBody!)"HybridTeleport"{
-    define isHasPosition! = false;
-
+    // threat enemy combat teleport
     if(
-        // during Object attacks
-        IsPlayerOnObject ||
-        // probability
-        ProbabilityTrue(forceActiveTeleport)
+        // general or boss
+        IsThreatEnemyType(ep.enemyType)
+            &&
+        // player team close win
+        IsCloseWin(playerTeam)
     ){
-        if(
-            // is boss class type
-            IsThreatEnemyType(ep) &&
-            // payload near destination
-            IsCloseWin(playerTeam)
-        ){
-            // set teleport position to object
-            teleportPosition = CurrentObjectOnPosition();
-            isHasPosition = true;
-        }
-        else if(
-            // force use common pos probability
-            ProbabilityTrue(teleportToCommonPositionProb)
-        ){
-            isHasPosition = SetTeleportPositionToCommonPosition();
-        }
-        else{
-            isHasPosition = SetTeleportPositionToObjectAhead();
-        }
+        teleportPosition = objectPos;
     }
+    // set teleportPosition with update commonTeleportPosition
+    else if(
+        // player on object
+        IsPlayerOnObject
+            &&
+        (
+            // by prob
+            ProbabilityTrue(forceRenewCommonTeleportPositionProb)
+                ||
+            // too close to near enemy
+            DistanceBetween(
+                commonTeleportPosition,
+                ClosestPlayerTo(commonTeleportPosition, playerTeam)) < forceRenewCommonTeleportPositionDist        
+                ||
+            (
+                // player on object
+                IsPlayerOnObject
+                        &&
+                // Has not line to object
+                !IsInLineOfSight(
+                    PositionOffsetY1() + commonTeleportPosition,
+                    PositionOffsetY1() + objectPos,
+                    BarrierLOS.NoBarriersBlock)
+            )
+                ||
+            // position invalid
+            commonTeleportPosition == 0
+        )
+    ){
+        // set teleportPosition by calc new position
+        SetTeleportPositionToObjectAhead();
+
+        // renew common position by teleportPosition
+        commonTeleportPosition = teleportPosition;
+    }
+    // set teleportPosition only
     else{
-        if(IsTeamOnDefense(TeamOf())){
-            isHasPosition = SetTeleportPositionToPlayerFront();
+        if(
+            // player on object
+            IsPlayerOnObject
+                &&
+            // by prob
+            ProbabilityTrue(forceReuseCommonTeleportPositionProb)
+        ){
+            // set teleportPosition by reuse common position
+            SetTeleportPositionFromCommonPosition();
         }
         else{
-            isHasPosition = SetTeleportPositionToPlayerAround();
+            // set teleportPosition by calc new position
+            if(
+                // player on object
+                IsPlayerOnObject
+            ){
+                SetTeleportPositionToObjectAhead();
+            }
+            else{
+                SetTeleportPositionToPlayerFront();
+            }
         }
     }
 
-    if(isHasPosition){
-        // teleport to teleportPosition
-        TeleportWithEffect(isBeamFromBody);
-    }
+    // teleport to teleportPosition
+    TeleportWithEffect(isBeamFromBody);
 }
 
 rule: "EnemyBot/Teleport/teleportByRespawn"
@@ -1150,7 +1118,7 @@ if(
     IsGameInProgress() &&
     IsInSpawnRoom()
 ){
-    HybridTeleport(false);
+    DoTeleport(false);
     // failsafe
     Wait(3, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
@@ -1195,12 +1163,12 @@ if(
         }
         // count up checkConditionCount
         Wait(1, WaitBehavior.AbortWhenFalse);
-        WaitRandomForDistributeServerLoad();
+        WaitRandomAfterServerFree();
     }
 
     // when over checkConditionCount 
     // teleport
-    HybridTeleport(false);
+    DoTeleport(false);
 
     LoopIfConditionIsTrue();
 }
@@ -1340,7 +1308,7 @@ if(
 
     if(IsAlive()){
         // show teleport beam from body
-        HybridTeleport(true);
+        DoTeleport(true);
     }
 
     LoopIfConditionIsTrue();
@@ -1691,9 +1659,11 @@ if(
     //     commonTeleportPosition + PositionOffsetY1(), Icon.Spiral,
     //     IconRev.VisibleToAndPosition, enemyColor, true);
     // CreateEffect(commonTeleportPosition != 0 ? hp: null, Effect.Ring, enemyColor,
-    //     commonTeleportPosition + PositionOffsetY1(), forceRelocateCommonTeleportPositionDist, EffectRev.VisibleToPositionRadiusAndColor);
+    //     commonTeleportPosition + PositionOffsetY1(), forceRenewCommonTeleportPositionDist, EffectRev.VisibleToPositionAndRadius);
     // CreateEffect(commonTeleportPosition != 0 ? hp: null, Effect.Ring, enemyColor,
-    //     commonTeleportPosition + PositionOffsetY1(), teleportAreaSize, EffectRev.VisibleToPositionRadiusAndColor);
+    //     commonTeleportPosition + PositionOffsetY1(), teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+    // CreateBeamEffect(commonTeleportPosition != 0 ? hp: null, BeamType.GoodBeam, 
+    //         commonTeleportPosition, CurrentObjectOnPosition(), enemyColor, EffectRev.VisibleToPositionAndRadius);
 
     // while(true){
     //     Wait(1);
@@ -1775,7 +1745,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
     ){
         debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("count Wait Random For Distribute Server Load", countWaitRandomForDistributeServerLoad, Color.Orange);
+        debugHuds[Last()] = CreateDebugHud("count Wait Random After Server Free", countWaitRandomAfterServerFree, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("count Game Logic Speed Decrease", countGameLogicSpeedDecrease, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("human player Num", HumanPlayerNum(playerTeam), HumanPlayerNum(playerTeam) <= 1 ? Color.Team2 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
