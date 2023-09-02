@@ -41,7 +41,57 @@ Event.OngoingGlobal
     initCompleted = true;
 }
 
-// TAG Player ----------
+// TAG Round ----------
+rule: "Round/shortenAssemblePhase"
+Event.OngoingGlobal
+if(
+    IsAssemblingHeroes()
+){
+    SetMatchTime(45);
+
+    // wait player join server
+    Wait(10, WaitBehavior.AbortWhenFalse);
+    
+    if(
+        // no human
+        HumanPlayerNum(playerTeam) <= 0
+            ||
+        // host human only
+        (
+            // 1 human only
+            HumanPlayerNum(playerTeam) == 1
+                &&
+            // human is host player
+            hp ==
+                FirstOf(
+                    FilteredArray(
+                        AllPlayers(playerTeam),
+                        !IsDummyBot(ae)
+                    )
+                )
+        )
+    ){
+        // omit assemble phase
+        SetMatchTime(0);
+    }
+}
+
+rule: "Round/shortenSetupPhase"
+Event.OngoingGlobal
+if(
+    IsInSetup()
+){
+    SetMatchTime(45);
+    if(
+        // no human
+        HumanPlayerNum(playerTeam) <= 0
+    ){
+        // omit setup phase
+        SetMatchTime(0);
+    }
+}
+
+// TAG Player/Config ----------
 playervar define isHighlightingText!;
 rule: "Player/highlightingText"
 Event.OngoingPlayer
@@ -63,7 +113,10 @@ if(
         define players! = AllPlayers();
         players[CountOf(players)] = hp;
         StartForcingPlayerOutlines(
-            FilteredArray(AllPlayers(playerTeam), !IsDummyBot(ae)),
+            FilteredArray(
+                AllPlayers(playerTeam),
+                !IsDummyBot(ae)
+            ),
             players,
             true,
             Color.Green,
@@ -79,7 +132,7 @@ if(
     }
 }
 
-// TAG Buddy ----------
+// TAG Buddy/Asset ----------
 define buddyAssetList:
     [
         // fix hero asset
@@ -712,7 +765,7 @@ if(
         AddHealthPoolToPlayer(ep, HealthType.Shields, MaxHealth(ep) * 0.5, true, false);
     }
 
-    if(IsThreatEnemyType(ep)){
+    if(IsThreatEnemy(ep)){
         StartForcingPlayerOutlines(
             ep,
             AllPlayers(playerTeam),
@@ -749,7 +802,7 @@ if(
 define enemyColor: Color.Team1;
 playervar define skullIcon!;
 
-define IsThreatEnemyType(in define player):
+define IsThreatEnemy(in define player):
     player.enemyType == EnemyType.General ||
     player.enemyType == EnemyType.Boss;
 
@@ -798,11 +851,11 @@ define isInCombat:
 // TAG EnemyBot/Teleport ----------
 define teleportAreaSize: ActionRange.Close;
 define teleportAreaOffsetDistFromPayload: ActionRange.CanFind;
-define teleportAreaExtendScaleByBlockedAhead: 0.25;
-define minSpaceToEnemyDistWhenTeleport: ActionRange.Close / 2;
-define forceRenewCommonTeleportPositionDist: ActionRange.Close / 2;
-define forceRenewCommonTeleportPositionProb: 3; //3;
-define forceReuseCommonTeleportPositionProb: 90;   //90;
+define teleportAreaExtendScaleByBlockedAhead: 0.2;
+define minDistToEnemyWhenTeleport: teleportAreaSize / 2;
+define minDistOfRenewCommonTeleportPosition: teleportAreaSize / 2;
+define probOfRenewCommonTeleportPosition: 3;    //3;
+define probOfReuseCommonTeleportPosition: 90;   //90;
 
 define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(playerTeam));
 
@@ -830,12 +883,14 @@ define CanEncountPosition(define position!)"CanEncountPosition"{
         // position valid
         position != 0
                 &&
-        // not close to near enemy
-        DistanceBetween(
-            ep,
-            ClosestPlayerTo(position, playerTeam)
-            ) >= minSpaceToEnemyDistWhenTeleport        
-                &&
+
+        // // not close to near enemy
+        // DistanceBetween(
+        //     ep,
+        //     ClosestPlayerTo(position, playerTeam)
+        //     ) >= minDistToEnemyWhenTeleport        
+        //         &&
+
         // Has line to near enemy
         IsInLineOfSight(
             PositionOffsetY1() + position,
@@ -885,10 +940,14 @@ void SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlayerFr
     }
 }
 
+globalvar define teleportAreaExtendSize!;
+globalvar define blockedPositionPayloadAhead!;
+
 void SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
     define setSuccess! = false;
     define teleportToTarget! = CurrentObjectOnPosition();
-    define teleportAreaExtendSize!;
+    // define teleportAreaExtendSize!;
+    // define blockedPositionPayloadAhead!;
 
     // If there is a wall in the payload direction and the offset distance of the teleport area is not enough,
     //   increase the teleport area size by cut off distance
@@ -897,13 +956,13 @@ void SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAh
         IsPlayerOnObject
     ){
         // get blocked position of payload ahead
-        define blockedPositionPayloadAhead! = BlockedPositon(teleportToTarget, payloadDirection, teleportAreaOffsetDistFromPayload);
-        // change teleportTarget to blocked position of payload ahead from payload positon
+        blockedPositionPayloadAhead = BlockedPositon(teleportToTarget, payloadDirection, teleportAreaOffsetDistFromPayload);
+        // get cut off distance by blocked position
+        define cutOffDist! = teleportAreaOffsetDistFromPayload - DistanceBetween(blockedPositionPayloadAhead, blockedPositionPayloadAhead);
+        // get teleportAreaExtendSize by cut off distance with scale
+        teleportAreaExtendSize = cutOffDist * teleportAreaExtendScaleByBlockedAhead;
+        // change teleportTarget to blocked position
         teleportToTarget = blockedPositionPayloadAhead;
-        // get cut off distance as teleportAreaExtendSize
-        teleportAreaExtendSize = teleportAreaOffsetDistFromPayload - DistanceBetween(teleportToTarget, blockedPositionPayloadAhead);
-        // convert to extend size by multi scale
-        teleportAreaExtendSize *= teleportAreaExtendScaleByBlockedAhead;
     }
     else{
         // clear extend size by no cut off
@@ -1039,7 +1098,7 @@ void DoTeleport(define isBeamFromBody!)"DoTeleport"{
     // threat enemy combat teleport
     if(
         // general or boss
-        IsThreatEnemyType(ep.enemyType)
+        IsThreatEnemy(ep)
             &&
         // player team close win
         IsCloseWin(playerTeam)
@@ -1048,35 +1107,38 @@ void DoTeleport(define isBeamFromBody!)"DoTeleport"{
     }
     // set teleportPosition with update commonTeleportPosition
     else if(
-        // player on object
-        IsPlayerOnObject
-            &&
+        // by prob
+        ProbabilityTrue(probOfRenewCommonTeleportPosition)
+            ||
+        // too close to near enemy
+        DistanceBetween(
+            commonTeleportPosition,
+            ClosestPlayerTo(commonTeleportPosition, playerTeam)) < minDistOfRenewCommonTeleportPosition        
+            ||
         (
-            // by prob
-            ProbabilityTrue(forceRenewCommonTeleportPositionProb)
-                ||
-            // too close to near enemy
-            DistanceBetween(
-                commonTeleportPosition,
-                ClosestPlayerTo(commonTeleportPosition, playerTeam)) < forceRenewCommonTeleportPositionDist        
-                ||
-            (
-                // player on object
-                IsPlayerOnObject
-                        &&
-                // Has not line to object
-                !IsInLineOfSight(
-                    PositionOffsetY1() + commonTeleportPosition,
-                    PositionOffsetY1() + objectPos,
-                    BarrierLOS.NoBarriersBlock)
-            )
-                ||
-            // position invalid
-            commonTeleportPosition == 0
+            // player on object
+            IsPlayerOnObject
+                    &&
+            // Has not line to object
+            !IsInLineOfSight(
+                PositionOffsetY1() + commonTeleportPosition,
+                PositionOffsetY1() + objectPos,
+                BarrierLOS.NoBarriersBlock)
         )
+            ||
+        // position invalid
+        commonTeleportPosition == 0
     ){
         // set teleportPosition by calc new position
-        SetTeleportPositionToObjectAhead();
+        if(
+            // player on object
+            IsPlayerOnObject
+        ){
+            SetTeleportPositionToObjectAhead();
+        }
+        else{
+            SetTeleportPositionToPlayerFront();
+        }
 
         // renew common position by teleportPosition
         commonTeleportPosition = teleportPosition;
@@ -1084,11 +1146,8 @@ void DoTeleport(define isBeamFromBody!)"DoTeleport"{
     // set teleportPosition only
     else{
         if(
-            // player on object
-            IsPlayerOnObject
-                &&
             // by prob
-            ProbabilityTrue(forceReuseCommonTeleportPositionProb)
+            ProbabilityTrue(probOfReuseCommonTeleportPosition)
         ){
             // set teleportPosition by reuse common position
             SetTeleportPositionFromCommonPosition();
@@ -1126,7 +1185,7 @@ if(
 
 define checkTeleportConditionMaxCount: 3;
 
-rule: "EnemyBot/Teleport/teleportForDefendObject"
+rule: "EnemyBot/Teleport/teleportForDefendObjectorIdle"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
@@ -1284,7 +1343,7 @@ Event.OngoingPlayer
 if(
     IsGameInProgress() &&
     TeamOf() == enemyTeam &&
-    IsThreatEnemyType(ep)
+    IsThreatEnemy(ep)
 ){
     // set default interval
     combatTeleportInterval = ObjectProgressScaledInterval(5, 15, 5);
@@ -1320,7 +1379,7 @@ rule: "EnemyBot/EnemyAbility/moreUltimate"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    IsThreatEnemyType(ep) &&
+    IsThreatEnemy(ep) &&
     IsAlive() &&
     actionState != ActionState.Non &&
     !IsUsingUltimate()
@@ -1436,7 +1495,7 @@ define autoTuneDmgDltInitial :
     confirmGameDifficulty == GameDifficulty.HARD ?      35 :
     confirmGameDifficulty == GameDifficulty.HELL ?      40 :
     confirmGameDifficulty == GameDifficulty.INSANE ?    50 :
-                                                        0;
+                                                        50;
 
 define autoTuneDmgDltLimit:
     confirmGameDifficulty == GameDifficulty.EASY ?      50 :
@@ -1444,7 +1503,7 @@ define autoTuneDmgDltLimit:
     confirmGameDifficulty == GameDifficulty.HARD ?      70 :
     confirmGameDifficulty == GameDifficulty.HELL ?      80 :
     confirmGameDifficulty == GameDifficulty.INSANE ?    100 :
-                                                        0;
+                                                        100;
 
 define upValueBase: 1.0;
 define upValueScale:
@@ -1453,7 +1512,7 @@ define upValueScale:
     confirmGameDifficulty == GameDifficulty.HARD ?      upValueBase * 1.50: 
     confirmGameDifficulty == GameDifficulty.HELL ?      upValueBase * 1.75: 
     confirmGameDifficulty == GameDifficulty.INSANE ?    upValueBase * 2.00: 
-                                                        0;
+                                                        2.00;
 define downValueBase: 2.0;
 define downValueScale:
     confirmGameDifficulty == GameDifficulty.EASY ?      downValueBase * 2.00 :
@@ -1461,7 +1520,7 @@ define downValueScale:
     confirmGameDifficulty == GameDifficulty.HARD ?      downValueBase * 1.50 :
     confirmGameDifficulty == GameDifficulty.HELL ?      downValueBase * 1.25 :
     confirmGameDifficulty == GameDifficulty.INSANE ?    downValueBase * 1.00 :
-                                                        0;
+                                                        1.00;
 globalvar define autoTuneDmgDlt!;
 globalvar define enemyDeathCount! = [0,0,0,0];  // for debug
 globalvar define playerDeathCount! = 0;  // for debug
@@ -1655,15 +1714,25 @@ if(
     }
 
     // // show enemy common teleport positon
-    // CreateIcon(commonTeleportPosition != 0 ? hp: null,
+    // CreateIcon(commonTeleportPosition != 0 ? hp : null,
     //     commonTeleportPosition + PositionOffsetY1(), Icon.Spiral,
     //     IconRev.VisibleToAndPosition, enemyColor, true);
-    // CreateEffect(commonTeleportPosition != 0 ? hp: null, Effect.Ring, enemyColor,
-    //     commonTeleportPosition + PositionOffsetY1(), forceRenewCommonTeleportPositionDist, EffectRev.VisibleToPositionAndRadius);
-    // CreateEffect(commonTeleportPosition != 0 ? hp: null, Effect.Ring, enemyColor,
+    // CreateEffect(commonTeleportPosition != 0 ? hp : null, Effect.Ring, enemyColor,
+    //     commonTeleportPosition + PositionOffsetY1(), minDistOfRenewCommonTeleportPosition, EffectRev.VisibleToPositionAndRadius);
+    // CreateEffect(commonTeleportPosition != 0 ? hp : null, Effect.Ring, enemyColor,
     //     commonTeleportPosition + PositionOffsetY1(), teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
-    // CreateBeamEffect(commonTeleportPosition != 0 ? hp: null, BeamType.GoodBeam, 
-    //         commonTeleportPosition, CurrentObjectOnPosition(), enemyColor, EffectRev.VisibleToPositionAndRadius);
+    // CreateBeamEffect(commonTeleportPosition != 0 ? hp : null, BeamType.GoodBeam, 
+    //     commonTeleportPosition, CurrentObjectOnPosition(), enemyColor, EffectRev.VisibleToPositionAndRadius);
+
+    // // show enemy teleport area size of blocked position payload ahead
+    // define isPayloadAheadTeleport! = IsPlayerOnObject && blockedPositionPayloadAhead != 0;
+    // define objectPos! = CurrentObjectPosition();
+    // CreateEffect(
+    //     blockedPositionPayloadAhead != 0 ? hp : null,
+    //     Effect.Sphere, enemyColor,
+    //     blockedPositionPayloadAhead,
+    //     teleportAreaSize + teleportAreaExtendSize,
+    //     EffectRev.VisibleToPositionAndRadius);
 
     // while(true){
     //     Wait(1);
@@ -1724,7 +1793,7 @@ define FirstEnemyOf(in define enemyType):
     FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == enemyType));
 
 define FirstThreatEnemy():
-    FirstOf(FilteredArray(AllPlayers(enemyTeam), IsThreatEnemyType(ae)));
+    FirstOf(FilteredArray(AllPlayers(enemyTeam), IsThreatEnemy(ae)));
 
 // show debug icon and hud
 void ShowDebugHud(define player!)"ShowDebugHud"{
