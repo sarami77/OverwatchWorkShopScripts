@@ -1055,16 +1055,31 @@ define IsSightedAsEnemy(in define player):
         IsAlive(player) &&
         CanFindRange(player) &&
         CanFindLine(player) &&
-        !(IsStealth(player) && DistanceBetween(player, ep) >= 4);
+        !(IsStealth(player) && DistanceBetween(player, ep) >= 4) &&
+        // for debug
+        !(player == hp && IsCrouching(player));
 
 define IsSightedAsFriend(in define player):
         TeamOf(ep) == TeamOf(player) &&
         HasSpawned(player) &&
         (IsAlive(player) || CanResurrect(ep)) &&
         CanFindRange(player) &&
-        (CanFindLine(player) || CanSwiftStep(player));
+        (CanFindLine(player) || CanSwiftStep(player)) &&
+        // for debug
+        !(player == hp && IsCrouching(player));
+
 
 define FindAttackTarget()"FindAttackTarget"{
+    // define target! = FirstOf(
+    //     SortedArray(
+    //         FilteredArray(
+    //             AllPlayers(EnemyTeamOf(ep)),
+    //             IsSightedAsEnemy(ae)
+    //         ),
+    //         DistanceBetween(ep, ae)
+    //     )
+    // );
+    
     return FirstOf(
         SortedArray(
             FilteredArray(
@@ -1079,6 +1094,18 @@ define FindAttackTarget()"FindAttackTarget"{
 define NormalizedHealthFullScale: 0.9;
 
 define FindSupportTarget()"FindSupportTarget"{
+    // define target! = FirstOf(
+    //     SortedArray(
+    //         FilteredArray(
+    //             AllPlayers(TeamOf()),
+    //             ae != ep &&
+    //             NormalizedHealth(ae) < NormalizedHealthFullScale &&
+    //             IsSightedAsFriend(ae)
+    //         ),
+    //         NormalizedHealth(ae)
+    //     )
+    // );
+
     return FirstOf(
         SortedArray(
             FilteredArray(
@@ -1096,35 +1123,27 @@ void FindTarget()"FindTarget"{
     WaitRandomAfterServerFree();
 
     define candidateTarget!;
+    // by supportPrioloty
+    if(ProbabilityTrue(100 * supportPrioloty))
+    {
+        // find support target
+        candidateTarget = FindSupportTarget();
 
-    // for(define tryFindCount! = 0; tryFindCount < 1; tryFindCount++){
-        
-        // by supportPrioloty
-        if(ProbabilityTrue(100 * supportPrioloty))
-        {
-            // find support target
-            candidateTarget = FindSupportTarget();
-
-            // not found heal target
-            if(candidateTarget == null){
-                // find attack target
-                candidateTarget = FindAttackTarget();
-            }
-        }
-        else{
+        // not found heal target
+        if(candidateTarget == null){
             // find attack target
             candidateTarget = FindAttackTarget();
         }
-
-    //     if(candidateTarget != 0){
-    //         break;
-    //     }
-    //     Wait(0.1, WaitBehavior.AbortWhenFalse);
-    //     WaitRandomAfterServerFree();
-    // }
+    }
+    else{
+        // find attack target
+        candidateTarget = FindAttackTarget();
+    }
 
     if(candidateTarget == null){
+        // not set target
         StopFacing(ep);
+        aimTarget = null;
     }
     else{
         // confirm as target
