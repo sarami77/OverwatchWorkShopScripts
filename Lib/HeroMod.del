@@ -197,7 +197,7 @@ if(
 }
 
 // TAG HeroMod/Action ----------
-void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) playervar "DoHeroModAction"{
+void DoHeroModAction(define heromod!, define trigger!, define triggerPayload!) playervar "DoHeroModAction"{
     // TAG TEAMMATE_DEATH/RAGE
     if(
         trigger == HeroModTrigger.TEAMMATE_DEATH
@@ -580,14 +580,14 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
                     FirstOf(
                         SortedArray(
                             FilteredArray(
-                                !IsDummyBot() ?
+                                !IsDummyBot(ep) ?
                                     PlayersInViewAngle(ep, playerTeam, 45) :
                                     AllPlayers(playerTeam),
                                 (
                                     ae != ep &&
                                     IsAlive(ae) &&
                                     NormalizedHealth(ae) < 1.0 &&
-                                    DistanceBetween(ep, ae) <= 3
+                                    DistanceBetween(ep, ae) <= (!IsDummyBot(ep) ? 3 : 6)
                                 )
                             ),
                             DistanceBetween(ep, ae)
@@ -651,13 +651,13 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
                     FirstOf(
                         SortedArray(
                             FilteredArray(
-                                !IsDummyBot() ?
+                                !IsDummyBot(ep) ?
                                     PlayersInViewAngle(ep, playerTeam, 45) :
                                     AllPlayers(playerTeam),
                                 (
                                     ae != ep &&
                                     IsDead(ae) &&
-                                    DistanceBetween(ep, ae) <= 3
+                                    DistanceBetween(ep, ae) <= (!IsDummyBot(ep) ? 3 : 6)
                                 )
                             ),
                             DistanceBetween(ep, ae)
@@ -685,9 +685,10 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             trigger == HeroModTrigger.ACTIVATE ||
             trigger == HeroModTrigger.TIME_PASSED
         ){
+            define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
             heroModName = "GRUDGE FIRE BALL";
             heroModDetail = 
-                "+ heal teammate to charging grudge power (now "+ grudgePower +"% / 500%)" + NL +
+                "+ heal teammate to charging grudge power (now "+ currentValue +"% / 100%)" + NL +
                 "+ long press melee key to release grudge power as fire ball and blast" + NL +
                 "- receive heal 50%";
 
@@ -711,15 +712,14 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
         else if(
             trigger == HeroModTrigger.DEAL_HEAL
         ){
-            define maxPower! = 500;
-            AbortIf(maxPower <= grudgePower);
+            AbortIf(DefaultPercentage() <= grudgePower);
 
-            define gainPower! = (eventPayload * 0.7);
-            if(grudgePower + gainPower > maxPower){
-                grudgePower = maxPower;
+            define gainPower! = triggerPayload * 0.15;
+            if(grudgePower + gainPower > DefaultPercentage()){
+                grudgePower = DefaultPercentage();
             }
             else{
-                grudgePower = RoundToInteger(grudgePower + gainPower, Rounding.Up);
+                grudgePower = grudgePower + gainPower;
             }
         }
         else if(
@@ -736,7 +736,7 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             trigger == HeroModTrigger.ACTIVATE ||
             trigger == HeroModTrigger.TIME_PASSED
         ){
-            define addValue! = IsAlive() ? RoundToInteger(((1 - NormalizedHealth()) * 100), Rounding.Up) : 0;
+            define addValue! = IsAlive() ? RoundToInteger(((1 - NormalizedHealth()) * 100), Rounding.Nearest) : 0;
             heroModName = "ADRENALINE RUSH";
             heroModDetail = 
                 "more lost health..." + NL +
@@ -773,7 +773,7 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             trigger == HeroModTrigger.ACTIVATE ||
             trigger == HeroModTrigger.TIME_PASSED
         ){
-            define addValue! = RoundToInteger((UltimateChargePercent()), Rounding.Up);
+            define addValue! = RoundToInteger((UltimateChargePercent()), Rounding.Nearest);
             heroModName = "POWER CHARGING";
             heroModDetail = 
                 "more ult charges..." + NL +
@@ -999,7 +999,7 @@ void DoHeroModAction(define heromod!, define trigger!, define eventPayload!) pla
             ForcePlayerHero(ep, Hero.Reinhardt);
             SetHeroButtonControlPropety();
             SetMaxHealth(ep, 500);
-            SetDamageDealt(ep, 200);
+            SetDamageDealt(ep, 250);
             Wait(0.1, WaitBehavior.IgnoreCondition);
             Heal(ep, null, MaxValue());
             define tianScale! = 2.5;
@@ -1219,32 +1219,35 @@ void DoGrudgeFireBall() playervar "DoGrudgeFireBall"{
         IsAlive() &&
         grudgePower > 0
     ){
-        define ballSize! = grudgePower / 200;
-        define ballSpeed! = 30 - (grudgePower / 50);
-        define ballDamage! = grudgePower;
-        define ballBlastRange! = ballSize * 5.0;
-        define ballBlastCount! = ballSize * 2 <= 5 ? ballSize * 2 : 5;
+        define ballSpeed! = 30;
+        define ballSize! = grudgePower * 0.025;
+        define ballDamage! = grudgePower * 5;
+        define ballBlastRange! = grudgePower * 0.15;
+        define ballBlastCount! = RoundToInteger(grudgePower / 30, Rounding.Down);
+        ballBlastCount = ballBlastCount < 1 ? 1 : ballBlastCount;
+        define minCollisionSize! = ballSpeed / 20;
+        define collisionSize! = ballSize;
+        collisionSize = collisionSize < minCollisionSize ? minCollisionSize : collisionSize;
         grudgePower = 0;
 
         define ballPos = EyePosition();
         define aimPos! = AimingPositionWithLimit(40);
-
         define effects = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
             ballPos, ballSize, EffectRev.PositionAndRadius);
+
         ChaseVariableAtRate(
             ballPos, aimPos, ballSpeed,
             RateChaseReevaluation.DestinationAndRate);
-
-        define collisionSize! = ballSize * 0.5 < 1 ? 1 : ballSize * 0.5;
-
         while(
             // not
             !(
-                // hit surface
-                DistanceBetween(ballPos, aimPos) <= collisionSize ||
+                // hit aimed position
+                DistanceBetween(ballPos, aimPos) <= 0 ||
                 // hit enemy
-                DistanceBetween(ballPos, ClosestPlayerTo(ballPos, EnemyTeamOf(ep))) <= collisionSize
-
+                (
+                    DistanceBetween(ballPos, ClosestPlayerTo(ballPos, EnemyTeamOf(ep))) <= collisionSize &&
+                    IsAlive(ClosestPlayerTo(ballPos, EnemyTeamOf(ep)))
+                )
             )
         ){
             PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
@@ -1253,13 +1256,10 @@ void DoGrudgeFireBall() playervar "DoGrudgeFireBall"{
         StopChasingVariable(ballPos);
         DestroyEffect(effects);
         
-        define targets! = PlayersWithinRadius(ballPos, ballBlastRange, EnemyTeamOf(ep), RadiusLOS.Off);
+        define targets! = PlayersWithinRadius(ballPos, collisionSize < minCollisionSize ? minCollisionSize : ballBlastRange, EnemyTeamOf(ep), RadiusLOS.Off);
         ApplyBlastImpulse(targets, ballPos, ballBlastRange);
         Damage(targets, ep, ballDamage);
         PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
-    }
-    else{
-        PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 75);
     }
 }
 

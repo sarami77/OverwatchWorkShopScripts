@@ -13,7 +13,7 @@ rule: "Builtin"
 Event.OngoingGlobal
 {
     // DisableInspectorRecording();
-    Wait(6);
+    Wait(3);
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 
     define list = [
@@ -38,30 +38,50 @@ Event.OngoingGlobal
     CreateBotsByHeroList(list, playerTeam);
     CreateBotsByHeroList(list, enemyTeam);
     
-    SetRespawnMaxTime(ap, 1000);
+    // SetRespawnMaxTime(ap, 1000);
     // SetDamageDealt(ap, 10);
     // SetStatus(hp, null, Status.Unkillable, MaxValue());
 
-
     initCompleted = true;
-    dbgHudTxt("initCompleted");
 
     Wait(180);
     LoopIfConditionIsTrue();
 }
 
 // TestCode -----------------------------------------------
-globalvar define startCyclicAction;
-
-// TestCode -----------------------------------------------
 rule: "TestCode"
 Event.OngoingPlayer
 if(
     hp == ep &&
-    IsButtonHeld(ep, Button.Crouch)
+    HasSpawned(hp)
 ){
     dbgHudTxt("Run TestCode");
+    
+    define target! = 
+        FirstOf(
+            SortedArray(
+                FilteredArray(
+                    !IsDummyBot(ep) ?
+                        PlayersInViewAngle(ep, playerTeam, 45) :
+                        AllPlayers(playerTeam),
+                    (
+                        ae != ep &&
+                        IsAlive(ae) &&
+                        NormalizedHealth(ae) < 1.0 &&
+                        DistanceBetween(ep, ae) <= (!IsDummyBot(ep) ? 3 : 6)
+                    )
+                ),
+            DistanceBetween(ep, ae)
+            )
+        );
+    
+    dbgHudTxt(<"target count = <0>", CountOf(target)>);
+    for(define index! = 0; index < CountOf(target); index++){
+        dbgPlyEft(target[index]);
+    }
 
+    Wait(0.1);
+    Loop();
 }
 
 // TeamFormation -----------------------------------------------
@@ -79,7 +99,7 @@ if(
             MaxValue()
         );
         Wait(3);
-        Respawn(ap);
+        Respawn(ap(Team.All));
         Wait(1);
     }
 }
