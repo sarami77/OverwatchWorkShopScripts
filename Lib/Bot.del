@@ -1050,32 +1050,19 @@ define IsSighted(in define player!):
         false;
 
 define IsSightedAsEnemy(in define player):
-        TeamOf(ep) != TeamOf(player) &&
+        TeamOf(ep) == EnemyTeamOf(player) &&
         HasSpawned(player) &&
         IsAlive(player) &&
         CanFindRange(player) &&
         CanFindLine(player) &&
-        !(
-            IsStealth(player) &&
-            DistanceBetween(player, ep) >= 4
-        ) &&
-        // for debug
-        !(
-            player == hp &&
-            IsCrouching(player)
-        );
+        !(IsStealth(player) && DistanceBetween(player, ep) >= 4);
 
 define IsSightedAsFriend(in define player):
         TeamOf(ep) == TeamOf(player) &&
         HasSpawned(player) &&
         (IsAlive(player) || CanResurrect(ep)) &&
         CanFindRange(player) &&
-        (CanFindLine(player) || CanSwiftStep(player))&&
-        // for debug
-        !(
-            player == hp &&
-            IsCrouching(player)
-        );
+        (CanFindLine(player) || CanSwiftStep(player));
 
 define FindAttackTarget()"FindAttackTarget"{
     return FirstOf(
@@ -1106,6 +1093,8 @@ define FindSupportTarget()"FindSupportTarget"{
 }
 
 void FindTarget()"FindTarget"{
+    WaitRandomAfterServerFree();
+
     define candidateTarget!;
 
     // for(define tryFindCount! = 0; tryFindCount < 1; tryFindCount++){
@@ -1117,7 +1106,7 @@ void FindTarget()"FindTarget"{
             candidateTarget = FindSupportTarget();
 
             // not found heal target
-            if(candidateTarget == 0){
+            if(candidateTarget == null){
                 // find attack target
                 candidateTarget = FindAttackTarget();
             }
@@ -1134,18 +1123,12 @@ void FindTarget()"FindTarget"{
     //     WaitRandomAfterServerFree();
     // }
 
-    aimTarget = candidateTarget;
-
-    if(aimTarget == null){
+    if(candidateTarget == null){
         StopFacing(ep);
-        SetFacing(
-            ep,
-            DirectionTowards(
-                EyePosition(ep),
-                EyePosition(ClosestPlayerTo(ep, EnemyTeamOf(ep))
-                )
-            )
-        );
+    }
+    else{
+        // confirm as target
+        aimTarget = candidateTarget;
     }
 }
 
@@ -1212,18 +1195,18 @@ if(
         if(
             // heal target completed
             NormalizedHealth(aimTarget) >= NormalizedHealthFullScale ||
-            !(
-                IsAlive(aimTarget) ||  // target alive
-                CanResurrect(ep)    // can resurrect
-            )
+            // can not revive dead player
+            !(IsDead(aimTarget) && CanResurrect(ep))
         ){
             // change target 
             tryFindTarget = true;
         }
         else if(
             ProbabilityTrue(
-                (75 * (1 - supportPrioloty)) +          // by no support prioloty
-                (25 * NormalizedHealth(aimTarget))      // by support target health
+                // by no support prioloty
+                (50 * (1 - supportPrioloty)) +          
+                // by support target health
+                (50 * NormalizedHealth(aimTarget))      
             )
         ){
             // change target 
@@ -1241,7 +1224,7 @@ if(
         }
         else if(
             ProbabilityTrue(
-                (100 * NormalizedHealth(aimTarget))   // by support target health
+                (100 * NormalizedHealth(aimTarget))     // by attack target health
             )
         ){
             // change target 
@@ -2272,7 +2255,7 @@ void StartButtonControl(in define bc){
 
                 StopHoldingButton(ep, bc[ButtonControl.button]);
 
-                WaitRandomAfterServerFree();
+                WaitUntilServerFree();
             }
         }
         // release-repeat action
@@ -2303,7 +2286,7 @@ void StartButtonControl(in define bc){
                     Wait(0.25, WaitBehavior.AbortWhenFalse);
                 }
 
-                WaitRandomAfterServerFree();
+                WaitUntilServerFree();
             }
         }
         // else
