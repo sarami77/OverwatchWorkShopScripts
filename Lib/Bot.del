@@ -26,7 +26,7 @@ enum EnemyType{
 }
 
 // TAG Bot/Asset ----------
-void CreateBotsByAsset(define asset, define team, define addLimitNum)"CreateBotsByAsset"{
+void CreateBotsByAsset(define asset!, define team!, define addLimitNum!)"CreateBotsByAsset"{
     if(CountOf(asset) <= 0){
         dbgHudTxt(<"CreateBotsByAsset asset = <0>", CountOf(asset)>);
         return;
@@ -68,7 +68,7 @@ void CreateBotsByAsset(define asset, define team, define addLimitNum)"CreateBots
     }
 }
 
-void CreateBotsByHeroList(define heroList, define team)"CreateBotsByHeroList"{
+void CreateBotsByHeroList(define heroList!, define team!)"CreateBotsByHeroList"{
     // create bot by asset
     for(define listIdx! = 0; listIdx < CountOf(heroList); listIdx++){
         // get empty slot
@@ -92,7 +92,7 @@ void CreateBotsByHeroList(define heroList, define team)"CreateBotsByHeroList"{
     }
 }
 
-void CreateBotsByHeroInput(define hero, define num, define team)"CreateBotsByHeroInput"{
+void CreateBotsByHeroInput(define hero!, define num!, define team!)"CreateBotsByHeroInput"{
     // create bot by asset
     for(define listIdx! = 0; listIdx < num; listIdx++){
         // get empty slot
@@ -220,7 +220,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         return;
     }
 
-    aimTarget = 0;
+    aimTarget = null;
     heroName = "";
 
     // basic routine
@@ -838,7 +838,7 @@ void SetMoveDir() playervar "SetMoveDir"{
     // move to object for secure
     else if(
         // object pos valid
-        objPos != 0 &&
+        objPos != null &&
         // high health
         ProbabilityTrue(150 * NormalizedHealth()) &&
         // payload escort player num is not enough
@@ -1050,40 +1050,41 @@ define IsSighted(in define player!):
         false;
 
 define IsSightedAsEnemy(in define player):
-        TeamOf(ep) == EnemyTeamOf(player) &&
+        // is enemy team
+        (TeamOf(ep) == EnemyTeamOf(player)) &&
+        // has spawn
         HasSpawned(player) &&
+        // alive
         IsAlive(player) &&
+        // can find range
         CanFindRange(player) &&
+        // can find line
         CanFindLine(player) &&
-        !(IsStealth(player) && DistanceBetween(player, ep) >= 4) &&
+        // not detection stealth
+        !(IsStealth(player) && DistanceBetween(player, ep) >= 4);
         // for debug
-        !(player == hp && IsCrouching(player));
+        // !(player == hp && IsCrouching(player));
 
 define IsSightedAsFriend(in define player):
-        TeamOf(ep) == TeamOf(player) &&
+        // is player team
+        (TeamOf(ep) == TeamOf(player)) &&
+        // has spawn
         HasSpawned(player) &&
+        // alive or can resurrect
         (IsAlive(player) || CanResurrect(ep)) &&
+        // can find line
         CanFindRange(player) &&
-        (CanFindLine(player) || CanSwiftStep(player)) &&
+        // can find line or can swift step
+        (CanFindLine(player) || CanSwiftStep(player));
         // for debug
-        !(player == hp && IsCrouching(player));
-
+        // !(player == hp && IsCrouching(player));
 
 define FindAttackTarget()"FindAttackTarget"{
-    // define target! = FirstOf(
-    //     SortedArray(
-    //         FilteredArray(
-    //             AllPlayers(EnemyTeamOf(ep)),
-    //             IsSightedAsEnemy(ae)
-    //         ),
-    //         DistanceBetween(ep, ae)
-    //     )
-    // );
-    
     return FirstOf(
         SortedArray(
             FilteredArray(
                 AllPlayers(EnemyTeamOf(ep)),
+                // sight as enemy
                 IsSightedAsEnemy(ae)
             ),
             DistanceBetween(ep, ae)
@@ -1091,27 +1092,18 @@ define FindAttackTarget()"FindAttackTarget"{
     );
 }
 
-define NormalizedHealthFullScale: 0.9;
+define fullHealthScale: 0.9;
 
 define FindSupportTarget()"FindSupportTarget"{
-    // define target! = FirstOf(
-    //     SortedArray(
-    //         FilteredArray(
-    //             AllPlayers(TeamOf()),
-    //             ae != ep &&
-    //             NormalizedHealth(ae) < NormalizedHealthFullScale &&
-    //             IsSightedAsFriend(ae)
-    //         ),
-    //         NormalizedHealth(ae)
-    //     )
-    // );
-
     return FirstOf(
         SortedArray(
             FilteredArray(
                 AllPlayers(TeamOf()),
-                ae != ep &&
-                NormalizedHealth(ae) < NormalizedHealthFullScale &&
+                // not self
+                (ae != ep) &&
+                // need heal
+                (NormalizedHealth(ae) < fullHealthScale) &&
+                // sight as friend
                 IsSightedAsFriend(ae)
             ),
             NormalizedHealth(ae)
@@ -1123,13 +1115,16 @@ void FindTarget()"FindTarget"{
     WaitRandomAfterServerFree();
 
     define candidateTarget!;
+
+    // find aim target
+    // but, not set as direct to aimTarget for avoid interrupt invalid facing
+
     // by supportPrioloty
     if(ProbabilityTrue(100 * supportPrioloty))
     {
         // find support target
         candidateTarget = FindSupportTarget();
-
-        // not found heal target
+        // not found support target
         if(candidateTarget == null){
             // find attack target
             candidateTarget = FindAttackTarget();
@@ -1140,38 +1135,43 @@ void FindTarget()"FindTarget"{
         candidateTarget = FindAttackTarget();
     }
 
+    // not any found target
     if(candidateTarget == null){
-        // not set target
+        // stop facing
         StopFacing(ep);
+        // set null for goto idle state
         aimTarget = null;
     }
     else{
         // confirm as target
+        
         aimTarget = candidateTarget;
     }
 }
 
 define GetNextActionState()"GetNextActionState"{
     define nextActionState!;
-    // has target
+    
     if(
+        // self alive
         IsAlive() &&
+        // has target
         aimTarget != null
     ){
-        // target is friend
         if(
+            // target is friend
             TeamOf() == TeamOf(aimTarget)
         ){
-            // Attack state
+            // Support state
             nextActionState = ActionState.Support;
         }
         else{
-            // Support state
+            // Attack state
             nextActionState = ActionState.Attack; 
         }
     }
     else{
-        // target has not spawn
+        // non state
         nextActionState = ActionState.Non;  
     }
     
@@ -1183,7 +1183,7 @@ void SetActionState(define player!, define nextActionState!) "SetActionState"{
     if(nextActionState != player.actionState){
         // reset for button control reload
         enableButtonControl = false;
-        // run disable button control rule
+        // wait for run disable button control rule
         Wait(0.1, WaitBehavior.IgnoreCondition);
         // set next state
         player.actionState = nextActionState;        
@@ -1200,22 +1200,22 @@ if(
 ){
     define tryFindTarget! = false;
     
-    // target not Sighted
     if(
+        // target not Sighted
         !IsSighted(aimTarget)
     ){
         tryFindTarget = true;
     }
-    // is support role and now supporting
     else if(
+        // is support role and now supporting
         0 < supportPrioloty &&
         actionState == ActionState.Support
     ){
         if(
             // heal target completed
-            NormalizedHealth(aimTarget) >= NormalizedHealthFullScale ||
+            NormalizedHealth(aimTarget) >= fullHealthScale ||
             // can not revive dead player
-            !(CanResurrect(ep) && IsDead(aimTarget))
+            !(CanResurrect(ep) && !IsAlive(aimTarget))
         ){
             // change target 
             tryFindTarget = true;
@@ -1243,7 +1243,8 @@ if(
         }
         else if(
             ProbabilityTrue(
-                (100 * NormalizedHealth(aimTarget))     // by attack target health
+                // by attack target health
+                (100 * NormalizedHealth(aimTarget))     
             )
         ){
             // change target 
@@ -1276,7 +1277,7 @@ if(
     Victim() == ep
 ){
     // reset target
-    aimTarget = 0;
+    aimTarget = null;
     while(actionState != ActionState.Non){
         // apply next state
         SetActionState(ep, ActionState.Non);
@@ -1304,7 +1305,7 @@ if(
     isBotEnableTeam &&
     IsDummyBot() &&
     actionState == ActionState.Support &&
-    NormalizedHealth(aimTarget) >= NormalizedHealthFullScale
+    NormalizedHealth(aimTarget) >= fullHealthScale
 ){
     // find next target
     FindTarget();
@@ -1338,7 +1339,7 @@ if(
     CallAttackNearBot();
 
     // reduce overrun change target
-    Wait(3.0, WaitBehavior.IgnoreCondition);
+    Wait(2.0, WaitBehavior.IgnoreCondition);
 }
 
 globalvar define isCallAttackCoolingDown1! = false;
@@ -1346,30 +1347,25 @@ globalvar define isCallAttackCoolingDown2! = false;
 
 void CallAttackNearBot()"CallAttackNearBot"{
     // check cooldown for reduce overrun
+    // if already CoolingDown flag true, ignore action
     if(TeamOf() == Team.Team1){
-        if(isCallAttackCoolingDown1){
-            return;
-        }
+        if(isCallAttackCoolingDown1){return;}
         isCallAttackCoolingDown1 = true;
     }
     else{
-        if(isCallAttackCoolingDown2){
-            return;
-        }
+        if(isCallAttackCoolingDown2){return;}
         isCallAttackCoolingDown2 = true;
     }
 
     if(
         // has aim target
-        aimTarget != 0 &&
+        aimTarget != null &&
         // in attack
         actionState == ActionState.Attack
     ){
         // get near idle bot
-        define nearFriends = FilteredArray(
-            PlayersWithinRadius(
-                ep, 0 + ActionRange.CanFind, TeamOf(), RadiusLOS.Off
-            ),
+        define nearFriends! = FilteredArray(
+            PlayersWithinRadius(ep, 0 + ActionRange.CanFind, TeamOf(), RadiusLOS.Off),
             (
                 ae != ep &&
                 IsDummyBot(ae) &&
@@ -1393,7 +1389,7 @@ if(
     isCallAttackCoolingDown1 ||
     isCallAttackCoolingDown2
 ){
-    Wait(1.0, WaitBehavior.IgnoreCondition);
+    Wait(2.0, WaitBehavior.IgnoreCondition);
     isCallAttackCoolingDown1 = false;
     isCallAttackCoolingDown2 = false;
     Loop();
@@ -1489,7 +1485,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
     ){
         // melee
         while(
-            aimTarget != 0 &&
+            aimTarget != null &&
             actionState == ActionState.Attack &&
             DistanceBetween(ep, aimTarget) <= meleeRange &&
             (
@@ -2163,7 +2159,7 @@ define EnemyDensityRateOfAimTarget(in define dist):
     CountOf(PlayersWithinRadius(aimTarget, dist, EnemyTeamOf(ep), RadiusLOS.Off)) /
     NumberOfPlayers(EnemyTeamOf(ep));
 
-// can's implment as function
+// can's implment as function, cuz need control instance each button
 void StartButtonControl(in define bc){
     if(noShooting) return;
     if(enemyType == EnemyType.Zombie) return;
@@ -2329,7 +2325,7 @@ if(
 ){
     if(
         // has aimTarget
-        aimTarget != 0 &&
+        aimTarget != null &&
         // is idling fire
         !IsFiringPrimary() &&
         !IsFiringSecondary() &&
@@ -2553,7 +2549,7 @@ if(
 
 //     while(true){
 //         // tagret line
-//         if(aimTarget != 0){
+//         if(aimTarget != null){
 //             dbgPlyBemEft(EyePosition(ep), BodyPosition(aimTarget));
 //         }
 //         Wait(1);
