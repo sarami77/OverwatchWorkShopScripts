@@ -30,6 +30,7 @@ enum HeroModType{
     STRAFING_REQUEST,
     TITAN_FORM,
     BEAM_SNIPER,
+    GRUDGE_LIGHTNING,
     GRUDGE_FIRE_BALL,
     ZOMBIE,
     LAST
@@ -50,6 +51,7 @@ enum HeroModTrigger{
     NOT_USING_ULT,
     CHARGING_ULT,
     LOST_HEALTH,
+    RECEIVE_DAMAGE,
     DEAL_HEAL,
     KILL,
     DEATH,
@@ -580,14 +582,12 @@ void DoHeroModAction(define heromod!, define trigger!, define triggerPayload!) p
                     FirstOf(
                         SortedArray(
                             FilteredArray(
-                                !IsDummyBot(ep) ?
-                                    PlayersInViewAngle(ep, playerTeam, 45) :
-                                    AllPlayers(playerTeam),
+                                IsDummyBot(ep) ? AllPlayers(playerTeam) : PlayersInViewAngle(ep, playerTeam, 45),
                                 (
                                     ae != ep &&
                                     IsAlive(ae) &&
                                     NormalizedHealth(ae) < 1.0 &&
-                                    DistanceBetween(ep, ae) <= (!IsDummyBot(ep) ? 3 : 6)
+                                    DistanceBetween(ep, ae) <= (IsDummyBot(ep) ? 6 : 3)
                                 )
                             ),
                             DistanceBetween(ep, ae)
@@ -651,13 +651,11 @@ void DoHeroModAction(define heromod!, define trigger!, define triggerPayload!) p
                     FirstOf(
                         SortedArray(
                             FilteredArray(
-                                !IsDummyBot(ep) ?
-                                    PlayersInViewAngle(ep, playerTeam, 45) :
-                                    AllPlayers(playerTeam),
+                                IsDummyBot(ep) ? AllPlayers(playerTeam) : PlayersInViewAngle(ep, playerTeam, 45),
                                 (
                                     ae != ep &&
                                     IsDead(ae) &&
-                                    DistanceBetween(ep, ae) <= (!IsDummyBot(ep) ? 3 : 6)
+                                    DistanceBetween(ep, ae) <= (IsDummyBot(ep) ? 6 : 3)
                                 )
                             ),
                             DistanceBetween(ep, ae)
@@ -677,6 +675,57 @@ void DoHeroModAction(define heromod!, define trigger!, define triggerPayload!) p
             }
         }
     }
+    // TAG GRUDGE_LIGHTNING
+    else if(
+        selectHeroMod == HeroModType.GRUDGE_LIGHTNING
+    ){
+        if(
+            trigger == HeroModTrigger.ACTIVATE ||
+            trigger == HeroModTrigger.TIME_PASSED
+        ){
+            define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
+            heroModName = "GRUDGE LIGHTNING";
+            heroModDetail = 
+                "+ receive damage to charging grudge power (now "+ currentValue +"% / 100%)" + NL +
+                "+ hold melee key to release grudge power as stunning lightning" + NL +
+                "- receive heal 50%";
+
+            if(
+                trigger == HeroModTrigger.ACTIVATE
+            ){
+                SetHealingReceived(ep, 50);
+                grudgePower = 0;
+            }
+            else if(
+                trigger == HeroModTrigger.TIME_PASSED
+            ){
+                Wait(1, WaitBehavior.AbortWhenFalse);
+            }
+        }
+        else if(
+            trigger == HeroModTrigger.DEACTIVATE
+        ){
+            SetHealingReceived(ep, DefaultPercentage());
+        }
+        else if(
+            trigger == HeroModTrigger.RECEIVE_DAMAGE
+        ){
+            if(DefaultPercentage() <= grudgePower){return;}
+            define gainPower! = triggerPayload * 0.1;
+            if(grudgePower + gainPower > DefaultPercentage()){
+                grudgePower = DefaultPercentage();
+            }
+            else{
+                grudgePower = grudgePower + gainPower;
+            }
+        }
+        else if(
+            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+        ){
+            DoGrudgeLightning();
+        }
+    }
+
     // TAG GRUDGE_FIRE_BALL
     else if(
         selectHeroMod == HeroModType.GRUDGE_FIRE_BALL
@@ -713,7 +762,6 @@ void DoHeroModAction(define heromod!, define trigger!, define triggerPayload!) p
             trigger == HeroModTrigger.DEAL_HEAL
         ){
             if(DefaultPercentage() <= grudgePower){return;}
-
             define gainPower! = triggerPayload * 0.2;
             if(grudgePower + gainPower > DefaultPercentage()){
                 grudgePower = DefaultPercentage();
@@ -917,8 +965,8 @@ void DoHeroModAction(define heromod!, define trigger!, define triggerPayload!) p
             heroModDetail = 
                 "in ult using..." + NL +
                 "  + get invincible status" + NL +
-                "  + deal damage 400%" + NL +
-                "  + deal heal 400%" + NL +
+                "  + deal damage 300%" + NL +
+                "  + deal heal 300%" + NL +
                 "  + move speed 200%" + NL +
                 "  + gravity 25%" + NL +
                 "+ at ult end, gain more ult full charge by 50% probility" + NL +
@@ -960,8 +1008,8 @@ void DoHeroModAction(define heromod!, define trigger!, define triggerPayload!) p
             isUltUsed = true;
             
             SetStatus(ep, null, Status.PhasedOut, MaxValue());
-            SetDamageDealt(ep, 400);
-            SetHealingDealt(ep, 400);
+            SetDamageDealt(ep, 300);
+            SetHealingDealt(ep, 300);
             SetMoveSpeed(ep, 200);
             SetGravity(ep, 25);
         }
@@ -1208,12 +1256,62 @@ void DoHeroModAction(define heromod!, define trigger!, define triggerPayload!) p
 }
 
 // TAG HeroMod/Variable ----------
-playervar define grudgePower!;      // GRUDGE_FIRE_BALL
+playervar define grudgePower!;      // GRUDGE_FIRE_BALL, GRUDGE_LIGHTNING
 playervar define isTransformed!;    // TITAN_FORM, BEAM_SNIPER
 playervar define beamAimPos!;       // BEAM_SNIPER
 playervar define beamCharging!;     // BEAM_SNIPER
 
 // TAG HeroMod/Function ----------
+void DoGrudgeLightning() playervar "DoGrudgeLightning"{
+    if(
+        IsAlive() &&
+        grudgePower > 0
+    ){
+        if(IsDummyBot()){
+            StartHoldingButton(ep, Button.Melee);
+        }
+
+        define landPos = AimingPosition();
+        define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
+            EyePosition() + Vector(0, -0.1, 0), landPos,
+            Color.SkyBlue, EffectRev.VisibleToPositionAndRadius);
+
+        define aimPos;
+        define scatter;
+        define targets;
+        define count = 0;
+        while(
+            IsAlive() &&
+            IsButtonHeld(ep, Button.Melee) &&
+            grudgePower > 0
+        ){
+            if(count == 0){
+                grudgePower -= 3;
+                grudgePower = grudgePower < 0 ? 0 : grudgePower;
+                define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
+                heroModDetail = 
+                    "+ receive damage to charging grudge power (now "+ currentValue +"% / 100%)" + NL +
+                    "+ hold melee key to release grudge power as stunning lightning" + NL +
+                    "- receive heal 50%";
+
+                define dist = DistanceBetween(EyePosition(), landPos);
+                aimPos = AimingPositionIgnorePlayerWithLimit(40);
+                scatter = dist * 0.04;
+                targets = PlayersInViewAngle(ep, EnemyTeamOf(ep), 4);
+                SetStatus(targets, ep, Status.Stunned, 0.5);
+                Damage(targets, ep, 70);
+                PlayEffect(AllPlayers(), PlayEffect.DebuffImpactSound, Color.White, ep, 50);
+            }
+
+            landPos = aimPos + RandomPosition(scatter, scatter, scatter);
+
+            count = count < 10 ? count + 1 : 0;
+            Wait(0.01, WaitBehavior.IgnoreCondition);
+        }
+        DestroyEffect(ballisticEffect);
+    }
+}
+
 void DoGrudgeFireBall() playervar "DoGrudgeFireBall"{
     if(
         IsAlive() &&
@@ -1258,6 +1356,7 @@ void DoGrudgeFireBall() playervar "DoGrudgeFireBall"{
         
         define targets! = PlayersWithinRadius(ballPos, collisionSize < minCollisionSize ? minCollisionSize : ballBlastRange, EnemyTeamOf(ep), RadiusLOS.Off);
         ApplyBlastImpulse(targets, ballPos, ballBlastRange);
+        SetStatus(targets, ep, Status.Burning, 3);
         Damage(targets, ep, ballDamage);
         PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
     }
@@ -1583,7 +1682,8 @@ if(
         selectHeroMod == HeroModType.SAVIOR ||
         selectHeroMod == HeroModType.POWER_CHARGING ||
         selectHeroMod == HeroModType.ADRENALINE_RUSH ||
-        selectHeroMod == HeroModType.GRUDGE_FIRE_BALL
+        selectHeroMod == HeroModType.GRUDGE_FIRE_BALL ||
+        selectHeroMod == HeroModType.GRUDGE_LIGHTNING
     ) &&
     IsGameInProgress()
 ){
@@ -1627,6 +1727,7 @@ if(
         selectHeroMod == HeroModType.HEALING_SYRINGE ||
         selectHeroMod == HeroModType.SAVIOR ||
         selectHeroMod == HeroModType.GRUDGE_FIRE_BALL ||
+        selectHeroMod == HeroModType.GRUDGE_LIGHTNING ||
         selectHeroMod == HeroModType.ZOMBIE
     ) &&
     (
@@ -1759,6 +1860,19 @@ if(
     NormalizedHealth() <= 0.5
 ){
     DoHeroModAction(selectHeroMod, HeroModTrigger.LOST_HEALTH, null);
+}
+
+// TAG RECEIVE_DAMAGE
+rule: "HeroModTrigger/RECEIVE_DAMAGE"
+Event.OnDamageTaken
+if(
+    TeamOf() == playerTeam &&
+    (
+        selectHeroMod == HeroModType.GRUDGE_LIGHTNING
+    ) &&
+    Attacker() != ep
+){
+    DoHeroModAction(selectHeroMod, HeroModTrigger.RECEIVE_DAMAGE, EventDamage());
 }
 
 // TAG DEAL_HEAL
