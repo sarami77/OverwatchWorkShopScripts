@@ -17,7 +17,9 @@ Event.OngoingGlobal
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 
     define list = [
-        Hero.Moira
+        RandomHero,
+        RandomHero,
+        RandomHero
     ];
     
     // DestroyBots(playerTeam);
@@ -25,9 +27,9 @@ Event.OngoingGlobal
     CreateBotsByHeroList(list, playerTeam);
     CreateBotsByHeroList(list, enemyTeam);
     
-    // SetRespawnMaxTime(ap, 1000);
-    // SetDamageDealt(ap, 10);
-    // SetStatus(hp, null, Status.Unkillable, MaxValue());
+    SetRespawnMaxTime(ap(Team.All), 0);
+    SetDamageDealt(ap(Team.All), 1);
+    SetStatus(hp, null, Status.Unkillable, MaxValue());
 
     initCompleted = true;
 
@@ -39,10 +41,48 @@ Event.OngoingGlobal
 rule: "TestCode"
 Event.OngoingPlayer
 if(
-    hp == ep &&
-    HasSpawned(hp)
+    // hp == ep &&
+    HasSpawned(hp) &&
+    IsButtonHeld(ep, Button.PrimaryFire)
 ){
     dbgHudTxt("Run TestCode");
+
+    define landPos = AimingPosition();
+    define launchPos = AimingPosition();
+
+    define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
+        EyePosition() + Vector(0, -0.1, 0), landPos,
+        Color.SkyBlue, EffectRev.VisibleToPositionAndRadius);
+
+    define count = 0;
+    define target;
+    define scatter;
+    define aimPos;
+    while(IsButtonHeld(ep, Button.PrimaryFire)){
+        
+        if(count % 5 == 0){
+            define dist = DistanceBetween(EyePosition(), landPos);
+            // 20 -> 1
+            aimPos = AimingPositionIgnorePlayerWithLimit(40);
+            scatter = dist * 0.04;
+            target = PlayersInViewAngle(ep, EnemyTeamOf(ep), 3);
+            Damage(target, ep, 10);
+            PlayEffect(AllPlayers(), PlayEffect.DebuffImpactSound, Color.White, ep, 25);
+        }
+
+        landPos = aimPos + RandomPosition(scatter, scatter, scatter);
+
+        if(count >= 5){
+            count = 0;
+        }
+        else{
+            count ++;
+        }
+        
+        Wait(0.01);
+    }
+
+    DestroyEffect(ballisticEffect);
 
 }
 
