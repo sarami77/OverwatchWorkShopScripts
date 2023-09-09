@@ -1,7 +1,7 @@
 import "Utility.del";
 
 // Message display for debugging that can be seen only by the host player
-globalvar define debugMode!;
+globalvar define debugMode;
 
 enum DebugMode{
     Non,
@@ -10,46 +10,43 @@ enum DebugMode{
     WithRecord
 }
 
-// define isInDebugMode: debugMode != DebugMode.Non;
-define isInDebugMode: true;
-
 define debugShowTime: 0.5;
 
 void dbgMsg(define msg)"dbgMsg"{
-    if(isInDebugMode){
-        SmallMessage(HostPlayer(), "dbg: "+ msg);
-    }
+    SmallMessage(HostPlayer(), "dbg: "+ msg);
 }
 
 void dbgLog(define msg)"dbgLog"{
-    if(isInDebugMode){
-        LogToInspector("dbg: "+ msg);
-    }
+    LogToInspector("dbg: "+ msg);
 }
 
 define maxDbgHudTxtNum: 25;
-globalvar define dbgHudTxtEntity! = [];
-globalvar define dbgHudTxtIndex! = 0;
+globalvar define dbgHudTxtEntity = [];
+globalvar define dbgHudTxtIndex = 0;
+globalvar define dbgHudTxtCount = 0;
 
-globalvar define dbgHudTxtCount! = 0;
-
-Number dbgHudTxt(define msg!)"dbgHudTxt"{
+void dbgHudTxt(define msg)"dbgHudTxt"{
+    DestroyHudText(dbgHudTxtEntity[dbgHudTxtIndex]);
+    dbgHudTxtEntity[dbgHudTxtIndex] = CreateHudText(HostPlayer(),
+        null, "[" + dbgHudTxtCount + "] dbg: "+ msg, null,
+        Location.Right, -MaxValue(),
+        Color.White, Color.Yellow, Color.White,
+        HudTextRev.None, Spectators.VisibleNever);
     dbgHudTxtCount ++;
-    if(isInDebugMode){
-        if(dbgHudTxtIndex >= maxDbgHudTxtNum)
-        {
-            dbgHudTxtIndex = 0;
-        }
-        DestroyHudText(dbgHudTxtEntity[dbgHudTxtIndex]);
-        dbgHudTxtEntity[dbgHudTxtIndex] = 
-            CreateHudText(HostPlayer(),
-                null, "[" + dbgHudTxtCount + "] dbg: "+ msg, null,
-                Location.Right, -MaxValue(),
-                Color.White, Color.Yellow, Color.White,
-                HudTextRev.None, Spectators.VisibleNever);
-        dbgHudTxtIndex ++;
+
+    if(dbgHudTxtIndex < maxDbgHudTxtNum)
+    {
+        dbgHudTxtIndex++;
     }
-    return dbgHudTxtEntity[dbgHudTxtIndex];
+    else{
+        dbgHudTxtIndex = 0;
+    }
+}
+
+void dbgHudTxtArray(define array)"dbgHudTxtArray"{
+    for(define index! = 0; index < CountOf(array); index++){
+        dbgHudTxt(<"array[<1>] = <0>", array[index], index>);
+    }
 }
 
 void destoryAllDbgHudTxt()"destoryAllDbgHudTxt"{
@@ -75,70 +72,58 @@ void errLog(define msg)"errLog"{
 globalvar define dbgWldTxtEntity! = 0;
 
 void dbgWldTxt(define position, define msg)"dbgWldTxt"{
-    if(isInDebugMode){
-        WaitUntil(dbgWldTxtEntity == 0, debugShowTime);
-        DestroyInWorldText(dbgWldTxtEntity);
-        dbgWldTxtEntity = CreateInWorldText(HostPlayer(),
-            "dbg: "+ msg, 
-            position, 1, Clipping.DoNotClip, InworldTextRev.None,
-            Color.Yellow, Spectators.VisibleNever);
-        Wait(debugShowTime, WaitBehavior.IgnoreCondition);
-        DestroyInWorldText(dbgWldTxtEntity);
-        dbgWldTxtEntity = 0;
-    }
+    WaitUntil(dbgWldTxtEntity == 0, debugShowTime);
+    DestroyInWorldText(dbgWldTxtEntity);
+    dbgWldTxtEntity = CreateInWorldText(HostPlayer(),
+        "dbg: "+ msg, 
+        position, 1, Clipping.DoNotClip, InworldTextRev.None,
+        Color.Yellow, Spectators.VisibleNever);
+    Wait(debugShowTime, WaitBehavior.IgnoreCondition);
+    DestroyInWorldText(dbgWldTxtEntity);
+    dbgWldTxtEntity = 0;
 }
 
 void dbgIcn(define position)"dbgIcn"{
-    if(isInDebugMode){
-        CreateIcon(HostPlayer(),
-            position, Icon.X, IconRev.VisibleToPositionAndColor,
-            Color.Yellow, true);
-    }
+    CreateIcon(HostPlayer(),
+        position, Icon.X, IconRev.VisibleToPositionAndColor,
+        Color.Yellow, true);
 }
 
 void dbgEft(define position)"dbgIcn"{
-    if(isInDebugMode){
-        CreateEffect(HostPlayer(),
-            Effect.Sphere, Color.Yellow, position, 1,
-            EffectRev.VisibleToPositionRadiusAndColor);
-    }
+    CreateEffect(HostPlayer(),
+        Effect.Sphere, Color.Yellow, position, 1,
+        EffectRev.VisibleToPositionRadiusAndColor);
 }
 
 void dbgPlyEft(define position)"dbgPlyEft"{
-    if(isInDebugMode){    
-        PlayEffect(HostPlayer(),
-            PlayEffect.GoodPickupEffect,
-            Color.Yellow, position, 1);
-    }
+    PlayEffect(HostPlayer(),
+        PlayEffect.GoodPickupEffect,
+        Color.Yellow, position, 1);
 }
 
 globalvar define dbgPlyBemEftEntity!;
 
 void dbgPlyBemEft(define startPos!, define endPos!)"dbgPlyBemEft"{
-    if(isInDebugMode){
-        DestroyEffect(dbgPlyBemEftEntity[0]);
-        DestroyEffect(dbgPlyBemEftEntity[1]);
+    DestroyEffect(dbgPlyBemEftEntity[0]);
+    DestroyEffect(dbgPlyBemEftEntity[1]);
 
-        dbgPlyBemEftEntity = [];
-        dbgPlyBemEftEntity[0] = CreateBeamEffect(HostPlayer(),
-            BeamType.GoodBeam, startPos, endPos,
-            Color.Yellow, EffectRev.PositionAndRadius);
-        dbgPlyBemEftEntity[1] = CreateEffect(HostPlayer(),
-            Effect.Orb, Color.Yellow, startPos, 1, EffectRev.PositionAndRadius);
+    dbgPlyBemEftEntity = [];
+    dbgPlyBemEftEntity[0] = CreateBeamEffect(HostPlayer(),
+        BeamType.GoodBeam, startPos, endPos,
+        Color.Yellow, EffectRev.PositionAndRadius);
+    dbgPlyBemEftEntity[1] = CreateEffect(HostPlayer(),
+        Effect.Orb, Color.Yellow, startPos, 1, EffectRev.PositionAndRadius);
 
-        Wait(debugShowTime, WaitBehavior.IgnoreCondition);
+    Wait(debugShowTime, WaitBehavior.IgnoreCondition);
 
-        DestroyEffect(dbgPlyBemEftEntity[0]);
-        DestroyEffect(dbgPlyBemEftEntity[1]);
-    }
+    DestroyEffect(dbgPlyBemEftEntity[0]);
+    DestroyEffect(dbgPlyBemEftEntity[1]);
 }
 
 void dbgPlySud()"dbgPlySud"{
-    if(isInDebugMode){    
-        PlayEffect(HostPlayer(),
-            PlayEffect.BuffImpactSound,
-            Color.Yellow, HostPlayer(), MaxValue());
-    }
+    PlayEffect(HostPlayer(),
+        PlayEffect.BuffImpactSound,
+        Color.Yellow, HostPlayer(), MaxValue());
 }
 
 // Debug Action
