@@ -1598,11 +1598,12 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     );
 
                 if(boostTarget != null){
-                    // use nano boost
+                    // face boostTarget
                     StartFacingPlayer(boostTarget);
-                    Wait(0.5, WaitBehavior.IgnoreCondition);     
+                    Wait(0.5, WaitBehavior.IgnoreCondition);
+                    // use nano boost
                     PressButton(ep, Button.Ultimate);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
+                    Wait(0.5, WaitBehavior.IgnoreCondition);
                     // restore facing
                     StartFacingTarget();
                 }
@@ -1612,26 +1613,56 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         else if(
             HeroOf() == Hero.Mercy
         ){
-            if(actionState == ActionState.Attack){
-                // change to gun
-                SetWeapon(ep, 2);
-            }
-            else if(actionState == ActionState.Support){
+            if(
+                actionState == ActionState.Support
+            ){
                 // change to heal arm
                 SetWeapon(ep, 1);
+
                 if(
                     // by target health
                     ProbabilityTrue(75 * NormalizedHealth(aimTarget))
                 ){
-                    // damage boost
+                    // boost aimTarget 
                     StopHoldingButton(ep, Button.PrimaryFire);
                     StartHoldingButton(ep, Button.SecondaryFire);
+
+                    // set boostTarget by ult using player
+                    define boostTarget = 
+                        RandomValueInArray(
+                            FilteredArray(
+                                AllLivingPlayers(TeamOf()),
+                                (
+                                    ae != ep &&
+                                    (
+                                        // ready ult
+                                        100 <= UltimateChargePercent(ae) ||
+                                        // using ult
+                                        IsUsingUltimate(ae)
+                                    ) &&
+                                    CanFindLine(ae)
+                                )
+                            )
+                        );
+
+                    if(boostTarget != null){
+                        // face boostTarget
+                        StartFacingPlayer(boostTarget);
+                        // use damage boost
+                        Wait(RandomReal(5, 10), WaitBehavior.AbortWhenFalse);
+                        // restore facing
+                        StartFacingTarget();
+                    }
                 }
                 else{
-                    // heal
+                    // heal aimTarget
                     StopHoldingButton(ep, Button.SecondaryFire);
                     StartHoldingButton(ep, Button.PrimaryFire);
                 }
+            }
+            else if(actionState == ActionState.Attack){
+                // change to gun
+                SetWeapon(ep, 2);
             }
         }
         // Sombra
