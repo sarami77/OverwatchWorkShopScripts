@@ -585,7 +585,7 @@ define enemyAssetNoLotteryList: [
     12,
     13,
     14,
-    15, 15, 15
+    15
 
     // for debug
     // 30
@@ -671,7 +671,7 @@ if(
             progressStage ++;
         }
         else if(
-            progressStage == 3 && progress >= (finaleProgress - 5)
+            progressStage == 3 && progress >= (FinaleProgress() - 5)
         ){
             progressAssetNo = 22;
             progressAssetInterval = MaxValue();
@@ -971,25 +971,22 @@ define SetTeleportPositionToPlayerFront() playervar "SetTeleportPositionToPlayer
         return false;
     }
 
-    define teleportToTarget = ClosestPlayerTo(objPos, playerTeam);
+    define teleportBasePosition = PositionOf(ClosestPlayerTo(objPos, playerTeam));
 
-    for(pLoopIndex = 0; pLoopIndex < 6; pLoopIndex++){
-        // select teleportPosition from middle of Object and teleportToTarget
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        // select teleportPosition from middle of Object and teleportBasePosition
+        define searchAreaSize = teleportAreaSize + (pLoopIndex * 3);
         teleportPosition =
             NearestWalkablePosition(
-                PositionOf(teleportToTarget)
+                teleportBasePosition
                     + 
                 (
-                    DirectionTowards(teleportToTarget, objPos)
+                    DirectionTowards(teleportBasePosition, objPos)
                         *
-                    DistanceBetween(teleportToTarget, objPos) * 0.25
+                    DistanceBetween(teleportBasePosition, objPos) * 0.25
                 )
                     +
-                RandomPosition(
-                    (teleportAreaSize),
-                    (teleportAreaSize),
-                    (teleportAreaSize)
-                )
+                RandomPosition(searchAreaSize, searchAreaSize, searchAreaSize)
             );
 
         if(
@@ -1011,8 +1008,8 @@ globalvar define blockedPositionPayloadAhead;
 
 define SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObjectAhead"{
     define isFoundPosition = false;
-    define teleportToTarget = CurrentObjectOnPosition();
-    if(teleportToTarget == null){
+    define teleportBasePosition = CurrentObjectOnPosition();
+    if(teleportBasePosition == null){
         return false;
     }
 
@@ -1023,30 +1020,27 @@ define SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObject
         IsPlayerOnObject
     ){
         // get blocked position of payload ahead
-        blockedPositionPayloadAhead = BlockedPositon(teleportToTarget, payloadDirection, teleportAreaOffsetDistFromPayload);
+        blockedPositionPayloadAhead = BlockedPositon(teleportBasePosition, payloadDirection, teleportAreaOffsetDistFromPayload);
         // get cut off distance by blocked position
         define cutOffDist = teleportAreaOffsetDistFromPayload - DistanceBetween(blockedPositionPayloadAhead, blockedPositionPayloadAhead);
         // get teleportAreaExtendSize by cut off distance with scale
         teleportAreaExtendSize = cutOffDist * teleportAreaExtendScaleByBlockedAhead;
         // change teleportTarget to blocked position
-        teleportToTarget = blockedPositionPayloadAhead;
+        teleportBasePosition = blockedPositionPayloadAhead;
     }
     else{
         // clear extend size by no cut off
         teleportAreaExtendSize = 0;
     }
 
-    for(pLoopIndex = 0; pLoopIndex < 6; pLoopIndex++){
-        // select teleportPosition from teleportToTarget around
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        // select teleportPosition from teleportBasePosition around
+        define searchAreaSize = teleportAreaSize + (pLoopIndex * 3) + teleportAreaExtendSize;
         teleportPosition = 
             NearestWalkablePosition(
-                teleportToTarget
+                teleportBasePosition
                     +
-                RandomPosition(
-                    (teleportAreaSize + teleportAreaExtendSize),
-                    (teleportAreaSize + teleportAreaExtendSize),
-                    (teleportAreaSize + teleportAreaExtendSize)
-                )
+                RandomPosition(searchAreaSize, searchAreaSize, searchAreaSize)
             );
 
         if(
@@ -1065,22 +1059,19 @@ define SetTeleportPositionToObjectAhead() playervar "SetTeleportPositionToObject
 
 define SetTeleportPositionFromCommonPosition() playervar "SetTeleportPositionFromCommonPosition"{
     define isFoundPosition = false;
-    define teleportToTarget = commonTeleportPosition;
-    if(teleportToTarget == null){
+    define teleportBasePosition = commonTeleportPosition;
+    if(teleportBasePosition == null){
         return false;
     }
 
-    for(pLoopIndex = 0; pLoopIndex < 6; pLoopIndex++){
-        // select teleportPosition from teleportToTarget around
+    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+        // select teleportPosition from teleportBasePosition around
+        define searchAreaSize = teleportAreaSize + (pLoopIndex * 3);
         teleportPosition = 
             NearestWalkablePosition(
-                teleportToTarget
+                teleportBasePosition
                     +
-                RandomPosition(
-                    (teleportAreaSize),
-                    (teleportAreaSize),
-                    (teleportAreaSize)
-                )
+                RandomPosition(searchAreaSize, searchAreaSize, searchAreaSize)
             );
 
         if(
@@ -1126,9 +1117,7 @@ void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
     DestroyEffect(telBeam);
 }
 
-
 define showTeleportBeamTime: 0.7;
-
 define scaleBodySizeToEffectSize: 1.5;
 
 void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "PlayTeleportEffect"{
@@ -1420,7 +1409,7 @@ if(
     IsThreatEnemy(ep)
 ){
     // set default interval
-    combatTeleportInterval = ObjectProgressScaledInterval(10, 20, 5);
+    combatTeleportInterval = ObjectProgressScaledInterval(5, 15, 5);
     combatTeleportInterval *= WorkshopSettingReal("Enemy Bot Settings", "(General & Boss) Combat-Teleport Interval Scale", 1.0, 0.1, 100, 4);
     if(actionRangeMax == ActionRange.Melee){
         combatTeleportInterval *= 1;
@@ -1429,13 +1418,17 @@ if(
         combatTeleportInterval *= 2;
     } 
     else if(actionRangeMax == ActionRange.Middle){
-        combatTeleportInterval *= 4;
+        combatTeleportInterval *= 3;
     } 
     else if(actionRangeMax == ActionRange.Far){
-        combatTeleportInterval *= 8;
-    } 
+        combatTeleportInterval *= 4;
+    }
 
-    if(IsPlayerOnObject){
+    if(
+        // player team close win
+        IsCloseWin(playerTeam)
+    ){
+        // shorten interval
         combatTeleportInterval *= 0.5;
     }
 
