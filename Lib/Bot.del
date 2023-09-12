@@ -767,10 +767,9 @@ void SetMoveDir() playervar "SetMoveDir"{
         )
     
     ){
-
-        define supportPlayers! = [];
-        define notSupportPlayers! = [];
-        define livingFriends! = AllLivingPlayers(TeamOf());
+        define supportPlayers = [];
+        define notSupportPlayers = [];
+        define livingFriends = AllLivingPlayers(TeamOf());
 
         // make support player list and not support player
         for(define index! = 0; index < CountOf(livingFriends); index ++){
@@ -790,7 +789,7 @@ void SetMoveDir() playervar "SetMoveDir"{
         }
 
         // find near healer
-        define nearHealer! = 
+        define nearHealer = 
             FirstOf(
                 SortedArray(
                     supportPlayers,
@@ -799,7 +798,7 @@ void SetMoveDir() playervar "SetMoveDir"{
             );
 
         // find near guard as not support
-        define nearGuard! = 
+        define nearGuard = 
             FirstOf(
                 SortedArray(
                     notSupportPlayers,
@@ -839,8 +838,6 @@ void SetMoveDir() playervar "SetMoveDir"{
     else if(
         // object pos valid
         objPos != null &&
-        // high health
-        ProbabilityTrue(150 * NormalizedHealth()) &&
         // payload escort player num is not enough
         (
             (
@@ -848,15 +845,16 @@ void SetMoveDir() playervar "SetMoveDir"{
                 IsCloseWin(EnemyTeamOf(ep)) ||
                 // over time
                 IsOverTime()
-            ) ?
-                // half of team players num
-                NumberOfPlayers(TeamOf()) / 2
-            :
-                // one player
-                1
-            >
-                // current on object players num
-                NumberOfPlayersOnObjective(TeamOf())
+            )
+                ?
+            // half of team players num
+            NumberOfPlayers(TeamOf()) / 2
+                :
+            // one player
+            1
+                >
+            // current on object players num
+            NumberOfPlayersOnObjective(TeamOf())
         )
     ){
         // set move to object
@@ -1016,9 +1014,6 @@ void StartFacingTarget() playervar "StartFacingTarget"{
             ep, DirectionTowards(EyePosition(), aimPosition(aimTarget)),
             facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
     }
-    else{
-        StopFacing(ep);
-    }
 }
 
 define aimPosition(in define player): 
@@ -1135,6 +1130,11 @@ void FindTarget()"FindTarget"{
     else{
         // find attack target
         candidateTarget = FindAttackTarget();
+    }
+
+    if(candidateTarget == null){
+        // stop facing before set aimTarget for avoid invalid facing
+        StopFacing(ep);
     }
 
     // confirm as target
