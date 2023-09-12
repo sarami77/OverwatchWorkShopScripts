@@ -941,6 +941,7 @@ define probOfRenewCommonTeleportBasePosition: 5;
 define probOfReuseCommonTeleportBasePosition: 90;
 
 define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(playerTeam));
+define IsEnemyOnObject: (0 < NumberOfPlayersOnObjective(enemyTeam));
 
 playervar define teleportPosition;
 globalvar define commonTeleportBasePosition;
@@ -1260,8 +1261,7 @@ if(
     }
     else if(
         // player on object
-        IsPlayerOnObject
-                &&
+        IsPlayerOnObject &&
         // Has not line to objectPosition
         !IsInLineOfSight(
             PositionOffsetY1() + commonTeleportBasePosition,
@@ -1476,22 +1476,19 @@ if(
     }
     combatTeleportInterval = RoundToInteger(combatTeleportInterval, Rounding.Up);
 
-    for(;combatTeleportInterval > 0;
-        combatTeleportInterval -=
-            (
-                // player on object
-                IsPlayerOnObject &&
-                // player team close win
-                IsCloseWin(playerTeam)
-                    ?
-                // to get faster interval
-                5
-                    :
-                // else, not get faster
-                1
-            )
-    ){
+    for(;combatTeleportInterval > 0; combatTeleportInterval --){
         Wait(1, WaitBehavior.AbortWhenFalse);
+        if(
+            // player on object
+            IsPlayerOnObject &&
+            // enemy not on object
+            !IsEnemyOnObject &&
+            // player team close win
+            IsCloseWin(playerTeam)
+        ){
+            // instantly teleport for defend object in finale phase
+            break;
+        }
     }
 
     if(IsAlive()){
