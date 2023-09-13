@@ -741,7 +741,7 @@ define autoTuneDmgDltLimit:
     confirmGameDifficulty == GameDifficulty.INSANE ?    100 :
                                                         100 ;
 
-define upValueBase: 1.25;
+define upValueBase: 1.0;
 define upValueScale:
     confirmGameDifficulty == GameDifficulty.EASY ?      upValueBase * 1.00: 
     confirmGameDifficulty == GameDifficulty.NORMAL ?    upValueBase * 1.25: 
@@ -932,12 +932,12 @@ define isInCombat:
 // }
 
 // TAG EnemyBot/Teleport ----------
-define teleportAreaSize: 15;
+define teleportAreaSize: HasPayload() ? ActionRange.Close : ActionRange.Middle;
 define teleportAreaOffsetDistFromPayload: ActionRange.CanFind;
 define teleportAreaExtendScaleByBlockedAhead: 0.4;
 define minDistToEnemyWhenTeleport: teleportAreaSize * 0.5;
 define minDistOfRenewCommonTeleportBasePosition: teleportAreaSize * 0.5;
-define probOfRenewCommonTeleportBasePosition: 5;
+define probOfRenewCommonTeleportBasePosition: 3;
 define probOfReuseCommonTeleportBasePosition: 90;
 
 define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(playerTeam));
@@ -979,7 +979,7 @@ define SetTeleportPositionByClosestPlayerToObject() playervar "SetTeleportPositi
 
     define teleportBasePosition = PositionOf(ClosestPlayerTo(objectPosition, playerTeam));
 
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+    for(pLoopIndex = 0; pLoopIndex < 5; pLoopIndex++){
         // select teleportPosition from middle of Object and teleportBasePosition
         define searchAreaSize = teleportAreaSize;
         teleportPosition =
@@ -1003,7 +1003,7 @@ define SetTeleportPositionByClosestPlayerToObject() playervar "SetTeleportPositi
             break;
         }
 
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
         WaitRandomAfterServerFree();
     }
 
@@ -1046,7 +1046,7 @@ define SetTeleportPositionByObjectPositionOrBlockedPosition() playervar "SetTele
         teleportAreaExtendSize = 0;
     }
 
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+    for(pLoopIndex = 0; pLoopIndex < 5; pLoopIndex++){
         // select teleportPosition from teleportBasePosition around
         define searchAreaSize = teleportAreaSize + teleportAreaExtendSize;
         teleportPosition = 
@@ -1064,7 +1064,7 @@ define SetTeleportPositionByObjectPositionOrBlockedPosition() playervar "SetTele
             break;
         }
 
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
         WaitRandomAfterServerFree();
     }
 
@@ -1079,7 +1079,7 @@ define SetTeleportPositionToCommonTeleportBasePosition() playervar "SetTeleportP
         return false;
     }
 
-    for(pLoopIndex = 0; pLoopIndex < 10; pLoopIndex++){
+    for(pLoopIndex = 0; pLoopIndex < 5; pLoopIndex++){
         // select teleportPosition from teleportBasePosition around
         define searchAreaSize = teleportAreaSize;
         teleportPosition = 
@@ -1097,7 +1097,7 @@ define SetTeleportPositionToCommonTeleportBasePosition() playervar "SetTeleportP
             break;
         }
 
-        Wait(0.5, WaitBehavior.AbortWhenFalse);
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
         WaitRandomAfterServerFree();
     }
 
@@ -1235,6 +1235,7 @@ void DoTeleport(define isBeamFromBody!)"DoTeleport"{
     }
 }
 
+// TAG EnemyBot/Teleport/SetNeedUpdateCommonTeleportBasePosition ----------
 globalvar define needUpdateCommonTeleportBasePosition;
 
 rule: "EnemyBot/Teleport/SetNeedUpdateCommonTeleportBasePosition"
@@ -1262,10 +1263,10 @@ if(
     else if(
         // player on object
         IsPlayerOnObject &&
-        // Has not line to objectPosition
+        // Has not line to objectPosition or blockedPosition
         !IsInLineOfSight(
             PositionOffsetY1() + commonTeleportBasePosition,
-            CurrentObjectOnPosition(),
+            HasPayload() ? blockedPositionPayloadAhead : CurrentObjectOnPosition(),
             BarrierLOS.NoBarriersBlock)
     ){
         needUpdateCommonTeleportBasePosition = true;
@@ -1687,7 +1688,6 @@ void UpdateEachReceivedDamage()"UpdateEachReceivedDamage"{
 rule: "EnemyBot/ReceivedDamage/update"
 Event.OngoingGlobal
 if(
-    initCompleted &&
     IsGameInProgress()
 ){
     UpdateEachReceivedDamage();
@@ -1744,7 +1744,7 @@ globalvar define isBlink = false;
 rule: "EnemyBot/ObstIcon/blinkColor"
 Event.OngoingGlobal
 if(
-    initCompleted
+    IsGameInProgress()
 ){
     while(true){
         isBlink = !isBlink;
@@ -1784,36 +1784,36 @@ if(
 // if(
 //     initCompleted
 // ){
-//     // // enemy common teleport positon icon
-//     // CreateIcon(commonTeleportBasePosition != null ? hp : null,
-//     //     commonTeleportBasePosition + PositionOffsetY1(), Icon.Spiral,
-//     //     IconRev.VisibleToAndPosition, enemyColor, true);
-//     // // minDistOfRenewCommon ring
-//     // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
-//     //     commonTeleportBasePosition + PositionOffsetY1(), minDistOfRenewCommonTeleportBasePosition, EffectRev.VisibleToPositionAndRadius);
-//     // // teleportAreaSize ring
-//     // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
-//     //     commonTeleportBasePosition + PositionOffsetY1(), teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
-//     // // object -> blockedPosition beam
-//     // CreateBeamEffect(HasPayload() ? hp : null, BeamType.GoodBeam, 
-//     //     CurrentObjectOnPosition(),
-//     //     blockedPositionPayloadAhead, 
-//     //     enemyColor, EffectRev.VisibleToPositionAndRadius);
-//     // // commonTeleportBasePosition -> object beam
-//     // CreateBeamEffect(HasPayload() ? hp : null, BeamType.BadBeam, 
-//     //     PositionOffsetY1() + commonTeleportBasePosition, 
-//     //     CurrentObjectOnPosition(),
-//     //     enemyColor, EffectRev.VisibleToPositionAndRadius);
-//     // // blockedPositionPayloadAhead orb
-//     // CreateEffect(HasPayload() ? hp : null,
-//     //     Effect.Orb, enemyColor, blockedPositionPayloadAhead,
-//     //     1, EffectRev.VisibleToPositionAndRadius);
-//     // // placable teleportPosition area size ring
-//     // CreateEffect(hp,
-//     //     Effect.Sphere, enemyColor,
-//     //     HasPayload() ? blockedPositionPayloadAhead : CurrentObjectOnPosition(),
-//     //     HasPayload() ? teleportAreaSize + teleportAreaExtendSize : teleportAreaSize,
-//     //     EffectRev.VisibleToPositionAndRadius);
+//     // enemy common teleport positon icon
+//     CreateIcon(commonTeleportBasePosition != null ? hp : null,
+//         commonTeleportBasePosition + PositionOffsetY1(), Icon.Spiral,
+//         IconRev.VisibleToAndPosition, enemyColor, true);
+//     // minDistOfRenewCommon ring
+//     CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
+//         commonTeleportBasePosition + PositionOffsetY1(), minDistOfRenewCommonTeleportBasePosition, EffectRev.VisibleToPositionAndRadius);
+//     // teleportAreaSize ring
+//     CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
+//         commonTeleportBasePosition + PositionOffsetY1(), teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+//     // object -> blockedPosition beam
+//     CreateBeamEffect(HasPayload() ? hp : null, BeamType.BadBeam, 
+//         CurrentObjectOnPosition(),
+//         blockedPositionPayloadAhead, 
+//         enemyColor, EffectRev.VisibleToPositionAndRadius);
+//     // commonTeleportBasePosition -> blockedPosition or objectPosition
+//     CreateBeamEffect(hp, BeamType.GoodBeam, 
+//         PositionOffsetY1() + commonTeleportBasePosition, 
+//         HasPayload() ? blockedPositionPayloadAhead : CurrentObjectOnPosition(),
+//         enemyColor, EffectRev.VisibleToPositionAndRadius);
+//     // blockedPositionPayloadAhead orb
+//     CreateEffect(HasPayload() ? hp : null,
+//         Effect.Orb, enemyColor, blockedPositionPayloadAhead,
+//         1, EffectRev.VisibleToPositionAndRadius);
+//     // placable teleportPosition area size ring
+//     CreateEffect(hp,
+//         Effect.Sphere, enemyColor,
+//         HasPayload() ? blockedPositionPayloadAhead : CurrentObjectOnPosition(),
+//         HasPayload() ? teleportAreaSize + teleportAreaExtendSize : teleportAreaSize,
+//         EffectRev.VisibleToPositionAndRadius);
 
 //     // while(true){
 //     //     SetStatus(ap(ta), null, Status.Unkillable, MaxValue());
