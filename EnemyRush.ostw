@@ -122,6 +122,33 @@ if(
 //     SetMatchTime(MatchTime() + (120 * addTimeScale));
 // }
 
+// TAG Payload ----------
+globalvar define prevPayloadPosition;
+
+globalvar define payloadDirection;
+
+define HasPayload(): payloadDirection != null;
+
+rule: "Payload/updatePayloadDirection"
+Event.OngoingGlobal
+if(
+    PayloadProgressPercentage() > 0
+){
+    prevPayloadPosition = PayloadPosition();
+
+    while(true){
+        define nowPayloadPosition! = PayloadPosition();
+        if(
+            IsPlayerOnObject &&
+            nowPayloadPosition != prevPayloadPosition
+        ){
+            payloadDirection = DirectionTowards(prevPayloadPosition, nowPayloadPosition);
+            prevPayloadPosition = nowPayloadPosition;
+        }
+        WaitUpdateMediumCycle();
+    }
+}
+
 // TAG Player/Config ----------
 rule: "Player/Config/SetRespawnMaxTime"
 Event.OngoingGlobal
@@ -152,6 +179,7 @@ if(
     }
 }
 
+// TAG Buddy/Config ----------
 rule: "Buddy/Config/SetWatchUpdateRate"
 Event.OngoingPlayer
 if(
@@ -408,323 +436,6 @@ if(
     Respawn();
 }
 
-// TAG Payload ----------
-globalvar define prevPayloadPosition;
-
-globalvar define payloadDirection;
-
-define HasPayload(): payloadDirection != null;
-
-rule: "Payload/updatePayloadDirection"
-Event.OngoingGlobal
-if(
-    PayloadProgressPercentage() > 0
-){
-    prevPayloadPosition = PayloadPosition();
-
-    while(true){
-        define nowPayloadPosition! = PayloadPosition();
-        if(
-            IsPlayerOnObject &&
-            nowPayloadPosition != prevPayloadPosition
-        ){
-            payloadDirection = DirectionTowards(prevPayloadPosition, nowPayloadPosition);
-            prevPayloadPosition = nowPayloadPosition;
-        }
-        WaitUpdateMediumCycle();
-    }
-}
-
-// TAG EnemyBot ----------
-globalvar define sameHero;
-
-define enemyAssetList:
-    [
-        // random hero asset
-        [   
-            // assetNo 0
-            // basic
-            [EnemyType.General,     RandomHero,         1],
-            [EnemyType.Elite,       RandomHero,         4],
-            [EnemyType.Minion,      RandomHero,         7]
-        ],
-        [   
-            // assetNo 1
-            // general and minion
-            [EnemyType.General,     RandomHero,         1],
-            [EnemyType.Minion,      RandomHero,         11]
-        ],
-        [   
-            // assetNo 2
-            // all elite
-            [EnemyType.Elite,       RandomHero,         4],
-            [EnemyType.Elite,       RandomHero,         4],
-            [EnemyType.Elite,       RandomHero,         4]
-        ],
-        [   
-            // assetNo 3
-            // all elites same hero
-            [EnemyType.Elite,       sameHero,           12]
-        ],
-        [   
-            // assetNo 4
-            // half elite
-            [EnemyType.Elite,       RandomHero,         6],
-            [EnemyType.Minion,      RandomHero,         6]
-        ],
-        [   
-            // assetNo 5
-            // all minion
-            [EnemyType.Minion,      rva([favDamage, favTank]),   12]
-        ],
-        [   
-            // assetNo 6
-            // double general
-            [EnemyType.General,     RandomHero,         1],
-            [EnemyType.General,     RandomHero,         1],
-            [EnemyType.Minion,      RandomHero,         10]
-        ],
-        [   
-            // assetNo 7
-            // triple general
-            [EnemyType.General,     RandomHero,         1],
-            [EnemyType.General,     RandomHero,         1],
-            [EnemyType.General,     RandomHero,         1]
-        ],
-        [   
-            // assetNo 8
-            // damage boss with minion
-            [EnemyType.Boss,        favDamage,          1],
-            [EnemyType.Minion,      RandomHero,         11]
-        ],
-        // 9,
-        [],
-
-        // fix hero asset
-        [   
-            // assetNo 10
-            // Reinhardt army
-            [EnemyType.General,     Hero.Reinhardt,     1],
-            [EnemyType.Elite,       Hero.Reinhardt,     4],
-            [EnemyType.Minion,      Hero.Reinhardt,     7]
-        ],
-        [   
-            // assetNo 11
-            // Soldier76 army
-            [EnemyType.General,     Hero.Soldier76,     1],
-            [EnemyType.Elite,       Hero.Soldier76,     4],
-            [EnemyType.Minion,      Hero.Soldier76,     7]
-        ],
-        [   
-            // assetNo 12
-            // Pharah army
-            [EnemyType.General,     Hero.Pharah,        1],
-            [EnemyType.Elite,       Hero.Pharah,        4],
-            [EnemyType.Minion,      Hero.Pharah,        7]
-        ],
-        [   
-            // assetNo 13
-            // Roadhog army
-            [EnemyType.General,     Hero.Roadhog,       1],
-            [EnemyType.Elite,       Hero.Roadhog,       4],
-            [EnemyType.Minion,      Hero.Roadhog,       7]
-        ],
-        [   
-            // assetNo 14
-            // Bastion army
-            [EnemyType.General,     Hero.Bastion,       1],
-            [EnemyType.Elite,       Hero.Bastion,       4],
-            [EnemyType.Minion,      Hero.Bastion,       7]
-        ],
-        [   
-            // assetNo 15
-            // gun and shield
-            [EnemyType.Boss,        Hero.Widowmaker,    1],
-            [EnemyType.General,     Hero.Widowmaker,    4],
-            [EnemyType.Minion,      favTank,            7]   
-        ],
-        // 16,17,18,19,
-        [],[],[],[],
-
-        // progress asset
-        [
-            // assetNo 20
-            // damage boss with minion
-            [EnemyType.Boss,        favDamage,          1],
-            [EnemyType.Elite,       RandomHero,         4],
-            [EnemyType.Minion,      RandomHero,         7]
-        ],
-        [
-            // assetNo 21
-            // damage boss with tank elite
-            [EnemyType.Boss,        favDamage,          1],
-            [EnemyType.Elite,       favTank,            4],
-            [EnemyType.Minion,      RandomHero,         7]
-        ],
-        [
-            // assetNo 22
-            // tank boss with damage elite
-            [EnemyType.Boss,        favTank,            1],
-            [EnemyType.Elite,       favDamage,          4],
-            [EnemyType.Minion,      RandomHero,         7]
-        ],
-        // 23,24,25,26,27,28,29,
-        [],[],[],[],[],[],[],
-
-        // debug asset
-        [
-            // assetNo 30
-            // tank boss with damage elite
-            [EnemyType.Boss,       Hero.Widowmaker,      12]
-        ]
-    ];
-
-define enemyAssetNoLotteryList: [
-    // random hero asset
-    0, 0,
-    1, 1,
-    2, 2, 2, 2,
-    3, 3,
-    4, 4,
-    5,
-    6,
-    7,
-    8,
-
-    // fix hero asset
-    10,
-    11,
-    12,
-    13,
-    14,
-    15
-
-    // for debug
-    // 30
-];
-
-// TAG EnemyBot/BotAssetInterval ----------
-globalvar define reloadEnemyAssetInterval = -1;
-globalvar define enemyAssetNo = -1;
-globalvar define hasProgressAssetNo = false;
-define maxEnemyBotNum: 12;
-
-rule: "EnemyBot/BotAssetInterval/reloadReloadEnemyAsset"
-Event.OngoingGlobal
-if(
-    initCompleted &&
-    (
-        (IsInSetup() && MatchTime() <= 5) ||
-        (IsGameInProgress())
-    )
-){
-    while(true){
-        // play effect at all enemy
-        PlayEffectsToTeam(enemyTeam);
-
-        // if hasProgressAssetNo, skip change assetNo
-        if(!hasProgressAssetNo){
-            // choice asset by random
-            enemyAssetNo = RandomValueInArray(enemyAssetNoLotteryList);
-            // set default interval
-            reloadEnemyAssetInterval = AssetChangeInterval();
-            // change some hero
-            sameHero = RandomHero;
-        }
-
-        // relealse hasProgressAssetNo
-        hasProgressAssetNo = false;
-
-        // create bots by asset
-        DestroyBots(enemyTeam);
-        CreateBotsByAssetWithMutexLock(enemyAssetList[enemyAssetNo], enemyTeam, maxEnemyBotNum);
-        // wait start intarval until game start.
-        WaitUntil(IsGameInProgress(), MaxValue());
-
-        for(;
-            reloadEnemyAssetInterval > 0 &&
-            // if hasProgressAssetNo, skip interval count and reload asset
-            !hasProgressAssetNo;
-            reloadEnemyAssetInterval--){
-            Wait(1, WaitBehavior.AbortWhenFalse);
-        }
-    }
-}
-
-rule: "EnemyBot/BotAssetInterval/reloadBotAssetIntervalByProgress"
-Event.OngoingGlobal
-if(
-    initCompleted &&
-    IsGameInProgress()
-){
-    define progressStage = 0;
-
-    while(true){
-        define progress = TotalObjectProgress();
-
-        define progressAssetNo! = -1;
-        define progressAssetInterval!;
-
-        if(
-            progressStage == 0 && progress >= 15
-        ){
-            spawnRushInterval = 0;
-            progressStage ++;
-        }
-        else if(
-            progressStage == 1 && progress >= 30
-        ){
-            progressAssetNo = 20;
-            progressAssetInterval = (AssetChangeInterval() - 60);
-            progressStage ++;
-        }
-        else if(
-            progressStage == 2 && progress >= 60
-        ){
-            progressAssetNo = 21;
-            progressAssetInterval = (AssetChangeInterval() - 60);
-            progressStage ++;
-        }
-        else if(
-            progressStage == 3 && progress >= (FinaleProgress() - 5)
-        ){
-            progressAssetNo = 22;
-            progressAssetInterval = MaxValue();
-            progressStage ++;
-        }
-
-        // has progress asset
-        if(progressAssetNo != -1){
-            // set assetNo from progress asset
-            enemyAssetNo = progressAssetNo;
-            // set interval from progress asset interval
-            reloadEnemyAssetInterval = progressAssetInterval;
-            // set flag for skip change assetNo
-            hasProgressAssetNo = true;
-        }
-
-        // check Interval
-        WaitUpdateMediumCycle();
-    }
-}
-
-void PlayEffectsToTeam(define team!) "PlayEffectsToTeam"{
-    define players! = AllPlayers(team);
-    for(define playersIndex! = 0; playersIndex < CountOf(players); playersIndex ++){
-        // play blast
-        PlayEffect(
-            AllPlayers(), PlayEffect.BadExplosion,
-            TeamOf(players[playersIndex]) == enemyTeam ?
-                enemyColor :
-                Color.Yellow,
-            BodyPosition(players[playersIndex]),
-            TeamOf(players[playersIndex]) == enemyTeam ?
-                players[playersIndex].eachBodyScale * 1.5 : 
-                1.5
-            );
-    }
-    Wait(0.1, WaitBehavior.IgnoreCondition);
-}
 
 // TAG EnemyBot/Config ----------
 define basicSpawnTimeMin: 
@@ -876,7 +587,7 @@ if(
     UpdateEachSpawnInterval();
 }
 
-rule: "EnemyBot/Effect/setFullHealth"
+rule: "EnemyBot/EnemyType/setFullHealth"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
@@ -890,6 +601,299 @@ if(
         Wait(0.5, WaitBehavior.IgnoreCondition);
     }
 }
+
+// TAG EnemyBot/Asset ----------
+globalvar define sameHero;
+
+define enemyAssetList:
+    [
+        // random hero asset
+        [   
+            // assetNo 0
+            // basic
+            [EnemyType.General,     RandomHero,         1],
+            [EnemyType.Elite,       RandomHero,         4],
+            [EnemyType.Minion,      RandomHero,         7]
+        ],
+        [   
+            // assetNo 1
+            // general and minion
+            [EnemyType.General,     RandomHero,         1],
+            [EnemyType.Minion,      RandomHero,         11]
+        ],
+        [   
+            // assetNo 2
+            // all elite
+            [EnemyType.Elite,       RandomHero,         4],
+            [EnemyType.Elite,       RandomHero,         4],
+            [EnemyType.Elite,       RandomHero,         4]
+        ],
+        [   
+            // assetNo 3
+            // all elites same hero
+            [EnemyType.Elite,       sameHero,           12]
+        ],
+        [   
+            // assetNo 4
+            // half elite
+            [EnemyType.Elite,       RandomHero,         6],
+            [EnemyType.Minion,      RandomHero,         6]
+        ],
+        [   
+            // assetNo 5
+            // all minion
+            [EnemyType.Minion,      rva([favDamage, favTank]),   12]
+        ],
+        [   
+            // assetNo 6
+            // double general
+            [EnemyType.General,     RandomHero,         1],
+            [EnemyType.General,     RandomHero,         1],
+            [EnemyType.Minion,      RandomHero,         10]
+        ],
+        [   
+            // assetNo 7
+            // triple general
+            [EnemyType.General,     RandomHero,         1],
+            [EnemyType.General,     RandomHero,         1],
+            [EnemyType.General,     RandomHero,         1]
+        ],
+        [   
+            // assetNo 8
+            // damage boss with minion
+            [EnemyType.Boss,        favDamage,          1],
+            [EnemyType.Minion,      RandomHero,         11]
+        ],
+        // 9,
+        [],
+
+        // fix hero asset
+        [   
+            // assetNo 10
+            // Reinhardt army
+            [EnemyType.General,     Hero.Reinhardt,     1],
+            [EnemyType.Elite,       Hero.Reinhardt,     4],
+            [EnemyType.Minion,      Hero.Reinhardt,     7]
+        ],
+        [   
+            // assetNo 11
+            // Soldier76 army
+            [EnemyType.General,     Hero.Soldier76,     1],
+            [EnemyType.Elite,       Hero.Soldier76,     4],
+            [EnemyType.Minion,      Hero.Soldier76,     7]
+        ],
+        [   
+            // assetNo 12
+            // Pharah army
+            [EnemyType.General,     Hero.Pharah,        1],
+            [EnemyType.Elite,       Hero.Pharah,        4],
+            [EnemyType.Minion,      Hero.Pharah,        7]
+        ],
+        [   
+            // assetNo 13
+            // Roadhog army
+            [EnemyType.General,     Hero.Roadhog,       1],
+            [EnemyType.Elite,       Hero.Roadhog,       4],
+            [EnemyType.Minion,      Hero.Roadhog,       7]
+        ],
+        [   
+            // assetNo 14
+            // Bastion army
+            [EnemyType.General,     Hero.Bastion,       1],
+            [EnemyType.Elite,       Hero.Bastion,       4],
+            [EnemyType.Minion,      Hero.Bastion,       7]
+        ],
+        [   
+            // assetNo 15
+            // gun and shield
+            [EnemyType.Boss,        Hero.Widowmaker,    1],
+            [EnemyType.General,     Hero.Widowmaker,    3],
+            [EnemyType.Minion,      favTank,            8]   
+        ],
+        // 16,17,18,19,
+        [],[],[],[],
+
+        // progress asset
+        [
+            // assetNo 20
+            // damage boss with minion
+            [EnemyType.Boss,        favDamage,          1],
+            [EnemyType.Elite,       RandomHero,         4],
+            [EnemyType.Minion,      RandomHero,         7]
+        ],
+        [
+            // assetNo 21
+            // damage boss with tank elite
+            [EnemyType.Boss,        favDamage,          1],
+            [EnemyType.Elite,       favTank,            4],
+            [EnemyType.Minion,      RandomHero,         7]
+        ],
+        [
+            // assetNo 22
+            // tank boss with damage elite
+            [EnemyType.Boss,        favTank,            1],
+            [EnemyType.Elite,       favDamage,          4],
+            [EnemyType.Minion,      RandomHero,         7]
+        ],
+        // 23,24,25,26,27,28,29,
+        [],[],[],[],[],[],[],
+
+        // debug asset
+        [
+            // assetNo 30
+            // tank boss with damage elite
+            [EnemyType.Boss,       Hero.Widowmaker,      12]
+        ]
+    ];
+
+define enemyAssetNoLotteryList: [
+    // random hero asset
+    0, 0,
+    1, 1,
+    2, 2, 2, 2,
+    3, 3,
+    4, 4,
+    5,
+    6,
+    7,
+    8,
+
+    // fix hero asset
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+
+    // for debug
+    // 30
+];
+
+
+// TAG EnemyBot/Asset/Interval ----------
+globalvar define reloadEnemyAssetInterval = -1;
+globalvar define enemyAssetNo = -1;
+globalvar define hasProgressAssetNo = false;
+define maxEnemyBotNum: 12;
+
+rule: "EnemyBot/Asset/Interval/reloadReloadEnemyAsset"
+Event.OngoingGlobal
+if(
+    initCompleted &&
+    (
+        (IsInSetup() && MatchTime() <= 5) ||
+        (IsGameInProgress())
+    )
+){
+    while(true){
+        // play effect at all enemy
+        PlayEffectsToTeam(enemyTeam);
+
+        // if hasProgressAssetNo, skip change assetNo
+        if(!hasProgressAssetNo){
+            // choice asset by random
+            enemyAssetNo = RandomValueInArray(enemyAssetNoLotteryList);
+            // set default interval
+            reloadEnemyAssetInterval = AssetChangeInterval();
+            // change some hero
+            sameHero = RandomHero;
+        }
+
+        // relealse hasProgressAssetNo
+        hasProgressAssetNo = false;
+
+        // create bots by asset
+        DestroyBots(enemyTeam);
+        CreateBotsByAssetWithMutexLock(enemyAssetList[enemyAssetNo], enemyTeam, maxEnemyBotNum);
+        // wait start intarval until game start.
+        WaitUntil(IsGameInProgress(), MaxValue());
+
+        for(;
+            reloadEnemyAssetInterval > 0 &&
+            // if hasProgressAssetNo, skip interval count and reload asset
+            !hasProgressAssetNo;
+            reloadEnemyAssetInterval--){
+            Wait(1, WaitBehavior.AbortWhenFalse);
+        }
+    }
+}
+
+rule: "EnemyBot/Asset/Interval/reloadBotAssetIntervalByProgress"
+Event.OngoingGlobal
+if(
+    initCompleted &&
+    IsGameInProgress()
+){
+    define progressStage = 0;
+
+    while(true){
+        define progress = TotalObjectProgress();
+
+        define progressAssetNo! = -1;
+        define progressAssetInterval!;
+
+        if(
+            progressStage == 0 && progress >= 15
+        ){
+            spawnRushInterval = 0;
+            progressStage ++;
+        }
+        else if(
+            progressStage == 1 && progress >= 30
+        ){
+            progressAssetNo = 20;
+            progressAssetInterval = (AssetChangeInterval() - 60);
+            progressStage ++;
+        }
+        else if(
+            progressStage == 2 && progress >= 60
+        ){
+            progressAssetNo = 21;
+            progressAssetInterval = (AssetChangeInterval() - 60);
+            progressStage ++;
+        }
+        else if(
+            progressStage == 3 && progress >= (FinaleProgress() - 5)
+        ){
+            progressAssetNo = 22;
+            progressAssetInterval = MaxValue();
+            progressStage ++;
+        }
+
+        // has progress asset
+        if(progressAssetNo != -1){
+            // set assetNo from progress asset
+            enemyAssetNo = progressAssetNo;
+            // set interval from progress asset interval
+            reloadEnemyAssetInterval = progressAssetInterval;
+            // set flag for skip change assetNo
+            hasProgressAssetNo = true;
+        }
+
+        // check Interval
+        WaitUpdateMediumCycle();
+    }
+}
+
+void PlayEffectsToTeam(define team!) "PlayEffectsToTeam"{
+    define players! = AllPlayers(team);
+    for(define playersIndex! = 0; playersIndex < CountOf(players); playersIndex ++){
+        // play blast
+        PlayEffect(
+            AllPlayers(), PlayEffect.BadExplosion,
+            TeamOf(players[playersIndex]) == enemyTeam ?
+                enemyColor :
+                Color.Yellow,
+            BodyPosition(players[playersIndex]),
+            TeamOf(players[playersIndex]) == enemyTeam ?
+                players[playersIndex].eachBodyScale * 1.5 : 
+                1.5
+            );
+    }
+    Wait(0.1, WaitBehavior.IgnoreCondition);
+}
+
 
 // TAG EnemyBot/Effect ----------
 define enemyColor: Color.Team1;
@@ -905,41 +909,6 @@ define isInCombat:
         IsAlive() &&
         !IsInSpawnRoom()
     );
-
-// rule: "EnemyBot/Effect/showSkullIconByTakenDamage"
-// Event.OnDamageTaken
-// if(
-//     TeamOf() == enemyTeam &&
-//     IsThreatEnemyType(ep) &&
-//     Attacker() != ep
-// ){
-//     // show skull icon
-//     ShowSkullIcon();
-// }
-
-// rule: "EnemyBot/Effect/hideSkullIcon"
-// Event.OnDeath
-// if(
-//     TeamOf() == enemyTeam &&
-//     IsThreatEnemyType(ep)
-// ){
-//     // hide skull icon
-//     HideSkullIcon();
-// }
-
-// void ShowSkullIcon()"ShowSkullIcon"{
-//     if(skullIcon == null){
-//         skullIcon = CreateIcon(AllPlayers(playerTeam), ep, Icon.Skull,
-//             IconRev.VisibleToPositionAndColor, warningIconColor, true);
-//     }
-//     Wait(2.0, WaitBehavior.RestartWhenTrue);
-//     HideSkullIcon();
-// }
-
-// void HideSkullIcon()"HideSkullIcon"{
-//     DestroyIcon(skullIcon);
-//     skullIcon = 0;
-// }
 
 // TAG EnemyBot/Teleport ----------
 define teleportAreaSize: HasPayload() ? ActionRange.Close : ActionRange.Middle;

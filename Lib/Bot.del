@@ -1259,8 +1259,8 @@ if(
     // apply next state
     SetActionState(ep, GetNextActionState());
 
-    // call attack by near bots
-    CallAttackNearBot();
+    // action call to near bots
+    CallToNearBot();
 
     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     WaitRandomAfterServerFree();
@@ -1333,8 +1333,8 @@ if(
         SetActionState(ep, GetNextActionState());
     }
 
-    // call attack by near bots
-    CallAttackNearBot();
+    // action call to near bots
+    CallToNearBot();
 
     // reduce overrun change target
     Wait(2.0, WaitBehavior.IgnoreCondition);
@@ -1343,7 +1343,7 @@ if(
 globalvar define isCallAttackCoolingDown1 = false;
 globalvar define isCallAttackCoolingDown2 = false;
 
-void CallAttackNearBot()"CallAttackNearBot"{
+void CallToNearBot()"CallToNearBot"{
     // check cooldown for reduce overrun
     // if already CoolingDown flag true, ignore action
     if(TeamOf() == Team.Team1){
@@ -1357,9 +1357,7 @@ void CallAttackNearBot()"CallAttackNearBot"{
 
     if(
         // has aim target
-        aimTarget != null &&
-        // in attack
-        actionState == ActionState.Attack
+        aimTarget != null
     ){
         // get near idle bot
         define nearFriends = FilteredArray(
@@ -1368,15 +1366,22 @@ void CallAttackNearBot()"CallAttackNearBot"{
                 ae != ep &&
                 IsDummyBot(ae) &&
                 IsAlive(ae) &&
-                ae.actionState == ActionState.Non
+                (
+                    // if support state
+                    actionState == ActionState.Support ?
+                        // call to near supportable bot for support
+                        ae.supportPrioloty > 0 :
+                        // call to near idle bot for attack
+                        ae.actionState == ActionState.Non
+                )
             )
         );
 
-        for(define nearFriendsIndex = 0; nearFriendsIndex < CountOf(nearFriends); nearFriendsIndex ++){
+        for(define index = 0; index < CountOf(nearFriends); index ++){
             // set target
-            nearFriends[nearFriendsIndex].aimTarget = ep.aimTarget;
-            // set attack 
-            SetActionState(nearFriends[nearFriendsIndex], ActionState.Attack);
+            nearFriends[index].aimTarget = aimTarget;
+            // set state 
+            SetActionState(nearFriends[index], actionState);
         }
     }
 }
