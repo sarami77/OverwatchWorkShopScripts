@@ -913,14 +913,16 @@ define isInCombat:
 // TAG EnemyBot/Teleport ----------
 define teleportAreaSize: HasPayload() ? ActionRange.Close : ActionRange.Middle;
 define teleportAreaOffsetDistFromPayload: ActionRange.CanFind;
-define teleportAreaExtendScaleByBlockedAhead: 0.4;
-define minDistToEnemyWhenTeleport: teleportAreaSize * 0.5;
+define teleportAreaExtendScaleByBlockedAheadDist: 0.3;
 define minDistOfRenewCommonTeleportBasePosition: teleportAreaSize * 0.5;
-define probOfRenewCommonTeleportBasePosition: 3;
+define probOfRenewCommonTeleportBasePosition: 5;
 define probOfReuseCommonTeleportBasePosition: 90;
+define minDistToEnemyWhenTeleport: teleportAreaSize * 0.5;
 
 define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(playerTeam));
 define IsEnemyOnObject: (0 < NumberOfPlayersOnObjective(enemyTeam));
+define searchPositionInterval: 0.25;
+define searchPositionTryCountMax: 10;
 
 playervar define teleportPosition;
 globalvar define commonTeleportBasePosition;
@@ -958,7 +960,7 @@ define SetTeleportPositionByClosestPlayerToObject() playervar "SetTeleportPositi
 
     define teleportBasePosition = PositionOf(ClosestPlayerTo(objectPosition, playerTeam));
 
-    for(pLoopIndex = 0; pLoopIndex < 5; pLoopIndex++){
+    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from middle of Object and teleportBasePosition
         define searchAreaSize = teleportAreaSize;
         teleportPosition =
@@ -982,7 +984,7 @@ define SetTeleportPositionByClosestPlayerToObject() playervar "SetTeleportPositi
             break;
         }
 
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Wait(searchPositionInterval, WaitBehavior.AbortWhenFalse);
         WaitRandomAfterServerFree();
     }
 
@@ -1018,14 +1020,14 @@ define SetTeleportPositionByObjectPositionOrBlockedPosition() playervar "SetTele
                 DistanceBetween(blockedPositionPayloadAhead, blockedPositionPayloadAhead)
             ) *
             // apply extend scale
-            teleportAreaExtendScaleByBlockedAhead;
+            teleportAreaExtendScaleByBlockedAheadDist;
     }
     else{
         // clear extend size by non cut off distance
         teleportAreaExtendSize = 0;
     }
 
-    for(pLoopIndex = 0; pLoopIndex < 5; pLoopIndex++){
+    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from teleportBasePosition around
         define searchAreaSize = teleportAreaSize + teleportAreaExtendSize;
         teleportPosition = 
@@ -1043,7 +1045,7 @@ define SetTeleportPositionByObjectPositionOrBlockedPosition() playervar "SetTele
             break;
         }
 
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Wait(searchPositionInterval, WaitBehavior.AbortWhenFalse);
         WaitRandomAfterServerFree();
     }
 
@@ -1058,7 +1060,7 @@ define SetTeleportPositionToCommonTeleportBasePosition() playervar "SetTeleportP
         return false;
     }
 
-    for(pLoopIndex = 0; pLoopIndex < 5; pLoopIndex++){
+    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from teleportBasePosition around
         define searchAreaSize = teleportAreaSize;
         teleportPosition = 
@@ -1076,7 +1078,7 @@ define SetTeleportPositionToCommonTeleportBasePosition() playervar "SetTeleportP
             break;
         }
 
-        Wait(0.1, WaitBehavior.AbortWhenFalse);
+        Wait(searchPositionInterval, WaitBehavior.AbortWhenFalse);
         WaitRandomAfterServerFree();
     }
 
@@ -1276,7 +1278,7 @@ if(
 
 define checkTeleportConditionMaxCount: 3;
 
-rule: "EnemyBot/Teleport/teleportForDefendObjectorIdle"
+rule: "EnemyBot/Teleport/teleportForDefendObjectOrNonTarget"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
@@ -1284,39 +1286,37 @@ if(
     IsAlive() &&
     !IsInSpawnRoom()
 ){
-    Wait(1, WaitBehavior.AbortWhenFalse);
+    define checkConditionCount = 0;
 
-    for(define checkConditionCount = 0; checkConditionCount < checkTeleportConditionMaxCount; checkConditionCount ++){
-        
-        // check not teleport condition
+    while(checkConditionCount < checkTeleportConditionMaxCount){
         if(
-            // not
-            !(
-                // need defend object
-                (
-                    // player on object
-                    IsPlayerOnObject &&
-                    // far from object
-                    DistanceBetween(ep, CurrentObjectPosition()) > ActionRange.CanFind
-                )
-                    ||
-                // enemy not found
-                (
-                    aimTarget != null &&
-                    !IsInLineOfSight(ep, aimTarget)
-                )
-            )
+            // player on object
+            IsPlayerOnObject &&
+            // far from object
+            DistanceBetween(ep, CurrentObjectPosition()) > ActionRange.CanFind
         ){
-            // keep position
-            // reset count up
-            LoopIfConditionIsTrue();
+            // do teleport
+            break;
         }
-        // count up checkConditionCount
+
+        if(
+            // valid aim target
+            aimTarget != null &&
+            // has line
+            IsInLineOfSight(ep, aimTarget)
+        ){
+            // reset count
+            checkConditionCount = 0;
+        }
+        else{
+            // keep position and count up
+            checkConditionCount ++;
+        }
+
         Wait(1, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
 
-    // when over checkConditionCount 
     // teleport
     DoTeleport(false);
 
