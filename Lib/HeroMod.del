@@ -682,7 +682,7 @@ void DoHeroModAction(define heromod!, define trigger!, define triggerPayload!) p
             heroModName = "GRUDGE LIGHTNING";
             heroModDetail = 
                 "+ receive damage to charging grudge power (now "+ currentValue +"% / 100%)" + NL +
-                "+ hold melee key to release grudge power as stunning lightning" + NL +
+                "+ hold melee key to release grudge power as penetrate lightning and stun" + NL +
                 "- receive heal 50%";
 
             if(
@@ -1171,7 +1171,7 @@ void DoHeroModAction(define heromod!, define trigger!, define triggerPayload!) p
                         // update aim pos
                         while(beamCharging){
                             // pre set aim pos
-                            beamAimPos = AimingPositionWithLimit(40);
+                            beamAimPos = AimingPosition(40, EnemyTeamOf(ep));
                             Wait(0.1, WaitBehavior.AbortWhenFalse);
                         }
                     }
@@ -1278,7 +1278,7 @@ void DoGrudgeLightning() playervar "DoGrudgeLightning"{
             StartHoldingButton(ep, Button.Melee);
         }
 
-        define landPos = AimingPosition();
+        define landPos;
         define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
             EyePosition() + Vector(0, -0.1, 0), landPos,
             Color.SkyBlue, EffectRev.VisibleToPositionAndRadius);
@@ -1295,6 +1295,7 @@ void DoGrudgeLightning() playervar "DoGrudgeLightning"{
             if(count == 0){
                 grudgePower -= 3;
                 grudgePower = grudgePower < 0 ? 0 : grudgePower;
+
                 define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
                 heroModDetail = 
                     "+ receive damage to charging grudge power (now "+ currentValue +"% / 100%)" + NL +
@@ -1302,9 +1303,13 @@ void DoGrudgeLightning() playervar "DoGrudgeLightning"{
                     "- receive heal 50%";
 
                 define dist = DistanceBetween(EyePosition(), landPos);
-                aimPos = AimingPositionIgnorePlayerWithLimit(40);
+                aimPos = AimingPosition(40, null);
                 scatter = dist * 0.04;
+
+                // get inside sight players
                 targets = PlayersInViewAngle(ep, EnemyTeamOf(ep), 4);
+                // add ryacast hit player
+                targets[Last(targets)] = AimingPlayer(40, EnemyTeamOf(ep));
                 SetStatus(targets, ep, Status.Stunned, 0.5);
                 Damage(targets, ep, 40);
                 PlayEffect(AllPlayers(), PlayEffect.DebuffImpactSound, Color.White, ep, 50);
@@ -1336,7 +1341,7 @@ void DoGrudgeFireBall() playervar "DoGrudgeFireBall"{
         grudgePower = 0;
 
         define ballPos = EyePosition() + Vector(0, -0.1, 0);
-        define aimPos! = AimingPositionWithLimit(40);
+        define aimPos! = AimingPosition(40, null);
         define effects! = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
             ballPos, ballSize, EffectRev.PositionAndRadius);
 
@@ -1371,7 +1376,7 @@ void DoGrudgeFireBall() playervar "DoGrudgeFireBall"{
 
 void DoStrafingRequest() playervar "DoStrafingRequest"{
     // set attack point from aimming position
-    define attackPosition! = BelowPosition(AimingPositionWithLimit(40));
+    define attackPosition! = BelowPosition(AimingPosition(40, null));
     Wait(1.5, WaitBehavior.IgnoreCondition);
 
     // config value
