@@ -742,14 +742,14 @@ define enemyAssetList:
         [
             // assetNo 30
             // tank boss with damage elite
-            [EnemyType.Boss,       Hero.Widowmaker,      12]
+            [EnemyType.Boss,       Hero.Soldier76,      12]
         ]
     ];
 
 define enemyAssetNoLotteryList: [
     // random hero asset
-    0, 0,
-    1, 1,
+    0, 0, 0, 0,
+    1, 1, 1, 1,
     2, 2, 2, 2,
     3, 3,
     4, 4,
@@ -834,7 +834,7 @@ if(
         define progressAssetInterval!;
 
         if(
-            progressStage == 0 && progress >= 15
+            progressStage == 0 && progress >= 10
         ){
             spawnRushInterval = 0;
             progressStage ++;
@@ -1476,6 +1476,9 @@ if(
     LoopIfConditionIsTrue();
 }
 
+define moreAbilityProb: DefaultPercentage();
+define moreAbilityInterval: RandomReal(0.1, 3);
+
 globalvar define moreUltProb;
 
 rule: "EnemyBot/EnemyAbility/moreUltimate"
@@ -1485,28 +1488,31 @@ if(
     IsThreatEnemy(ep) &&
     IsAlive() &&
     actionState != ActionState.Non &&
-    !IsUsingUltimate()
+    IsUsingUltimate()
 ){
-    moreUltProb = DefaultPercentage();
+    
+    moreUltProb = moreAbilityProb;
+    
     while(
         IsAlive() &&
         ProbabilityTrue(moreUltProb)
     ){
+        WaitUntil(!IsUsingUltimate(), 30);
         SetUltimateCharge(ep, DefaultPercentage());
-        Wait(RandomReal(0, 3), WaitBehavior.IgnoreCondition);
+        WaitUntilServerFree();
+        Wait(moreAbilityInterval, WaitBehavior.AbortWhenFalse);
         PressButton(ep, Button.Ultimate);
-        Wait(0.1, WaitBehavior.IgnoreCondition);
-        WaitUntil(!IsUsingUltimate(), MaxValue());
     }
+
     moreUltProb = 0;
-    Wait(1, WaitBehavior.IgnoreCondition);
+    WaitUntil(!IsUsingUltimate(), 30);
 }
 
 globalvar define decreaseProb =
     WorkshopSettingReal("Enemy Bot Settings", "(General & Boss) Rapid-Fire-Ultimate Termination Scale", 1.0, 0, 10, 5) *
     10;
 
-rule: "EnemyBot/EnemyAbility/decreasemultiUltimate"
+rule: "EnemyBot/EnemyAbility/decreaseMultiUltimateProb"
 Event.OngoingGlobal
 if(
     moreUltProb > 0
@@ -1515,6 +1521,69 @@ if(
     Wait(1.0, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
+
+// rule: "EnemyBot/EnemyAbility/moreAbility1"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == enemyTeam &&
+//     IsThreatEnemy(ep) &&
+//     IsAlive() &&
+//     actionState != ActionState.Non &&
+//     IsUsingAbility1()
+// ){
+//     while(
+//         IsAlive() &&
+//         ProbabilityTrue(moreAbilityProb)
+//     ){
+//         WaitUntil(!IsUsingAbility1(), 30);
+//         AddAbilityStock(Button.Ability1, 1);
+//         WaitUntilServerFree();
+//         Wait(moreAbilityInterval, WaitBehavior.AbortWhenFalse);
+//         PressButton(ep, Button.Ability1);
+//     }
+// }
+
+// rule: "EnemyBot/EnemyAbility/moreAbility2"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == enemyTeam &&
+//     IsThreatEnemy(ep) &&
+//     IsAlive() &&
+//     actionState != ActionState.Non &&
+//     IsUsingAbility2()
+// ){
+//     while(
+//         IsAlive() &&
+//         ProbabilityTrue(moreAbilityProb)
+//     ){
+//         WaitUntil(!IsUsingAbility2(), 30);
+//         AddAbilityStock(Button.Ability2, 1);
+//         WaitUntilServerFree();
+//         Wait(moreAbilityInterval, WaitBehavior.AbortWhenFalse);
+//         PressButton(ep, Button.Ability2);
+//     }
+// }
+
+// rule: "EnemyBot/EnemyAbility/moreSecondary"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == enemyTeam &&
+//     IsThreatEnemy(ep) &&
+//     IsAlive() &&
+//     actionState != ActionState.Non &&
+//     IsFiringSecondary()
+// ){
+//     while(
+//         IsAlive() &&
+//         ProbabilityTrue(moreAbilityProb)
+//     ){
+//         WaitUntil(!IsFiringSecondary(), 30);
+//         AddAbilityStock(Button.SecondaryFire, 1);
+//         WaitUntilServerFree();
+//         Wait(moreAbilityInterval, WaitBehavior.IgnoreCondition);
+//         PressButton(ep, Button.SecondaryFire);
+//     }
+// }
 
 // TAG EnemyBot/SpawnInterval ----------
 
@@ -1750,6 +1819,7 @@ if(
     Wait(0.25, WaitBehavior.IgnoreCondition);   // show slow
     SetSlowMotion(DefaultPercentage());
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
+    
 }
 
 // TAG Debug ----------
