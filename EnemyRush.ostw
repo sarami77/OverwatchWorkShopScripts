@@ -298,7 +298,7 @@ define buddyAssetNoLotteryList: [
     // 20
 ];
 
-globalvar define isLockedCreateBotsByAsset = false;
+globalvar define isLockedCreateBotsByAsset! = false;
 
 void CreateBotsByAssetWithMutexLock(in define asset!, in define team!, in define addLimitNum!){ 
     // can't implement as subroutin for mutex  
@@ -923,8 +923,8 @@ define minDistToEnemyWhenTeleport: teleportAreaSize * 0.5;
 
 define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(playerTeam));
 define IsEnemyOnObject: (0 < NumberOfPlayersOnObjective(enemyTeam));
-define searchPositionInterval: 0.25;
-define searchPositionTryCountMax: 10;
+define searchPositionInterval: 0.2;
+define searchPositionTryCountMax: 5;
 
 playervar define teleportPosition;
 globalvar define commonTeleportBasePosition;
@@ -952,8 +952,8 @@ define CanEncountPosition(define position)"CanEncountPosition"{
     return canEncount;
 }
 
-define SetTeleportPositionByClosestPlayerToObject() playervar "SetTeleportPositionByClosestPlayerToObject"{
-    define isFoundTeleportPosition = false;
+define GetCanTeleportPositionByClosestPlayerToObject() playervar "GetCanTeleportPositionByClosestPlayerToObject"{
+    define canTelPosition! = null;
 
     define objectPosition = CurrentObjectPosition();
     if(objectPosition == null){
@@ -965,7 +965,7 @@ define SetTeleportPositionByClosestPlayerToObject() playervar "SetTeleportPositi
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from middle of Object and teleportBasePosition
         define searchAreaSize = teleportAreaSize;
-        teleportPosition =
+        define candidatePosition =
             NearestWalkablePosition(
                 teleportBasePosition
                     + 
@@ -980,9 +980,9 @@ define SetTeleportPositionByClosestPlayerToObject() playervar "SetTeleportPositi
 
         if(
             // can encount enemy
-            CanEncountPosition(teleportPosition)
+            CanEncountPosition(candidatePosition)
         ){
-            isFoundTeleportPosition = true;
+            canTelPosition = candidatePosition;
             break;
         }
 
@@ -990,14 +990,14 @@ define SetTeleportPositionByClosestPlayerToObject() playervar "SetTeleportPositi
         WaitRandomAfterServerFree();
     }
 
-    return isFoundTeleportPosition;
+    return canTelPosition;
 }
 
 globalvar define teleportAreaExtendSize;
 globalvar define blockedPositionPayloadAhead;
 
-define SetTeleportPositionByObjectPositionOrBlockedPosition() playervar "SetTeleportPositionByObjectPositionOrBlockedPosition"{
-    define isFoundTeleportPosition = false;
+define GetCanTeleportPositionByObjectPositionOrBlockedPosition() playervar "GetCanTeleportPositionByObjectPositionOrBlockedPosition"{
+    define canTelPosition! = null;
 
     define teleportBasePosition = CurrentObjectOnPosition();
     if(teleportBasePosition == null){
@@ -1032,7 +1032,7 @@ define SetTeleportPositionByObjectPositionOrBlockedPosition() playervar "SetTele
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from teleportBasePosition around
         define searchAreaSize = teleportAreaSize + teleportAreaExtendSize;
-        teleportPosition = 
+        define candidatePosition = 
             NearestWalkablePosition(
                 teleportBasePosition
                     +
@@ -1041,9 +1041,9 @@ define SetTeleportPositionByObjectPositionOrBlockedPosition() playervar "SetTele
 
         if(
             // can encount enemy
-            CanEncountPosition(teleportPosition)
+            CanEncountPosition(candidatePosition)
         ){
-            isFoundTeleportPosition = true;
+            canTelPosition = candidatePosition;
             break;
         }
 
@@ -1051,11 +1051,11 @@ define SetTeleportPositionByObjectPositionOrBlockedPosition() playervar "SetTele
         WaitRandomAfterServerFree();
     }
 
-    return isFoundTeleportPosition;
+    return canTelPosition;
 }
 
-define SetTeleportPositionToCommonTeleportBasePosition() playervar "SetTeleportPositionToCommonTeleportBasePosition"{
-    define isFoundTeleportPosition = false;
+define GetCanTeleportPositionToCommonTeleportBasePosition() playervar "GetCanTeleportPositionToCommonTeleportBasePosition"{
+    define canTelPosition! = null;
 
     define teleportBasePosition = commonTeleportBasePosition;
     if(teleportBasePosition == null){
@@ -1065,7 +1065,7 @@ define SetTeleportPositionToCommonTeleportBasePosition() playervar "SetTeleportP
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from teleportBasePosition around
         define searchAreaSize = teleportAreaSize;
-        teleportPosition = 
+        define candidatePosition = 
             NearestWalkablePosition(
                 teleportBasePosition
                     +
@@ -1074,9 +1074,9 @@ define SetTeleportPositionToCommonTeleportBasePosition() playervar "SetTeleportP
 
         if(
             // can encount enemy
-            CanEncountPosition(teleportPosition)
+            CanEncountPosition(candidatePosition)
         ){
-            isFoundTeleportPosition = true;
+            canTelPosition = candidatePosition;
             break;
         }
 
@@ -1084,7 +1084,7 @@ define SetTeleportPositionToCommonTeleportBasePosition() playervar "SetTeleportP
         WaitRandomAfterServerFree();
     }
 
-    return isFoundTeleportPosition;
+    return canTelPosition;
 }
 
 playervar define telBeam;
@@ -1150,8 +1150,6 @@ void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "Pla
 }
 
 void DoTeleport(define isBeamFromBody!)"DoTeleport"{
-    define isFoundTeleportPosition = false;
-
     // threat enemy combat teleport
     if(
         // general or boss
@@ -1162,39 +1160,38 @@ void DoTeleport(define isBeamFromBody!)"DoTeleport"{
         IsCloseWin(playerTeam)
     ){
         teleportPosition = CurrentObjectOnPosition() + (payloadDirection * 3);
-        isFoundTeleportPosition = true;
     }
     // set teleportPosition with update commonTeleportBasePosition
     else if(
         // has need update flag
         needUpdateCommonTeleportBasePosition
     ){
-        needUpdateCommonTeleportBasePosition = false;
-
         // set teleportPosition by calc new position
         if(
             // player on object
             IsPlayerOnObject
         ){
-            isFoundTeleportPosition = SetTeleportPositionByObjectPositionOrBlockedPosition();
+            teleportPosition = GetCanTeleportPositionByObjectPositionOrBlockedPosition();
         }
         else{
-            isFoundTeleportPosition = SetTeleportPositionByClosestPlayerToObject();
+            teleportPosition = GetCanTeleportPositionByClosestPlayerToObject();
         }
         
-        if(isFoundTeleportPosition){
-            // renew common position by teleportPosition
+        if(teleportPosition != null){
+            // renew common position
             commonTeleportBasePosition = teleportPosition;
+            needUpdateCommonTeleportBasePosition = false;
         }
     }
-    // set teleportPosition only
+    // set teleportPosition
     else{
         if(
+            commonTeleportBasePosition != null &&
             // by prob
             ProbabilityTrue(probOfReuseCommonTeleportBasePosition)
         ){
             // set teleportPosition by reuse common position
-            isFoundTeleportPosition = SetTeleportPositionToCommonTeleportBasePosition();
+            teleportPosition = GetCanTeleportPositionToCommonTeleportBasePosition();
         }
         else{
             // set teleportPosition by calc new position
@@ -1202,67 +1199,83 @@ void DoTeleport(define isBeamFromBody!)"DoTeleport"{
                 // player on object
                 IsPlayerOnObject
             ){
-                isFoundTeleportPosition = SetTeleportPositionByObjectPositionOrBlockedPosition();
+                teleportPosition = GetCanTeleportPositionByObjectPositionOrBlockedPosition();
             }
             else{
-                isFoundTeleportPosition = SetTeleportPositionByClosestPlayerToObject();
+                teleportPosition = GetCanTeleportPositionByClosestPlayerToObject();
             }
         }
     }
 
-    if(isFoundTeleportPosition){
+    if(teleportPosition != null){
         // teleport to teleportPosition
         TeleportWithEffect(isBeamFromBody);
     }
 }
 
-// TAG EnemyBot/Teleport/SetNeedUpdateCommonTeleportBasePosition ----------
-globalvar define needUpdateCommonTeleportBasePosition;
+// TAG EnemyBot/Teleport/CheckUpdateCommonTeleportBasePosition ----------
+globalvar define needUpdateCommonTeleportBasePosition!;
 
-rule: "EnemyBot/Teleport/SetNeedUpdateCommonTeleportBasePosition"
+rule: "EnemyBot/Teleport/CheckUpdateCommonTeleportBasePosition"
 Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    // set flag of update commonTeleportBasePosition
-    if(
-        // position invalid
-        commonTeleportBasePosition == null
-    ){
-        needUpdateCommonTeleportBasePosition = true;
-        // dbgHudTxt(<"com tel bs pos updt trg = <0>", "position invalid">);
-    }
-    else if(
-        // too close to near enemy
-        DistanceBetween(
-            commonTeleportBasePosition,
-            ClosestPlayerTo(commonTeleportBasePosition, playerTeam)) < minDistOfRenewCommonTeleportBasePosition        
-    ){
-        needUpdateCommonTeleportBasePosition = true;
-        // dbgHudTxt(<"com tel bs pos updt trg = <0>", "too close to near enemy">);
-    }
-    else if(
-        // player on object
-        IsPlayerOnObject &&
-        // Has not line to objectPosition or blockedPosition
-        !IsInLineOfSight(
-            PositionOffsetY1() + commonTeleportBasePosition,
-            CurrentObjectOnPosition(),
-            BarrierLOS.NoBarriersBlock)
-    ){
-        needUpdateCommonTeleportBasePosition = true;
-        // dbgHudTxt(<"com tel bs pos updt trg = <0>", "Has not line to objectPosition">);
-    }
-    else if(
-        // by prob
-        ProbabilityTrue(probOfRenewCommonTeleportBasePosition)
-    ){
-        needUpdateCommonTeleportBasePosition = true;
-        // dbgHudTxt(<"com tel bs pos updt trg = <0>", "by prob">);
+    // need check update
+    if(!needUpdateCommonTeleportBasePosition){
+        // set update flag of commonTeleportBasePosition
+
+        if(
+            // position invalid
+            commonTeleportBasePosition == null
+        ){
+            needUpdateCommonTeleportBasePosition = true;
+            // dbgHudTxt(<"com tel bs pos updt trg = <0>", "position invalid">);
+        }
+        else if(
+            // too close to near enemy
+            DistanceBetween(
+                commonTeleportBasePosition,
+                ClosestPlayerTo(commonTeleportBasePosition, playerTeam)) < minDistOfRenewCommonTeleportBasePosition        
+        ){
+            needUpdateCommonTeleportBasePosition = true;
+            // dbgHudTxt(<"com tel bs pos updt trg = <0>", "too close to near enemy">);
+        }
+        else if(
+            // player on object
+            IsPlayerOnObject &&
+            // Has not line to objectPosition or blockedPosition
+            !IsInLineOfSight(
+                PositionOffsetY1() + commonTeleportBasePosition,
+                CurrentObjectOnPosition(),
+                BarrierLOS.NoBarriersBlock)
+        ){
+            needUpdateCommonTeleportBasePosition = true;
+            // dbgHudTxt(<"com tel bs pos updt trg = <0>", "Has not line to objectPosition">);
+        }
+        else if(
+            // by prob
+            ProbabilityTrue(probOfRenewCommonTeleportBasePosition)
+        ){
+            needUpdateCommonTeleportBasePosition = true;
+            // dbgHudTxt(<"com tel bs pos updt trg = <0>", "by prob">);
+        }
     }
 
     WaitUpdateMediumCycle();
     LoopIfConditionIsTrue();
+}
+
+rule: "EnemyBot/Teleport/clearCommonTeleportBasePosition"
+Event.OnDeath
+if(
+    TeamOf() == enemyTeam &&
+    Attacker() == ep
+){
+    if(ProbabilityTrue(25)){
+        // reset position by enemy sucide of invalid position
+        needUpdateCommonTeleportBasePosition = true;
+    }
 }
 
 rule: "EnemyBot/Teleport/teleportByRespawn"
@@ -1322,18 +1335,6 @@ if(
     DoTeleport(false);
 
     LoopIfConditionIsTrue();
-}
-
-rule: "EnemyBot/Teleport/clearCommonTeleportBasePosition"
-Event.OnDeath
-if(
-    TeamOf() == enemyTeam &&
-    Attacker() == ep
-){
-    if(ProbabilityTrue(25)){
-        // reset position by enemy sucide of invalid position
-        commonTeleportBasePosition = null;
-    }
 }
 
 // TAG EnemyBot/EnemyAbility ----------
@@ -1475,6 +1476,7 @@ if(
         DoTeleport(true);
     }
 
+    WaitUntilServerFree();
     LoopIfConditionIsTrue();
 }
 
@@ -1865,15 +1867,15 @@ if(
 //         HasPayload() ? teleportAreaSize + teleportAreaExtendSize : teleportAreaSize,
 //         EffectRev.VisibleToPositionAndRadius);
 
-//     while(true){
-//         SetStatus(ap(ta), null, Status.Unkillable, MaxValue());
-//         SetRespawnMaxTime(ap(ta), 0.1);
-//         shotCallInterval = 0;
-//         spawnRushInterval = 0;
+//     // while(true){
+//     //     SetStatus(ap(ta), null, Status.Unkillable, MaxValue());
+//     //     SetRespawnMaxTime(ap(ta), 0.1);
+//     //     shotCallInterval = 0;
+//     //     spawnRushInterval = 0;
 
-//         HostPlayer().grudgePower = 100;
-//         Wait(3);
-//     }
+//     //     HostPlayer().grudgePower = 100;
+//     //     Wait(3);
+//     // }
 // }
 
 // rule: "DebugPlayerAction"
