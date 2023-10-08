@@ -663,18 +663,13 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         heroName = "Zarya";
         actionRangeMin = ActionRange.Close;
         actionRangeMax = ActionRange.Middle;
-        supportPrioloty = 0.25;
-        supportButtons = [
-            Button.Ability2
-        ];
         attackButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
             Button.Ability1
         ];
-        ability1ButtonReleaseMax = 10;
-        ability2ButtonReleaseMax = 0.5;         // to more use projected barrier
-        ability2ButtonPressMax = 0.5;           // to more use projected barrier
+        ability1ButtonReleaseMax = 15;
+        ability2ButtonReleaseMax = PreferPolingHeroUniqueAction();          // to suppress over use inmortal field (Prefer PolingHeroUniqueAction)
         break;
 
         case Hero.Zenyatta:
@@ -1208,8 +1203,8 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    IsAlive() &&
-    !IsInSpawnRoom()
+    IsAlive() //&&
+    // !IsInSpawnRoom()
 ){
     define tryFindTarget = false;
 
@@ -1480,6 +1475,25 @@ if(
 }
 
 // TAG Bot/HeroUniqueAction ----------
+void StartFacingTemporaryWithButton(define target!, define offset!, define aimTime!, define button!, define keepTime!) playervar "StartFacingTemporaryWithButton"{
+    if(HasSpawned(target)){
+        // is player
+        StartFacingPlayer(target);
+    }
+    else{
+        // is position
+        StartFacing(
+            ep, DirectionTowards(EyePosition(), target + offset),
+            facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+    }
+
+    Wait(aimTime, WaitBehavior.IgnoreCondition);
+    StartHoldingButton(ep, button);
+    Wait(keepTime, WaitBehavior.IgnoreCondition);
+    StopHoldingButton(ep, button);
+    StartFacingAimTarget();
+}
+
 void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
     // common action
     // reload
@@ -1523,32 +1537,143 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         if(enemyType == EnemyType.Zombie) return;
 
         // hero unique action
-        // Bastion
-        else if(
-            HeroOf() == Hero.Bastion
+        // Ana
+        if(
+            HeroOf() == Hero.Ana
         ){
             if(
-                AbilityCooldown(ep, Button.Ability1) <= 0 &&
-                !IsUsingAbility1() &&
-                !IsUsingUltimate()
+                UltimateChargePercent() >= 100
             ){
-                PressButton(ep, Button.Ability1);
+                // get ultimate ready or ultimate using or low helath player
+                define boostTarget! = 
+                    RandomValueInArray(
+                        FilteredArray(
+                            AllLivingPlayers(TeamOf()),
+                            (
+                                (
+                                    // ult ready
+                                    UltimateChargePercent(ae) >= 100 ||
+                                    // using ult
+                                    IsUsingUltimate(ae) ||
+                                    // low health
+                                    NormalizedHealth(ae) <= 0.25
+                                ) &&
+                                CanFindLine(ae)
+                            )
+                        )
+                    );
+
+                if(boostTarget != null){
+                    StartFacingTemporaryWithButton(boostTarget, null, 0.5, Button.Ultimate, 0);
+                }
             }
         }
-
-        // Ramattra
-        else if(
-            HeroOf() == Hero.Ramattra
+        // Baptiste
+        if(
+            HeroOf() == Hero.Baptiste
         ){
             if(
-                AbilityCooldown(ep, Button.Ability1) <= 0 &&
-                !IsUsingAbility1() &&
-                !IsUsingUltimate()
+                AbilityCooldown(ep, Button.Ability2) <= 0
             ){
-                PressButton(ep, Button.Ability1);
+                // get ultimate ready or ultimate using or low helath player
+                define protectTarget! = 
+                    RandomValueInArray(
+                        FilteredArray(
+                            AllLivingPlayers(TeamOf()),
+                            (
+                                (
+                                    // low health
+                                    NormalizedHealth(ae) <= 0.25
+                                ) &&
+                                CanFindLine(ae)
+                            )
+                        )
+                    );
+
+                if(protectTarget != null){
+                    StartFacingTemporaryWithButton(protectTarget, null, 0.5, Button.Ability2, 0);
+                }
             }
         }
+        // Zarya
+        if(
+            HeroOf() == Hero.Zarya
+        ){
+            if(
+                ProbabilityTrue(50) &&
+                AbilityCooldown(ep, Button.Ability2) <= 0
+            ){
+                // get ultimate ready or ultimate using or low helath player
+                define protectTarget! = 
+                    RandomValueInArray(
+                        FilteredArray(
+                            AllLivingPlayers(TeamOf()),
+                            (
+                                (
+                                    // low health
+                                    NormalizedHealth(ae) <= 0.5
+                                ) &&
+                                CanFindLine(ae)
+                            )
+                        )
+                    );
 
+                if(protectTarget != null){
+                    StartFacingTemporaryWithButton(protectTarget, null, 0.5, Button.Ability2, 0);
+                }
+            }
+        }
+        // Mercy
+        else if(
+            HeroOf() == Hero.Mercy
+        ){
+            if(
+                actionState == ActionState.Support
+            ){
+                // change to heal arm
+                SetWeapon(ep, 1);
+
+                if(
+                    // by target health
+                    ProbabilityTrue(100 * NormalizedHealth(aimTarget))
+                ){
+                    // boost aimTarget 
+                    StopHoldingButton(ep, Button.PrimaryFire);
+                    StartHoldingButton(ep, Button.SecondaryFire);
+
+                    // set boostTarget by ult using player
+                    define boostTarget = 
+                        RandomValueInArray(
+                            FilteredArray(
+                                AllLivingPlayers(TeamOf()),
+                                (
+                                    ae != ep &&
+                                    (
+                                        // ready ult
+                                        100 <= UltimateChargePercent(ae) ||
+                                        // using ult
+                                        IsUsingUltimate(ae)
+                                    ) &&
+                                    CanFindLine(ae)
+                                )
+                            )
+                        );
+
+                    if(boostTarget != null){
+                        StartFacingTemporaryWithButton(boostTarget, null, 0.5, Button.SecondaryFire, RandomReal(5, 10));
+                    }
+                }
+                else{
+                    // heal aimTarget
+                    StopHoldingButton(ep, Button.SecondaryFire);
+                    StartHoldingButton(ep, Button.PrimaryFire);
+                }
+            }
+            else if(actionState == ActionState.Attack){
+                // change to gun
+                SetWeapon(ep, 2);
+            }
+        }
         // Ashe
         else if(
             HeroOf() == Hero.Ashe
@@ -1592,134 +1717,6 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 enableButtonControl = true;
             }
         }
-        // Ana
-        if(
-            HeroOf() == Hero.Ana
-        ){
-            if(
-                UltimateChargePercent() >= 100
-            ){
-                // get ultimate ready or ultimate using or low helath player
-                define boostTarget! = 
-                    RandomValueInArray(
-                        FilteredArray(
-                            AllLivingPlayers(TeamOf()),
-                            (
-                                (
-                                    // ult ready
-                                    UltimateChargePercent(ae) >= 100 ||
-                                    // using ult
-                                    IsUsingUltimate(ae) ||
-                                    // low health
-                                    NormalizedHealth(ae) <= 0.25
-                                ) &&
-                                CanFindLine(ae)
-                            )
-                        )
-                    );
-
-                if(boostTarget != null){
-                    // face boostTarget
-                    StartFacingPlayer(boostTarget);
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
-                    // use nano boost
-                    PressButton(ep, Button.Ultimate);
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
-                    // restore facing
-                    StartFacingAimTarget();
-                }
-            }
-        }
-        // Baptiste
-        if(
-            HeroOf() == Hero.Baptiste
-        ){
-            if(
-                AbilityCooldown(ep, Button.Ability2) <= 0
-            ){
-                // get ultimate ready or ultimate using or low helath player
-                define protectTarget! = 
-                    RandomValueInArray(
-                        FilteredArray(
-                            AllLivingPlayers(TeamOf()),
-                            (
-                                (
-                                    // low health
-                                    NormalizedHealth(ae) <= 0.25
-                                ) &&
-                                CanFindLine(ae)
-                            )
-                        )
-                    );
-
-                if(protectTarget != null){
-                    // face boostTarget
-                    StartFacingPlayer(protectTarget);
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
-                    // use imortal field
-                    PressButton(ep, Button.Ability2);
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
-                    // restore facing
-                    StartFacingAimTarget();
-                }
-            }
-        }
-        // Mercy
-        else if(
-            HeroOf() == Hero.Mercy
-        ){
-            if(
-                actionState == ActionState.Support
-            ){
-                // change to heal arm
-                SetWeapon(ep, 1);
-
-                if(
-                    // by target health
-                    ProbabilityTrue(75 * NormalizedHealth(aimTarget))
-                ){
-                    // boost aimTarget 
-                    StopHoldingButton(ep, Button.PrimaryFire);
-                    StartHoldingButton(ep, Button.SecondaryFire);
-
-                    // set boostTarget by ult using player
-                    define boostTarget = 
-                        RandomValueInArray(
-                            FilteredArray(
-                                AllLivingPlayers(TeamOf()),
-                                (
-                                    ae != ep &&
-                                    (
-                                        // ready ult
-                                        100 <= UltimateChargePercent(ae) ||
-                                        // using ult
-                                        IsUsingUltimate(ae)
-                                    ) &&
-                                    CanFindLine(ae)
-                                )
-                            )
-                        );
-
-                    if(boostTarget != null){
-                        // face boostTarget
-                        StartFacingPlayer(boostTarget);
-                        // use damage boost
-                        Wait(RandomReal(5, 10), WaitBehavior.AbortWhenFalse);
-                        // restore facing
-                        StartFacingAimTarget();
-                    }
-                }
-                else{
-                    // heal aimTarget
-                    StopHoldingButton(ep, Button.SecondaryFire);
-                    StartHoldingButton(ep, Button.PrimaryFire);
-                }
-            }
-            else if(actionState == ActionState.Attack){
-                // change to gun
-                SetWeapon(ep, 2);
-            }
-        }
         // Sombra
         else if(
             HeroOf() == Hero.Sombra
@@ -1745,22 +1742,6 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 IsUsingAbility2()
             ){
                 PressButton(ep, Button.Ability2);
-            }
-        }
-        // Reaper
-        else if(
-            HeroOf() == Hero.Reaper
-        ){
-            // teleport enemy behind with shadow step 
-            if(
-                ProbabilityTrue(75 * NormalizedHealth()) &&
-                AbilityCooldown(ep, Button.Ability2) <= 0 &&
-                DistanceBetween(ep, aimTarget) > ActionRange.Close
-            ){
-                // use shadow step
-                PressButton(ep, Button.Ability2);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-                PressButton(ep, Button.PrimaryFire);
             }
         }
         // LifeWeever
@@ -1789,6 +1770,51 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 Wait(0.1, WaitBehavior.IgnoreCondition);
                 // restore facing
                 StartFacingAimTarget();
+            }
+        }
+        // Widowmaker
+        else if(
+            HeroOf() == Hero.Widowmaker
+        ){
+            // using infra sight
+            if(
+                IsUsingUltimate()
+            ){
+                // Improve accuracy
+                aimScatter = 0.0;
+            }
+            else{
+                aimScatter = 0.1;
+            }
+
+            // fallback by graple hook
+            if(
+                ProbabilityTrue(75) &&
+                DistanceBetween(ep, aimTarget) <= ActionRange.Close
+            ){
+                if(
+                    AbilityCooldown(ep, Button.Ability1) <= 0 &&
+                    IsBlockedBetween(
+                        EyePosition(ep),
+                        EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * 16)
+                    )
+                ){
+                    // use graple at backword
+                    StopMove(ep);
+                    StartFacingPlayerRetreatPosition(aimTarget, RandomReal(2, 5));
+                    Wait(0.5, WaitBehavior.IgnoreCondition);
+                    PressButton(ep, Button.Ability1);
+                    Wait(0.1, WaitBehavior.IgnoreCondition);
+                    // restore aiming
+                    StartHoldingButton(ep, Button.SecondaryFire);
+                    // restore facing
+                    StartFacingAimTarget();
+                }
+                else if(ProbabilityTrue(50)){
+                    // fallback by non aiming fire
+                    StopHoldingButton(ep, Button.SecondaryFire);
+                    StartHoldingButton(ep, Button.PrimaryFire);
+                }
             }
         }
         // Lucio
@@ -1825,6 +1851,59 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 StartMove(ep);
             }
         }
+        // Reaper
+        else if(
+            HeroOf() == Hero.Reaper
+        ){
+            // teleport enemy behind with shadow step 
+            if(
+                ProbabilityTrue(75 * NormalizedHealth()) &&
+                AbilityCooldown(ep, Button.Ability2) <= 0 &&
+                DistanceBetween(ep, aimTarget) > ActionRange.Close
+            ){
+                // use shadow step
+                PressButton(ep, Button.Ability2);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+                PressButton(ep, Button.PrimaryFire);
+            }
+        }
+        // WreckingBall
+        else if(
+            HeroOf() == Hero.WreckingBall
+        ){
+            // use graple hook and tackle
+            if(
+                ProbabilityTrue(75) &&
+                AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
+                IsBlockedBetween(
+                    EyePosition(ep),
+                    EyePosition(ep) + (VectorWithOutY(FacingDirectionOf(ep)) * 20)
+                )
+            ){
+                // stop buton control for reduce ball form cancel by fire
+                enableButtonControl = false;
+                // use graple at target above
+                StartFacingPlayerAbovePosition(aimTarget, 5);
+                Wait(0.5, WaitBehavior.IgnoreCondition);
+                StartHoldingButton(ep, Button.SecondaryFire);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+                // restore facing
+                StartFacingAimTarget();
+            }
+            // use pile driver
+            if(
+                ProbabilityTrue(75) &&
+                AbilityCooldown(ep, Button.Crouch) <= 0
+            ){
+                if(IsOnGround()){
+                    // jump for pile driver
+                    ApplyImpulse(ep, Up(),
+                        10, Relative.ToWorld, ContraryMotion.Cancel);
+                    Wait(RandomReal(0.5, 1), WaitBehavior.IgnoreCondition);
+                }
+                PressButton(ep, Button.Crouch);
+            }
+        }
         // Torbjorn
         else if(
             HeroOf() == Hero.Torbjorn
@@ -1853,89 +1932,6 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             else{
                 // change to gun
                 SetWeapon(ep, 1);
-            }
-        }
-        // Widowmaker
-        else if(
-            HeroOf() == Hero.Widowmaker
-        ){
-            // fallback by graple hook
-            if(
-                ProbabilityTrue(75) &&
-                DistanceBetween(ep, aimTarget) <= ActionRange.Close
-            ){
-                if(
-                    AbilityCooldown(ep, Button.Ability1) <= 0 &&
-                    IsBlockedBetween(
-                        EyePosition(ep),
-                        EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * 16)
-                    )
-                ){
-                    // use graple at backword
-                    StopMove(ep);
-                    StartFacingPlayerRetreatPosition(aimTarget, RandomReal(2, 5));
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
-                    PressButton(ep, Button.Ability1);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                    // restore aiming
-                    StartHoldingButton(ep, Button.SecondaryFire);
-                    // restore facing
-                    StartFacingAimTarget();
-                }
-                else if(ProbabilityTrue(50)){
-                    // fallback by non aiming fire
-                    StopHoldingButton(ep, Button.SecondaryFire);
-                    StartHoldingButton(ep, Button.PrimaryFire);
-                }
-            }
-
-            // using infra sight
-            if(
-                IsUsingUltimate()
-            ){
-                // Improve accuracy
-                aimScatter = 0.0;
-            }
-            else{
-                aimScatter = 0.1;
-            }
-        }
-        // WreckingBall
-        else if(
-            HeroOf() == Hero.WreckingBall
-        ){
-            // use graple hook and tackle
-            if(
-                ProbabilityTrue(75) &&
-                AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
-                IsBlockedBetween(
-                    EyePosition(ep),
-                    EyePosition(ep) + (VectorWithOutY(FacingDirectionOf(ep)) * 20)
-                )
-            ){
-                // stop buton control for reduce ball form cancel by fire
-                enableButtonControl = false;
-                // use graple at target above
-                StartFacingPlayerAbovePosition(aimTarget, 5);
-                Wait(0.5, WaitBehavior.IgnoreCondition);
-                StartHoldingButton(ep, Button.SecondaryFire);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-                // restore facing
-                StartFacingAimTarget();
-            }
-
-            // use pile driver
-            if(
-                ProbabilityTrue(75) &&
-                AbilityCooldown(ep, Button.Crouch) <= 0
-            ){
-                if(IsOnGround()){
-                    // jump for pile driver
-                    ApplyImpulse(ep, Up(),
-                        10, Relative.ToWorld, ContraryMotion.Cancel);
-                    Wait(RandomReal(0.5, 1), WaitBehavior.IgnoreCondition);
-                }
-                PressButton(ep, Button.Crouch);
             }
         }
         // Zenyatta
@@ -1968,6 +1964,32 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 StartHoldingButton(ep, Button.Jump);
                 Wait(0.5, WaitBehavior.AbortWhenFalse);
                 StopHoldingButton(ep, Button.Jump);
+            }
+        }
+        // Bastion
+        else if(
+            HeroOf() == Hero.Bastion
+        ){
+            if(
+                ProbabilityTrue(75) &&
+                AbilityCooldown(ep, Button.Ability1) <= 0 &&
+                !IsUsingAbility1() &&
+                !IsUsingUltimate()
+            ){
+                PressButton(ep, Button.Ability1);
+            }
+        }
+        // Ramattra
+        else if(
+            HeroOf() == Hero.Ramattra
+        ){
+            if(
+                ProbabilityTrue(75) &&
+                AbilityCooldown(ep, Button.Ability1) <= 0 &&
+                !IsUsingAbility1() &&
+                !IsUsingUltimate()
+            ){
+                PressButton(ep, Button.Ability1);
             }
         }
     }
