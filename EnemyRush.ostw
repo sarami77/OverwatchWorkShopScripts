@@ -179,6 +179,32 @@ if(
     }
 }
 
+// TAG Buddy/BotActive ----------
+define canBuddyBotActive:
+    IsAlive();
+
+rule: "EnemyBot/BotActive/activate"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned() &&
+    canBuddyBotActive
+){
+    isBotActive = true;
+}
+
+rule: "Buddy/BotActive/deactive"
+Event.OngoingPlayer
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot() &&
+    HasSpawned() &&
+    !canBuddyBotActive
+){
+    isBotActive = false;
+}
+
 // TAG Buddy/Config ----------
 rule: "Buddy/Config/SetWatchUpdateRate"
 Event.OngoingPlayer
@@ -437,6 +463,33 @@ if(
 }
 
 
+// TAG EnemyBot/BotActive ----------
+define canEnemyBotActive:
+    IsAlive() &&
+    !IsInSpawnRoom();
+
+rule: "EnemyBot/BotActive/activate"
+Event.OngoingPlayer
+if(
+    TeamOf() == enemyTeam &&
+    IsDummyBot() &&
+    HasSpawned() &&
+    canEnemyBotActive    
+){
+    isBotActive = true;
+}
+
+rule: "EnemyBot/BotActive/deactive"
+Event.OngoingPlayer
+if(
+    TeamOf() == enemyTeam &&
+    IsDummyBot() &&
+    HasSpawned() &&
+    !canEnemyBotActive
+){
+    isBotActive = false;
+}
+
 // TAG EnemyBot/Config ----------
 define basicSpawnTimeMin: 
     confirmGameDifficulty == GameDifficulty.EASY ?      10.0 :
@@ -499,6 +552,9 @@ if(
     enemyType != EnemyType.Non &&
     confirmGameDifficulty != GameDifficulty.NO_VOTE
 ){
+    // enemy bot don't retreat
+    enableRetreat = false;
+
     // setEnemyType
     if(enemyType == EnemyType.Minion){
         StartForcingDummyBotName(ep, "Minion");
@@ -579,9 +635,6 @@ if(
             OutlineType.Default
         ); 
     }
-
-    // enemy bot don't retreat
-    enableRetreat = false;
 
     // update params
     UpdateEachDealtDamage();
@@ -717,7 +770,7 @@ define enemyAssetList:
         // progress asset
         [
             // assetNo 20
-            // damage boss with minion
+            // damage boss
             [EnemyType.Boss,        favDamage,          1],
             [EnemyType.Elite,       RandomHero,         4],
             [EnemyType.Minion,      RandomHero,         7]
@@ -731,13 +784,20 @@ define enemyAssetList:
         ],
         [
             // assetNo 22
-            // tank boss with damage elite
+            // tank boss
             [EnemyType.Boss,        favTank,            1],
             [EnemyType.Elite,       favDamage,          4],
             [EnemyType.Minion,      RandomHero,         7]
         ],
-        // 23,24,25,26,27,28,29,
-        [],[],[],[],[],[],[],
+        [
+            // assetNo 23
+            // double damage boss
+            [EnemyType.Boss,        favDamage,          1],
+            [EnemyType.Boss,        favDamage,          1],
+            [EnemyType.Minion,      RandomHero,         10]
+        ],
+        // 24,25,26,27,28,29,
+        [],[],[],[],[],[],
 
         // debug asset
         [
@@ -826,39 +886,48 @@ if(
     initCompleted &&
     IsGameInProgress()
 ){
-    define progressStage = 0;
-    define fisrtStageProgress = RandomValueInArray([10, 20]);
+    define progressStage! = 0;
 
     while(true){
-        define progress = TotalObjectProgress();
-
+        define progress! = TotalObjectProgress();
         define progressAssetNo! = -1;
         define progressAssetInterval!;
 
         if(
-            progressStage == 0 && progress >= fisrtStageProgress
+            progressStage == 0 && progress >= 10
         ){
-            spawnRushInterval = 0;
+            if(!HasPayload()){
+                spawnRushInterval = 0;
+            }
             progressStage ++;
         }
         else if(
-            progressStage == 1 && progress >= 30
+            progressStage == 1 && progress >= 20
+        ){
+            if(!HasPayload()){
+                spawnRushInterval = 0;
+                shotCallInterval = 0;
+            }
+            progressStage ++;
+        }
+        else if(
+            progressStage == 2 && progress >= 30
         ){
             progressAssetNo = 20;
             progressAssetInterval = (AssetChangeInterval() - 60);
             progressStage ++;
         }
         else if(
-            progressStage == 2 && progress >= 60
+            progressStage == 3 && progress >= 60
         ){
             progressAssetNo = 21;
             progressAssetInterval = (AssetChangeInterval() - 60);
             progressStage ++;
         }
         else if(
-            progressStage == 3 && progress >= (FinaleProgress() - 5)
+            progressStage == 4 && progress >= (FinaleProgress() - 5)
         ){
-            progressAssetNo = 22;
+            progressAssetNo = RandomValueInArray([22, 23]);
             progressAssetInterval = MaxValue();
             progressStage ++;
         }
@@ -915,9 +984,9 @@ define isInCombat:
 // TAG EnemyBot/Teleport ----------
 define teleportAreaSize: HasPayload() ? ActionRange.Close : ActionRange.Middle;
 define teleportAreaOffsetDistFromPayload: ActionRange.Far;
-define teleportAreaExtendScaleByBlockedAheadDist: 0.4;
+define teleportAreaExtendScaleByBlockedAheadDist: 0.5;
 define minDistOfRenewCommonTeleportBasePosition: teleportAreaSize * 0.5;
-define probOfRenewCommonTeleportBasePosition: 5;
+define probOfRenewCommonTeleportBasePosition: 10;
 define probOfReuseCommonTeleportBasePosition: 90;
 define minDistToEnemyWhenTeleport: teleportAreaSize * 0.5;
 
