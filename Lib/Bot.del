@@ -998,7 +998,7 @@ void StartMove(define player!) playervar "StartMove"{
     }
 }
 
-void StopMove(define player) playervar "StopMove"{
+void StopMove(define player!) playervar "StopMove"{
     if(noMoving) return;
     
     player.moveDirFB = NoDirection();
@@ -1023,7 +1023,7 @@ void StartFacingAimTarget() playervar "StartFacingAimTarget"{
     }
 }
 
-define aimPosition(in define player): 
+define aimPosition(in define player!): 
     (
         IsInAlternateForm(player) ?
         EyePosition(player) - Vector(0, 0.6, 0)     // body position
@@ -1041,20 +1041,20 @@ playervar define isBotActive;
 playervar define actionState;
 playervar define aimTarget;
 
-define CanFindRange(in define player) :
+define CanFindRange(in define player!) :
     player != null &&
     DistanceBetween(ep, player) <= ActionRange.CanFind;
 
-define CanFindLine(in define player) :
+define CanFindLine(in define player!) :
     player != null &&
     IsInLineOfSight(EyePosition(ep), EyePosition(player), BarrierLOS.NoBarriersBlock);
 
-define IsSighted(in define player):
+define IsSighted(in define player!):
     TeamOf(ep) == TeamOf(player)        ? IsSightedAsFriend(player) :
     TeamOf(ep) == EnemyTeamOf(player)   ? IsSightedAsEnemy(player) :
         false;
 
-define IsSightedAsEnemy(in define player):
+define IsSightedAsEnemy(in define player!):
     // valid param
     player != null &&
     // is enemy team
@@ -1074,7 +1074,7 @@ define IsSightedAsEnemy(in define player):
     // for debug
     // !(player == hp && IsCrouching(player));
 
-define IsSightedAsFriend(in define player):
+define IsSightedAsFriend(in define player!):
     // valid param
     player != null &&
     // is player team
@@ -1210,8 +1210,8 @@ if(
     aimTarget = null;
     // apply next state
     SetActionState(ep, GetNextActionState());
-    Wait(3, WaitBehavior.AbortWhenFalse);
-    LoopIfConditionIsTrue();
+    Wait(1, WaitBehavior.AbortWhenFalse);
+    Loop();
 }
 
 rule: "Bot/ActionState/StateControl"
@@ -1309,9 +1309,10 @@ Event.OnDeath
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     Victim() == ep
 ){
+    AbortIf(!isBotActive);
+
     // reset target
     aimTarget = null;
     // apply next state
@@ -1323,13 +1324,14 @@ Event.OnElimination
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     IsAlive() &&
     (
         actionState != ActionState.Non &&
         Victim() == aimTarget
     )
 ){
+    AbortIf(!isBotActive);
+
     // find next target
     FindTarget();
     // apply next state
@@ -1341,13 +1343,14 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     IsAlive() &&
     (
         actionState == ActionState.Support &&
         NormalizedHealth(aimTarget) >= fullHealthScale
     )
 ){
+    AbortIf(!isBotActive);
+
     // find next target
     FindTarget();
     // apply next state
@@ -1365,6 +1368,7 @@ if(
         Attacker() != ep
     )
 ){
+    AbortIf(!isBotActive);
     WaitUntilServerFree();
     
     if(
@@ -1440,13 +1444,12 @@ if(
     isCallAttackCoolingDown1 ||
     isCallAttackCoolingDown2
 ){
-    Wait(2.0, WaitBehavior.IgnoreCondition);
+    Wait(3.0, WaitBehavior.IgnoreCondition);
 
     isCallAttackCoolingDown1 = false;
     isCallAttackCoolingDown2 = false;
     Loop();
 }
-
 
 // TAG Bot/ActionState/Non ----------
 rule: "Bot/ActionState/Non"
@@ -1480,12 +1483,13 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     (
         actionState == ActionState.Attack ||
         actionState == ActionState.Support
     )
 ){
+    AbortIf(!isBotActive);
+
     // start button control
     enableButtonControl = true;
 
@@ -2043,9 +2047,10 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     IsUsingUltimate()
 ){
+    AbortIf(!isBotActive);
+    
     define isPositionMoveUltmate!;
     define waitForStartMove!;
     define moveSpeed!;
@@ -2125,10 +2130,11 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     UltimateChargePercent() >= DefaultPercentage() &&
     IsButtonHeld(ep, Button.Ultimate)
 ){
+    AbortIf(!isBotActive);
+
     define isPositionAimUltmate!;
     define isRotateProb!;
     
@@ -2172,10 +2178,11 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
     IsButtonHeld(ep, Button.SecondaryFire)
 ){
+    AbortIf(!isBotActive);
+
     define isPositionAimSecondary!;
 
     if(
@@ -2211,9 +2218,10 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     IsFiringSecondary()
 ){
+    AbortIf(!isBotActive);
+
     define isPositionFixSecondary!;
 
     if(
@@ -2451,7 +2459,6 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     isRepeatFiring
 ){
     // button repeat during
@@ -2496,9 +2503,10 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     enableButtonControl
 ){
+    AbortIf(!isBotActive);
+
     StartButtonControl(
         [
             Button.PrimaryFire,
@@ -2517,9 +2525,10 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     enableButtonControl
 ){
+    AbortIf(!isBotActive);
+
     StartButtonControl(
         [
             Button.SecondaryFire,
@@ -2538,9 +2547,10 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     enableButtonControl
 ){
+    AbortIf(!isBotActive);
+
     StartButtonControl(
         [
             Button.Ability1,
@@ -2559,9 +2569,10 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     enableButtonControl
 ){
+    AbortIf(!isBotActive);
+
     StartButtonControl(
         [
             Button.Ability2,
@@ -2580,10 +2591,11 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     enableButtonControl &&
     UltimateChargePercent() >= DefaultPercentage()
 ){
+    AbortIf(!isBotActive);
+    
     StartButtonControl(
         [
             Button.Ultimate,
@@ -2602,9 +2614,10 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     enableButtonControl
 ){
+    AbortIf(!isBotActive);
+
     StartButtonControl(
         [
             Button.Crouch,
@@ -2623,9 +2636,10 @@ Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     enableButtonControl
 ){
+    AbortIf(!isBotActive);
+
     StartButtonControl(
         [
             Button.Jump,
