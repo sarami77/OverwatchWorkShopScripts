@@ -476,7 +476,10 @@ if(
     HasSpawned() &&
     canEnemyBotActive    
 ){
-    if(IsInLineOfSight(EyePosition(ep), EyePosition(ClosestPlayerTo(ep, EnemyTeamOf(ep))))){
+    if(
+        NormalizedHealth() < 1.0 ||
+        IsInLineOfSight(EyePosition(), EyePosition(ClosestPlayerTo(ep, EnemyTeamOf(ep))))
+    ){
         isBotActive = true;
         Abort();
     }
@@ -521,21 +524,23 @@ define autoTuneDmgDltLimit:
                                                         100 ;
 
 define upValueBase: 1.0;
-define upValueScale:
+define upValueScale: 1.5;
+/*
     confirmGameDifficulty == GameDifficulty.EASY ?      upValueBase * 1.00: 
     confirmGameDifficulty == GameDifficulty.NORMAL ?    upValueBase * 1.25: 
     confirmGameDifficulty == GameDifficulty.HARD ?      upValueBase * 1.50: 
     confirmGameDifficulty == GameDifficulty.HELL ?      upValueBase * 1.75: 
     confirmGameDifficulty == GameDifficulty.INSANE ?    upValueBase * 2.00: 
                                                         2.00;
+*/
 
-define downValueBase: 0.5;
+define downValueBase: 1.0;
 define downValueScale:
-    confirmGameDifficulty == GameDifficulty.EASY ?      downValueBase * 2.00 :
-    confirmGameDifficulty == GameDifficulty.NORMAL ?    downValueBase * 1.75 :
-    confirmGameDifficulty == GameDifficulty.HARD ?      downValueBase * 1.50 :
-    confirmGameDifficulty == GameDifficulty.HELL ?      downValueBase * 1.25 :
-    confirmGameDifficulty == GameDifficulty.INSANE ?    downValueBase * 1.00 :
+    confirmGameDifficulty == GameDifficulty.EASY ?      downValueBase * 3.0 :
+    confirmGameDifficulty == GameDifficulty.NORMAL ?    downValueBase * 2.5 :
+    confirmGameDifficulty == GameDifficulty.HARD ?      downValueBase * 2.0 :
+    confirmGameDifficulty == GameDifficulty.HELL ?      downValueBase * 1.5 :
+    confirmGameDifficulty == GameDifficulty.INSANE ?    downValueBase * 1.0 :
                                                         1.00;
 
 // TAG EnemyBot/EnemyType ----------
@@ -604,8 +609,8 @@ if(
 
         eachDeathCost =         500;
         SetMaxHealth(ep,        500);
-        SetHealingDealt(ep,     250 * heroDealHealScale);
-        SetHealingReceived(ep,  250);
+        SetHealingDealt(ep,     200 * heroDealHealScale);
+        SetHealingReceived(ep,  200);
 
         eachDealtDamageScale =  1.5;
         eachChargeUltInterval = 15;
@@ -621,8 +626,8 @@ if(
 
         eachDeathCost =         1000;
         SetMaxHealth(ep,        1000);
-        SetHealingDealt(ep,     250 * heroDealHealScale);
-        SetHealingReceived(ep,  250);
+        SetHealingDealt(ep,     200 * heroDealHealScale);
+        SetHealingReceived(ep,  200);
 
         eachDealtDamageScale =  1.5;
         eachChargeUltInterval = 15;
@@ -808,7 +813,7 @@ define enemyAssetList:
             // double damage boss
             [EnemyType.Boss,        favDamage,          1],
             [EnemyType.Boss,        favDamage,          1],
-            [EnemyType.Minion,      RandomHero,         10]
+            [EnemyType.Minion,      RandomSupportHero,  10]
         ],
         // 24,25,26,27,28,29,
         [],[],[],[],[],[],
@@ -835,7 +840,7 @@ define enemyAssetNoLotteryList: [
     8,
 
     // fix hero asset
-    10,
+    10, 10, 10,
     11,
     12,
     13,
@@ -1304,12 +1309,12 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    if(baseSmoke == null){
-        // base smoke
-        baseSmoke = CreateEffect(commonTeleportBasePosition != null ? AllPlayers() : null,
-            Effect.Cloud, enemyColor, commonTeleportBasePosition,
-            teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
-    }
+    // if(baseSmoke == null){
+    //     // base smoke
+    //     baseSmoke = CreateEffect(commonTeleportBasePosition != null ? AllPlayers() : null,
+    //         Effect.Cloud, enemyColor, commonTeleportBasePosition,
+    //         teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+    // }
 
     // need check update
     if(!needUpdateCommonTeleportBasePosition){
@@ -2062,7 +2067,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         // debugHuds[Last()] = CreateDebugHud("Server Load Average", ServerLoadAverage(), ServerLoadAverage() < 255 ? Color.Orange : Color.Yellow);
         // debugHuds[Last()] = CreateDebugHud("Server Load Peak", ServerLoadPeak(), ServerLoadPeak() < 255 ? Color.Orange : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("count Wait Random After Server Free", countWaitRandomAfterServerFree, Color.Orange);
+        debugHuds[Last()] = CreateDebugHud("count Detect Server Over load", countDetectServerOverload, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("count Game Logic Speed Decrease", countGameLogicSpeedDecrease, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("human player Num", HumanPlayerNum(playerTeam), HumanPlayerNum(playerTeam) <= 1 ? Color.Team2 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);

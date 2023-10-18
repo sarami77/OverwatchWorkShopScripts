@@ -687,6 +687,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
 
         case Hero.Illari:
         heroName = "Illari";
+        aimScatter = 0.3;
         actionRangeMin = ActionRange.Close;
         actionRangeMax = ActionRange.Middle;
         supportPrioloty = 1.0;
@@ -1010,7 +1011,7 @@ void StartFacingAimTarget() playervar "StartFacingAimTarget"{
     }
     else{
         StopFacing();
-        SetFacing(ep, VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))));
+        SetFacing(ep, VectorTowards(ep, CurrentObjectPosition()));
     }
 }
 
@@ -1096,7 +1097,7 @@ define FindAttackTarget()"FindAttackTarget"{
     );
 }
 
-define fullHealthScale: 0.9;
+define neadHealHealthScale: 0.9;
 
 define FindSupportTarget()"FindSupportTarget"{
     return FirstOf(
@@ -1106,7 +1107,7 @@ define FindSupportTarget()"FindSupportTarget"{
                 // not self
                 (ae != ep) &&
                 // need heal
-                (NormalizedHealth(ae) < fullHealthScale) &&
+                (NormalizedHealth(ae) < neadHealHealthScale) &&
                 // sight as friend
                 IsSightedAsFriend(ae)
             ),
@@ -1140,13 +1141,12 @@ void FindTarget()"FindTarget"{
     if(candidateTarget == null){
         // stop facing before set aimTarget for avoid invalid facing
         StopFacing(ep);
-        SetFacing(ep, VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))));
+        SetFacing(ep, VectorTowards(ep, CurrentObjectPosition()));
     }
 
     // confirm as target
     aimTarget = candidateTarget;
 
-    WaitRandomAfterServerFree();
 }
 
 define GetNextActionState()"GetNextActionState"{
@@ -1231,7 +1231,7 @@ if(
         ){
             if(
                 // heal target completed
-                NormalizedHealth(aimTarget) >= fullHealthScale ||
+                NormalizedHealth(aimTarget) >= neadHealHealthScale ||
                 // can not revive dead player
                 !(CanResurrect(ep) && !IsAlive(aimTarget))
             ){
@@ -1337,7 +1337,7 @@ if(
     IsAlive() &&
     (
         actionState == ActionState.Support &&
-        NormalizedHealth(aimTarget) >= fullHealthScale
+        NormalizedHealth(aimTarget) >= neadHealHealthScale
     )
 ){
     AbortIf(!isBotActive);
@@ -1454,7 +1454,7 @@ if(
 
     // stop facing
     StopFacing(ep);
-    SetFacing(ep, VectorTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))));
+    SetFacing(ep, VectorTowards(ep, CurrentObjectPosition()));
 
     // stop move
     StopMove(ep);
@@ -2267,7 +2267,7 @@ define BallTackleDirection()"BallTackleDirection"{
         dir = DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep)));
     }
     else{
-        dir = -DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep)));
+        dir = -1 * DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep)));
     }
     return dir;
 }
