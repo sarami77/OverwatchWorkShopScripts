@@ -828,28 +828,32 @@ void SetMoveDir() playervar "SetMoveDir"{
         objPos != null &&
         // payload escort player num is not enough
         (
+            // current on object players num
+            NumberOfPlayersOnObjective(TeamOf())
+                <
             (
-                (
                     // enemy close win
                     IsCloseWin(EnemyTeamOf(ep)) ||
                     // over time
                     IsOverTime()
-                )
                     ?
-                // 1/2 players num of team
-                NumberOfPlayers(TeamOf()) / 2
+                        // 1/2 players num of team
+                        NumberOfPlayers(TeamOf()) / 2
                     :
-                (IsTeamOnOffense(TeamOf()) ?
-                    // 3 is max paylod escort speed
-                    3
+                        (IsTeamOnOffense(TeamOf())
+                        ?
+                            // 3 is max num of payload escort speed
+                            3
                         :
-                    // 1 is min paylod stop
-                    1
+                            // enemy on object
+                            NumberOfPlayersOnObjective(EnemyTeamOf(ep)) > 0
+                            ?
+                                // 1 is min num of payload stop
+                                1
+                            :
+                                0
                 )
             )
-                >
-            // current on object players num
-            NumberOfPlayersOnObjective(TeamOf())
         )
     ){
         // set move to object
@@ -875,7 +879,7 @@ void SetMoveDir() playervar "SetMoveDir"{
                 distToTarget > (actionRangeMax * distRate) &&
                 ProbabilityTrue(
                     // by enemy density low
-                    (50 * (1 - EnemyDensityRateOfAimTarget(ActionRange.Close))) +
+                    (50 * (1 - EnemyDensityRateOfAimTargetNear(ActionRange.Close))) +
                     // by health high
                     (50 * NormalizedHealth())
                 )
@@ -2295,7 +2299,7 @@ Boolean isMatchButton(in define matchButton, in define butttons){
 define buttonControlPressScale: 1.0;
 define buttonControlReleaseScale: 1.0;
 
-define EnemyDensityRateOfAimTarget(in define dist):
+define EnemyDensityRateOfAimTargetNear(in define dist):
     CountOf(PlayersWithinRadius(aimTarget, dist, EnemyTeamOf(ep), RadiusLOS.Off)) /
     NumberOfPlayers(EnemyTeamOf(ep));
 
@@ -2379,7 +2383,7 @@ void StartButtonControl(in define bc){
 
                 if(
                     bc[ButtonControl.button] == Button.Ultimate &&
-                    !ProbabilityTrue(50 * EnemyDensityRateOfAimTarget(ActionRange.Close))
+                    ProbabilityTrue(100 * (1 - EnemyDensityRateOfAimTargetNear(ActionRange.Close)))
                 ){
                     // skip use ultimate whem alive enemies count is low
                     continue;
