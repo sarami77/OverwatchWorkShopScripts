@@ -350,6 +350,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         actionRangeMax = ActionRange.Close;
         canFireButtonCombination = true;
         supportPrioloty = 0.5;
+        primaryFireButtonPressMax = 20;
         secondaryFireButtonReleaseMax = 5;      // to suppress over use shield
         ability2ButtonReleaseMax = 1;           // to more use repair pack
         supportButtons = [
@@ -551,6 +552,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         heroName = "Reinhardt";
         actionRangeMin = ActionRange.Melee;
         actionRangeMax = ActionRange.Melee;
+        primaryFireButtonPressMax = 20;
         secondaryFireButtonReleaseMax = 5;     // to suppress over use barrier
         break;
 
@@ -1150,7 +1152,6 @@ void FindTarget()"FindTarget"{
     if(candidateTarget == null){
         // stop facing before set aimTarget for avoid invalid facing
         StopFacing(ep);
-        SetFacing(ep, VectorTowards(ep, CurrentObjectPosition()));
     }
 
     // confirm as target
@@ -1190,10 +1191,6 @@ define GetNextActionState()"GetNextActionState"{
 void SetActionState(define player, define nextActionState) "SetActionState"{
     // if state changed
     if(nextActionState != player.actionState){
-        // reset for button control reload
-        enableButtonControl = false;
-        // wait for run disable button control rule
-        Wait(0.1, WaitBehavior.IgnoreCondition);
         // set next state
         player.actionState = nextActionState;        
     }
@@ -1299,9 +1296,9 @@ if(
         SetActionState(ep, GetNextActionState());
     }
 
-    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     WaitRandomAfterServerFree();
-    LoopIfConditionIsTrue();
+    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    Loop();
 }
 
 rule: "Bot/ActionState/SetNonStateByDead"
@@ -1467,12 +1464,13 @@ if(
     // stop move
     StopMove(ep);
 
-    // hero unique action
-    PolingHeroUniqueAction();
-
-    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    WaitRandomAfterServerFree();
-    LoopIfConditionIsTrue();
+    while(true){
+        // hero unique action
+        PolingHeroUniqueAction();
+        
+        WaitRandomAfterServerFree();
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    }
 }
 
 // TAG Bot/ActionState/AttackOrSupport ----------
@@ -1488,24 +1486,29 @@ if(
 ){
     AbortIf(!isBotActive);
 
+    // reset for button control reload
+    enableButtonControl = false;
+    // wait for run disable button control rule
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
     // start button control
     enableButtonControl = true;
 
-    // start facing
-    StartFacingAimTarget();
+    while(true){
+        // start facing
+        StartFacingAimTarget();
 
-    // set moveDir for combat
-    SetMoveDir();
+        // set moveDir for combat
+        SetMoveDir();
 
-    // start move by moveDir
-    StartMove(ep);
+        // start move by moveDir
+        StartMove(ep);
 
-    // hero unique action
-    PolingHeroUniqueAction();
+        // hero unique action
+        PolingHeroUniqueAction();
 
-    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    WaitRandomAfterServerFree();
-    LoopIfConditionIsTrue();
+        WaitRandomAfterServerFree();
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    }
 }
 
 // TAG Bot/HeroUniqueAction ----------
