@@ -271,7 +271,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
     crouchButtonPressMax = 1;
 
     jumpButtonReleaseMin = 0;
-    jumpButtonReleaseMax = 10;
+    jumpButtonReleaseMax = 5;
     jumpButtonPressMin = 0;
     jumpButtonPressMax = 1;
 
@@ -373,6 +373,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         ability2ButtonReleaseMin = 3;
         secondaryFireButtonPressMin = 1.3;      // to charge enough rocket punch
         secondaryFireButtonPressMax = 1.5;      // to suppress charge over rocket punch
+        jumpButtonReleaseMax = 10;              // to to suppress cancel rocket punch
         break;
 
         case Hero.Dva:
@@ -785,15 +786,6 @@ void SetMoveDir() playervar "SetMoveDir"{
                 )
             );
 
-        // find near guard as not support
-        define nearGuard = 
-            FirstOf(
-                SortedArray(
-                    notSupportPlayers,
-                    DistanceBetween(ep, ae)
-                )
-            );
-
         // found support player and far
         if(
             nearHealer != null &&
@@ -804,22 +796,34 @@ void SetMoveDir() playervar "SetMoveDir"{
             moveDirFB = NoDirection();
             moveDirLR = NoDirection();
         }
-        // found guard player and far
-        else if(
-            nearGuard != null &&
-            DistanceBetween(ep, nearGuard) > ActionRange.Close
-        ){
-            // set moveTarget by near guard
-            moveTarget = nearGuard;
-            moveDirFB = NoDirection();
-            moveDirLR = NoDirection();
-        }
+        
         else{
-            // set move to back
-            moveTarget = null;
-            moveDirFB = Backward();
-            moveDirLR = RandomValueInArray([NoDirection(), Right(), Left()]);
-        }
+            // find near guard as not support
+            define nearGuard = 
+                FirstOf(
+                    SortedArray(
+                        notSupportPlayers,
+                        DistanceBetween(ep, ae)
+                    )
+                );
+
+            // found guard player and far
+            if(
+                nearGuard != null &&
+                DistanceBetween(ep, nearGuard) > ActionRange.Close
+            ){
+                // set moveTarget by near guard
+                moveTarget = nearGuard;
+                moveDirFB = NoDirection();
+                moveDirLR = NoDirection();
+            }
+            else{
+                // set move to back
+                moveTarget = null;
+                moveDirFB = Backward();
+                moveDirLR = RandomValueInArray([NoDirection(), Right(), Left()]);
+            }
+        } 
     }
 
     // move to object for secure
@@ -832,27 +836,29 @@ void SetMoveDir() playervar "SetMoveDir"{
             NumberOfPlayersOnObjective(TeamOf())
                 <
             (
-                    // enemy close win
-                    IsCloseWin(EnemyTeamOf(ep)) ||
-                    // over time
-                    IsOverTime()
-                    ?
-                        // 1/2 players num of team
-                        NumberOfPlayers(TeamOf()) / 2
-                    :
-                        (IsTeamOnOffense(TeamOf())
+                // enemy close win
+                IsCloseWin(EnemyTeamOf(ep))
+                ?
+                    // 1/2 players num of team
+                    NumberOfPlayers(TeamOf()) / 2
+                :
+                    (
+                        // offense team
+                        IsTeamOnOffense(TeamOf())
                         ?
                             // 3 is max num of payload escort speed
                             3
                         :
-                            // enemy on object
-                            NumberOfPlayersOnObjective(EnemyTeamOf(ep)) > 0
-                            ?
-                                // 1 is min num of payload stop
-                                1
-                            :
-                                0
-                )
+                            (
+                                // enemy on object
+                                NumberOfPlayersOnObjective(EnemyTeamOf(ep)) > 0
+                                ?
+                                    // 1 is min num of payload stop
+                                    1
+                                :
+                                    0
+                            )
+                    )
             )
         )
     ){
@@ -1015,7 +1021,6 @@ void StartFacingAimTarget() playervar "StartFacingAimTarget"{
     }
     else{
         StopFacing();
-        SetFacing(ep, VectorTowards(ep, CurrentObjectPosition()));
     }
 }
 
@@ -1458,7 +1463,6 @@ if(
 
     // stop facing
     StopFacing(ep);
-    SetFacing(ep, VectorTowards(ep, CurrentObjectPosition()));
 
     // stop move
     StopMove(ep);
@@ -1505,13 +1509,14 @@ if(
 }
 
 // TAG Bot/HeroUniqueAction ----------
-void StartFacingTemporaryWithButton(define target!, define offset!, define aimTime!, define button!, define keepTime!) playervar "StartFacingTemporaryWithButton"{
+void StartFacingTemporaryTargetWithButton(define target!, define offset!, define aimTime!, define button!, define keepTime!) playervar "StartFacingTemporaryTargetWithButton"{
+    // is player
     if(HasSpawned(target)){
-        // is player
+        
         StartFacingPlayer(target);
     }
+    // is position
     else{
-        // is position
         StartFacing(
             ep, DirectionTowards(EyePosition(), target + offset),
             facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
@@ -1594,7 +1599,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     );
 
                 if(boostTarget != null){
-                    StartFacingTemporaryWithButton(boostTarget, null, 0.5, Button.Ultimate, 0);
+                    StartFacingTemporaryTargetWithButton(boostTarget, null, 0.5, Button.Ultimate, 0);
                 }
             }
         }
@@ -1621,7 +1626,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     );
 
                 if(protectTarget != null){
-                    StartFacingTemporaryWithButton(protectTarget, null, 0.5, Button.Ability2, 0);
+                    StartFacingTemporaryTargetWithButton(protectTarget, null, 0.5, Button.Ability2, 0);
                 }
             }
         }
@@ -1649,7 +1654,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     );
 
                 if(protectTarget != null){
-                    StartFacingTemporaryWithButton(protectTarget, null, 0.5, Button.Ability2, 0);
+                    StartFacingTemporaryTargetWithButton(protectTarget, null, 0.5, Button.Ability2, 0);
                 }
             }
         }
@@ -1690,7 +1695,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                         );
 
                     if(boostTarget != null){
-                        StartFacingTemporaryWithButton(boostTarget, null, 0.5, Button.SecondaryFire, RandomReal(5, 10));
+                        StartFacingTemporaryTargetWithButton(boostTarget, null, 0.5, Button.SecondaryFire, RandomReal(5, 10));
                     }
                 }
                 else{
