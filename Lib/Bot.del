@@ -1192,7 +1192,7 @@ void SetActionState(define player, define nextActionState) "SetActionState"{
     // if state changed
     if(nextActionState != player.actionState){
         // set next state
-        player.actionState = nextActionState;        
+        player.actionState = nextActionState;
     }
 }
 
@@ -1218,87 +1218,88 @@ if(
     IsDummyBot() &&
     isBotActive
 ){
-    define tryFindTarget = false;
+    while(true){
+        define tryFindTarget = false;
 
-    if(IsAlive()){
-        // new target
-        if(
-            // target not Sighted
-            !IsSighted(aimTarget)
-        ){
+        if(IsAlive()){
+            // new target
+            if(
+                // target not Sighted
+                !IsSighted(aimTarget)
+            ){
+                // get new target
+                tryFindTarget = true;
+            }
+            // check target as support action
+            else if(
+                // is support role and now supporting
+                0 < supportPrioloty &&
+                actionState == ActionState.Support
+            ){
+                if(
+                    // heal target completed
+                    NormalizedHealth(aimTarget) >= neadHealHealthScale ||
+                    // can not revive dead player
+                    !(CanResurrect(ep) && !IsAlive(aimTarget))
+                ){
+                    // change target
+                    tryFindTarget = true;
+                }
+                else if(
+                    ProbabilityTrue(
+                        // by no support prioloty
+                        (50 * (1 - supportPrioloty)) +          
+                        // by support target health
+                        (50 * NormalizedHealth(aimTarget))      
+                    )
+                ){
+                    // change target 
+                    tryFindTarget = true;
+                }
+                // else{} keep target
+            }
+            // check target as attack action
+            else{
+                if(
+                    // target dead
+                    !IsAlive(aimTarget)
+                ){
+                    // change target 
+                    tryFindTarget = true;
+                }
+                else if(
+                    ProbabilityTrue(
+                        // by attack target health
+                        50 * NormalizedHealth(aimTarget) 
+                    )
+                ){
+                    // change target 
+                    tryFindTarget = true;
+                }
+                // else{} keep target
+            }
+
             // get new target
-            tryFindTarget = true;
-        }
-        // check target as support action
-        else if(
-            // is support role and now supporting
-            0 < supportPrioloty &&
-            actionState == ActionState.Support
-        ){
-            if(
-                // heal target completed
-                NormalizedHealth(aimTarget) >= neadHealHealthScale ||
-                // can not revive dead player
-                !(CanResurrect(ep) && !IsAlive(aimTarget))
-            ){
-                // change target
-                tryFindTarget = true;
+            if(tryFindTarget){
+                // find target
+                FindTarget();
             }
-            else if(
-                ProbabilityTrue(
-                    // by no support prioloty
-                    (50 * (1 - supportPrioloty)) +          
-                    // by support target health
-                    (50 * NormalizedHealth(aimTarget))      
-                )
-            ){
-                // change target 
-                tryFindTarget = true;
-            }
-            // else{} keep target
+
+            // apply next state
+            SetActionState(ep, GetNextActionState());
+            // action call to near bots
+            CallToNearBot();
         }
-        // check target as attack action
         else{
-            if(
-                // target dead
-                !IsAlive(aimTarget)
-            ){
-                // change target 
-                tryFindTarget = true;
-            }
-            else if(
-                ProbabilityTrue(
-                    // by attack target health
-                    50 * NormalizedHealth(aimTarget) 
-                )
-            ){
-                // change target 
-                tryFindTarget = true;
-            }
-            // else{} keep target
+            // reset target
+            aimTarget = null;
+            // apply next state
+            SetActionState(ep, GetNextActionState());
         }
 
-        // get new target
-        if(tryFindTarget){
-            // find target
-            FindTarget();
-        }
-
-        // apply next state
-        SetActionState(ep, GetNextActionState());
-        // action call to near bots
-        CallToNearBot();
+        WaitRandomAfterServerFree();
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
-    else{
-        // reset target
-        aimTarget = null;
-        // apply next state
-        SetActionState(ep, GetNextActionState());
-    }
-
-    WaitRandomAfterServerFree();
-    Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    Loop();
 }
 
 rule: "Bot/ActionState/SetNonStateByDead"
@@ -1473,24 +1474,52 @@ if(
     }
 }
 
-// TAG Bot/ActionState/AttackOrSupport ----------
-rule: "Bot/ActionState/AttackOrSupport"
+// TAG Bot/ActionState/Attack ----------
+rule: "Bot/ActionState/Attack"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    (
-        actionState == ActionState.Attack ||
-        actionState == ActionState.Support
-    )
+    actionState == ActionState.Attack
 ){
     AbortIf(!isBotActive);
 
     // reset for button control reload
     enableButtonControl = false;
-    // wait for run disable button control rule
     Wait(0.1, WaitBehavior.AbortWhenFalse);
-    // start button control
+    enableButtonControl = true;
+
+    while(true){
+        // start facing
+        StartFacingAimTarget();
+
+        // set moveDir for combat
+        SetMoveDir();
+
+        // start move by moveDir
+        StartMove(ep);
+
+        // hero unique action
+        PolingHeroUniqueAction();
+
+        WaitRandomAfterServerFree();
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+// TAG Bot/ActionState/Support ----------
+rule: "Bot/ActionState/Support"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    actionState == ActionState.Support
+){
+    AbortIf(!isBotActive);
+
+    // reset for button control reload
+    enableButtonControl = false;
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
     enableButtonControl = true;
 
     while(true){
@@ -1569,7 +1598,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         ){
             // melee
             PressButton(ep, Button.Melee);
-            Wait(0.5, WaitBehavior.AbortWhenFalse);
+            Wait(0.5, WaitBehavior.IgnoreCondition);
         }
 
         if(enemyType == EnemyType.Zombie) return;
@@ -1673,7 +1702,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
 
                 if(
                     // by target health
-                    ProbabilityTrue(100 * NormalizedHealth(aimTarget))
+                    ProbabilityTrue(70 * NormalizedHealth(aimTarget))
                 ){
                     // boost aimTarget 
                     StopHoldingButton(ep, Button.PrimaryFire);
@@ -1698,7 +1727,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                         );
 
                     if(boostTarget != null){
-                        StartFacingTemporaryTargetWithButton(boostTarget, null, 0.5, Button.SecondaryFire, RandomReal(5, 10));
+                        StartFacingTemporaryTargetWithButton(boostTarget, null, 0.5, Button.SecondaryFire, RandomReal(3, 6));
                     }
                 }
                 else{
@@ -1956,6 +1985,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 while(
                     // continue melee mode condition
                     ProbabilityTrue(90) &&
+                    IsAlive() &&
                     DistanceBetween(ep, aimTarget) <= ActionRange.Close
                 ){
                     // move foward for melee
@@ -1964,7 +1994,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     StartMove(ep);
                     // melee by hammer
                     PressButton(ep, Button.PrimaryFire);
-                    Wait(0.5, WaitBehavior.AbortWhenFalse);
+                    Wait(0.5, WaitBehavior.IgnoreCondition);
                 }
             }
             else{
@@ -1977,6 +2007,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             HeroOf() == Hero.Zenyatta
         ){
             while(
+                IsAlive() &&
                 IsUsingUltimate()
             ){
                 define needHealerPlayer! = FindSupportTarget();
@@ -1987,7 +2018,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     moveDirLR = Vector(XOf(localDir), 0, 0);
                     StartMove(ep);
                 }
-                Wait(0.5, WaitBehavior.AbortWhenFalse);
+                Wait(0.5, WaitBehavior.IgnoreCondition);
             }
         }
         // Illari
@@ -2000,7 +2031,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             ){
                 PressButton(ep, Button.Ability1);
                 StartHoldingButton(ep, Button.Jump);
-                Wait(0.5, WaitBehavior.AbortWhenFalse);
+                Wait(0.5, WaitBehavior.IgnoreCondition);
                 StopHoldingButton(ep, Button.Jump);
             }
         }
@@ -2678,9 +2709,9 @@ if(
 // Event.OngoingPlayer
 // if(
 //     isBotEnableTeam &&
-//     IsDummyBot() &&
-//     TeamOf() == enemyTeam &&
-//     SlotOf() <= 3
+//     IsDummyBot()
+//     // TeamOf() == enemyTeam &&
+//     // SlotOf() <= 3
 // ){
 //     // enable button text
 //     CreateInWorldText(
@@ -2694,7 +2725,7 @@ if(
 //         enableButtonControl,
 //         enableButtonBit>,
 //         EyePosition(ep) + Vector(0, 1.25, 0),
-//         0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
+//         0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
 //         isBotActive ? Color.Yellow : Color.White,
 //         Spectators.DefaultVisibility);
 

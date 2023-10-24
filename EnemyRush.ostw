@@ -571,7 +571,7 @@ if(
     // setEnemyType
     if(enemyType == EnemyType.Minion){
         StartForcingDummyBotName(ep, "Minion");
-        watchUpdateRate =       18;
+        watchUpdateRate =       10;
         
         eachDeathCost =         25;
         SetMaxHealth(ep,        25);
@@ -631,7 +631,7 @@ if(
 
         eachDealtDamageScale =  1.5;
         eachChargeUltInterval = 15;
-        eachMinSpawnInterval =  basicSpawnTimeMin * 4;
+        eachMinSpawnInterval =  basicSpawnTimeMin * 6;
         eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
         eachBodyScale =         2.5;
         StartScalingPlayer(ep, eachBodyScale, false);
@@ -1011,7 +1011,7 @@ define minDistToEnemyWhenTeleport: teleportAreaSize * 0.5;
 define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(playerTeam));
 define IsEnemyOnObject: (0 < NumberOfPlayersOnObjective(enemyTeam));
 define searchPositionInterval: 0.25;
-define searchPositionTryCountMax: 4 * 3;
+define searchPositionTryCountMax: (1 / searchPositionInterval) * 3;
 
 playervar define teleportPosition;
 globalvar define commonTeleportBasePosition;
@@ -1073,7 +1073,7 @@ define GetCanTeleportPositionByClosestPlayerToObject() playervar "GetCanTeleport
             break;
         }
 
-        WaitRandomAfterServerFree();
+        WaitUntilServerFree();
         Wait(searchPositionInterval, WaitBehavior.AbortWhenFalse);
     }
 
@@ -1134,7 +1134,7 @@ define GetCanTeleportPositionByObjectPositionOrBlockedPosition() playervar "GetC
             break;
         }
 
-        WaitRandomAfterServerFree();
+        WaitUntilServerFree();
         Wait(searchPositionInterval, WaitBehavior.AbortWhenFalse);
     }
 
@@ -1167,7 +1167,7 @@ define GetCanTeleportPositionToCommonTeleportBasePosition() playervar "GetCanTel
             break;
         }
 
-        WaitRandomAfterServerFree();
+        WaitUntilServerFree();
         Wait(searchPositionInterval, WaitBehavior.AbortWhenFalse);
     }
 
@@ -1500,15 +1500,15 @@ if(
     //     HudTextRev.Color, Spectators.VisibleAlways);
 
     // action
-    define allEnemys! = AllPlayers(enemyTeam);
-    define shotCallDelay! = RandomReal(0.3, 1.0);
-    for(define scLoopIndex! = 0; scLoopIndex < CountOf(allEnemys); scLoopIndex ++){
+    define activeEnemys! = AllPlayers(enemyTeam);
+    define shotCallDelay! = RandomReal(0.2, 1.0);
+    for(define scLoopIndex! = 0; scLoopIndex < CountOf(activeEnemys); scLoopIndex ++){
         if(
-            IsAlive(allEnemys[scLoopIndex]) &&
-            !IsInSpawnRoom(allEnemys[scLoopIndex])
+            IsAlive(activeEnemys[scLoopIndex]) &&
+            !IsInSpawnRoom(activeEnemys[scLoopIndex])
         ){
-            SetUltimateCharge(allEnemys[scLoopIndex], DefaultPercentage());
-            PressButton(allEnemys[scLoopIndex], Button.Ultimate);
+            SetUltimateCharge(activeEnemys[scLoopIndex], DefaultPercentage());
+            PressButton(activeEnemys[scLoopIndex], Button.Ultimate);
             Wait(shotCallDelay, WaitBehavior.IgnoreCondition);
             WaitUntilServerFree();
         }
@@ -1715,6 +1715,7 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     confirmSpawnInterval = ObjectProgressScaledInterval(eachMinSpawnInterval, eachMaxSpawnInterval, 0);
     confirmSpawnInterval *= spawnTimeScale;
     confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Basic Spawn Intarval Scale", 1.0, 0, 100, 1);
+    // SetRespawnMaxTime(ep, confirmSpawnInterval);
 }
 
 rule: "EnemyBot/SpawnInterval/update"
@@ -1926,54 +1927,54 @@ if(
 
 // TAG Debug ----------
 
-// rule: "DebugGlobalAction"
-// Event.OngoingGlobal
-// Team.All
-// if(
-//     initCompleted
-// ){
-//     // enemy common teleport positon icon
-//     CreateIcon(commonTeleportBasePosition != null ? hp : null,
-//         commonTeleportBasePosition + PositionOffsetY1(), Icon.Spiral,
-//         IconRev.VisibleToAndPosition, enemyColor, true);
-//     // minDistOfRenewCommon ring
-//     CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
-//         commonTeleportBasePosition + PositionOffsetY1(), minDistOfRenewCommonTeleportBasePosition, EffectRev.VisibleToPositionAndRadius);
-//     // teleportAreaSize ring
-//     CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
-//         commonTeleportBasePosition + PositionOffsetY1(), teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
-//     // object -> blockedPosition beam
-//     CreateBeamEffect(HasPayload() ? hp : null, BeamType.BadBeam, 
-//         CurrentObjectOnPosition(),
-//         blockedPositionPayloadAhead, 
-//         enemyColor, EffectRev.VisibleToPositionAndRadius);
-//     // commonTeleportBasePosition -> blockedPosition or objectPosition
-//     CreateBeamEffect(hp, BeamType.GoodBeam, 
-//         PositionOffsetY1() + commonTeleportBasePosition, 
-//         CurrentObjectOnPosition(),
-//         enemyColor, EffectRev.VisibleToPositionAndRadius);
+globalvar define countDetectTriggerServerLoadPerSecond;
+
+rule: "DebugGlobalAction"
+Event.OngoingGlobal
+Team.All
+if(
+    initCompleted
+){
+    // // enemy common teleport positon icon
+    // CreateIcon(commonTeleportBasePosition != null ? hp : null,
+    //     commonTeleportBasePosition + PositionOffsetY1(), Icon.Spiral,
+    //     IconRev.VisibleToAndPosition, enemyColor, true);
+    // // minDistOfRenewCommon ring
+    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
+    //     commonTeleportBasePosition + PositionOffsetY1(), minDistOfRenewCommonTeleportBasePosition, EffectRev.VisibleToPositionAndRadius);
+    // // teleportAreaSize ring
+    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
+    //     commonTeleportBasePosition + PositionOffsetY1(), teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+    // // object -> blockedPosition beam
+    // CreateBeamEffect(HasPayload() ? hp : null, BeamType.BadBeam, 
+    //     CurrentObjectOnPosition(),
+    //     blockedPositionPayloadAhead, 
+    //     enemyColor, EffectRev.VisibleToPositionAndRadius);
+    // // commonTeleportBasePosition -> blockedPosition or objectPosition
+    // CreateBeamEffect(hp, BeamType.GoodBeam, 
+    //     PositionOffsetY1() + commonTeleportBasePosition, 
+    //     CurrentObjectOnPosition(),
+    //     enemyColor, EffectRev.VisibleToPositionAndRadius);
         
-//     // blockedPositionPayloadAhead orb
-//     CreateEffect(HasPayload() ? hp : null,
-//         Effect.Orb, enemyColor, blockedPositionPayloadAhead,
-//         1, EffectRev.VisibleToPositionAndRadius);
-//     // placable teleportPosition area size ring
-//     CreateEffect(hp,
-//         Effect.Sphere, enemyColor,
-//         HasPayload() ? blockedPositionPayloadAhead : CurrentObjectOnPosition(),
-//         HasPayload() ? teleportAreaSize + teleportAreaExtendSize : teleportAreaSize,
-//         EffectRev.VisibleToPositionAndRadius);
+    // // blockedPositionPayloadAhead orb
+    // CreateEffect(HasPayload() ? hp : null,
+    //     Effect.Orb, enemyColor, blockedPositionPayloadAhead,
+    //     1, EffectRev.VisibleToPositionAndRadius);
+    // // placable teleportPosition area size ring
+    // CreateEffect(hp,
+    //     Effect.Sphere, enemyColor,
+    //     HasPayload() ? blockedPositionPayloadAhead : CurrentObjectOnPosition(),
+    //     HasPayload() ? teleportAreaSize + teleportAreaExtendSize : teleportAreaSize,
+    //     EffectRev.VisibleToPositionAndRadius);
 
-//     // while(true){
-//     //     SetStatus(ap(ta), null, Status.Unkillable, MaxValue());
-//     //     SetRespawnMaxTime(ap(ta), 0.1);
-//     //     shotCallInterval = 0;
-//     //     spawnRushInterval = 0;
+    define pastSecond = 1;
 
-//     //     HostPlayer().grudgePower = 100;
-//     //     Wait(3);
-//     // }
-// }
+    while(true){
+        countDetectTriggerServerLoadPerSecond = countDetectTriggerServerLoad / pastSecond;
+        pastSecond ++;
+        Wait(1);
+    }
+}
 
 // rule: "DebugPlayerAction"
 // Event.OngoingPlayer
@@ -2068,6 +2069,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         // debugHuds[Last()] = CreateDebugHud("Server Load Peak", ServerLoadPeak(), ServerLoadPeak() < 255 ? Color.Orange : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("count Detect Trigger Server Load", countDetectTriggerServerLoad, Color.Orange);
+        debugHuds[Last()] = CreateDebugHud("count Detect Trigger Server Load Per Second", countDetectTriggerServerLoadPerSecond, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("count Game Logic Speed Decrease", countGameLogicSpeedDecrease, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("human player Num", HumanPlayerNum(playerTeam), HumanPlayerNum(playerTeam) <= 1 ? Color.Team2 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
