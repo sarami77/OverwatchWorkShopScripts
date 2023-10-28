@@ -827,7 +827,6 @@ void SetMoveDir() playervar "SetMoveDir"{
             }
         } 
     }
-
     // move to object for secure
     else if(
         // object pos valid
@@ -870,7 +869,6 @@ void SetMoveDir() playervar "SetMoveDir"{
         moveDirFB = Vector(0, 0, ZOf(dirToObject));
         moveDirLR = Vector(XOf(dirToObject), 0, 0);
     }
-    
     // move to enemy for combat
     else if(actionState != ActionState.Non){
         moveTarget = null;
@@ -878,21 +876,8 @@ void SetMoveDir() playervar "SetMoveDir"{
         // set distRate by actionState
         define distRate! = (actionState == ActionState.Attack) ? 1 : 0.5;
 
-        // target is far and enemy density rate low
+        // target is far
         if(
-            enableRetreat
-                ?
-            (
-                // target is far
-                distToTarget > (actionRangeMax * distRate) &&
-                ProbabilityTrue(
-                    // by enemy density low
-                    (50 * (1 - EnemyDensityRateOfAimTargetNear(ActionRange.Close))) +
-                    // by health high
-                    (50 * NormalizedHealth())
-                )
-            ) 
-                :
             distToTarget > (actionRangeMax * distRate)
         ){
             moveDirFB = Forward();
@@ -908,19 +893,21 @@ void SetMoveDir() playervar "SetMoveDir"{
         }
 
         // side step
-        // start sidestep by distance close and health less
+        // start sidestep
         if(
-            (
-                actionState == ActionState.Attack &&                // attack state
+            actionState == ActionState.Attack
+            ?
                 ProbabilityTrue(
-                    70 * (1 - NormalizedHealth()) + // by lost health
-                    30 * (1 - (distToTarget / ActionRange.Far))  // by target distance clsoe
-                )    
-            ) ||
-            (
-                actionState == ActionState.Support &&               // Support state
-                ProbabilityTrue(100 * (1 - NormalizedHealth()))      // by lost health
-            )
+                    // by lost health
+                    50 * (1 - NormalizedHealth()) + 
+                    // by target distance clsoe
+                    50 * (1 - (distToTarget / ActionRange.Far))  
+                )
+            :
+                ProbabilityTrue(
+                    // by lost health
+                    100 * (1 - NormalizedHealth())
+                )
         ){
             if(moveDirLR == NoDirection()){
                 moveDirLR = RandomValueInArray([Right(), Left()]);
