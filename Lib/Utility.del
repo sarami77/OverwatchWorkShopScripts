@@ -90,7 +90,7 @@ enum ActionRange{
 Number GameProgressDiff() globalvar "GameProgressDiff"{
     define prgDiff! = 0;
     // get obj prg by 0~ 100
-    Number objPrg! = RoundToInteger(TotalObjectProgress(), Rounding.Down);
+    Number objPrg! = RoundToInteger(ObjectProgress(), Rounding.Down);
     // get time prg by 0 ~ 100
     Number timePrg! = RoundToInteger(DefaultPercentage() - (MatchTime() / (MaxMatchTime() / DefaultPercentage())), Rounding.Down);
     prgDiff = objPrg - timePrg;
@@ -99,7 +99,7 @@ Number GameProgressDiff() globalvar "GameProgressDiff"{
 
 Number ObjectProgressScaledInterval(define intervalMin!, define intervalMax!, define random!) globalvar "ObjectProgressScaledInterval"{
     define intarval! = (intervalMax - intervalMin);
-    intarval *= (1 - (TotalObjectProgress() / DefaultPercentage()));
+    intarval *= (1 - (ObjectProgress() / DefaultPercentage()));
     intarval += intervalMin;
     intarval += RandomInteger(-random, random);
     intarval = intarval < 0 ? 0 : intarval;
@@ -119,7 +119,7 @@ Boolean IsCloseWin(define team!)"IsCloseWin"{
         isCloseWin =
             IsGameInProgress() &&
             (
-                TotalObjectProgress() >= FinaleProgress()
+                ObjectProgress() >= FinaleProgress()
             );
     }
     else{
@@ -127,7 +127,7 @@ Boolean IsCloseWin(define team!)"IsCloseWin"{
             IsGameInProgress() &&
             (
                 MatchTime() <= FinaleRemainTime() ||   // include over time
-                TotalObjectProgress() >= FinaleProgress()
+                ObjectProgress() >= FinaleProgress()
             );
     }
     return isCloseWin;
@@ -137,7 +137,7 @@ define IsOverTime():
     IsGameInProgress() &&
     MatchTime() <= 0;
 
-define TotalObjectProgress()"TotalObjectProgress"{
+define ObjectProgress()"ObjectProgress"{
     define progress!;
 
     if(!IsGameInProgress()){
@@ -145,19 +145,24 @@ define TotalObjectProgress()"TotalObjectProgress"{
     }
     else{
         define mode! = CurrentGameMode();
+        define objIdx! = ObjectiveIndex();
 
         if(mode == GameMode.Escort){
             progress = PayloadProgressPercentage();
         }
         else if(mode == GameMode.Hybrid){
-            if(CurrentObjectNo() == 0){
+            if(objIdx == 0){
                 progress = (PointCapturePercentage() * 0.3);
             }
             else{
                 progress = 30 + (PayloadProgressPercentage() * 0.7);
             }
         }
-
+        else if(
+            mode == GameMode.Push
+        ){
+            
+        }
     }
     return progress;
 }
@@ -169,32 +174,33 @@ define CurrentObjectPosition() globalvar "CurrentObjectPosition"{
     define objPos!;
 
     define mode! = CurrentGameMode();
-    define objNo! = CurrentObjectNo();
+    define objIdx! = ObjectiveIndex();
 
     if(mode == GameMode.Escort){
         objPos = PayloadPosition();
     }
     else if(mode == GameMode.Hybrid){
-        if(objNo == 0){
-            objPos = ObjectivePosition(objNo);
+        // is capture point phase
+        if(objIdx == 0){
+            objPos = ObjectivePosition(objIdx);
         }
         else{
             objPos = PayloadPosition();
         }
     }
+    else if(
+        mode == GameMode.Push
+    ){
+        objPos = PayloadPosition();
+    }
+    else if(
+        mode == GameMode.Control ||
+        mode == GameMode.Flashpoint
+    ){
+        objPos = ObjectivePosition(objIdx);
+    }
 
     return objPos;
-}
-
-define CurrentObjectNo()"CurrentObjectNo"{
-    define curObjNo! = -1;
-    for(define objNo! = 0; objNo <= 3; objNo++){
-        if(!IsObjectiveComplete(objNo)){
-            curObjNo = objNo;
-            break;
-        }
-    }
-    return curObjNo;
 }
 
 define HumanPlayerNum(define team!):

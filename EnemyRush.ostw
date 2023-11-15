@@ -122,28 +122,28 @@ if(
 //     SetMatchTime(MatchTime() + (120 * addTimeScale));
 // }
 
-// TAG Payload ----------
-globalvar define prevPayloadPosition;
+// TAG Object ----------
+globalvar define prevObjectPosition;
 
-globalvar define payloadDirection;
+globalvar define objectDirection;
 
-define HasPayload(): payloadDirection != null;
+define HasObjectDirection(): objectDirection != null;
 
-rule: "Payload/updatePayloadDirection"
+rule: "Object/updateObjectDirection"
 Event.OngoingGlobal
 if(
-    PayloadProgressPercentage() > 0
+    IsGameInProgress()
 ){
-    prevPayloadPosition = PayloadPosition();
+    prevObjectPosition = CurrentObjectPosition();
 
     while(true){
-        define nowPayloadPosition! = PayloadPosition();
+        define nowObjectPosition! = CurrentObjectPosition();
         if(
             IsPlayerOnObject &&
-            nowPayloadPosition != prevPayloadPosition
+            nowObjectPosition != prevObjectPosition
         ){
-            payloadDirection = DirectionTowards(prevPayloadPosition, nowPayloadPosition);
-            prevPayloadPosition = nowPayloadPosition;
+            objectDirection = DirectionTowards(prevObjectPosition, nowObjectPosition);
+            prevObjectPosition = nowObjectPosition;
         }
         WaitUpdateMediumCycle();
     }
@@ -908,14 +908,14 @@ if(
     define progressStage! = 0;
 
     while(true){
-        define progress! = TotalObjectProgress();
+        define progress! = ObjectProgress();
         define progressAssetNo! = -1;
         define progressAssetInterval!;
 
         if(
             progressStage == 0 && progress >= 10
         ){
-            if(!HasPayload()){
+            if(!HasObjectDirection()){
                 spawnRushInterval = 0;
             }
             progressStage ++;
@@ -923,7 +923,7 @@ if(
         else if(
             progressStage == 1 && progress >= 20
         ){
-            if(!HasPayload()){
+            if(!HasObjectDirection()){
                 spawnRushInterval = 0;
             }
             progressStage ++;
@@ -1000,8 +1000,8 @@ define isInCombat:
     );
 
 // TAG EnemyBot/Teleport ----------
-define teleportAreaSize: HasPayload() ? ActionRange.Close : ActionRange.Close * 1.5;
-define teleportAreaOffsetDistFromPayload: ActionRange.Far;
+define teleportAreaSize: HasObjectDirection() ? ActionRange.Close : ActionRange.Close * 1.5;
+define teleportAreaOffsetDistFromObject: ActionRange.Far;
 define teleportAreaExtendScaleByBlockedAheadDist: 0.5;
 define minDistOfRenewCommonTeleportBasePosition: teleportAreaSize * 0.5;
 define probOfRenewCommonTeleportBasePosition: 10;
@@ -1081,7 +1081,7 @@ define GetCanTeleportPositionByClosestPlayerToObject() playervar "GetCanTeleport
 }
 
 globalvar define teleportAreaExtendSize;
-globalvar define blockedPositionPayloadAhead;
+globalvar define blockedPositionObjectAhead;
 
 define GetCanTeleportPositionByObjectPositionOrBlockedPosition() playervar "GetCanTeleportPositionByObjectPositionOrBlockedPosition"{
     define canTelPosition! = null;
@@ -1091,22 +1091,22 @@ define GetCanTeleportPositionByObjectPositionOrBlockedPosition() playervar "GetC
         return false;
     }
 
-    // If there is a wall in the payload direction and the offset distance of the teleport area is not enough,
+    // If there is a wall in the Object direction and the offset distance of the teleport area is not enough,
     //   increase the teleport area size by cut off distance
     if(
-        HasPayload() &&
+        HasObjectDirection() &&
         IsPlayerOnObject
     ){
-        // get blocked position of payload ahead
-        blockedPositionPayloadAhead = BlockedPositon(teleportBasePosition, payloadDirection, teleportAreaOffsetDistFromPayload);
+        // get blocked position of Object ahead
+        blockedPositionObjectAhead = BlockedPositon(teleportBasePosition, objectDirection, teleportAreaOffsetDistFromObject);
         // change teleportBasePosition to blocked position
-        teleportBasePosition = blockedPositionPayloadAhead;
+        teleportBasePosition = blockedPositionObjectAhead;
         // get teleportAreaExtendSize by cut off distance with scale
         teleportAreaExtendSize =
             (
                 // get cut off distance by blocked position
-                teleportAreaOffsetDistFromPayload -
-                DistanceBetween(blockedPositionPayloadAhead, blockedPositionPayloadAhead)
+                teleportAreaOffsetDistFromObject -
+                DistanceBetween(blockedPositionObjectAhead, blockedPositionObjectAhead)
             ) *
             // apply extend scale
             teleportAreaExtendScaleByBlockedAheadDist;
@@ -1246,7 +1246,7 @@ void DoTeleport(define isBeamFromBody!)"DoTeleport"{
         // player team close win
         IsCloseWin(playerTeam)
     ){
-        teleportPosition = CurrentObjectOnPosition() + (payloadDirection * 3);
+        teleportPosition = CurrentObjectOnPosition() + (objectDirection * 3);
     }
     // set teleportPosition with update commonTeleportBasePosition
     else if(
@@ -1330,7 +1330,7 @@ if(
             // too far from blocked position
             DistanceBetween(
                 commonTeleportBasePosition,
-                blockedPositionPayloadAhead) > teleportAreaSize + teleportAreaExtendSize        
+                blockedPositionObjectAhead) > teleportAreaSize + teleportAreaExtendSize        
         ){
             needUpdateCommonTeleportBasePosition = true;
         }
@@ -1961,24 +1961,24 @@ if(
     // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
     //     commonTeleportBasePosition + PositionOffsetY1(), teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
     // // object -> blockedPosition beam
-    // CreateBeamEffect(HasPayload() ? hp : null, BeamType.BadBeam, 
+    // CreateBeamEffect(HasObject() ? hp : null, BeamType.BadBeam, 
     //     CurrentObjectOnPosition(),
-    //     blockedPositionPayloadAhead, 
+    //     blockedPositionObjectAhead, 
     //     enemyColor, EffectRev.VisibleToPositionAndRadius);
     // // commonTeleportBasePosition -> blockedPosition or objectPosition
     // CreateBeamEffect(hp, BeamType.GoodBeam, 
     //     PositionOffsetY1() + commonTeleportBasePosition, 
     //     CurrentObjectOnPosition(),
     //     enemyColor, EffectRev.VisibleToPositionAndRadius);
-    // // blockedPositionPayloadAhead orb
-    // CreateEffect(HasPayload() ? hp : null,
-    //     Effect.Orb, enemyColor, blockedPositionPayloadAhead,
+    // // blockedPositionObjectAhead orb
+    // CreateEffect(HasObject() ? hp : null,
+    //     Effect.Orb, enemyColor, blockedPositionObjectAhead,
     //     1, EffectRev.VisibleToPositionAndRadius);
     // // placable teleportPosition area size ring
     // CreateEffect(hp,
     //     Effect.Sphere, enemyColor,
-    //     HasPayload() ? blockedPositionPayloadAhead : CurrentObjectOnPosition(),
-    //     HasPayload() ? teleportAreaSize + teleportAreaExtendSize : teleportAreaSize,
+    //     HasObject() ? blockedPositionObjectAhead : CurrentObjectOnPosition(),
+    //     HasObject() ? teleportAreaSize + teleportAreaExtendSize : teleportAreaSize,
     //     EffectRev.VisibleToPositionAndRadius);
 
     define pastSecond = 1;
