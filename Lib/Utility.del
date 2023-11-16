@@ -137,6 +137,38 @@ define IsOverTime():
     IsGameInProgress() &&
     MatchTime() <= 0;
 
+define IsNeedEscortObject()"IsNeedEscortObject"{
+    define isNeedEscort!;
+    define mode! = CurrentGameMode();
+    define isOffense! = IsTeamOnOffense();
+    define isScoring! = (TeamOf() == ControlModeScoringTeam());
+
+    if(
+        mode == GameMode.Assault ||
+        mode == GameMode.Escort ||
+        mode == GameMode.Hybrid
+    ){
+        if(isOffense){
+            isNeedEscort = true;
+        }
+    }
+    else if(
+        mode == GameMode.Flashpoint ||
+        mode == GameMode.Control
+    ){
+        if(!isScoring){
+            isNeedEscort = true;
+        }
+    }
+    else if(
+        mode == GameMode.Push
+    ){
+        isNeedEscort = true;
+    }
+
+    return isNeedEscort;
+}
+
 define ObjectProgress()"ObjectProgress"{
     define progress!;
 
@@ -147,10 +179,24 @@ define ObjectProgress()"ObjectProgress"{
         define mode! = CurrentGameMode();
         define objIdx! = ObjectiveIndex();
 
-        if(mode == GameMode.Escort){
+        if(
+            mode == GameMode.Escort
+        ){
             progress = PayloadProgressPercentage();
         }
-        else if(mode == GameMode.Hybrid){
+        else if(
+            mode == GameMode.Assault
+        ){
+            if(objIdx == 0){
+                progress = (PointCapturePercentage() * 0.5);
+            }
+            else{
+                progress = 50 + (PointCapturePercentage() * 0.5);
+            }
+        }
+        else if(
+            mode == GameMode.Hybrid
+        ){
             if(objIdx == 0){
                 progress = (PointCapturePercentage() * 0.3);
             }
@@ -159,14 +205,18 @@ define ObjectProgress()"ObjectProgress"{
             }
         }
         else if(
+            mode == GameMode.Control
+        ){
+            progress = ControlModeScoringPercentage();
+        }
+        else if(
             mode == GameMode.Push
         ){
-            
+            progress = 50;
         }
     }
     return progress;
 }
-
 
 define CurrentObjectOnPosition(): CurrentObjectPosition() + Vector(0, 4, 0);
 
@@ -176,24 +226,19 @@ define CurrentObjectPosition() globalvar "CurrentObjectPosition"{
     define mode! = CurrentGameMode();
     define objIdx! = ObjectiveIndex();
 
-    if(mode == GameMode.Escort){
-        objPos = PayloadPosition();
-    }
-    else if(mode == GameMode.Hybrid){
-        // is capture point phase
-        if(objIdx == 0){
-            objPos = ObjectivePosition(objIdx);
-        }
-        else{
-            objPos = PayloadPosition();
-        }
-    }
-    else if(
-        mode == GameMode.Push
+    if(
+        mode == GameMode.Escort ||
+        mode == GameMode.Push ||
+        (
+            mode == GameMode.Hybrid &&
+            objIdx > 0
+        )
     ){
         objPos = PayloadPosition();
     }
     else if(
+        mode == GameMode.Hybrid ||
+        mode == GameMode.Assault ||
         mode == GameMode.Control ||
         mode == GameMode.Flashpoint
     ){
