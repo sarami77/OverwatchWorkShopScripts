@@ -1080,47 +1080,6 @@ define GetTeleportPositionByClosestPlayer() playervar "GetTeleportPositionByClos
     return canTelPosition;
 }
 
-define GetTeleportPositionByObjectPosition() playervar "GetTeleportPositionByObjectPosition"{
-    define canTelPosition = null;
-
-    define objectPosition = CurrentObjectPosition();
-    if(objectPosition == null){
-        return false;
-    }
-
-    define teleportBasePosition = objectPosition;
-
-    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
-        // select teleportPosition from middle of Object and teleportBasePosition
-        define searchAreaSize = teleportAreaSize;
-        define candidatePosition =
-            NearestWalkablePosition(
-                teleportBasePosition
-                    + 
-                (
-                    DirectionTowards(teleportBasePosition, objectPosition)
-                        *
-                    DistanceBetween(teleportBasePosition, objectPosition) * 0.5
-                )
-                    +
-                RandomPosition(searchAreaSize, searchAreaSize, searchAreaSize)
-            );
-
-        if(
-            // can encount enemy
-            CanEncountPosition(candidatePosition)
-        ){
-            canTelPosition = candidatePosition;
-            break;
-        }
-
-        WaitUntilServerFree();
-        Wait(searchPositionInterval, WaitBehavior.AbortWhenFalse);
-    }
-
-    return canTelPosition;
-}
-
 globalvar define teleportAreaExtendSize;
 globalvar define blockedPositionObjectAhead;
 
@@ -1329,11 +1288,6 @@ void DoTeleport(define isBeamFromBody!)"DoTeleport"{
             ){
                 teleportPosition = GetTeleportPositionByObjectDirection();
             }
-            else if(
-                IsNeedEscortObject()
-            ){
-                teleportPosition = GetTeleportPositionByObjectPosition();
-            }
             else{
                 teleportPosition = GetTeleportPositionByClosestPlayer();
             }
@@ -1373,6 +1327,7 @@ if(
             needUpdateCommonTeleportBasePosition = true;
         }
         else if(
+            HasObjectDirection() &&
             // too far from blocked position
             DistanceBetween(
                 commonTeleportBasePosition,
