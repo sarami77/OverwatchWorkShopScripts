@@ -106,19 +106,26 @@ void SetFollowTarget()"SetFollowTarget"{
     }
 }
 
+define buddyReturnTimeScale : 0.75;
+
+playervar define isInitialTeleport! = true;
+
 void TeleportToFollowTarget()"TeleportToFollowTarget"{
+
+    if(
+        // is not teleport of first spawn by entity created
+        !isInitialTeleport
+    ){
+        // wait for return to front line by dist
+        Wait(
+            DistanceBetween(ep, followTarget) / walkMeterPerSec * buddyReturnTimeScale,
+            WaitBehavior.AbortWhenFalse);
+    }
+    else{
+        isInitialTeleport = false;
+    }
+
     define teleportPos!;
-
-    WaitUntil(
-        (
-            // wait regroup
-            NumberOfLivingPlayers(TeamOf()) >= (NumberOfPlayers(TeamOf()) / 2) ||
-            // enemy close win
-            IsCloseWin(EnemyTeamOf(ep))
-        ),
-        MaxValue()
-
-    );
     
     if(
         // game not progress
@@ -138,9 +145,16 @@ void TeleportToFollowTarget()"TeleportToFollowTarget"{
         }
     }
 
-    // wait by distance
-    // Wait(DistanceBetween(ep, teleportPos) / walkMeterPerSec, WaitBehavior.AbortWhenFalse);
-    
+    // WaitUntil(
+    //     (
+    //         // wait regroup
+    //         NumberOfLivingPlayers(TeamOf()) >= (NumberOfPlayers(TeamOf()) / 2) ||
+    //         // enemy close win
+    //         IsCloseWin(EnemyTeamOf(ep))
+    //     ),
+    //     MaxValue()
+    // );
+
     // teleport
     Teleport(ep, teleportPos);
 }
@@ -247,7 +261,6 @@ if(
         // try count over
         followTryCount >= followTryCountMax
     ){
-
         // stop follow
         StopMove(ep);
 

@@ -478,7 +478,9 @@ if(
 ){
     if(
         NormalizedHealth() < 1.0 ||
-        IsInLineOfSight(EyePosition(), EyePosition(ClosestPlayerTo(ep, EnemyTeamOf(ep))))
+        IsInLineOfSight(
+            EyePosition(),
+            EyePosition(ClosestPlayerTo(ep, EnemyTeamOf(ep))))
     ){
         isBotActive = true;
         Abort();
@@ -510,7 +512,7 @@ define basicSpawnTimeMin:
     confirmGameDifficulty == GameDifficulty.INSANE ?    basicSpawnTimeBase + (basicSpawnTimeScale * 5.0) :
                                                         basicSpawnTimeBase + (basicSpawnTimeScale * 5.0);
 
-define spawnTimeMinToMaxScale: 1.25;
+define spawnTimeMinToMaxScale: 1.5;
 
 define autoTuneDmgDltInitial :
     confirmGameDifficulty == GameDifficulty.EASY ?      20 :
@@ -527,7 +529,7 @@ define autoTuneDmgDltLimit:
     confirmGameDifficulty == GameDifficulty.INSANE ?    100 :
                                                         100 ;
 
-define upValueBase: 1.0;
+define upValueBase: 1.25;
 define upValueScale:
     confirmGameDifficulty == GameDifficulty.EASY ?      upValueBase * 1.0 : 
     confirmGameDifficulty == GameDifficulty.NORMAL ?    upValueBase * 1.0 : 
@@ -536,7 +538,7 @@ define upValueScale:
     confirmGameDifficulty == GameDifficulty.INSANE ?    upValueBase * 1.0 : 
                                                         upValueBase * 1.0 ;
 
-define downValueBase: 1.25;
+define downValueBase: 1.0;
 define downValueScale:
     confirmGameDifficulty == GameDifficulty.EASY ?      downValueBase * 3.0 :
     confirmGameDifficulty == GameDifficulty.NORMAL ?    downValueBase * 2.5 :
@@ -862,8 +864,11 @@ Event.OngoingGlobal
 if(
     initCompleted &&
     (
-        (IsInSetup() && MatchTime() <= 5) ||
-        (IsGameInProgress())
+        IsGameInProgress() ||
+        (
+            IsInSetup() &&
+            MatchTime() <= 5
+        )
     )
 ){
     while(true){
@@ -908,7 +913,12 @@ if(
     define progressStage! = 0;
 
     while(true){
-        define progress! = ObjectProgress();
+        define progress! = ObjectProgress(playerTeam);
+        if(CurrentGameMode() == GameMode.Push){
+            progress = progress - 50;
+            progress *= 2;
+        }
+        
         define progressAssetNo! = -1;
         define progressAssetInterval!;
 
@@ -953,8 +963,8 @@ if(
         // has progress asset
         if(progressAssetNo != -1){
             // set assetNo from progress asset
-            enemyAssetNo = progressAssetNo;
             // set interval from progress asset interval
+            enemyAssetNo = progressAssetNo;
             reloadEnemyAssetInterval = progressAssetInterval;
             // set flag for skip change assetNo
             hasProgressAssetNo = true;
@@ -1189,7 +1199,7 @@ void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
             ),
             ep
         ) *
-        0.1;
+        0.2;
 
     Wait(waitTeleportInterval, WaitBehavior.AbortWhenFalse);
 
@@ -1239,6 +1249,8 @@ void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "Pla
 }
 
 void DoTeleport(define isBeamFromBody!)"DoTeleport"{
+    define needGetNewPosition!;
+
     // threat enemy combat teleport
     if(
         // sub boss or boss
@@ -1255,28 +1267,7 @@ void DoTeleport(define isBeamFromBody!)"DoTeleport"{
         // has need update flag
         needUpdateCommonTeleportBasePosition
     ){
-        // set teleportPosition by calc new position
-        if(
-            // player on object
-            IsPlayerOnObject
-        ){
-            teleportPosition = GetTeleportPositionByObjectDirection();
-        }
-        // else if(
-        //     IsNeedEscortObject(TeamOf())
-        // ){
-        //     dbgHudTxt(<"CurrentObjectPosition = <0>", true>);
-        //     teleportPosition = CurrentObjectPosition();
-        // }
-        else{
-            teleportPosition = GetTeleportPositionByClosestPlayer();
-        }
-        
-        if(teleportPosition != null){
-            // renew common position
-            commonTeleportBasePosition = teleportPosition;
-            needUpdateCommonTeleportBasePosition = false;
-        }
+        needGetNewPosition = true;
     }
     // set teleportPosition
     else{
@@ -1285,27 +1276,41 @@ void DoTeleport(define isBeamFromBody!)"DoTeleport"{
             // by prob
             ProbabilityTrue(probOfReuseCommonTeleportBasePosition)
         ){
-            // set teleportPosition by reuse common position
-            teleportPosition = GetTeleportPositionByCommonPosition();
+            needGetNewPosition = false;
         }
         else{
-            // set teleportPosition by calc new position
-            if(
-                // player on object
-                IsPlayerOnObject
-            ){
-                teleportPosition = GetTeleportPositionByObjectDirection();
-            }
-            // else if(
-            //     IsNeedEscortObject(TeamOf())
-            // ){
-            //     dbgHudTxt(<"CurrentObjectPosition = <0>", true>);
-            //     teleportPosition = CurrentObjectPosition();
-            // }
-            else{
-                teleportPosition = GetTeleportPositionByClosestPlayer();
+            needGetNewPosition = true;
+        }
+    }
+
+    if(needGetNewPosition){
+        // set teleportPosition by calc new position
+        if(
+            // player on object
+            IsPlayerOnObject
+        ){
+            teleportPosition = GetTeleportPositionByObjectDirection();
+        }
+        else if(
+            IsNeedEscortObject(enemyTeam)
+        ){
+            teleportPosition = CurrentObjectPosition();
+        }
+        else{
+            teleportPosition = GetTeleportPositionByClosestPlayer();
+        }
+
+        if(needUpdateCommonTeleportBasePosition){
+            if(teleportPosition != null){
+                // renew common position
+                commonTeleportBasePosition = teleportPosition;
+                needUpdateCommonTeleportBasePosition = false;
             }
         }
+    }
+    else{
+        // set teleportPosition by reuse common position
+        teleportPosition = GetTeleportPositionByCommonPosition();
     }
 
     if(teleportPosition != null){
@@ -1323,12 +1328,12 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    // if(baseSmoke == null){
-    //     // base smoke
-    //     baseSmoke = CreateEffect(commonTeleportBasePosition != null ? AllPlayers() : null,
-    //         Effect.Cloud, enemyColor, commonTeleportBasePosition,
-    //         teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
-    // }
+    if(baseSmoke == null){
+        // base smoke
+        baseSmoke = CreateEffect(commonTeleportBasePosition != null ? AllPlayers() : null,
+            Effect.Cloud, enemyColor, commonTeleportBasePosition,
+            teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+    }
 
     // need check update
     if(!needUpdateCommonTeleportBasePosition){
@@ -1341,26 +1346,16 @@ if(
             needUpdateCommonTeleportBasePosition = true;
         }
         else if(
-            // has object direction
-            HasObjectDirection() &&
             // player on object
             IsPlayerOnObject &&
-            // too far from blocked position
-            DistanceBetween(
-                commonTeleportBasePosition,
-                blockedPositionObjectAhead) > teleportAreaSize + teleportAreaExtendSize        
+            HasObjectDirection() ?
+                // position too far from bloeckd position
+                DistanceBetween(commonTeleportBasePosition, blockedPositionObjectAhead) > teleportAreaSize + teleportAreaExtendSize :
+                // position too far from object position
+                DistanceBetween(commonTeleportBasePosition, CurrentObjectPosition()) > teleportAreaSize
         ){
             needUpdateCommonTeleportBasePosition = true;
         }
-        // else if(
-        //     // has object direction
-        //     IsNeedEscortObject(enemyTeam) &&
-        //     // enemy on object
-        //     !IsEnemyOnObject     
-        // ){
-        //     dbgHudTxt(<"needUpdateCommonTeleportBasePosition = <0>", true>);
-        //     needUpdateCommonTeleportBasePosition = true;
-        // }
         else if(
             // too close to near enemy
             DistanceBetween(
@@ -1423,15 +1418,16 @@ if(
     LoopIfConditionIsTrue();
 }
 
+define checkTeleportConditionInterval: 1;
 define checkTeleportConditionMaxCount: 3;
 
-rule: "EnemyBot/Teleport/teleportForDefendObjectOrNonTarget"
+rule: "EnemyBot/Teleport/teleportOrHopForDefendObjectOnIdle"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
     IsGameInProgress() &&
-    IsAlive() &&
-    !IsInSpawnRoom()
+    !IsInSpawnRoom() &&
+    IsAlive()
 ){
     define checkConditionCount = 0;
 
@@ -1446,10 +1442,10 @@ if(
             break;
         }
         else if(
-            // valid aim target
-            aimTarget != null &&
-            // has line
-            IsInLineOfSight(EyePosition(ep), EyePosition(aimTarget))
+            // has line of close player
+            IsInLineOfSight(
+                EyePosition(ep),
+                EyePosition(ClosestPlayerTo(ep, EnemyTeamOf(ep))))
         ){
             // reset count
             checkConditionCount = 0;
@@ -1459,12 +1455,28 @@ if(
             checkConditionCount ++;
         }
 
-        Wait(1, WaitBehavior.AbortWhenFalse);
+        Wait(checkTeleportConditionInterval, WaitBehavior.AbortWhenFalse);
         WaitUntilServerFree();
     }
 
-    // teleport
-    DoTeleport(false);
+    define objectPosition! = CurrentObjectPosition();
+    define dist! = DistanceBetween(ep, objectPosition);
+    if(
+        IsNeedEscortObject(enemyTeam) &&
+        IsInLineOfSight(
+            EyePosition(ep),
+            PositionOffsetY1() + objectPosition)
+    ){
+        ApplyImpulse(ep, 
+            VectorTowards(ep, objectPosition + Vector(0, dist * 0.25, 0)),
+            dist * 2.5,
+            Relative.ToWorld, ContraryMotion.Cancel);
+    }
+    else{
+        // teleport
+        DoTeleport(false);
+    }
+
 
     LoopIfConditionIsTrue();
 }
@@ -1478,7 +1490,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval
-    spawnRushInterval = ObjectProgressScaledInterval(25, 50, 5);
+    spawnRushInterval = ObjectProgressScaledInterval(playerTeam, 25, 50, 5);
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.01, 100, 2);
     spawnRushInterval = RoundToInteger(spawnRushInterval, Rounding.Up);
     for(;spawnRushInterval > 0; spawnRushInterval--){
@@ -1526,7 +1538,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval
-    shotCallInterval = ObjectProgressScaledInterval(25, 50, 5);
+    shotCallInterval = ObjectProgressScaledInterval(playerTeam, 25, 50, 5);
     shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.01, 100, 3);
     shotCallInterval = RoundToInteger(shotCallInterval, Rounding.Up);
     for(;shotCallInterval > 0; shotCallInterval--){
@@ -1574,7 +1586,7 @@ if(
     IsThreatEnemy(ep)
 ){
     // set default interval
-    combatTeleportInterval = ObjectProgressScaledInterval(10, 20, 5);
+    combatTeleportInterval = ObjectProgressScaledInterval(playerTeam, 10, 20, 5);
     combatTeleportInterval *= WorkshopSettingReal("Enemy Bot Settings", "(Sub Boss & Boss) Combat-Teleport Interval Scale", 1.0, 0.01, 100, 4);
     if(actionRangeMax == ActionRange.Melee){
         combatTeleportInterval *= 1;
@@ -1732,7 +1744,7 @@ globalvar define spawnTimeScale;
 playervar define confirmSpawnInterval;
 
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
-    define diff! = GameProgressDiff();
+    define diff! = GameProgressDiff(playerTeam);
     if(70 <= diff){
         spawnTimeScale = 0;
     }
@@ -1746,16 +1758,16 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
         spawnTimeScale = 1.0;
     }
     else if(-40 <= diff && diff < -10){
-        spawnTimeScale = 2.0;
+        spawnTimeScale = 1.5;
     }
     else if(-70 <= diff && diff < -40){
-        spawnTimeScale = 3.0;
+        spawnTimeScale = 2.0;
     }
     else if(diff < -70){
-        spawnTimeScale = 4.0;
+        spawnTimeScale = 2.5;
     }
 
-    confirmSpawnInterval = ObjectProgressScaledInterval(eachMinSpawnInterval, eachMaxSpawnInterval, 0);
+    confirmSpawnInterval = ObjectProgressScaledInterval(playerTeam, eachMinSpawnInterval, eachMaxSpawnInterval, 0);
     confirmSpawnInterval *= spawnTimeScale;
     confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Basic Spawn Intarval Scale", 1.0, 0, 100, 1);
     // SetRespawnMaxTime(ep, confirmSpawnInterval);
@@ -1948,7 +1960,7 @@ rule: "FinalStand/FinalStand"
 Event.OngoingGlobal
 if(
     IsGameInProgress() &&
-    MatchTime() <= 0
+    IsOverTime()
 ){
     BigMessage(AllPlayers(), "Final Stand !");
     slowControlHandler = SlowControlHandler.GameLogic;
@@ -1964,7 +1976,6 @@ if(
     Wait(0.25, WaitBehavior.IgnoreCondition);   // show slow
     SetSlowMotion(DefaultPercentage());
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
-    
 }
 
 // TAG Debug ----------
@@ -1988,7 +1999,7 @@ if(
     // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
     //     commonTeleportBasePosition + PositionOffsetY1(), teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
     // // object -> blockedPosition beam
-    // CreateBeamEffect(HasObject() ? hp : null, BeamType.BadBeam, 
+    // CreateBeamEffect(HasObjectDirection() ? hp : null, BeamType.BadBeam, 
     //     CurrentObjectOnPosition(),
     //     blockedPositionObjectAhead, 
     //     enemyColor, EffectRev.VisibleToPositionAndRadius);
@@ -1998,19 +2009,27 @@ if(
     //     CurrentObjectOnPosition(),
     //     enemyColor, EffectRev.VisibleToPositionAndRadius);
     // // blockedPositionObjectAhead orb
-    // CreateEffect(HasObject() ? hp : null,
+    // CreateEffect(HasObjectDirection() ? hp : null,
     //     Effect.Orb, enemyColor, blockedPositionObjectAhead,
     //     1, EffectRev.VisibleToPositionAndRadius);
     // // placable teleportPosition area size ring
     // CreateEffect(hp,
     //     Effect.Sphere, enemyColor,
-    //     HasObject() ? blockedPositionObjectAhead : CurrentObjectOnPosition(),
-    //     HasObject() ? teleportAreaSize + teleportAreaExtendSize : teleportAreaSize,
+    //     HasObjectDirection() ? blockedPositionObjectAhead : CurrentObjectOnPosition(),
+    //     HasObjectDirection() ? teleportAreaSize + teleportAreaExtendSize : teleportAreaSize,
     //     EffectRev.VisibleToPositionAndRadius);
 
     define pastSecond = 1;
 
     while(true){
+        // StartForcingPlayerOutlines(
+        //     AllLivingPlayers(enemyTeam),
+        //     hp,
+        //     true,
+        //     Color.Red,
+        //     OutlineType.Always
+        // );
+
         countDetectTriggerServerLoadPerSecond = countDetectTriggerServerLoad / pastSecond;
         pastSecond ++;
         Wait(1);
@@ -2026,10 +2045,7 @@ if(
 //     TeamOf() == playerTeam
 // ){
 //     while(true){
-//         if(ProbabilityTrue(1)){
-//             DoStrafingFire();
-//         }
-//         Wait(1);
+//         Wait(3);
 //     }
 // }
 
@@ -2116,6 +2132,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("count Detect Trigger Server Load Per Second", countDetectTriggerServerLoadPerSecond, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("human player Num", HumanPlayerNum(playerTeam), HumanPlayerNum(playerTeam) <= 1 ? Color.Team2 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("Game Progress Diff", GameProgressDiff(playerTeam), Color.Team1);
         debugHuds[Last()] = CreateDebugHud("spawn Time scale", spawnTimeScale, Color.Team1);
     }
 

@@ -75,7 +75,16 @@ define VectorScaledY(in define vector, in define scale):
 
 define BodyPosition(in define player): Midpoint(PositionOf(player), EyePosition(player));
 
-define MaxMatchTime(): 60 * 5;
+define MaxMatchTime(): maxMatchTime;
+globalvar define maxMatchTime;
+rule: "Utility/GetMaxMatchTime"
+Event.OngoingGlobal
+if(
+    IsGameInProgress()
+){
+    maxMatchTime = RoundToInteger(MatchTime(), Rounding.Up);
+}
+
 define FinaleProgress(): 95;
 define FinaleRemainTime(): 10;
 
@@ -87,89 +96,56 @@ enum ActionRange{
     CanFind = 40
 }
 
-Number GameProgressDiff() globalvar "GameProgressDiff"{
+Number GameProgressDiff(define team!) globalvar "GameProgressDiff"{
     define prgDiff! = 0;
-    // get obj prg by 0~ 100
-    Number objPrg! = RoundToInteger(ObjectProgress(), Rounding.Down);
-    // get time prg by 0 ~ 100
-    Number timePrg! = RoundToInteger(DefaultPercentage() - (MatchTime() / (MaxMatchTime() / DefaultPercentage())), Rounding.Down);
-    prgDiff = objPrg - timePrg;
+
+    if(!IsGameInProgress()){
+        prgDiff = 0;
+    }
+    else{
+        define mode! = CurrentGameMode();
+
+        if(
+            mode == GameMode.Assault ||
+            mode == GameMode.Escort ||
+            mode == GameMode.Hybrid
+        ){
+            define objPrg! = ObjectProgress(team);
+            // get match time progress
+            define timePrg! = (1 - (MatchTime() / MaxMatchTime())) * 100;
+            prgDiff = objPrg - timePrg;
+        }
+        else if(
+            mode == GameMode.Push
+        ){
+            define objPrg! = ObjectProgress(team);
+            // get match time progress
+            define timePrg! = (1 - (MatchTime() / MaxMatchTime())) * 100;
+            prgDiff = objPrg - timePrg;
+        }
+        else if(
+            mode == GameMode.Flashpoint ||
+            mode == GameMode.Control
+        ){
+            prgDiff = ObjectProgress(team) - ObjectProgress(EnemyTeamOf(team));
+        }
+
+        prgDiff = RoundToInteger(prgDiff, Rounding.Down);
+    }
+
     return prgDiff;
 }
 
-Number ObjectProgressScaledInterval(define intervalMin!, define intervalMax!, define random!) globalvar "ObjectProgressScaledInterval"{
+Number ObjectProgressScaledInterval(define team!, define intervalMin!, define intervalMax!, define random!) globalvar "ObjectProgressScaledInterval"{
     define intarval! = (intervalMax - intervalMin);
-    intarval *= (1 - (ObjectProgress() / DefaultPercentage()));
+    intarval *= (1 - (ObjectProgress(team) / DefaultPercentage()));
     intarval += intervalMin;
     intarval += RandomInteger(-random, random);
     intarval = intarval < 0 ? 0 : intarval;
     return intarval;
 }
 
-Boolean IsCloseWin(define team!)"IsCloseWin"{
-    define isCloseWin! = false;
-    if(IsTeamOnDefense(team)){
-        isCloseWin =
-            IsGameInProgress() &&
-            (
-                MatchTime() <= FinaleRemainTime()   // include over time
-            );
-    }
-    else if(IsTeamOnOffense(team)){
-        isCloseWin =
-            IsGameInProgress() &&
-            (
-                ObjectProgress() >= FinaleProgress()
-            );
-    }
-    else{
-        isCloseWin =
-            IsGameInProgress() &&
-            (
-                MatchTime() <= FinaleRemainTime() ||   // include over time
-                ObjectProgress() >= FinaleProgress()
-            );
-    }
-    return isCloseWin;
-}
-
-define IsOverTime():
-    IsGameInProgress() &&
-    MatchTime() <= 0;
-
-define IsNeedEscortObject(define team!)"IsNeedEscortObject"{
-    define isNeedEscort!;
-    define mode! = CurrentGameMode();
-    define isOffense! = IsTeamOnOffense(team);
-    define isScoring! = (team == ControlModeScoringTeam());
-
-    if(
-        mode == GameMode.Assault ||
-        mode == GameMode.Escort ||
-        mode == GameMode.Hybrid
-    ){
-        if(isOffense){
-            isNeedEscort = true;
-        }
-    }
-    else if(
-        mode == GameMode.Flashpoint ||
-        mode == GameMode.Control
-    ){
-        if(!isScoring){
-            isNeedEscort = true;
-        }
-    }
-    else if(
-        mode == GameMode.Push
-    ){
-        isNeedEscort = true;
-    }
-
-    return isNeedEscort;
-}
-
-define ObjectProgress()"ObjectProgress"{
+define ObjectProgress(define team!) globalvar "ObjectProgress"{
     define progress!;
 
     if(!IsGameInProgress()){
@@ -207,16 +183,115 @@ define ObjectProgress()"ObjectProgress"{
         else if(
             mode == GameMode.Control
         ){
-            progress = ControlModeScoringPercentage();
+            progress = ControlModeScoringPercentage(team) / 2;
+            progress += TeamScore(team) * 50;
+        }
+        else if(
+            mode == GameMode.Flashpoint
+        ){
+            progress = ControlModeScoringPercentage(team) / 3;
+            progress += TeamScore(team) * 33;
         }
         else if(
             mode == GameMode.Push
         ){
-            progress = 50;
+            define objPos! = ObjectivePosition(ObjectiveIndex());
+            progress =
+                (
+                    DistanceBetween(objPos, PayloadPosition()) /
+                    DistanceBetween(objPos, -1 * objPos)
+                ) * 100;
         }
     }
     return progress;
 }
+
+Boolean IsCloseWin(define team!)"IsCloseWin"{
+    define isCloseWin! = false;
+    if(IsTeamOnDefense(team)){
+        isCloseWin =
+            IsGameInProgress() &&
+            (
+                MatchTime() <= FinaleRemainTime()   // include over time
+            );
+    }
+    else if(IsTeamOnOffense(team)){
+        isCloseWin =
+            IsGameInProgress() &&
+            (
+                ObjectProgress(team) >= FinaleProgress()
+            );
+    }
+    else{
+        isCloseWin =
+            IsGameInProgress() &&
+            (
+                MatchTime() <= FinaleRemainTime() ||   // include over time
+                ObjectProgress(team) >= FinaleProgress()
+            );
+    }
+    return isCloseWin;
+}
+
+define IsNeedEscortObject(define team!)"IsNeedEscortObject"{
+    define isNeedEscort!;
+    define mode! = CurrentGameMode();
+    define isOffense! = IsTeamOnOffense(team);
+    define isScoring! = (team == ControlModeScoringTeam());
+
+    if(
+        mode == GameMode.Assault ||
+        mode == GameMode.Escort ||
+        mode == GameMode.Hybrid
+    ){
+        if(isOffense){
+            isNeedEscort = true;
+        }
+    }
+    else if(
+        mode == GameMode.Flashpoint ||
+        mode == GameMode.Control
+    ){
+        if(!isScoring){
+            isNeedEscort = true;
+        }
+    }
+    else if(
+        mode == GameMode.Push
+    ){
+        isNeedEscort = true;
+    }
+
+    return isNeedEscort;
+}
+
+Number HasMatchTime() globalvar "HasMatchTime"{
+    define hasMatchTime!;
+
+    define mode! = CurrentGameMode();
+
+    if(
+        mode == GameMode.Assault ||
+        mode == GameMode.Escort ||
+        mode == GameMode.Hybrid ||
+        mode == GameMode.Push
+    ){
+        hasMatchTime = true;
+    }
+    else if(
+        mode == GameMode.Flashpoint ||
+        mode == GameMode.Control
+    ){
+        hasMatchTime = false;
+    }
+
+    return hasMatchTime;
+}
+
+define IsOverTime():
+    IsGameInProgress() &&
+    // HasMatchTime() &&
+    MatchTime() <= 0;
 
 define CurrentObjectOnPosition(): CurrentObjectPosition() + Vector(0, 4, 0);
 

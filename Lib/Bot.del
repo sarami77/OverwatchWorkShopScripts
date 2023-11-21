@@ -28,11 +28,6 @@ enum EnemyType{
 define createBotInterval : 0.2;
 
 void CreateBotsByAsset(define asset!, define team!, define addLimitNum!)"CreateBotsByAsset"{
-    if(CountOf(asset) <= 0){
-        dbgHudTxt(<"CreateBotsByAsset asset = <0>", CountOf(asset)>);
-        return;
-    }
-    
     define addNum! = 0;
     // run asset items
     for(define assetIdx! = 0; assetIdx < CountOf(asset); assetIdx++){
@@ -533,7 +528,7 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         break;
 
         case Hero.Roadhog:
-        actionRangeMin = ActionRange.Close;
+        actionRangeMin = ActionRange.Melee;
         actionRangeMax = ActionRange.Middle;
         break;
 
@@ -665,8 +660,10 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
             Button.PrimaryFire,
             Button.Ability1
         ];
-        primaryFireButtonPressMax = 3;
-        primaryFireButtonPressMin = 1.5;
+        primaryFireButtonReleaseMin = 0.5;      // to charge enough sorar rifle
+        primaryFireButtonReleaseMax = 1.0;      // to suppress charge over sorar rifle
+        primaryFireButtonPressMin = 0.1;          // to more use sorar rifle
+        primaryFireButtonPressMax = 0.1;          // to more use sorar rifle
         break;
 
         default:
@@ -1241,7 +1238,11 @@ if(
         }
 
         WaitRandomAfterServerFree();
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+        Wait(
+            actionState == ActionState.Non ?
+                watchUpdateRate / 2 :
+                watchUpdateRate,
+            WaitBehavior.AbortWhenFalse);
     }
 }
 
@@ -1898,6 +1899,19 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 PressButton(ep, Button.Ability2);
                 Wait(0.1, WaitBehavior.IgnoreCondition);
                 PressButton(ep, Button.PrimaryFire);
+            }
+        }
+        // Sojourn
+        else if(
+            HeroOf() == Hero.Sojourn
+        ){
+            // teleport enemy behind with shadow step 
+            if(
+                ProbabilityTrue(75 * NormalizedHealth()) &&
+                IsUsingUltimate()
+            ){
+                // use charged railgun
+                PressButton(ep, Button.SecondaryFire);
             }
         }
         // WreckingBall
