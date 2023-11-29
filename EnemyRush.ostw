@@ -501,7 +501,7 @@ if(
 }
 
 // TAG EnemyBot/Config ----------
-define basicSpawnTimeBase: 8;
+define basicSpawnTimeBase: 12;
 define basicSpawnTimeScale: 1.0;
 
 define basicSpawnTimeMin: 
@@ -512,7 +512,7 @@ define basicSpawnTimeMin:
     confirmGameDifficulty == GameDifficulty.INSANE ?    basicSpawnTimeBase + (basicSpawnTimeScale * 5.0) :
                                                         basicSpawnTimeBase + (basicSpawnTimeScale * 5.0);
 
-define spawnTimeMinToMaxScale: 1.5;
+define spawnTimeMinToMaxScale: 1.25;
 
 define autoTuneDmgDltInitial :
     confirmGameDifficulty == GameDifficulty.EASY ?      20 :
@@ -825,7 +825,13 @@ define enemyAssetList:
         // debug asset
         [
             // assetNo 30
-            [EnemyType.Boss,      Hero.Reinhardt,         12]
+            [EnemyType.Elite,      RandomValueInArray([
+                Hero.Ramattra,
+                Hero.WreckingBall,
+                Hero.Symmetra,
+                Hero.Lucio,
+                Hero.Illari
+            ]),         12]
         ]
     ];
 
@@ -1248,42 +1254,43 @@ void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "Pla
     }
 }
 
-void DoTeleport(define isBeamFromBody!)"DoTeleport"{
+void DoTeleport(define isBeamFromBody!, define isEmgTeleport!)"DoTeleport"{
     define needGetNewPosition!;
 
-    // threat enemy combat teleport
-    if(
-        // sub boss or boss
-        IsThreatEnemy(ep) &&
-        // player on object
-        IsPlayerOnObject &&
-        // player team close win
-        IsCloseWin(playerTeam)
-    ){
-        teleportPosition = CurrentObjectOnPosition() + (objectDirection * 3);
-    }
-    // set teleportPosition with update commonTeleportBasePosition
-    else if(
-        // has need update flag
-        needUpdateCommonTeleportBasePosition
-    ){
-        needGetNewPosition = true;
-    }
-    // set teleportPosition
-    else{
+    if(!isEmgTeleport){
+        // set teleportPosition with update commonTeleportBasePosition
         if(
-            commonTeleportBasePosition != null &&
-            // by prob
-            ProbabilityTrue(probOfReuseCommonTeleportBasePosition)
+            // has need update flag
+            needUpdateCommonTeleportBasePosition
         ){
-            needGetNewPosition = false;
-        }
-        else{
             needGetNewPosition = true;
         }
+        // set teleportPosition
+        else{
+            if(
+                commonTeleportBasePosition != null &&
+                // by prob
+                ProbabilityTrue(probOfReuseCommonTeleportBasePosition)
+            ){
+                needGetNewPosition = false;
+            }
+            else{
+                needGetNewPosition = true;
+            }
+        }
+    }
+    else{
+        needGetNewPosition = false;
     }
 
-    if(needGetNewPosition){
+    // do emergency teleport as threat enemy 
+    if(
+        isEmgTeleport
+    ){
+        // set teleportPosition by object position
+        teleportPosition = CurrentObjectOnPosition() + (objectDirection * 3);
+    }
+    else if(needGetNewPosition){
         // set teleportPosition by calc new position
         if(
             // player on object
@@ -1312,6 +1319,7 @@ void DoTeleport(define isBeamFromBody!)"DoTeleport"{
         // set teleportPosition by reuse common position
         teleportPosition = GetTeleportPositionByCommonPosition();
     }
+
 
     if(teleportPosition != null){
         // teleport to teleportPosition
@@ -1412,7 +1420,7 @@ if(
     IsGameInProgress() &&
     IsInSpawnRoom()
 ){
-    DoTeleport(false);
+    DoTeleport(false, false);
     Wait(1, WaitBehavior.AbortWhenFalse);
     WaitUntilServerFree();
     LoopIfConditionIsTrue();
@@ -1474,7 +1482,7 @@ if(
     }
     else{
         // teleport
-        DoTeleport(false);
+        DoTeleport(false, false);
     }
 
 
@@ -1518,6 +1526,7 @@ if(
                 )
             )
         );
+        
         Wait(spawnInteval, WaitBehavior.IgnoreCondition);
         WaitUntilServerFree();
     }
@@ -1563,6 +1572,7 @@ if(
         ){
             SetUltimateCharge(activeEnemys[scLoopIndex], DefaultPercentage());
             PressButton(activeEnemys[scLoopIndex], Button.Ultimate);
+
             Wait(shotCallDelay, WaitBehavior.IgnoreCondition);
             WaitUntilServerFree();
         }
@@ -1602,8 +1612,9 @@ if(
     }
     combatTeleportInterval = RoundToInteger(combatTeleportInterval, Rounding.Up);
 
+    define isEmgTeleport! = false;
+
     for(;combatTeleportInterval > 0; combatTeleportInterval --){
-        Wait(1, WaitBehavior.AbortWhenFalse);
         if(
             // player on object
             IsPlayerOnObject &&
@@ -1613,18 +1624,19 @@ if(
             IsCloseWin(playerTeam)
         ){
             // instantly teleport for defend object in finale phase
+            isEmgTeleport = true;
             break;
         }
+
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        WaitUntilServerFree();
     }
 
     if(IsAlive()){
-        // Wait fpr suppress over protect
-        Wait(RandomReal(0, 1.0), WaitBehavior.AbortWhenFalse);
         // teleport with teleport beam from body
-        DoTeleport(true);
+        // teleport with emergency by close lose
+        DoTeleport(true, isEmgTeleport);
     }
-
-    WaitUntilServerFree();
     LoopIfConditionIsTrue();
 }
 
@@ -1912,6 +1924,32 @@ if(
     LoopIfConditionIsTrue();
 }
 
+// TAG EnemyBot/ResetAbilitys ----------
+// rule: "EnemyBot/ResetAbilitys/reset"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == enemyTeam &&
+//     IsThreatEnemy(ep) &&
+//     IsGameInProgress()
+// ){
+//     define buttons = [
+//         Button.PrimaryFire,
+//         Button.SecondaryFire,
+//         Button.Ability1,
+//         Button.Ability2, 
+//         Button.Jump,
+//         Button.Crouch
+//     ];
+//     for(define idx = 0; idx < CountOf(buttons); idx++){
+//         SetAbilityCooldown(ep, buttons[idx], 0);
+//         SetAbilityCharge(ep, buttons[idx], 3);
+//         SetAbilityResource(ep, buttons[idx], DefaultPercentage());
+//     }
+
+//     Wait(3, WaitBehavior.AbortWhenFalse);
+//     LoopIfConditionIsTrue();
+// }
+
 // TAG EnemyBot/ObstIcon ----------
 playervar define obstIcon;
 define warningIconColor: isBlink ? Color.Red : Color.Yellow;
@@ -2045,7 +2083,8 @@ if(
 //     TeamOf() == playerTeam
 // ){
 //     while(true){
-//         Wait(3);
+//         DoGunshipFire(GUNSHIP_FIRE_TARGHET_MODE.NEAR_AIM_POS);
+//         Wait(1);
 //     }
 // }
 
