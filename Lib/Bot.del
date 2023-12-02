@@ -53,7 +53,7 @@ void CreateBotsByAsset(define asset!, define team!, define addLimitNum!)"CreateB
                     RandomDirection()
                 );
                 Wait(createBotInterval, WaitBehavior.IgnoreCondition);
-                WaitUntilServerFree();
+                WaitUntilReleaseServerLoadLevel(ServerLoadLevel.Overload);
             }
             // set Bot type as enemy type
             define bot! = PlayersInSlot(slot, team);
@@ -83,7 +83,7 @@ void CreateBotsByHeroList(define heroList!, define team!)"CreateBotsByHeroList"{
                 RandomDirection()
             );
             Wait(createBotInterval, WaitBehavior.IgnoreCondition);
-            WaitUntilServerFree();
+            WaitUntilReleaseServerLoadLevel(ServerLoadLevel.Overload);
         }
     }
 }
@@ -107,7 +107,7 @@ void CreateBotsByHeroInput(define hero!, define num!, define team!)"CreateBotsBy
                 RandomDirection()
             );
             Wait(createBotInterval, WaitBehavior.IgnoreCondition);
-            WaitUntilServerFree();
+            WaitUntilReleaseServerLoadLevel(ServerLoadLevel.Overload);
         }
     }
 }
@@ -1237,12 +1237,8 @@ if(
             SetActionState(ep, GetNextActionState());
         }
 
-        WaitRandomAfterServerFree();
-        Wait(
-            actionState == ActionState.Non ?
-                watchUpdateRate / 2 :
-                watchUpdateRate,
-            WaitBehavior.AbortWhenFalse);
+        WaitRandomAfterlReleaseServerLoadLevel(actionState != ActionState.Non ? ServerLoadLevel.Busy : ServerLoadLevel.Overload);
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
 }
 
@@ -1273,7 +1269,7 @@ if(
     )
 ){
     AbortIf(!isBotActive);
-    WaitUntilServerFree();
+    WaitUntilReleaseServerLoadLevel(ServerLoadLevel.Busy);
 
     // find next target
     FindTarget();
@@ -1293,7 +1289,7 @@ if(
     )
 ){
     AbortIf(!isBotActive);
-    WaitUntilServerFree();
+    WaitUntilReleaseServerLoadLevel(ServerLoadLevel.Busy);
 
     // find next target
     FindTarget();
@@ -1306,14 +1302,17 @@ Event.OnDamageTaken
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
-    isBotActive &&
     IsAlive() &&
     (
         Attacker() != ep
     )
 ){
     AbortIf(!isBotActive);
-    WaitUntilServerFree();
+
+    // action call to near bots
+    CallToNearBot();
+
+    WaitUntilReleaseServerLoadLevel(ServerLoadLevel.Busy);
     
     if(
         // set target in Non
@@ -1329,8 +1328,6 @@ if(
         SetActionState(ep, GetNextActionState());
     }
 
-    // action call to near bots
-    CallToNearBot();
     // reduce overrun change target
     Wait(3.0, WaitBehavior.IgnoreCondition);
 }
@@ -1415,7 +1412,7 @@ if(
         // hero unique action
         PolingHeroUniqueAction();
         
-        WaitRandomAfterServerFree();
+        WaitRandomAfterlReleaseServerLoadLevel(ServerLoadLevel.Hot);
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
 }
@@ -1448,7 +1445,7 @@ if(
         // hero unique action
         PolingHeroUniqueAction();
 
-        WaitRandomAfterServerFree();
+        WaitRandomAfterlReleaseServerLoadLevel(ServerLoadLevel.Hot);
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
 }
@@ -1481,7 +1478,7 @@ if(
         // hero unique action
         PolingHeroUniqueAction();
 
-        WaitRandomAfterServerFree();
+        WaitRandomAfterlReleaseServerLoadLevel(ServerLoadLevel.Hot);
         Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
     }
 }
@@ -2328,7 +2325,7 @@ define EnemyDensityRateOfAimTargetNear(in define dist):
     NumberOfPlayers(EnemyTeamOf(ep));
 
 // can's implment as function, cuz need control instance each button
-void StartButtonControl(in define bc){
+void StartButtonControl(in define button!, define buttonBehaivor!, define releaseMin!, define releaseMax!, define pressMin!, define pressMax!){
     if(noShooting) return;
 
     define startButton = false;
@@ -2343,19 +2340,19 @@ void StartButtonControl(in define bc){
     
     // if state dependent buttons
     if(
-        isMatchButton(bc[ButtonControl.button], stateDependemtButtons)
+        isMatchButton(button, stateDependemtButtons)
     ){
         // if match attack state buttons
         if(
             actionState == ActionState.Attack &&
-            isMatchButton(bc[ButtonControl.button], attackButtons)
+            isMatchButton(button, attackButtons)
         ){
             startButton = true;
         }
         // if match support state buttons
         else if(
             actionState == ActionState.Support &&
-            isMatchButton(bc[ButtonControl.button], supportButtons)
+            isMatchButton(button, supportButtons)
         ){
             startButton = true;
         }
@@ -2367,21 +2364,21 @@ void StartButtonControl(in define bc){
     // is not state dependent buttons
     if(!startButton){
         // stop button
-        StopHoldingButton(ep, bc[ButtonControl.button]);
+        StopHoldingButton(ep, button);
     }
     else{
         // not conbination fire
         if(!canFireButtonCombination){
             // if start primary button, release secondary button
             if(
-                bc[ButtonControl.button] == Button.PrimaryFire &&
+                button == Button.PrimaryFire &&
                 IsButtonHeld(ep, Button.SecondaryFire)
             ){
                 StopHoldingButton(ep, Button.SecondaryFire);
             }
             // if start secondary button, release primary button
             else if(
-                bc[ButtonControl.button] == Button.SecondaryFire &&
+                button == Button.SecondaryFire &&
                 IsButtonHeld(ep, Button.PrimaryFire)
             ){
                 StopHoldingButton(ep, Button.PrimaryFire);
@@ -2389,80 +2386,83 @@ void StartButtonControl(in define bc){
         }
 
         // add button bit for debug 
-        AddButtonBit(bc[ButtonControl.button]);
+        AddButtonBit(button);
 
         // start button
         // release-press action
-        if(bc[ButtonControl.buttonBehaivor] == ButtonBehaivor.ReleasePress){
+        if(buttonBehaivor == ButtonBehaivor.ReleasePress){
             while(true){
                 // button released during
                 Wait(
                     RandomReal(
-                        bc[ButtonControl.releaseMin],
-                        bc[ButtonControl.releaseMax]
+                        releaseMin,
+                        releaseMax
                     ) * buttonControlReleaseScale,
                     WaitBehavior.AbortWhenFalse
                 );
 
+                WaitRandomAfterlReleaseServerLoadLevel(ServerLoadLevel.Busy);
+
                 if(
-                    bc[ButtonControl.button] == Button.Ultimate &&
+                    button == Button.Ultimate &&
                     ProbabilityTrue(100 * (1 - EnemyDensityRateOfAimTargetNear(ActionRange.Close)))
                 ){
                     // skip use ultimate whem alive enemies count is low
                     continue;
                 }
 
-                StartHoldingButton(ep, bc[ButtonControl.button]);
+                StartHoldingButton(ep, button);
 
                 if(
-                    bc[ButtonControl.button] == Button.Jump &&
+                    button == Button.Jump &&
                     hasDoubleJumpButtonAbility &&
                     ProbabilityTrue(50)
                 ){
                     // use double jump ability
                     Wait(RandomReal(0.1, 0.5), WaitBehavior.AbortWhenFalse);
-                    StopHoldingButton(ep, bc[ButtonControl.button]);
+                    StopHoldingButton(ep, button);
                     Wait(RandomReal(0.1, 0.5), WaitBehavior.AbortWhenFalse);
-                    StartHoldingButton(ep, bc[ButtonControl.button]);
+                    StartHoldingButton(ep, button);
                 }
 
                 // button hold during
                 Wait(
                     RandomReal(
-                        bc[ButtonControl.pressMin],
-                        bc[ButtonControl.pressMax]
+                        pressMin,
+                        pressMax
                     ) * buttonControlPressScale,
                     WaitBehavior.AbortWhenFalse
                 );
 
-                StopHoldingButton(ep, bc[ButtonControl.button]);
+                StopHoldingButton(ep, button);
             }
         }
         // release-repeat action
-        else if(bc[ButtonControl.buttonBehaivor] == ButtonBehaivor.ReleaseRepeat){
+        else if(buttonBehaivor == ButtonBehaivor.ReleaseRepeat){
             while(true){
                 // button released during
                 Wait(
                     RandomReal(
-                        bc[ButtonControl.releaseMin],
-                        bc[ButtonControl.releaseMax]
+                        releaseMin,
+                        releaseMax
                     ) * buttonControlReleaseScale,
                     WaitBehavior.AbortWhenFalse
                 );
 
-                // set button repeat during
+                WaitRandomAfterlReleaseServerLoadLevel(ServerLoadLevel.Busy);
+
+                // set button repeat during and flag
                 repeatDuring = 
                     RandomReal(
-                        bc[ButtonControl.pressMin],
-                        bc[ButtonControl.pressMax]
+                        pressMin,
+                        pressMax
                     ) * buttonControlPressScale;
-
                 isRepeatFiring = true;
                 
                 while(
                     isRepeatFiring            
                 ){
-                    PressButton(ep, bc[ButtonControl.button]);
+                    PressButton(ep, button);
                     Wait(0.25, WaitBehavior.AbortWhenFalse);
                 }
             }
@@ -2525,14 +2525,12 @@ if(
     AbortIf(!isBotActive);
 
     StartButtonControl(
-        [
-            Button.PrimaryFire,
-            primaryFireButtonBehaivor,
-            primaryFireButtonReleaseMin,
-            primaryFireButtonReleaseMax,
-            primaryFireButtonPressMin,
-            primaryFireButtonPressMax
-        ]
+        Button.PrimaryFire,
+        primaryFireButtonBehaivor,
+        primaryFireButtonReleaseMin,
+        primaryFireButtonReleaseMax,
+        primaryFireButtonPressMin,
+        primaryFireButtonPressMax
     );
 }
 
@@ -2547,14 +2545,12 @@ if(
     AbortIf(!isBotActive);
 
     StartButtonControl(
-        [
-            Button.SecondaryFire,
-            secondaryFireButtonBehaivor,
-            secondaryFireButtonReleaseMin,
-            secondaryFireButtonReleaseMax,
-            secondaryFireButtonPressMin,
-            secondaryFireButtonPressMax
-        ]
+        Button.SecondaryFire,
+        secondaryFireButtonBehaivor,
+        secondaryFireButtonReleaseMin,
+        secondaryFireButtonReleaseMax,
+        secondaryFireButtonPressMin,
+        secondaryFireButtonPressMax
     );
 }
 
@@ -2569,14 +2565,12 @@ if(
     AbortIf(!isBotActive);
 
     StartButtonControl(
-        [
-            Button.Ability1,
-            ButtonBehaivor.ReleasePress,
-            ability1ButtonReleaseMin,
-            ability1ButtonReleaseMax,
-            ability1ButtonPressMin,
-            ability1ButtonPressMax
-        ]
+        Button.Ability1,
+        ButtonBehaivor.ReleasePress,
+        ability1ButtonReleaseMin,
+        ability1ButtonReleaseMax,
+        ability1ButtonPressMin,
+        ability1ButtonPressMax
     );
 }
 
@@ -2591,14 +2585,12 @@ if(
     AbortIf(!isBotActive);
 
     StartButtonControl(
-        [
-            Button.Ability2,
-            ButtonBehaivor.ReleasePress,
-            ability2ButtonReleaseMin,
-            ability2ButtonReleaseMax,
-            ability2ButtonPressMin,
-            ability2ButtonPressMax
-        ]
+        Button.Ability2,
+        ButtonBehaivor.ReleasePress,
+        ability2ButtonReleaseMin,
+        ability2ButtonReleaseMax,
+        ability2ButtonPressMin,
+        ability2ButtonPressMax
     );
 }
 
@@ -2614,14 +2606,12 @@ if(
     AbortIf(!isBotActive);
     
     StartButtonControl(
-        [
-            Button.Ultimate,
-            ButtonBehaivor.ReleasePress,
-            ultimateButtonReleaseMin,
-            ultimateButtonReleaseMax,
-            ultimateButtonPressMin,
-            ultimateButtonPressMax
-        ]
+        Button.Ultimate,
+        ButtonBehaivor.ReleasePress,
+        ultimateButtonReleaseMin,
+        ultimateButtonReleaseMax,
+        ultimateButtonPressMin,
+        ultimateButtonPressMax
     );
 }
 
@@ -2636,14 +2626,12 @@ if(
     AbortIf(!isBotActive);
 
     StartButtonControl(
-        [
-            Button.Crouch,
-            ButtonBehaivor.ReleasePress,
-            crouchButtonReleaseMin,
-            crouchButtonReleaseMax,
-            crouchButtonPressMin,
-            crouchButtonPressMax
-        ]
+        Button.Crouch,
+        ButtonBehaivor.ReleasePress,
+        crouchButtonReleaseMin,
+        crouchButtonReleaseMax,
+        crouchButtonPressMin,
+        crouchButtonPressMax
     );
 }
 
@@ -2658,14 +2646,12 @@ if(
     AbortIf(!isBotActive);
 
     StartButtonControl(
-        [
-            Button.Jump,
-            ButtonBehaivor.ReleasePress,
-            jumpButtonReleaseMin,
-            jumpButtonReleaseMax,
-            jumpButtonPressMin,
-            jumpButtonPressMax
-        ]
+        Button.Jump,
+        ButtonBehaivor.ReleasePress,
+        jumpButtonReleaseMin,
+        jumpButtonReleaseMax,
+        jumpButtonPressMin,
+        jumpButtonPressMax
     );
 }
 
