@@ -17,6 +17,20 @@ if(
     StartForcingDummyBotName(ep, GetDummyName());
 }
 
+playervar define isSucided!;
+
+rule: "Buddy/fastRespawnBySucided"
+Event.OnDeath
+if(
+    TeamOf() == playerTeam &&
+    IsDummyBot()
+){
+    if(Attacker() == ep){
+        isSucided = true;
+        Respawn();
+    }
+}
+
 define FindNearPositionAlivePlayer(define position!):
     FirstOf(
         SortedArray(
@@ -98,7 +112,10 @@ void SetFollowTarget()"SetFollowTarget"{
                 // set spawn point as followTarget for wait player respawn and join
                 followTarget = SpawnPoints(playerTeam)[0];
             }
-            else{
+            else if(
+                // valid object
+                objPos != null
+            ){
                 // set object as followTarget by non player
                 followTarget = objPos;
             }
@@ -111,20 +128,6 @@ define buddyReturnTimeScale : 0.75;
 playervar define isInitialTeleport! = true;
 
 void TeleportToFollowTarget()"TeleportToFollowTarget"{
-
-    if(
-        // is not teleport of first spawn by entity created
-        !isInitialTeleport
-    ){
-        // wait for return to front line by dist
-        Wait(
-            DistanceBetween(ep, followTarget) / walkMeterPerSec * buddyReturnTimeScale,
-            WaitBehavior.AbortWhenFalse);
-    }
-    else{
-        isInitialTeleport = false;
-    }
-
     define teleportPos!;
     
     if(
@@ -138,11 +141,33 @@ void TeleportToFollowTarget()"TeleportToFollowTarget"{
     }
     else{
         // teleport to followTarget offset position
-        teleportPos = BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRangeMin * 4);
-        teleportPos = teleportPos + DirectionTowards(ep, followTarget); // avoid map surface
+        teleportPos = BlockedPositon(followTarget, DirectionTowards(followTarget, ep), followRangeMax);
+        teleportPos = teleportPos - DirectionTowards(followTarget, ep); // avoid map surface
         if(IsBelowAbyss(teleportPos)){
+            // cancel offset by abyss
             teleportPos = followTarget;
         }
+        else{
+            // set below position
+            teleportPos = BelowPosition(teleportPos);
+        }
+    }
+
+
+    if(
+        // is not teleport of first spawn by entity created
+        !isInitialTeleport &&
+        // is not sucided
+        !isSucided
+    ){
+        // wait by distance to teleportPos
+        Wait(
+            (DistanceBetween(ep, teleportPos) / walkMeterPerSec) * buddyReturnTimeScale,
+            WaitBehavior.AbortWhenFalse);
+    }
+    else{
+        isInitialTeleport = false;
+        isSucided = false;
     }
 
     // WaitUntil(
