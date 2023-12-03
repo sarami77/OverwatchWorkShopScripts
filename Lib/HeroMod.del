@@ -20,6 +20,7 @@ enum HeroModType{
     POWER_CHARGING,
     HEALING_SYRINGE,
     SAVIOR,
+    POWERFUL_GIFT,
     TECHNICIAN,
     SURVIVALIST,
     GUNSHIP_SUPPORT,
@@ -203,6 +204,19 @@ if(
 }
 
 // TAG HeroMod/Action ----------
+define CanTouchPlayerList():
+    IsDummyBot(ep) ?
+        AllPlayers(playerTeam) :
+        PlayersInViewAngle(ep, playerTeam, 45);
+
+define CanTouchAE():
+    ae != ep &&
+    DistanceBetween(ep, ae) <= (
+        IsDummyBot(ep) ?
+            6 :
+            3
+    );
+
 void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) playervar "DoHeroModAction"{
     // TAG TEAMMATE_DEATH/RAGE
     if(
@@ -561,7 +575,7 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
             heroModName = "GUNSHIP SUPPORT";
             heroModDetail = 
                 "lost 50% health..." + NL + 
-                "  + incoming gunship fire and attack enemy nearby self for protect" + NL + 
+                "  + incoming gunship fire and attack enemy nearby myself for protect" + NL + 
                 "    * has 20 seconds cooldown to re-trigger" + NL + 
                 "- receive heal 50%";
             SetHealingReceived(ep, 50);
@@ -588,7 +602,7 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
             heroModName = "HEALING SYRINGE";
             heroModDetail = 
                 "long press melee key..." + NL +
-                "  + without near teammate to heal self 200 health" + NL +
+                "  + without near teammate to heal myself 200 health" + NL +
                 "  + with near teammate to heal teammate 500 health" + NL +
                 "  - consume 20% ult charge";
         }
@@ -604,12 +618,13 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
                     FirstOf(
                         SortedArray(
                             FilteredArray(
-                                IsDummyBot(ep) ? AllPlayers(playerTeam) : PlayersInViewAngle(ep, playerTeam, 45),
+                                CanTouchPlayerList(),
                                 (
-                                    ae != ep &&
+                                    CanTouchAE() &&
                                     IsAlive(ae) &&
-                                    (IsDummyBot(ep) ? NormalizedHealth(ae) < 0.5 : NormalizedHealth(ae) < 1.0) &&
-                                    DistanceBetween(ep, ae) <= (IsDummyBot(ep) ? 6 : 3)
+                                    IsDummyBot(ep) ?
+                                        NormalizedHealth(ae) < 0.5 :
+                                        NormalizedHealth(ae) < 1.0
                                 )
                             ),
                             DistanceBetween(ep, ae)
@@ -621,8 +636,9 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
                 ){
                     Heal(target, ep, 500);
                     SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
-                    PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
-                    PlayEffect([ep,target], PlayEffect.BuffExplosionSound, null, target, 100);
+
+                    PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
+                    PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
                     
                     SmallMessage(ep, "Healed "+ target + HeroIconString(HeroOf(target)));
                     SmallMessage(target, "Healed by "+ ep + HeroIconString(HeroOf(ep)));
@@ -630,7 +646,8 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
                 else if(NormalizedHealth(ep) < 1.0){
                     Heal(ep, ep, 200);
                     SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
-                    PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, ep, 1.5);
+
+                    PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Yellow, ep, 1.5);
                     PlayEffect(ep, PlayEffect.BuffExplosionSound, null, ep, 100);
                 }
             }
@@ -673,11 +690,10 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
                     FirstOf(
                         SortedArray(
                             FilteredArray(
-                                IsDummyBot(ep) ? AllPlayers(playerTeam) : PlayersInViewAngle(ep, playerTeam, 45),
+                                CanTouchPlayerList(),
                                 (
-                                    ae != ep &&
-                                    IsDead(ae) &&
-                                    DistanceBetween(ep, ae) <= (IsDummyBot(ep) ? 6 : 3)
+                                    CanTouchAE() &&
+                                    IsDead(ae)
                                 )
                             ),
                             DistanceBetween(ep, ae)
@@ -689,10 +705,66 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
                 ){
                     Resurrect(target);
                     SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
-                    PlayEffect(AllPlayers(playerTeam), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
+
+                    PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
                     PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
+
                     SmallMessage(ep, "Revived "+ target + HeroIconString(HeroOf(target)));
                     SmallMessage(target, "Revived by "+ ep + HeroIconString(HeroOf(ep)));
+                }
+            }
+        }
+    }
+    // TAG POWERFUL_GIFT
+    else if(
+        selectHeroMod == HeroModType.POWERFUL_GIFT
+    ){
+        if(
+            trigger == HeroModTrigger.ACTIVATE
+        ){
+            heroModName = "POWERFUL GIFT";
+            heroModDetail = 
+                "long press melee key to near teammate..." + NL +
+                "  - give my ult charge to teammate" + NL +
+                "  + gived ult charge increase to 150%" + NL +
+                "    * overflowed ult charge return to myself ";
+
+        }
+        else if(
+            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+        ){
+            if(
+                IsAlive() &&
+                UltimateChargePercent() > 0
+            ){
+                define target! = 
+                    FirstOf(
+                        SortedArray(
+                            FilteredArray(
+                                CanTouchPlayerList(),
+                                (
+                                    CanTouchAE() &&
+                                    UltimateChargePercent(ae) < DefaultPercentage()
+                                )
+                            ),
+                            DistanceBetween(ep, ae)
+                        )
+                    );
+                
+                if(
+                    target != null
+                ){
+                    define charge! = UltimateChargePercent() * 1.5;
+                    define fillableCharge! = DefaultPercentage() - UltimateChargePercent(target);
+                    define remainCharge! = charge - fillableCharge;
+                    SetUltimateCharge(target, UltimateChargePercent(target) + charge);
+                    SetUltimateCharge(ep, remainCharge);
+
+                    PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.SkyBlue, target, 1.5);
+                    PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
+
+                    SmallMessage(ep, "Ult charge gived "+ target + HeroIconString(HeroOf(target)));
+                    SmallMessage(target, "Ult charge gived by "+ ep + HeroIconString(HeroOf(ep)));
                 }
             }
         }
@@ -884,7 +956,7 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
             heroModName = "RAGE";
             heroModDetail = 
                 "+ at teammate dead, gain 30% ult charge" + NL +
-                "- at self dead, lose all ult charge";
+                "- at myself dead, lose all ult charge";
         }
         else if(
             trigger == HeroModTrigger.DEATH
@@ -1272,7 +1344,7 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
         ){
             heroModName = "ZOMBIE";
             heroModDetail = 
-                "+ at dead, revive self after 5 seconds" + NL +
+                "+ at dead, revive myself after 5 seconds" + NL +
                 "  * in over time is excluded" + NL +
                 "+ long press melee key in dead to force return to spawn room" + NL +
                 "- max health 50%" + NL +
@@ -1801,6 +1873,7 @@ if(
         selectHeroMod == HeroModType.BIRD_MAN ||
         selectHeroMod == HeroModType.HEALING_SYRINGE ||
         selectHeroMod == HeroModType.SAVIOR ||
+        selectHeroMod == HeroModType.POWERFUL_GIFT ||
         selectHeroMod == HeroModType.GRUDGE_FIRE_BALL ||
         selectHeroMod == HeroModType.GRUDGE_LIGHTNING ||
         selectHeroMod == HeroModType.ZOMBIE
