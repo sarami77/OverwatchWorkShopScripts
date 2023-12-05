@@ -7,7 +7,7 @@ playervar define heroModDetail;
 
 enum HeroModType{
     INIT,
-    NO_HERO_MOD,
+    NO_MOD,
     MEDIC,
     HIT_MAN,
     ASSASSIN,
@@ -28,16 +28,15 @@ enum HeroModType{
     SHOT_CALL,
     FAST_CHARGE,
     SUPER_ULT,
+    GRUDGE_LIGHTNING,
+    GRUDGE_FIRE_BALL,
     GUNSHIP_REQUEST,
     STRAFING_REQUEST,
     TITAN_FORM,
     BEAM_SNIPER,
-    GRUDGE_LIGHTNING,
-    GRUDGE_FIRE_BALL,
+    GUNSHIP_GUNNER,
     ZOMBIE,
     LAST
-    // GUNSHIP_GUNNER
-    // ENTRUSTED_POWER
 }
 
 enum HeroModTrigger{
@@ -135,7 +134,7 @@ if(
     ){
         // player
         // select no mod as player
-        selectHeroMod = HeroModType.NO_HERO_MOD;
+        selectHeroMod = HeroModType.NO_MOD;
     }
     else{
         // dummy bot
@@ -204,6 +203,71 @@ if(
 }
 
 // TAG HeroMod/Action ----------
+void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) playervar "DoHeroModAction"{
+    // TAG HeroModTrigger Action
+    switch(trigger){
+        // TAG TEAMMATE_DEATH
+        // give ult charge to player with RAGE
+        case HeroModTrigger.TEAMMATE_DEATH:
+        define playerArray! = FilteredArray(
+            AllPlayers(playerTeam),
+            (
+                ae != ep &&
+                ae.selectHeroMod == HeroModType.RAGE
+            )
+        );
+        for(define index! = 0; index < CountOf(playerArray); index++){
+            define player! = playerArray[index];
+            SetUltimateCharge(player, UltimateChargePercent(player) + 30);
+        }
+        break;
+        default:
+    }
+
+    // TAG HeroModTypeAction
+    switch(heromod){
+        case HeroModType.NO_MOD:            HeroMod_Action_NO_MOD(trigger);                             break;
+        case HeroModType.MEDIC:             HeroMod_Action_MEDIC(trigger);                              break;
+        case HeroModType.HIT_MAN:           HeroMod_Action_HIT_MAN(trigger);                            break;
+        case HeroModType.ASSASSIN:          HeroMod_Action_ASSASSIN(trigger);                           break;
+        case HeroModType.SPRINTER:          HeroMod_Action_SPRINTER(trigger);                           break;
+        case HeroModType.BIRD_MAN:          HeroMod_Action_BIRD_MAN(trigger);                           break;
+        case HeroModType.LIGHT_ARMOR:       HeroMod_Action_LIGHT_ARMOR(trigger);                        break;
+        case HeroModType.HEAVY_ARMOR:       HeroMod_Action_HEAVY_ARMOR(trigger);                        break;
+        case HeroModType.FIXED_TURRET:      HeroMod_Action_FIXED_TURRET(trigger);                       break;
+        case HeroModType.ADRENALINE_RUSH:   HeroMod_Action_ADRENALINE_RUSH(trigger);                    break;
+        case HeroModType.POWER_CHARGING:    HeroMod_Action_POWER_CHARGING(trigger);                     break;
+        case HeroModType.HEALING_SYRINGE:   HeroMod_Action_HEALING_SYRINGE(trigger);                    break;
+        case HeroModType.SAVIOR:            HeroMod_Action_SAVIOR(trigger);                             break;
+        case HeroModType.POWERFUL_GIFT:     HeroMod_Action_POWERFUL_GIFT(trigger);                      break;
+        case HeroModType.TECHNICIAN:        HeroMod_Action_TECHNICIAN(trigger);                         break;
+        case HeroModType.SURVIVALIST:       HeroMod_Action_SURVIVALIST(trigger);                        break;
+        case HeroModType.GUNSHIP_SUPPORT:   HeroMod_Action_GUNSHIP_SUPPORT(trigger);                    break;
+        case HeroModType.RAGE:              HeroMod_Action_RAGE(trigger);                               break;
+        case HeroModType.SHOT_CALL:         HeroMod_Action_SHOT_CALL(trigger);                          break;
+        case HeroModType.FAST_CHARGE:       HeroMod_Action_FAST_CHARGE(trigger);                        break;
+        case HeroModType.SUPER_ULT:         HeroMod_Action_SUPER_ULT(trigger);                          break;
+        case HeroModType.GRUDGE_LIGHTNING:  HeroMod_Action_GRUDGE_LIGHTNING(trigger, inputPayload);     break;
+        case HeroModType.GRUDGE_FIRE_BALL:  HeroMod_Action_GRUDGE_FIRE_BALL(trigger, inputPayload);     break;
+        case HeroModType.GUNSHIP_REQUEST:   HeroMod_Action_GUNSHIP_REQUEST(trigger);                    break;
+        case HeroModType.STRAFING_REQUEST:  HeroMod_Action_STRAFING_REQUEST(trigger);                   break;
+        case HeroModType.TITAN_FORM:        HeroMod_Action_TITAN_FORM(trigger);                         break;
+        case HeroModType.BEAM_SNIPER:       HeroMod_Action_BEAM_SNIPER(trigger);                        break;
+        case HeroModType.GUNSHIP_GUNNER:    HeroMod_Action_GUNSHIP_GUNNER(trigger);                     break;
+        case HeroModType.ZOMBIE:            HeroMod_Action_ZOMBIE(trigger);                             break;
+        default:
+    }
+}
+
+// TAG HeroMod/Variable ----------
+// TAG GRUDGE_FIRE_BALL & GRUDGE_LIGHTNING
+playervar define grudgePower!;    
+// TAG TITAN_FORM & BEAM_SNIPER
+playervar define isTransformed!;
+// TAG BEAM_SNIPER
+playervar define beamAimPos!;
+playervar define beamCharged!;
+
 define CanTouchPlayerList():
     IsDummyBot(ep) ?
         AllPlayers(playerTeam) :
@@ -217,1366 +281,1387 @@ define CanTouchAE():
             3
     );
 
-void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) playervar "DoHeroModAction"{
-    // TAG TEAMMATE_DEATH/RAGE
+// TAG HeroMod/Function ----------
+// TAG NO_MOD
+void HeroMod_Action_NO_MOD(define trigger!) playervar "HeroMod_Action_NO_MOD"{
     if(
-        trigger == HeroModTrigger.TEAMMATE_DEATH
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "NO MOD";
+        heroModDetail = 
+            "no modified" + NL +
+            "no pros(+), no cons(-)";
+    }
+}
+// TAG MEDIC
+void HeroMod_Action_MEDIC(define trigger!) playervar "HeroMod_Action_MEDIC"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "MEDIC";
+        heroModDetail = 
+            "+ deal heal 150%" + NL +
+            "- deal damage 50%";
+        SetHealingDealt(ep, 150);
+        SetDamageDealt(ep, 50);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetHealingDealt(ep, DefaultPercentage());
+        SetDamageDealt(ep, DefaultPercentage());
+    }
+}
+// TAG HIT_MAN
+void HeroMod_Action_HIT_MAN(define trigger!) playervar "HeroMod_Action_HIT_MAN"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "HIT MAN";
+        heroModDetail = 
+            "+ deal damage 150%" + NL +
+            "- receive heal 50%";
+        SetDamageDealt(ep, 150);
+        SetHealingReceived(ep, 50);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetDamageDealt(ep, DefaultPercentage());
+        SetHealingReceived(ep, DefaultPercentage());
+    }
+
+}
+// TAG ASSASSIN
+void HeroMod_Action_ASSASSIN(define trigger!) playervar "HeroMod_Action_ASSASSIN"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "ASSASSIN";
+        heroModDetail = 
+            "+ deal damage 125%" + NL +
+            "+ move speed 125%" + NL +
+            "- max Health 75%";
+        SetDamageDealt(ep, 125);
+        SetMoveSpeed(ep, 125);
+        SetMaxHealth(ep, 75);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetDamageDealt(ep, DefaultPercentage());
+        SetMoveSpeed(ep, DefaultPercentage());
+        SetMaxHealth(ep, DefaultPercentage());
+    }
+}
+// TAG SPRINTER
+void HeroMod_Action_SPRINTER(define trigger!) playervar "HeroMod_Action_SPRINTER"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "SPRINTER";
+        heroModDetail = 
+            "+ move speed 150%" + NL +
+            "- max health 75%";
+        SetMoveSpeed(ep, 150);
+        SetMaxHealth(ep, 75);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetMoveSpeed(ep, DefaultPercentage());
+        SetMaxHealth(ep, DefaultPercentage());
+    }
+
+}
+// TAG BIRD_MAN
+void HeroMod_Action_BIRD_MAN(define trigger!) playervar "HeroMod_Action_BIRD_MAN"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "BIRD MAN";
+        heroModDetail = 
+            "+ gravity 5%" + NL +
+            "  * long press melee key in air to dive" + NL +
+            "- max health 50%";
+        SetGravity(ep, 5);
+        SetMaxHealth(ep, 50);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetGravity(ep, DefaultPercentage());
+        SetMaxHealth(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+    ){
+        ApplyImpulse(ep, 
+            Down(),
+            20, Relative.ToWorld, ContraryMotion.Cancel);
+    }
+}
+// TAG LIGHT_ARMOR
+void HeroMod_Action_LIGHT_ARMOR(define trigger!) playervar "HeroMod_Action_LIGHT_ARMOR"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "LIGHT ARMOR";
+        heroModDetail = 
+            "+ max health 150%" + NL +
+            "- move speed 75%" + NL +
+            "- receive heal 50%";
+        SetMaxHealth(ep, 150);
+        SetMoveSpeed(ep, 75);
+        SetHealingReceived(ep, 50);
+        Heal(ep, null, MaxValue());
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetMaxHealth(ep, DefaultPercentage());
+        SetMoveSpeed(ep, DefaultPercentage());
+        SetHealingReceived(ep, DefaultPercentage());
+    }
+}
+// TAG HEAVY_ARMOR
+void HeroMod_Action_HEAVY_ARMOR(define trigger!) playervar "HeroMod_Action_HEAVY_ARMOR"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "HEAVY ARMOR";
+        heroModDetail = 
+            "+ max health 300%" + NL +
+            "- move speed 50%" + NL +
+            "- receive heal 25%";
+        SetMaxHealth(ep, 300);
+        SetMoveSpeed(ep, 50);
+        SetHealingReceived(ep, 25);
+        Heal(ep, null, MaxValue());
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetMaxHealth(ep, DefaultPercentage());
+        SetMoveSpeed(ep, DefaultPercentage());
+        SetHealingReceived(ep, DefaultPercentage());
+    }
+}
+// TAG FIXED_TURRET
+void HeroMod_Action_FIXED_TURRET(define trigger!) playervar "HeroMod_Action_FIXED_TURRET"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "FIXED TURRET";
+        heroModDetail = 
+            "in standing..." + NL +
+            "  + deal damage 150%" + NL +
+            "  + deal heal 150%" + NL +
+            "  + max health 200%" + NL +
+            "in moving..." + NL +
+            "  - deal damage 50%" + NL +
+            "  - deal heal 50%";
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetDamageDealt(ep, DefaultPercentage());
+        SetHealingDealt(ep, DefaultPercentage());
+        SetMaxHealth(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.STOP
+    ){
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
+        SetDamageDealt(ep, 150);
+        SetHealingDealt(ep, 150);
+        SetMaxHealth(ep, 200);
+        if(IsDummyBot()){
+            SetStatus(ep, null, Status.Rooted, RandomInteger(1, 10));
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.MOVING
+    ){
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
+        SetDamageDealt(ep, 50);
+        SetHealingDealt(ep, 50);
+        SetMaxHealth(ep, DefaultPercentage());
+    }
+}
+// TAG ADRENALINE_RUSH
+void HeroMod_Action_ADRENALINE_RUSH(define trigger!) playervar "HeroMod_Action_ADRENALINE_RUSH"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE ||
+        trigger == HeroModTrigger.TIME_PASSED
+    ){
+        define addValue! = IsAlive() ? ((1 - NormalizedHealth()) * 100) : 0;
+        heroModName = "ADRENALINE RUSH";
+        heroModDetail = 
+            "more lost health..." + NL +
+            "  + more deal damage (now "+ RoundToInteger((DefaultPercentage() + addValue), Rounding.Nearest) +"% / 200%)" + NL +
+            "  + more move speed (now "+ RoundToInteger((DefaultPercentage() + addValue), Rounding.Nearest) +"% / 200%)" + NL +
+            "- receive heal 50%";
+
+        if(
+            trigger == HeroModTrigger.ACTIVATE
+        ){
+            SetHealingReceived(ep, 50);
+        }
+        else if(
+            trigger == HeroModTrigger.TIME_PASSED
+        ){
+            SetDamageDealt(ep, (DefaultPercentage() + addValue));
+            SetMoveSpeed(ep, (DefaultPercentage() + addValue));             
+            Wait(1, WaitBehavior.AbortWhenFalse);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetHealingReceived(ep, DefaultPercentage());
+        SetMaxHealth(ep, DefaultPercentage());
+        SetMoveSpeed(ep, DefaultPercentage());
+    }
+}
+// TAG POWER_CHARGING
+void HeroMod_Action_POWER_CHARGING(define trigger!) playervar "HeroMod_Action_POWER_CHARGING"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE ||
+        trigger == HeroModTrigger.TIME_PASSED
+    ){
+        define addValue! = (UltimateChargePercent());
+        heroModName = "POWER CHARGING";
+        heroModDetail = 
+            "more ult charges..." + NL +
+            "  + more deal damage (now "+ RoundToInteger((DefaultPercentage() + (addValue * 0.5)), Rounding.Nearest) +"% / 150%)" + NL +
+            "  + more deal heal (now "+ RoundToInteger((DefaultPercentage() + (addValue * 0.5)), Rounding.Nearest) +"% / 150%)" + NL +
+            "  + more move speed (now "+ RoundToInteger((DefaultPercentage() + (addValue * 0.5)), Rounding.Nearest) +"% / 150%)" + NL +
+            "- at dead, lose all ult charge";
+
+        if(
+            trigger == HeroModTrigger.TIME_PASSED
+        ){
+            SetDamageDealt(ep, (DefaultPercentage() + (addValue * 0.5)));
+            SetHealingDealt(ep, (DefaultPercentage() + (addValue * 0.5)));
+            SetMoveSpeed(ep, (DefaultPercentage() + (addValue * 0.5)));
+            Wait(1, WaitBehavior.AbortWhenFalse);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetDamageDealt(ep, DefaultPercentage());
+        SetHealingDealt(ep, DefaultPercentage());
+        SetMoveSpeed(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.DEATH
+    ){
+        SetUltimateCharge(ep, 0);
+    }
+}
+// TAG HEALING_SYRINGE
+void HeroMod_Action_HEALING_SYRINGE(define trigger!) playervar "HeroMod_Action_HEALING_SYRINGE"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "HEALING SYRINGE";
+        heroModDetail = 
+            "long press melee key..." + NL +
+            "  + without near teammate to heal myself 200 health" + NL +
+            "  + with near teammate to heal teammate 500 health" + NL +
+            "  - consume 20% ult charge";
+    }
+    else if(
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+    ){
+        define consumeUltCharge! = 20;
+        if(
+            IsAlive() &&
+            UltimateChargePercent() >= consumeUltCharge
+        ){
+            define target! = 
+                FirstOf(
+                    SortedArray(
+                        FilteredArray(
+                            CanTouchPlayerList(),
+                            (
+                                CanTouchAE() &&
+                                IsAlive(ae) &&
+                                IsDummyBot(ep) ?
+                                    NormalizedHealth(ae) < 0.5 :
+                                    NormalizedHealth(ae) < 1.0
+                            )
+                        ),
+                        DistanceBetween(ep, ae)
+                    )
+                );
+
+            if(
+                target != null
+            ){
+                Heal(target, ep, 500);
+                SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
+
+                PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
+                PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
+                
+                SmallMessage(ep, "Healed "+ target + HeroIconString(HeroOf(target)));
+                SmallMessage(target, "Healed by "+ ep + HeroIconString(HeroOf(ep)));
+            }
+            else if(NormalizedHealth(ep) < 1.0){
+                Heal(ep, ep, 200);
+                SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
+
+                PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Yellow, ep, 1.5);
+                PlayEffect(ep, PlayEffect.BuffExplosionSound, null, ep, 100);
+            }
+        }
+    }
+}
+// TAG SAVIOR
+void HeroMod_Action_SAVIOR(define trigger!) playervar "HeroMod_Action_SAVIOR"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "SAVIOR";
+        heroModDetail = 
+            "long press melee key to near dead teammate..." + NL +
+            "  + revive teammate" + NL +
+            "  - consume 50% ult charge";
+    }
+    else if(
+        trigger == HeroModTrigger.TIME_PASSED
+    ){
+        define targets! = AllDeadPlayers(playerTeam);
+        for(define index! = 0; index < CountOf(targets); index++){
+            // play white effect
+            PlayEffect(
+                ep, PlayEffect.GoodPickupEffect,
+                Color.White, targets[index], 1);
+        }
+        Wait(2, WaitBehavior.AbortWhenFalse);
+    }
+    else if(
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+    ){
+        define consumeUltCharge! = 50;
+        if(
+            IsAlive() &&
+            UltimateChargePercent() >= consumeUltCharge
+        ){
+            define target! = 
+                FirstOf(
+                    SortedArray(
+                        FilteredArray(
+                            CanTouchPlayerList(),
+                            (
+                                CanTouchAE() &&
+                                IsDead(ae)
+                            )
+                        ),
+                        DistanceBetween(ep, ae)
+                    )
+                );
+            
+            if(
+                target != null
+            ){
+                Resurrect(target);
+                SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
+
+                PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
+                PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
+
+                SmallMessage(ep, "Revived "+ target + HeroIconString(HeroOf(target)));
+                SmallMessage(target, "Revived by "+ ep + HeroIconString(HeroOf(ep)));
+            }
+        }
+    }
+}
+// TAG POWERFUL_GIFT
+void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POWERFUL_GIFT"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "POWERFUL GIFT";
+        heroModDetail = 
+            "long press melee key to near teammate..." + NL +
+            "  - give my ult charge to teammate" + NL +
+            "  + gived ult charge increase to 150%" + NL +
+            "    * overflowed ult charge return to myself ";
+    }
+    else if(
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+    ){
+        if(
+            IsAlive() &&
+            UltimateChargePercent() > 0
+        ){
+            define target! = 
+                FirstOf(
+                    SortedArray(
+                        FilteredArray(
+                            CanTouchPlayerList(),
+                            (
+                                CanTouchAE() &&
+                                UltimateChargePercent(ae) < DefaultPercentage()
+                            )
+                        ),
+                        DistanceBetween(ep, ae)
+                    )
+                );
+            
+            if(
+                target != null
+            ){
+                define charge! = UltimateChargePercent() * 1.5;
+                define fillableCharge! = DefaultPercentage() - UltimateChargePercent(target);
+                define remainCharge! = charge - fillableCharge;
+                SetUltimateCharge(target, UltimateChargePercent(target) + charge);
+                SetUltimateCharge(ep, remainCharge);
+
+                PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.SkyBlue, target, 1.5);
+                PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
+
+                SmallMessage(ep, "Ult charge gived "+ target + HeroIconString(HeroOf(target)));
+                SmallMessage(target, "Ult charge gived by "+ ep + HeroIconString(HeroOf(ep)));
+            }
+        }
+    }
+}
+// TAG TECHNICIAN
+void HeroMod_Action_TECHNICIAN(define trigger!) playervar "HeroMod_Action_TECHNICIAN"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "TECHNICIAN";
+        heroModDetail = 
+            "kill enemy to..." + NL +
+            "  + get 150% move speed status until 3 seconds" + NL +
+            "  + reset cooldown ability2(default E key)" + NL +
+            "  + reset cooldown secondary fire ability" + NL +
+            "    * has 5 seconds cooldown to re-trigger" + NL + 
+            "- receive heal 50%";
+        SetHealingReceived(ep, 50);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetHealingReceived(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.KILL
+    ){
+        // set fast status
+        SetMoveSpeed(ep, 150);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+
+        // wait ability finish
+        if(
+            IsUsingAbility2()
+        ){
+            WaitUntil(!IsUsingAbility2(), 10);
+        }
+
+        define buttonList! = [
+            Button.Ability2,
+            Button.SecondaryFire
+        ];
+
+        // add ability stock
+        for(define index! = 0; index < CountOf(buttonList); index++){
+            AddAbilityStock(buttonList[index], 1);
+        }
+
+        Wait(3, WaitBehavior.IgnoreCondition);
+
+        // reset fast status
+        SetMoveSpeed(ep, DefaultPercentage());
+
+        Wait(2, WaitBehavior.IgnoreCondition);
+    }
+}
+// TAG SURVIVALIST
+void HeroMod_Action_SURVIVALIST(define trigger!) playervar "HeroMod_Action_SURVIVALIST"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "SURVIVALIST";
+        heroModDetail = 
+            "lost 50% health..." + NL + 
+            "  + get unkillable status until 3 seconds" + NL +
+            "  + auto use ability1(default Shift key) and reset cooldown" + NL +
+            "  + auto use jump ability and reset cooldown" + NL +
+            "    * has 5 seconds cooldown to re-trigger" + NL + 
+            "- receive heal 50%";
+        SetHealingReceived(ep, 50);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetHealingReceived(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.LOST_HEALTH
+    ){
+        // set unkillable status
+        SetStatus(ep, ep, Status.Unkillable, 3);
+
+        define buttonList! = [
+            Button.Ability1,
+            Button.Jump
+        ];
+
+        // add ability stock before auto use
+        for(define index! = 0; index < CountOf(buttonList); index++){
+            AddAbilityStock(buttonList[index], 1);
+        }
+
+        // use jump abiliry
+        PressButton(ep, Button.Jump);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        PressButton(ep, Button.Jump);   
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+
+        // use Ability1 abiliry
+        if(!IsUsingAbility1()){
+            PressButton(ep, Button.Ability1);
+        }
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        
+        // wait ability finish
+        if(
+            IsUsingAbility1()
+        ){
+            WaitUntil(!IsUsingAbility1(), 10);
+        }
+
+        // add ability stock after auto use
+        for(define index! = 0; index < CountOf(buttonList); index++){
+            AddAbilityStock(buttonList[index], 1);
+        }
+
+        Wait(5, WaitBehavior.IgnoreCondition);
+    }
+
+}
+// TAG GUNSHIP_SUPPORT
+void HeroMod_Action_GUNSHIP_SUPPORT(define trigger!) playervar "HeroMod_Action_GUNSHIP_SUPPORT"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "GUNSHIP SUPPORT";
+        heroModDetail = 
+            "lost 50% health..." + NL + 
+            "  + incoming gunship fire and attack enemy nearby myself for protect" + NL + 
+            "    * has 10 seconds cooldown to re-trigger" + NL + 
+            "- receive heal 50%";
+        SetHealingReceived(ep, 50);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetHealingReceived(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.LOST_HEALTH
+    ){
+        HeroMod_Action_GUNSHIP_FIRE(GUNSHIP_FIRE_TARGHET_MODE.NEAR_PLAYER, 30);
+        Wait(10, WaitBehavior.IgnoreCondition);
+    }
+}
+// TAG RAGE
+void HeroMod_Action_RAGE(define trigger!) playervar "HeroMod_Action_RAGE"{
+    // RAGE has HeroModTrigger Action TEAMMATE_DEATH
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "RAGE";
+        heroModDetail = 
+            "+ at teammate dead, gain 30% ult charge" + NL +
+            "- at myself dead, lose all ult charge";
+    }
+    else if(
+        trigger == HeroModTrigger.DEATH
+    ){
+        SetUltimateCharge(ep, 0);
+    }
+}
+// TAG SHOT_CALL
+void HeroMod_Action_SHOT_CALL(define trigger!) playervar "HeroMod_Action_SHOT_CALL"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "SHOT CALL";
+        heroModDetail = 
+            "+ use ult to all teammates gain ult full charge" + NL +
+            "  * each bot teammate use ult with you for combo attack" + NL +
+            "  * other SHOT CALL player is can't gain full charge" + NL +
+            "- every 3 seconds passed to lose 1% ult charge";
+    }
+    else if(
+        trigger == HeroModTrigger.CHARGING_ULT
+    ){
+        Wait(3, WaitBehavior.AbortWhenFalse);
+        if(UltimateChargePercent() < DefaultPercentage()){
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.USING_ULT
     ){
         define playerArray! = FilteredArray(
             AllPlayers(playerTeam),
             (
                 ae != ep &&
-                ae.selectHeroMod == HeroModType.RAGE
+                ae.selectHeroMod != HeroModType.SHOT_CALL &&
+                UltimateChargePercent(ae) < DefaultPercentage()
             )
         );
+
+        // set ult full charge to players of teammate
         for(define index! = 0; index < CountOf(playerArray); index++){
             define player! = playerArray[index];
-            SetUltimateCharge(player, UltimateChargePercent(player) + 30);
+            SetUltimateCharge(player, 100);
+            SmallMessage(player, "gained ult full charge by "+ ep + HeroIconString(HeroOf()));
+            PlayEffect(player, PlayEffect.BuffExplosionSound, null, player, 100);
         }
-    }
 
-    // TAG NO_HERO_MOD
-    if(
-        selectHeroMod == HeroModType.NO_HERO_MOD
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "NO MOD";
-            heroModDetail = 
-                "no modified" + NL +
-                "no pros(+), no cons(-)";
-        }
-    }
-    // TAG MEDIC
-    else if(
-        selectHeroMod == HeroModType.MEDIC
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "MEDIC";
-            heroModDetail = 
-                "+ deal heal 150%" + NL +
-                "- deal damage 50%";
-            SetHealingDealt(ep, 150);
-            SetDamageDealt(ep, 50);
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetHealingDealt(ep, DefaultPercentage());
-            SetDamageDealt(ep, DefaultPercentage());
-        }
-    }
-    // TAG HIT_MAN
-    else if(
-        selectHeroMod == HeroModType.HIT_MAN
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "HIT MAN";
-            heroModDetail = 
-                "+ deal damage 150%" + NL +
-                "- receive heal 50%";
-            SetDamageDealt(ep, 150);
-            SetHealingReceived(ep, 50);
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetDamageDealt(ep, DefaultPercentage());
-            SetHealingReceived(ep, DefaultPercentage());
-        }
-    }
-    // TAG ASSASSIN
-    else if(
-        selectHeroMod == HeroModType.ASSASSIN
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "ASSASSIN";
-            heroModDetail = 
-                "+ deal damage 125%" + NL +
-                "+ move speed 125%" + NL +
-                "- max Health 75%";
-            SetDamageDealt(ep, 125);
-            SetMoveSpeed(ep, 125);
-            SetMaxHealth(ep, 75);
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetDamageDealt(ep, DefaultPercentage());
-            SetMoveSpeed(ep, DefaultPercentage());
-            SetMaxHealth(ep, DefaultPercentage());
-        }
-    }
-    // TAG SPRINTER
-    else if(
-        selectHeroMod == HeroModType.SPRINTER
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "SPRINTER";
-            heroModDetail = 
-                "+ move speed 150%" + NL +
-                "- max health 75%";
-            SetMoveSpeed(ep, 150);
-            SetMaxHealth(ep, 75);
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetMoveSpeed(ep, DefaultPercentage());
-            SetMaxHealth(ep, DefaultPercentage());
-        }
-    }
-    // TAG BIRD_MAN
-    else if(
-        selectHeroMod == HeroModType.BIRD_MAN
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "BIRD MAN";
-            heroModDetail = 
-                "+ gravity 5%" + NL +
-                "  * long press melee key in air to dive" + NL +
-                "- max health 50%";
-            SetGravity(ep, 5);
-            SetMaxHealth(ep, 50);
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetGravity(ep, DefaultPercentage());
-            SetMaxHealth(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
-        ){
-            ApplyImpulse(ep, 
-                Down(),
-                20, Relative.ToWorld, ContraryMotion.Cancel);
-        }
-    }
-    // TAG LIGHT_ARMOR
-    else if(
-        selectHeroMod == HeroModType.LIGHT_ARMOR
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "LIGHT ARMOR";
-            heroModDetail = 
-                "+ max health 150%" + NL +
-                "- move speed 75%" + NL +
-                "- receive heal 50%";
-            SetMaxHealth(ep, 150);
-            SetMoveSpeed(ep, 75);
-            SetHealingReceived(ep, 50);
-            Heal(ep, null, MaxValue());
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetMaxHealth(ep, DefaultPercentage());
-            SetMoveSpeed(ep, DefaultPercentage());
-            SetHealingReceived(ep, DefaultPercentage());
-        }
-    }
-    // TAG HEAVY_ARMOR
-    else if(
-        selectHeroMod == HeroModType.HEAVY_ARMOR
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "HEAVY ARMOR";
-            heroModDetail = 
-                "+ max health 300%" + NL +
-                "- move speed 50%" + NL +
-                "- receive heal 25%";
-            SetMaxHealth(ep, 300);
-            SetMoveSpeed(ep, 50);
-            SetHealingReceived(ep, 25);
-            Heal(ep, null, MaxValue());
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetMaxHealth(ep, DefaultPercentage());
-            SetMoveSpeed(ep, DefaultPercentage());
-            SetHealingReceived(ep, DefaultPercentage());
-        }
-    }
-    // TAG FIXED_TURRET
-    else if(
-        selectHeroMod == HeroModType.FIXED_TURRET
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "FIXED TURRET";
-            heroModDetail = 
-                "in standing..." + NL +
-                "  + deal damage 150%" + NL +
-                "  + deal heal 150%" + NL +
-                "  + max health 200%" + NL +
-                "in moving..." + NL +
-                "  - deal damage 50%" + NL +
-                "  - deal heal 50%";
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetDamageDealt(ep, DefaultPercentage());
-            SetHealingDealt(ep, DefaultPercentage());
-            SetMaxHealth(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.STOP
-        ){
-            Wait(0.2, WaitBehavior.AbortWhenFalse);
-            SetDamageDealt(ep, 150);
-            SetHealingDealt(ep, 150);
-            SetMaxHealth(ep, 200);
-            if(IsDummyBot()){
-                SetStatus(ep, null, Status.Rooted, RandomInteger(1, 10));
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.MOVING
-        ){
-            Wait(0.2, WaitBehavior.AbortWhenFalse);
-            SetDamageDealt(ep, 50);
-            SetHealingDealt(ep, 50);
-            SetMaxHealth(ep, DefaultPercentage());
-        }
-    }
-    // TAG TECHNICIAN
-    else if(
-        selectHeroMod == HeroModType.TECHNICIAN
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "TECHNICIAN";
-            heroModDetail = 
-                "kill enemy to..." + NL +
-                "  + get 150% move speed status until 3 seconds" + NL +
-                "  + reset cooldown ability2(default E key)" + NL +
-                "  + reset cooldown secondary fire ability" + NL +
-                "    * has 5 seconds cooldown to re-trigger" + NL + 
-                "- receive heal 50%";
-            SetHealingReceived(ep, 50);
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetHealingReceived(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.KILL
-        ){
-            SetMoveSpeed(ep, 150);
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-
+        // sync use ult by buddy
+        for(define index! = 0; index < CountOf(playerArray); index++){
+            define player! = playerArray[index];
             if(
-                IsUsingAbility2()
+                IsDummyBot(player) &&
+                ProbabilityTrue(70)
             ){
-                WaitUntil(!IsUsingAbility2(), 10);
-            }
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-
-            define buttonList! = [
-                Button.Ability2,
-                Button.SecondaryFire
-            ];
-            for(define index! = 0; index < CountOf(buttonList); index++){
-                AddAbilityStock(buttonList[index], 1);
-            }
-
-            Wait(3, WaitBehavior.IgnoreCondition);
-            SetMoveSpeed(ep, DefaultPercentage());
-            Wait(2, WaitBehavior.IgnoreCondition);
-        }
-    }
-    // TAG SURVIVALIST
-    else if(
-        selectHeroMod == HeroModType.SURVIVALIST
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "SURVIVALIST";
-            heroModDetail = 
-                "lost 50% health..." + NL + 
-                "  + get unkillable status until 3 seconds" + NL +
-                "  + auto use ability1(default Shift key) and reset cooldown" + NL +
-                "  + auto use jump ability and reset cooldown" + NL +
-                "    * has 5 seconds cooldown to re-trigger" + NL + 
-                "- receive heal 50%";
-            SetHealingReceived(ep, 50);
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetHealingReceived(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.LOST_HEALTH
-        ){
-            SetStatus(ep, ep, Status.Unkillable, 3);
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-
-            define buttonList! = [
-                Button.Ability1,
-                Button.Jump
-            ];
-            for(define index! = 0; index < CountOf(buttonList); index++){
-                AddAbilityStock(buttonList[index], 1);
-            }
-
-            PressButton(ep, Button.Jump);
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-            PressButton(ep, Button.Jump);   // use jump button abiliry
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-            if(!IsUsingAbility1()){
-                PressButton(ep, Button.Ability1);
-            }
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-            
-            if(
-                IsUsingAbility1()
-            ){
-                WaitUntil(!IsUsingAbility1(), 10);
-            }
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-
-            for(define index! = 0; index < CountOf(buttonList); index++){
-                AddAbilityStock(buttonList[index], 1);
-            }
-
-            Wait(5, WaitBehavior.IgnoreCondition);
-        }
-    }
-    // TAG GUNSHIP_SUPPORT
-    else if(
-        selectHeroMod == HeroModType.GUNSHIP_SUPPORT
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "GUNSHIP SUPPORT";
-            heroModDetail = 
-                "lost 50% health..." + NL + 
-                "  + incoming gunship fire and attack enemy nearby myself for protect" + NL + 
-                "    * has 20 seconds cooldown to re-trigger" + NL + 
-                "- receive heal 50%";
-            SetHealingReceived(ep, 50);
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetHealingReceived(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.LOST_HEALTH
-        ){
-            DoGunshipFire(GUNSHIP_FIRE_TARGHET_MODE.NEAR_PLAYER, 30);
-            Wait(20, WaitBehavior.IgnoreCondition);
-        }
-    }
-    // TAG HEALING_SYRINGE
-    else if(
-        selectHeroMod == HeroModType.HEALING_SYRINGE
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "HEALING SYRINGE";
-            heroModDetail = 
-                "long press melee key..." + NL +
-                "  + without near teammate to heal myself 200 health" + NL +
-                "  + with near teammate to heal teammate 500 health" + NL +
-                "  - consume 20% ult charge";
-        }
-        else if(
-            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
-        ){
-            define consumeUltCharge! = 20;
-            if(
-                IsAlive() &&
-                UltimateChargePercent() >= consumeUltCharge
-            ){
-                define target! = 
-                    FirstOf(
-                        SortedArray(
-                            FilteredArray(
-                                CanTouchPlayerList(),
-                                (
-                                    CanTouchAE() &&
-                                    IsAlive(ae) &&
-                                    IsDummyBot(ep) ?
-                                        NormalizedHealth(ae) < 0.5 :
-                                        NormalizedHealth(ae) < 1.0
-                                )
-                            ),
-                            DistanceBetween(ep, ae)
-                        )
-                    );
-
-                if(
-                    target != null
-                ){
-                    Heal(target, ep, 500);
-                    SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
-
-                    PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
-                    PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
-                    
-                    SmallMessage(ep, "Healed "+ target + HeroIconString(HeroOf(target)));
-                    SmallMessage(target, "Healed by "+ ep + HeroIconString(HeroOf(ep)));
+                // bot use ult bt syc attack
+                PressButton(player, Button.Ultimate);
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
+                if(!IsUsingUltimate(player)){
+                    PressButton(player, Button.PrimaryFire);
                 }
-                else if(NormalizedHealth(ep) < 1.0){
-                    Heal(ep, ep, 200);
-                    SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
-
-                    PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Yellow, ep, 1.5);
-                    PlayEffect(ep, PlayEffect.BuffExplosionSound, null, ep, 100);
-                }
-            }
-        }
-    }
-    // TAG SAVIOR
-    else if(
-        selectHeroMod == HeroModType.SAVIOR
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "SAVIOR";
-            heroModDetail = 
-                "long press melee key to near dead teammate..." + NL +
-                "  + revive teammate" + NL +
-                "  - consume 50% ult charge";
-        }
-        else if(
-            trigger == HeroModTrigger.TIME_PASSED
-        ){
-            define targets! = AllDeadPlayers(playerTeam);
-            for(define index! = 0; index < CountOf(targets); index++){
-                // play white effect
-                PlayEffect(
-                    ep, PlayEffect.GoodPickupEffect,
-                    Color.White, targets[index], 1);
-            }
-            Wait(2, WaitBehavior.AbortWhenFalse);
-        }
-        else if(
-            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
-        ){
-            define consumeUltCharge! = 50;
-            if(
-                IsAlive() &&
-                UltimateChargePercent() >= consumeUltCharge
-            ){
-                define target! = 
-                    FirstOf(
-                        SortedArray(
-                            FilteredArray(
-                                CanTouchPlayerList(),
-                                (
-                                    CanTouchAE() &&
-                                    IsDead(ae)
-                                )
-                            ),
-                            DistanceBetween(ep, ae)
-                        )
-                    );
-                
-                if(
-                    target != null
-                ){
-                    Resurrect(target);
-                    SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
-
-                    PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Yellow, target, 1.5);
-                    PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
-
-                    SmallMessage(ep, "Revived "+ target + HeroIconString(HeroOf(target)));
-                    SmallMessage(target, "Revived by "+ ep + HeroIconString(HeroOf(ep)));
-                }
-            }
-        }
-    }
-    // TAG POWERFUL_GIFT
-    else if(
-        selectHeroMod == HeroModType.POWERFUL_GIFT
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "POWERFUL GIFT";
-            heroModDetail = 
-                "long press melee key to near teammate..." + NL +
-                "  - give my ult charge to teammate" + NL +
-                "  + gived ult charge increase to 150%" + NL +
-                "    * overflowed ult charge return to myself ";
-
-        }
-        else if(
-            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
-        ){
-            if(
-                IsAlive() &&
-                UltimateChargePercent() > 0
-            ){
-                define target! = 
-                    FirstOf(
-                        SortedArray(
-                            FilteredArray(
-                                CanTouchPlayerList(),
-                                (
-                                    CanTouchAE() &&
-                                    UltimateChargePercent(ae) < DefaultPercentage()
-                                )
-                            ),
-                            DistanceBetween(ep, ae)
-                        )
-                    );
-                
-                if(
-                    target != null
-                ){
-                    define charge! = UltimateChargePercent() * 1.5;
-                    define fillableCharge! = DefaultPercentage() - UltimateChargePercent(target);
-                    define remainCharge! = charge - fillableCharge;
-                    SetUltimateCharge(target, UltimateChargePercent(target) + charge);
-                    SetUltimateCharge(ep, remainCharge);
-
-                    PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.SkyBlue, target, 1.5);
-                    PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
-
-                    SmallMessage(ep, "Ult charge gived "+ target + HeroIconString(HeroOf(target)));
-                    SmallMessage(target, "Ult charge gived by "+ ep + HeroIconString(HeroOf(ep)));
-                }
-            }
-        }
-    }
-    // TAG GRUDGE_LIGHTNING
-    else if(
-        selectHeroMod == HeroModType.GRUDGE_LIGHTNING
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE ||
-            trigger == HeroModTrigger.TIME_PASSED
-        ){
-            define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
-            heroModName = "GRUDGE LIGHTNING";
-            heroModDetail = 
-                "+ receive damage to charge grudge power (now "+ currentValue +"% / 100%)" + NL +
-                "+ hold melee key to release grudge power as penetrate lightning and stun" + NL +
-                "- receive heal 50%";
-
-            if(
-                trigger == HeroModTrigger.ACTIVATE
-            ){
-                SetHealingReceived(ep, 50);
-                grudgePower = 0;
-            }
-            else if(
-                trigger == HeroModTrigger.TIME_PASSED
-            ){
-                Wait(1, WaitBehavior.AbortWhenFalse);
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetHealingReceived(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.RECEIVE_DAMAGE
-        ){
-            if(DefaultPercentage() <= grudgePower){return;}
-            define gainPower! = inputPayload * 0.1;
-            if(grudgePower + gainPower > DefaultPercentage()){
-                grudgePower = DefaultPercentage();
-            }
-            else{
-                grudgePower = grudgePower + gainPower;
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
-        ){
-            DoGrudgeLightning();
-        }
-    }
-
-    // TAG GRUDGE_FIRE_BALL
-    else if(
-        selectHeroMod == HeroModType.GRUDGE_FIRE_BALL
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE ||
-            trigger == HeroModTrigger.TIME_PASSED
-        ){
-            define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
-            heroModName = "GRUDGE FIRE BALL";
-            heroModDetail = 
-                "+ heal teammate to charge grudge power (now "+ currentValue +"% / 100%)" + NL +
-                "+ long press melee key to release grudge power as fire ball and blast" + NL +
-                "- receive heal 50%";
-
-            if(
-                trigger == HeroModTrigger.ACTIVATE
-            ){
-                SetHealingReceived(ep, 50);
-                grudgePower = 0;
-            }
-            else if(
-                trigger == HeroModTrigger.TIME_PASSED
-            ){
-                Wait(1, WaitBehavior.AbortWhenFalse);
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetHealingReceived(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.DEAL_HEAL
-        ){
-            if(DefaultPercentage() <= grudgePower){return;}
-            define gainPower! = inputPayload * 0.2;
-            if(grudgePower + gainPower > DefaultPercentage()){
-                grudgePower = DefaultPercentage();
-            }
-            else{
-                grudgePower = grudgePower + gainPower;
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
-        ){
-            DoGrudgeFireBall();
-        }
-    }
-    // TAG ADRENALINE_RUSH
-    else if(
-        selectHeroMod == HeroModType.ADRENALINE_RUSH
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE ||
-            trigger == HeroModTrigger.TIME_PASSED
-        ){
-            define addValue! = IsAlive() ? ((1 - NormalizedHealth()) * 100) : 0;
-            heroModName = "ADRENALINE RUSH";
-            heroModDetail = 
-                "more lost health..." + NL +
-                "  + more deal damage (now "+ RoundToInteger((DefaultPercentage() + addValue), Rounding.Nearest) +"% / 200%)" + NL +
-                "  + more move speed (now "+ RoundToInteger((DefaultPercentage() + addValue), Rounding.Nearest) +"% / 200%)" + NL +
-                "- receive heal 50%";
-
-            if(
-                trigger == HeroModTrigger.ACTIVATE
-            ){
-                SetHealingReceived(ep, 50);
-            }
-            else if(
-                trigger == HeroModTrigger.TIME_PASSED
-            ){
-                SetDamageDealt(ep, (DefaultPercentage() + addValue));
-                SetMoveSpeed(ep, (DefaultPercentage() + addValue));             
-                Wait(1, WaitBehavior.AbortWhenFalse);
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetHealingReceived(ep, DefaultPercentage());
-            SetMaxHealth(ep, DefaultPercentage());
-            SetMoveSpeed(ep, DefaultPercentage());
-        }
-    }
-    // TAG POWER_CHARGING
-    else if(
-        selectHeroMod == HeroModType.POWER_CHARGING
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE ||
-            trigger == HeroModTrigger.TIME_PASSED
-        ){
-            define addValue! = (UltimateChargePercent());
-            heroModName = "POWER CHARGING";
-            heroModDetail = 
-                "more ult charges..." + NL +
-                "  + more deal damage (now "+ RoundToInteger((DefaultPercentage() + (addValue * 0.5)), Rounding.Nearest) +"% / 150%)" + NL +
-                "  + more deal heal (now "+ RoundToInteger((DefaultPercentage() + (addValue * 0.5)), Rounding.Nearest) +"% / 150%)" + NL +
-                "  + more move speed (now "+ RoundToInteger((DefaultPercentage() + (addValue * 0.5)), Rounding.Nearest) +"% / 150%)" + NL +
-                "- at dead, lose all ult charge";
-
-            if(
-                trigger == HeroModTrigger.TIME_PASSED
-            ){
-                SetDamageDealt(ep, (DefaultPercentage() + (addValue * 0.5)));
-                SetHealingDealt(ep, (DefaultPercentage() + (addValue * 0.5)));
-                SetMoveSpeed(ep, (DefaultPercentage() + (addValue * 0.5)));
-                Wait(1, WaitBehavior.AbortWhenFalse);
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetDamageDealt(ep, DefaultPercentage());
-            SetHealingDealt(ep, DefaultPercentage());
-            SetMoveSpeed(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.DEATH
-        ){
-            SetUltimateCharge(ep, 0);
-        }
-    }
-    // TAG RAGE
-    else if(
-        selectHeroMod == HeroModType.RAGE
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "RAGE";
-            heroModDetail = 
-                "+ at teammate dead, gain 30% ult charge" + NL +
-                "- at myself dead, lose all ult charge";
-        }
-        else if(
-            trigger == HeroModTrigger.DEATH
-        ){
-            SetUltimateCharge(ep, 0);
-        }
-    }
-    // TAG SHOT_CALL
-    else if(
-        selectHeroMod == HeroModType.SHOT_CALL
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "SHOT CALL";
-            heroModDetail = 
-                "+ use ult to all teammates gain ult full charge" + NL +
-                "  * each bot teammate use ult with you for combo attack" + NL +
-                "  * other SHOT CALL player is can't gain full charge" + NL +
-                "- every 3 seconds passed to lose 1% ult charge";
-        }
-        else if(
-            trigger == HeroModTrigger.CHARGING_ULT
-        ){
-            Wait(3, WaitBehavior.AbortWhenFalse);
-            if(UltimateChargePercent() < DefaultPercentage()){
-                SetUltimateCharge(ep, UltimateChargePercent() - 1);
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.USING_ULT
-        ){
-            define playerArray! = FilteredArray(
-                AllPlayers(playerTeam),
-                (
-                    ae != ep &&
-                    ae.selectHeroMod != HeroModType.SHOT_CALL &&
-                    UltimateChargePercent(ae) < DefaultPercentage()
-                )
-            );
-
-            for(define index! = 0; index < CountOf(playerArray); index++){
-                // get ult full charge
-                define player! = playerArray[index];
-                SetUltimateCharge(player, 100);
-                SmallMessage(player, "gained ult full charge by "+ ep + HeroIconString(HeroOf()));
-                PlayEffect(player, PlayEffect.BuffExplosionSound, null, player, 100);
-            }
-
-            for(define index! = 0; index < CountOf(playerArray); index++){
-                define player! = playerArray[index];
-                if(
-                    IsDummyBot(player) &&
-                    ProbabilityTrue(70)
-                ){
-                    // bot use ult bt syc attack
-                    PressButton(player, Button.Ultimate);
-                    Wait(0.1, WaitBehavior.AbortWhenFalse);
-                    if(!IsUsingUltimate(player)){
-                        PressButton(player, Button.PrimaryFire);
-                    }
-                    // PressButton(player, Button.PrimaryFire);
-                    Wait(RandomReal(0.1, 0.3), WaitBehavior.AbortWhenFalse);
-                }
-            }
-        }
-    }
-    // TAG FAST_CHARGE
-    else if(
-        selectHeroMod == HeroModType.FAST_CHARGE
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "FAST CHARGE";
-            heroModDetail = 
-                "+ every 1 second passed to gain 3% ult charge" + NL +
-                "- max health 50%";
-            SetMaxHealth(ep, 50);
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetMaxHealth(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.CHARGING_ULT
-        ){
-            Wait(1, WaitBehavior.AbortWhenFalse);
-            if(
-                IsGameInProgress() &&
-                UltimateChargePercent() < DefaultPercentage()
-            ){
-                SetUltimateCharge(ep, UltimateChargePercent() + 3);
-            }
-        }
-    }
-    // TAG SUPER_ULT
-    else if(
-        selectHeroMod == HeroModType.SUPER_ULT
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "SUPER ULT";
-            heroModDetail = 
-                "in ult using..." + NL +
-                "  + get invincible status" + NL +
-                "  + deal damage 300%" + NL +
-                "  + deal heal 300%" + NL +
-                "  + move speed 200%" + NL +
-                "  + gravity 25%" + NL +
-                "+ at ult end, gain more ult full charge by 50% probility" + NL +
-                "- every 3 seconds passed to lose 1% ult charge";
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE ||
-            trigger == HeroModTrigger.NOT_USING_ULT
-        ){
-            ClearStatus(ep, Status.PhasedOut);
-            SetDamageDealt(ep, DefaultPercentage());
-            SetHealingDealt(ep, DefaultPercentage());
-            SetMoveSpeed(ep, DefaultPercentage());
-            SetGravity(ep, DefaultPercentage());
-
-            if(
-                trigger == HeroModTrigger.NOT_USING_ULT &&
-                isUltUsed
-            ){
-                isUltUsed = false;
-                if(
-                    ProbabilityTrue(50)
-                ){
-                    SetUltimateCharge(ep, 100);
-                }
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.CHARGING_ULT
-        ){
-            Wait(3, WaitBehavior.AbortWhenFalse);
-            if(UltimateChargePercent() < DefaultPercentage()){
-                SetUltimateCharge(ep, UltimateChargePercent() - 1);
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.USING_ULT
-        ){
-            isUltUsed = true;
-            
-            SetStatus(ep, null, Status.PhasedOut, MaxValue());
-            SetDamageDealt(ep, 300);
-            SetHealingDealt(ep, 300);
-            SetMoveSpeed(ep, 200);
-            SetGravity(ep, 25);
-        }
-    }
-    // TAG TITAN_FORM
-    else if(
-        selectHeroMod == HeroModType.TITAN_FORM
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "TITAN FORM";
-            heroModDetail = 
-                "+ use ult to transform to titan and rampage until 15 second" + NL +
-                "  * titan has super toughness, fast ability charge, wide range hammer attack" + NL +
-                "- every 3 seconds passed to lose 1% ult charge";
-        }
-        else if(
-            trigger == HeroModTrigger.CHARGING_ULT
-        ){
-            Wait(3, WaitBehavior.AbortWhenFalse);
-            if(
-                !isTransformed &&
-                UltimateChargePercent() < DefaultPercentage()
-            ){
-                SetUltimateCharge(ep, UltimateChargePercent() - 1);
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.USING_ULT
-        ){
-            isTransformed = true;
-            CancelPrimaryAction();
-            define prevHero! = HeroOf();
-            ForcePlayerHero(ep, Hero.Reinhardt);
-            SetHeroButtonControlPropety();
-            SetMaxHealth(ep, 500);
-            SetDamageDealt(ep, 250);
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-            Heal(ep, null, MaxValue());
-            define tianScale! = 2.5;
-            for(define scale! = 1; scale < tianScale; scale += 0.1){
-                StartScalingPlayer(ep, scale);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-            }
-            StartModifyingHeroVoiceLines(ep, 0.1, false);
-
-            for(define remainSecond! = 15; remainSecond > 0; remainSecond--){
-                if(IsDead()){
-                    break;
-                }
-                if(UltimateChargePercent() < DefaultPercentage()){
-                    SetUltimateCharge(ep, UltimateChargePercent() + 25);
-                }
-                SetAbilityCooldown(ep, Button.Ability1, 0);
-                SetAbilityCooldown(ep, Button.Ability2, 0);
-                Wait(1, WaitBehavior.IgnoreCondition);
-            }
-
-            StopModifyingHeroVoiceLines(ep);
-            for(define scale! = tianScale; scale > 1.0; scale -= 0.1){
-                StartScalingPlayer(ep, scale);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-            }
-            SetUltimateCharge(ep, 0);
-            SetMaxHealth(ep, DefaultPercentage());
-            SetDamageDealt(ep, DefaultPercentage());
-            ForcePlayerHero(ep, prevHero);
-            StopForcingHero(ep);
-            SetHeroButtonControlPropety();
-            isTransformed = false;
-            WaitUntil(!IsUsingUltimate(), MaxValue());
-        }
-    }
-    // TAG BEAM_SNIPER
-    else if(
-        selectHeroMod == HeroModType.BEAM_SNIPER
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "BEAM SNIPER";
-            heroModDetail = 
-                "+ use ult to transform to beam sniper and rampage until 40 second" + NL +
-                "  * beam sniper has powerful beam rifle with landed blast and penetrate wall" + NL +
-                "- every 3 seconds passed to lose 1% ult charge";
-            beamCharging = false;  // not charging
-        }
-        else if(
-            trigger == HeroModTrigger.CHARGING_ULT
-        ){
-            Wait(3, WaitBehavior.AbortWhenFalse);
-            if(
-                !isTransformed &&
-                UltimateChargePercent() < DefaultPercentage()
-            ){
-                SetUltimateCharge(ep, UltimateChargePercent() - 1);
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.USING_ULT
-        ){
-            isTransformed = true;
-            CancelPrimaryAction();
-            define prevHero! = HeroOf();
-            ForcePlayerHero(ep, Hero.Widowmaker);
-            SetHeroButtonControlPropety();
-            SetDamageDealt(ep, 200);
-
-            for(define remainSecond! = 40; remainSecond > 0; remainSecond--){
-                if(IsDead()){
-                    break;
-                }
-                if(UltimateChargePercent() < DefaultPercentage()){
-                    SetUltimateCharge(ep, UltimateChargePercent() + 20);
-                }
-                SetAbilityCooldown(ep, Button.Ability1, 0);
-                SetAbilityCooldown(ep, Button.Ability2, 0);
-                Wait(1, WaitBehavior.IgnoreCondition);
-            }
-
-            SetUltimateCharge(ep, 0);
-            SetDamageDealt(ep, DefaultPercentage());
-            ForcePlayerHero(ep, prevHero);
-            StopForcingHero(ep);
-            SetHeroButtonControlPropety();
-            isTransformed = false;
-            WaitUntil(!IsUsingUltimate(), MaxValue());
-        }
-        else if(
-            trigger == HeroModTrigger.USING_PRIMARY
-        ){
-            if(isTransformed){
-                DoBeamSniper();
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.USING_SECONDARY
-        ){
-            if(isTransformed){
-                while(IsFiringSecondary()){
-                    Wait(0.1, WaitBehavior.AbortWhenFalse);
-                    WaitUntil(IsFiringPrimary(), 1.2);
-                    // primary fire interrupted before charging fin
-                    if(IsFiringPrimary()){
-                        continue;
-                    }
-                    // scorping ended
-                    else if(!IsFiringSecondary()){
-                        Abort();
-                    }
-                    else if(IsFiringSecondary()){
-                        // charging fin
-                        beamCharging = true;
-                        // update aim pos
-                        while(beamCharging){
-                            // pre set aim pos
-                            beamAimPos = AimingPosition(40, EnemyTeamOf(ep));
-                            Wait(0.1, WaitBehavior.AbortWhenFalse);
-                        }
-                    }
-                }
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.NOT_USING_SECONDARY
-        ){
-            if(isTransformed){
-                beamCharging = false;
-            }
-        }
-    }
-    // TAG GUNSHIP_REQUEST
-    else if(
-        selectHeroMod == HeroModType.GUNSHIP_REQUEST
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "GUNSHIP REQUEST";
-            heroModDetail = 
-                "+ use ult to request gunship fire and attack enemy nearby aimming position" + NL +
-                "- every 3 seconds passed to lose 1% ult charge";
-        }
-        else if(
-            trigger == HeroModTrigger.CHARGING_ULT
-        ){
-            Wait(3, WaitBehavior.AbortWhenFalse);
-            if(UltimateChargePercent() < DefaultPercentage()){
-                SetUltimateCharge(ep, UltimateChargePercent() - 1);
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.USING_ULT
-        ){
-            DoGunshipFire(GUNSHIP_FIRE_TARGHET_MODE.NEAR_AIM_POS, 40);
-        }
-    }
-
-    // TAG STRAFING_REQUEST
-    else if(
-        selectHeroMod == HeroModType.STRAFING_REQUEST
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "STRAFING REQUEST";
-            heroModDetail = 
-                "+ use ult to request strafing fire and attack aimming position with straight shape" + NL +
-                "- every 3 seconds passed to lose 1% ult charge";
-        }
-        else if(
-            trigger == HeroModTrigger.CHARGING_ULT
-        ){
-            Wait(3, WaitBehavior.AbortWhenFalse);
-            if(UltimateChargePercent() < DefaultPercentage()){
-                SetUltimateCharge(ep, UltimateChargePercent() - 1);
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.USING_ULT
-        ){
-            DoStrafingFire();
-        }
-    }
-    // TAG ZOMBIE
-    else if(
-        selectHeroMod == HeroModType.ZOMBIE
-    ){
-        if(
-            trigger == HeroModTrigger.ACTIVATE
-        ){
-            heroModName = "ZOMBIE";
-            heroModDetail = 
-                "+ at dead, revive myself after 5 seconds" + NL +
-                "  * in over time is excluded" + NL +
-                "+ long press melee key in dead to force return to spawn room" + NL +
-                "- max health 50%" + NL +
-                "- receive heal 50%";
-            SetMaxHealth(ep, 50);
-            SetHealingReceived(ep, 50);
-        }
-        else if(
-            trigger == HeroModTrigger.DEACTIVATE
-        ){
-            SetMaxHealth(ep, DefaultPercentage());
-            SetHealingReceived(ep, DefaultPercentage());
-        }
-        else if(
-            trigger == HeroModTrigger.DEATH
-        ){
-            if(
-                !IsOverTime()
-            ){
-                Wait(5, WaitBehavior.AbortWhenFalse);
-                if(IsDeadByAbyss()){
-                    Teleport(ep, NearestWalkablePosition(ep));
-                    Wait(0.1, WaitBehavior.AbortWhenFalse);
-                }
-                SetStatus(ep, null, Status.Invincible, 3);
-                Resurrect(ep);
-            }
-        }
-        else if(
-            trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
-        ){
-            if(
-                IsDead()
-            ){
-                Respawn();
+                // PressButton(player, Button.PrimaryFire);
+                Wait(RandomReal(0.1, 0.3), WaitBehavior.AbortWhenFalse);
             }
         }
     }
 }
-
-// TAG HeroMod/Variable ----------
-playervar define grudgePower!;      // GRUDGE_FIRE_BALL, GRUDGE_LIGHTNING
-playervar define isTransformed!;    // TITAN_FORM, BEAM_SNIPER
-playervar define beamAimPos!;       // BEAM_SNIPER
-playervar define beamCharging!;     // BEAM_SNIPER
-
-// TAG HeroMod/Function ----------
-void DoGrudgeLightning() playervar "DoGrudgeLightning"{
+// TAG FAST_CHARGE
+void HeroMod_Action_FAST_CHARGE(define trigger!) playervar "HeroMod_Action_FAST_CHARGE"{
     if(
-        IsAlive() &&
-        grudgePower > 0
+        trigger == HeroModTrigger.ACTIVATE
     ){
-        if(IsDummyBot()){
-            StartHoldingButton(ep, Button.Melee);
+        heroModName = "FAST CHARGE";
+        heroModDetail = 
+            "+ every 1 second passed to gain 3% ult charge" + NL +
+            "- max health 50%";
+        SetMaxHealth(ep, 50);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetMaxHealth(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.CHARGING_ULT
+    ){
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        if(
+            IsGameInProgress() &&
+            UltimateChargePercent() < DefaultPercentage()
+        ){
+            SetUltimateCharge(ep, UltimateChargePercent() + 3);
         }
+    }
+}
+// TAG SUPER_ULT
+void HeroMod_Action_SUPER_ULT(define trigger!) playervar "HeroMod_Action_SUPER_ULT"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "SUPER ULT";
+        heroModDetail = 
+            "in ult using..." + NL +
+            "  + get invincible status" + NL +
+            "  + deal damage 300%" + NL +
+            "  + deal heal 300%" + NL +
+            "  + move speed 200%" + NL +
+            "  + gravity 25%" + NL +
+            "+ at ult end, gain more ult full charge by 50% probility" + NL +
+            "- every 3 seconds passed to lose 1% ult charge";
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE ||
+        trigger == HeroModTrigger.NOT_USING_ULT
+    ){
+        ClearStatus(ep, Status.PhasedOut);
+        SetDamageDealt(ep, DefaultPercentage());
+        SetHealingDealt(ep, DefaultPercentage());
+        SetMoveSpeed(ep, DefaultPercentage());
+        SetGravity(ep, DefaultPercentage());
 
-        define landPos;
-        define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
-            EyePosition() + Vector(0, -0.1, 0), landPos,
-            Color.SkyBlue, EffectRev.VisibleToPositionAndRadius);
+        if(
+            trigger == HeroModTrigger.NOT_USING_ULT &&
+            // is ult using started by SUPER_ULT
+            isUltUsed
+        ){
+            // reset ult using started by SUPER_ULT 
+            isUltUsed = false;
+            if(
+                ProbabilityTrue(50)
+            ){
+                SetUltimateCharge(ep, 100);
+                PlayEffect(ep, PlayEffect.BuffExplosionSound, null, ep, 100);
+                SmallMessage(ep, "gained more ult full charge!");
+            }
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.CHARGING_ULT
+    ){
+        Wait(3, WaitBehavior.AbortWhenFalse);
+        if(UltimateChargePercent() < DefaultPercentage()){
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.USING_ULT
+    ){
+        // set ult using started by SUPER_ULT (for exclude change mod with ult using)
+        isUltUsed = true;
+        
+        SetStatus(ep, null, Status.PhasedOut, MaxValue());
+        SetDamageDealt(ep, 300);
+        SetHealingDealt(ep, 300);
+        SetMoveSpeed(ep, 200);
+        SetGravity(ep, 25);
+    }
+}
+// TAG GRUDGE_LIGHTNING
+void HeroMod_Action_GRUDGE_LIGHTNING(define trigger!, define inputPayload!) playervar "HeroMod_Action_GRUDGE_LIGHTNING"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE ||
+        trigger == HeroModTrigger.TIME_PASSED
+    ){
+        define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
+        heroModName = "GRUDGE LIGHTNING";
+        heroModDetail = 
+            "+ receive damage to charge grudge power (now "+ currentValue +"% / 100%)" + NL +
+            "+ hold melee key to release grudge power as penetrate lightning and stun" + NL +
+            "- receive heal 50%";
 
-        define aimPos;
-        define scatter;
-        define targets;
-        define count = 0;
-        while(
+        if(
+            trigger == HeroModTrigger.ACTIVATE
+        ){
+            SetHealingReceived(ep, 50);
+            grudgePower = 0;
+        }
+        else if(
+            trigger == HeroModTrigger.TIME_PASSED
+        ){
+            Wait(1, WaitBehavior.AbortWhenFalse);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetHealingReceived(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.RECEIVE_DAMAGE
+    ){
+        if(DefaultPercentage() <= grudgePower){return;}
+        define gainPower! = inputPayload * 0.1;
+        if(grudgePower + gainPower > DefaultPercentage()){
+            grudgePower = DefaultPercentage();
+        }
+        else{
+            grudgePower = grudgePower + gainPower;
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+    ){
+        if(
             IsAlive() &&
-            IsButtonHeld(ep, Button.Melee) &&
             grudgePower > 0
         ){
-            if(count == 0){
-                grudgePower -= 3;
-                grudgePower = grudgePower < 0 ? 0 : grudgePower;
-
-                define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
-                heroModDetail = 
-                    "+ receive damage to charging grudge power (now "+ currentValue +"% / 100%)" + NL +
-                    "+ hold melee key to release grudge power as stunning lightning" + NL +
-                    "- receive heal 50%";
-
-                define dist! = DistanceBetween(EyePosition(), landPos);
-                aimPos = AimingPosition(40, null);
-                scatter = dist * 0.04;
-
-                // get inside sight players
-                targets = PlayersInViewAngle(ep, EnemyTeamOf(ep), 4);
-                // add ryacast hit player
-                targets[Last(targets)] = AimingPlayer(40, EnemyTeamOf(ep));
-                SetStatus(targets, ep, Status.Stunned, 0.5);
-                Damage(targets, ep, 40);
-                PlayEffect(AllPlayers(), PlayEffect.DebuffImpactSound, Color.White, ep, 50);
+            if(IsDummyBot()){
+                StartHoldingButton(ep, Button.Melee);
             }
 
-            landPos = aimPos + RandomPosition(scatter, scatter, scatter);
+            define landPos;
+            define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
+                EyePosition() + Vector(0, -0.1, 0), landPos,
+                Color.SkyBlue, EffectRev.VisibleToPositionAndRadius);
 
-            count = count < 10 ? count + 1 : 0;
-            Wait(0.01, WaitBehavior.IgnoreCondition);
+            define aimPos;
+            define scatter;
+            define targets;
+            define count = 0;
+            while(
+                IsAlive() &&
+                IsButtonHeld(ep, Button.Melee) &&
+                grudgePower > 0
+            ){
+                if(count == 0){
+                    grudgePower -= 3;
+                    grudgePower = grudgePower < 0 ? 0 : grudgePower;
+
+                    define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
+                    heroModDetail = 
+                        "+ receive damage to charging grudge power (now "+ currentValue +"% / 100%)" + NL +
+                        "+ hold melee key to release grudge power as stunning lightning" + NL +
+                        "- receive heal 50%";
+
+                    define dist! = DistanceBetween(EyePosition(), landPos);
+                    aimPos = AimingPosition(40, null);
+                    scatter = dist * 0.04;
+
+                    // get inside sight players
+                    targets = PlayersInViewAngle(ep, EnemyTeamOf(ep), 4);
+                    // add ryacast hit player
+                    targets[Last(targets)] = AimingPlayer(40, EnemyTeamOf(ep));
+                    SetStatus(targets, ep, Status.Stunned, 0.5);
+                    Damage(targets, ep, 40);
+                    PlayEffect(AllPlayers(), PlayEffect.DebuffImpactSound, Color.White, ep, 50);
+                }
+
+                landPos = aimPos + RandomPosition(scatter, scatter, scatter);
+
+                count = count < 10 ? count + 1 : 0;
+                Wait(0.01, WaitBehavior.IgnoreCondition);
+            }
+            DestroyEffect(ballisticEffect);
         }
+    }
+}
+// TAG GRUDGE_FIRE_BALL
+void HeroMod_Action_GRUDGE_FIRE_BALL(define trigger!, define inputPayload!) playervar "HeroMod_Action_GRUDGE_FIRE_BALL"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE ||
+        trigger == HeroModTrigger.TIME_PASSED
+    ){
+        define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
+        heroModName = "GRUDGE FIRE BALL";
+        heroModDetail = 
+            "+ heal teammate to charge grudge power (now "+ currentValue +"% / 100%)" + NL +
+            "+ long press melee key to release grudge power as fire ball and blast" + NL +
+            "- receive heal 50%";
+
+        if(
+            trigger == HeroModTrigger.ACTIVATE
+        ){
+            SetHealingReceived(ep, 50);
+            grudgePower = 0;
+        }
+        else if(
+            trigger == HeroModTrigger.TIME_PASSED
+        ){
+            Wait(1, WaitBehavior.AbortWhenFalse);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetHealingReceived(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.DEAL_HEAL
+    ){
+        if(DefaultPercentage() <= grudgePower){return;}
+        define gainPower! = inputPayload * 0.2;
+        if(grudgePower + gainPower > DefaultPercentage()){
+            grudgePower = DefaultPercentage();
+        }
+        else{
+            grudgePower = grudgePower + gainPower;
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+    ){
+        if(
+            IsAlive() &&
+            grudgePower > 0
+        ){
+            define ballSpeed! = 30;
+            define ballSize! = grudgePower * 0.025;
+            define ballDamage! = grudgePower * 5;
+            define ballBlastRange! = grudgePower * 0.15;
+            define ballBlastCount! = RoundToInteger(grudgePower / 30, Rounding.Down);
+            ballBlastCount = ballBlastCount < 1 ? 1 : ballBlastCount;
+            define minCollisionSize! = ballSpeed / 20;
+            define collisionSize! = ballSize;
+            collisionSize = collisionSize < minCollisionSize ? minCollisionSize : collisionSize;
+            grudgePower = 0;
+
+            define ballPos = EyePosition() + Vector(0, -0.1, 0);
+            define aimPos! = AimingPosition(40, null);
+            define effects! = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
+                ballPos, ballSize, EffectRev.PositionAndRadius);
+
+            ChaseVariableAtRate(
+                ballPos, aimPos, ballSpeed,
+                RateChaseReevaluation.DestinationAndRate);
+            while(
+                // not
+                !(
+                    // hit aimed position
+                    DistanceBetween(ballPos, aimPos) <= 0 ||
+                    // hit enemy
+                    (
+                        DistanceBetween(ballPos, ClosestPlayerTo(ballPos, EnemyTeamOf(ep))) <= collisionSize &&
+                        IsAlive(ClosestPlayerTo(ballPos, EnemyTeamOf(ep)))
+                    )
+                )
+            ){
+                PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+            }
+            StopChasingVariable(ballPos);
+            DestroyEffect(effects);
+            
+            define targets! = PlayersWithinRadius(ballPos, collisionSize < minCollisionSize ? minCollisionSize : ballBlastRange, EnemyTeamOf(ep), RadiusLOS.Off);
+            ApplyBlastImpulse(targets, ballPos, ballBlastRange);
+            SetStatus(targets, ep, Status.Burning, 3);
+            Damage(targets, ep, ballDamage);
+            PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
+        }
+    }
+}
+// TAG GUNSHIP_REQUEST
+void HeroMod_Action_GUNSHIP_REQUEST(define trigger!) playervar "HeroMod_Action_GUNSHIP_REQUEST"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "GUNSHIP REQUEST";
+        heroModDetail = 
+            "+ use ult to request gunship fire and attack enemy nearby aimming position" + NL +
+            "- every 3 seconds passed to lose 1% ult charge";
+    }
+    else if(
+        trigger == HeroModTrigger.CHARGING_ULT
+    ){
+        Wait(3, WaitBehavior.AbortWhenFalse);
+        if(UltimateChargePercent() < DefaultPercentage()){
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.USING_ULT
+    ){
+        HeroMod_Action_GUNSHIP_FIRE(GUNSHIP_FIRE_TARGHET_MODE.NEAR_AIM_POS, 40);
+    }
+}
+// TAG STRAFING_REQUEST
+void HeroMod_Action_STRAFING_REQUEST(define trigger!) playervar "HeroMod_Action_STRAFING_REQUEST"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "STRAFING REQUEST";
+        heroModDetail = 
+            "+ use ult to request strafing fire and attack aimming position with straight shape" + NL +
+            "- every 3 seconds passed to lose 1% ult charge";
+    }
+    else if(
+        trigger == HeroModTrigger.CHARGING_ULT
+    ){
+        Wait(3, WaitBehavior.AbortWhenFalse);
+        if(UltimateChargePercent() < DefaultPercentage()){
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.USING_ULT
+    ){
+        Wait(1.0, WaitBehavior.IgnoreCondition);
+
+        // config value
+        define strafReqAttackDistance! = 60;
+        define strafReqAttackTime! = 2.0;
+        define strafReqAttackInterval = 0.05;
+        define strafReqScatterRange! = 8;
+        define strafReqDamageRange! = 8;
+        define strafReqDamage! = 180;
+
+        // set attack angle base point from aimming position
+        define attackPosition! = BelowPosition(AimingPosition(40, null));
+
+        /// set entering angle
+        define enteringAngle! = VectorWithOutY(FacingDirectionOf());
+        // set start/end position
+        define startPosition! = attackPosition + (-enteringAngle * strafReqAttackDistance / 2);
+        define endPosition! =   attackPosition + ( enteringAngle * strafReqAttackDistance / 2);
+        // move landAreaPosition
+        define landAreaPosition = startPosition;
+        ChaseVariableOverTime(
+            landAreaPosition, endPosition,
+            strafReqAttackTime,
+            TimeChaseReevaluation.DestinationAndDuration);
+        // create ballistic
+        define landPosition;
+        define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
+            endPosition - (enteringAngle * 200) + (Up() * 200), landPosition,
+            Color.White, EffectRev.VisibleToPositionAndRadius);
+        // blast animation
+        for(define count = strafReqAttackTime / strafReqAttackInterval; count > 0; count --){
+            // set landed point
+            landPosition =
+                landAreaPosition + 
+                RandomPosition(
+                    strafReqScatterRange,
+                    0,
+                    strafReqScatterRange
+                );
+            // play blast sound
+            PlayEffect(
+                AllPlayers(), PlayEffect.RingExplosionSound,
+                Color.White,
+                landPosition,
+                MaxLength());
+            // play blast
+            PlayEffect(
+                AllPlayers(), PlayEffect.BadExplosion,
+                Color.White,
+                landPosition,
+                strafReqDamageRange);
+            // damage
+            Damage(
+                PlayersWithinRadius(
+                    landPosition, strafReqDamageRange,
+                    EnemyTeamOf(ep), RadiusLOS.Off
+                ),
+                ep, strafReqDamage
+            );
+            Wait(strafReqAttackInterval, WaitBehavior.IgnoreCondition);
+        }
+        StopChasingVariable(landAreaPosition);
         DestroyEffect(ballisticEffect);
     }
 }
-
-void DoGrudgeFireBall() playervar "DoGrudgeFireBall"{
+// TAG TITAN_FORM
+void HeroMod_Action_TITAN_FORM(define trigger!) playervar "HeroMod_Action_TITAN_FORM"{
     if(
-        IsAlive() &&
-        grudgePower > 0
+        trigger == HeroModTrigger.ACTIVATE
     ){
-        define ballSpeed! = 30;
-        define ballSize! = grudgePower * 0.025;
-        define ballDamage! = grudgePower * 5;
-        define ballBlastRange! = grudgePower * 0.15;
-        define ballBlastCount! = RoundToInteger(grudgePower / 30, Rounding.Down);
-        ballBlastCount = ballBlastCount < 1 ? 1 : ballBlastCount;
-        define minCollisionSize! = ballSpeed / 20;
-        define collisionSize! = ballSize;
-        collisionSize = collisionSize < minCollisionSize ? minCollisionSize : collisionSize;
-        grudgePower = 0;
-
-        define ballPos = EyePosition() + Vector(0, -0.1, 0);
-        define aimPos! = AimingPosition(40, null);
-        define effects! = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
-            ballPos, ballSize, EffectRev.PositionAndRadius);
-
-        ChaseVariableAtRate(
-            ballPos, aimPos, ballSpeed,
-            RateChaseReevaluation.DestinationAndRate);
-        while(
-            // not
-            !(
-                // hit aimed position
-                DistanceBetween(ballPos, aimPos) <= 0 ||
-                // hit enemy
-                (
-                    DistanceBetween(ballPos, ClosestPlayerTo(ballPos, EnemyTeamOf(ep))) <= collisionSize &&
-                    IsAlive(ClosestPlayerTo(ballPos, EnemyTeamOf(ep)))
-                )
-            )
+        heroModName = "TITAN FORM";
+        heroModDetail = 
+            "+ use ult to transform to titan and rampage until 15 second" + NL +
+            "  * titan has super toughness, fast ability charge, wide range hammer attack" + NL +
+            "- every 3 seconds passed to lose 1% ult charge";
+    }
+    else if(
+        trigger == HeroModTrigger.CHARGING_ULT
+    ){
+        Wait(3, WaitBehavior.AbortWhenFalse);
+        if(
+            !isTransformed &&
+            UltimateChargePercent() < DefaultPercentage()
         ){
-            PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.USING_ULT
+    ){
+        isTransformed = true;
+        CancelPrimaryAction();
+        define prevHero! = HeroOf();
+        ForcePlayerHero(ep, Hero.Reinhardt);
+        SetHeroButtonControlPropety();
+        SetMaxHealth(ep, 500);
+        SetDamageDealt(ep, 250);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        Heal(ep, null, MaxValue());
+        define tianScale! = 2.5;
+        for(define scale! = 1; scale < tianScale; scale += 0.1){
+            StartScalingPlayer(ep, scale);
             Wait(0.1, WaitBehavior.IgnoreCondition);
         }
-        StopChasingVariable(ballPos);
-        DestroyEffect(effects);
-        
-        define targets! = PlayersWithinRadius(ballPos, collisionSize < minCollisionSize ? minCollisionSize : ballBlastRange, EnemyTeamOf(ep), RadiusLOS.Off);
-        ApplyBlastImpulse(targets, ballPos, ballBlastRange);
-        SetStatus(targets, ep, Status.Burning, 3);
-        Damage(targets, ep, ballDamage);
-        PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
+        StartModifyingHeroVoiceLines(ep, 0.1, false);
+
+        for(define remainSecond! = 15; remainSecond > 0; remainSecond--){
+            if(IsDead()){
+                break;
+            }
+            if(UltimateChargePercent() < DefaultPercentage()){
+                SetUltimateCharge(ep, UltimateChargePercent() + 25);
+            }
+            SetAbilityCooldown(ep, Button.Ability1, 0);
+            SetAbilityCooldown(ep, Button.Ability2, 0);
+            Wait(1, WaitBehavior.IgnoreCondition);
+        }
+
+        StopModifyingHeroVoiceLines(ep);
+        for(define scale! = tianScale; scale > 1.0; scale -= 0.1){
+            StartScalingPlayer(ep, scale);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+        }
+        SetUltimateCharge(ep, 0);
+        SetMaxHealth(ep, DefaultPercentage());
+        SetDamageDealt(ep, DefaultPercentage());
+        ForcePlayerHero(ep, prevHero);
+        StopForcingHero(ep);
+        SetHeroButtonControlPropety();
+        isTransformed = false;
+        // wait using ult fin for not retrigger (if hero not changed by some hero)
+        WaitUntil(!IsUsingUltimate(), MaxValue());
     }
 }
+// TAG BEAM_SNIPER
+void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_SNIPER"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "BEAM SNIPER";
+        heroModDetail = 
+            "+ use ult to transform to beam sniper and rampage until 40 second" + NL +
+            "  * beam sniper has powerful beam rifle with landed blast and penetrate wall" + NL +
+            "- every 3 seconds passed to lose 1% ult charge";
+        beamCharged = false;  // not charging
+    }
+    else if(
+        trigger == HeroModTrigger.CHARGING_ULT
+    ){
+        Wait(3, WaitBehavior.AbortWhenFalse);
+        if(
+            !isTransformed &&
+            UltimateChargePercent() < DefaultPercentage()
+        ){
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.USING_ULT
+    ){
+        isTransformed = true;
+        CancelPrimaryAction();
+        define prevHero! = HeroOf();
+        ForcePlayerHero(ep, Hero.Widowmaker);
+        SetHeroButtonControlPropety();
+        SetDamageDealt(ep, 200);
 
-void DoStrafingFire() playervar "DoStrafingFire"{
-    // set attack point from aimming position
-    define attackPosition! = BelowPosition(AimingPosition(40, null));
-    Wait(1.5, WaitBehavior.IgnoreCondition);
+        for(define remainSecond! = 40; remainSecond > 0; remainSecond--){
+            if(IsDead()){
+                break;
+            }
+            if(UltimateChargePercent() < DefaultPercentage()){
+                SetUltimateCharge(ep, UltimateChargePercent() + 20);
+            }
+            SetAbilityCooldown(ep, Button.Ability1, 0);
+            SetAbilityCooldown(ep, Button.Ability2, 0);
+            Wait(1, WaitBehavior.IgnoreCondition);
+        }
 
-    // config value
-    define strafReqAttackDistance! = 40;
-    define strafReqAttackTime! = 2.0;
-    define strafReqAttackInterval = 0.05;
-    define strafReqScatterRange! = 3;
-    define strafReqDamageRange! = 6;
-    define strafReqDamage! = 180;
+        SetUltimateCharge(ep, 0);
+        SetDamageDealt(ep, DefaultPercentage());
+        ForcePlayerHero(ep, prevHero);
+        StopForcingHero(ep);
+        SetHeroButtonControlPropety();
+        isTransformed = false;
+        // wait using ult fin for not retrigger (if hero not changed by some hero)
+        WaitUntil(!IsUsingUltimate(), MaxValue());
+    }
+    else if(
+        trigger == HeroModTrigger.USING_SECONDARY &&
+        isTransformed
+    ){
+        while(IsFiringSecondary()){
+            // avoid infinite loop
+            Wait(0.1, WaitBehavior.AbortWhenFalse);
+            // waiting charge fin
+            WaitUntil(IsFiringPrimary(), 1.2);
+            // primary fire interrupted before charging fin
+            if(IsFiringPrimary()){
+                // restart waiting
+                continue;
+            }
+            // scorping ended
+            else if(!IsFiringSecondary()){
+                // clear waiting
+                Abort();
+            }
+            else if(IsFiringSecondary()){
+                // charge fin
+                beamCharged = true;
+                // update aim pos
+                while(beamCharged){
+                    // pre set aim pos
+                    beamAimPos = AimingPosition(40, EnemyTeamOf(ep));
+                    Wait(0.1, WaitBehavior.AbortWhenFalse);
+                }
+            }
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.NOT_USING_SECONDARY &&
+        isTransformed
+    ){
+        beamCharged = false;
+    }
 
-    define enteringAngle! = 
-        VectorWithOutY(
-            FacingDirectionOf(ep)
-        );
-    // set start/end position
-    define startPosition! = 
-        attackPosition + 
-            -enteringAngle *
-            (strafReqAttackDistance / 2);
-    define endPosition! = 
-        attackPosition + 
-            enteringAngle *
-            (strafReqAttackDistance / 2);
-    // move landAreaPosition
-    define landAreaPosition = startPosition;
-    ChaseVariableOverTime(
-        landAreaPosition, endPosition,
-        strafReqAttackTime,
-        TimeChaseReevaluation.DestinationAndDuration);
-    // create ballistic
-    define landPosition;
-    define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
-        endPosition - (enteringAngle * 200) + (Up() * 200), landPosition,
-        Color.White, EffectRev.VisibleToPositionAndRadius);
-    // blast animation
-    for(define count = strafReqAttackTime / strafReqAttackInterval; count > 0; count --){
-        // set landed point
-        landPosition =
-            landAreaPosition + 
-            RandomPosition(
-                strafReqScatterRange,
-                0,
-                strafReqScatterRange
+    else if(
+        trigger == HeroModTrigger.USING_PRIMARY &&
+        isTransformed
+    ){
+        define beamSniperDamage! = 200;
+        define beamSniperDamageRange! = 3;
+
+        // charging fin
+        if(beamCharged){
+            // reset charge
+            beamCharged = false;
+            // deal damage to target on ballstic
+            define targets! = FilteredArray(
+                PlayersInViewAngle(ep, EnemyTeamOf(ep), 2.5),
+                IsAlive(ae)
             );
-        // play blast sound
-        PlayEffect(
-            AllPlayers(), PlayEffect.RingExplosionSound,
-            Color.White,
-            landPosition,
-            MaxLength());
-        // play blast
-        PlayEffect(
-            AllPlayers(), PlayEffect.BadExplosion,
-            Color.White,
-            landPosition,
-            strafReqDamageRange);
-        // damage
-        Damage(
-            PlayersWithinRadius(
-                landPosition, strafReqDamageRange,
-                EnemyTeamOf(ep), RadiusLOS.Off
-            ),
-            ep, strafReqDamage
-        );
-        Wait(strafReqAttackInterval, WaitBehavior.IgnoreCondition);
+            Damage(targets, ep, beamSniperDamage);
+
+            // deal half damage to target in landed blast range
+            targets = FilteredArray(
+                PlayersWithinRadius(beamAimPos, beamSniperDamageRange, EnemyTeamOf(ep), RadiusLOS.Off),
+                IsAlive(ae)
+            );
+            Damage(targets, ep, beamSniperDamage / 2);
+
+            // set offset for gun sight
+            define gunSightPos! = EyePosition() - Vector(0, 0.5, 0); 
+            // set landing position for penetration
+            define landPos! = EyePosition() +
+                (FacingDirectionOf() * MaxLength());
+
+            // play shot sound
+            PlayEffect(
+                AllPlayers(), PlayEffect.RingExplosionSound,
+                Color.Purple, ep, MaxLength());
+            // play shot fire
+            PlayEffect(
+                AllPlayers(), PlayEffect.BadExplosion,
+                Color.Purple, gunSightPos + (FacingDirectionOf() * 1), 1.0);
+            // play big blast with sound
+            PlayContinuousBlast(
+                Color.Purple,
+                beamAimPos,
+                beamSniperDamageRange,
+                3,
+                2
+            );
+            // show ballistics for aiming
+            define beamEffect! = [];
+            beamEffect[0] = CreateBeamEffect(AllPlayers(),
+                BeamType.BadBeam, gunSightPos, beamAimPos,
+                Color.Purple, EffectRev.VisibleToPositionAndRadius);
+            // show ballistic for penetration
+            beamEffect[1] =  CreateBeamEffect(AllPlayers(),
+                BeamType.BadBeam, beamAimPos, landPos,
+                Color.Purple, EffectRev.VisibleToPositionAndRadius);
+
+            WaitPlayEffect();
+
+            // hide ballistics
+            DestroyEffect(beamEffect[0]);
+            DestroyEffect(beamEffect[1]); 
+        }
+        else{
+            // reset charge
+            beamCharged = false;
+        }
     }
-    StopChasingVariable(landAreaPosition);
-    DestroyEffect(ballisticEffect);
+}
+// TAG GUNSHIP_GUNNER
+void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GUNSHIP_GUNNER"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "GUNSHIP_GUNNER";
+        heroModDetail = 
+            "+ use ult to transform to gunship gunner and rampage until 30 second" + NL +
+            "  * gunship gunner has powerful auto cannon with landed blast and massive damage" + NL +
+            "- every 3 seconds passed to lose 1% ult charge";
+        SetMaxHealth(ep, 300);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetMaxHealth(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.CHARGING_ULT
+    ){
+        Wait(3, WaitBehavior.AbortWhenFalse);
+        if(
+            !isTransformed &&
+            UltimateChargePercent() < DefaultPercentage()
+        ){
+            SetUltimateCharge(ep, UltimateChargePercent() - 1);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.USING_ULT
+    ){
+        dbgHudTxt(<"GUNSHIP_GUNNER USING_ULT">);
+    }
+}
+// TAG ZOMBIE
+void HeroMod_Action_ZOMBIE(define trigger!) playervar "HeroMod_Action_ZOMBIE"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "ZOMBIE";
+        heroModDetail = 
+            "+ at dead, revive myself after 5 seconds" + NL +
+            "  * in over time is excluded" + NL +
+            "+ long press melee key in dead to force return to spawn room" + NL +
+            "- max health 50%" + NL +
+            "- receive heal 50%";
+        SetMaxHealth(ep, 50);
+        SetHealingReceived(ep, 50);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetMaxHealth(ep, DefaultPercentage());
+        SetHealingReceived(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.DEATH
+    ){
+        if(
+            !IsOverTime()
+        ){
+            Wait(5, WaitBehavior.AbortWhenFalse);
+            if(IsDeadByAbyss()){
+                Teleport(ep, NearestWalkablePosition(ep));
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
+            }
+            SetStatus(ep, null, Status.Invincible, 3);
+            Resurrect(ep);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+    ){
+        if(
+            IsDead()
+        ){
+            Respawn();
+        }
+    }
 }
 
+// TAG HeroMod/SubFunction ----------
 enum GUNSHIP_FIRE_TARGHET_MODE{
     NEAR_PLAYER,
     NEAR_AIM_POS
 }
 
-void DoGunshipFire(define targetMode!, define attackCount!) playervar "DoGunshipFire" {
-    Wait(0.5, WaitBehavior.AbortWhenFalse);
+// TAG GUNSHIP_FIRE
+void HeroMod_Action_GUNSHIP_FIRE(define targetMode!, define attackCount!) playervar "HeroMod_Action_GUNSHIP_REQUEST_SUPPORT" {
+    Wait(1.0, WaitBehavior.IgnoreCondition);
 
     // config value
     define gunshipTargetRange! = 20;
@@ -1605,7 +1690,7 @@ void DoGunshipFire(define targetMode!, define attackCount!) playervar "DoGunship
 
     // blast animation
     for(define count = attackCount / 2; count > 0; count --){
-        // set landAreaPosition by target position
+        // get target by base position
         define basePosition! =
             targetMode == GUNSHIP_FIRE_TARGHET_MODE.NEAR_PLAYER ?   PositionOf(ep) :
             targetMode == GUNSHIP_FIRE_TARGHET_MODE.NEAR_AIM_POS ?  AimingPosition(40, EnemyTeamOf(ep)) :
@@ -1620,108 +1705,109 @@ void DoGunshipFire(define targetMode!, define attackCount!) playervar "DoGunship
             )
         );
 
+        
+        define attackPosition!;
         if(
-            target != null
+            target == null
         ){
-            // get target position
-            define targetPosition! = BelowPosition(PositionOf(target));
+            // if not found target, get attack position by base position
+            attackPosition = basePosition;
+        }
+        else{
+            // get attack position by target
+            attackPosition = BelowPosition(PositionOf(target));
+        }
 
-            // land animation1
-            // set landed point
-            landPosition1 =
-                targetPosition + 
-                RandomPosition(
-                    gunshipScatterRange,
-                    0,
-                    gunshipScatterRange
-                );
-            // shell land animation
-            shellPosition1 = deployPosition;
-            ChaseVariableOverTime(
-                shellPosition1,
-                landPosition1,
-                gunshipAttackInterval * 2,
-                TimeChaseReevaluation.None
+        // land animation1
+        // set landed position by attackPosition with random scatter
+        landPosition1 =
+            attackPosition + 
+            RandomPosition(
+                gunshipScatterRange,
+                0,
+                gunshipScatterRange
             );
-            Wait(gunshipAttackInterval, WaitBehavior.IgnoreCondition);
+        // shell land animation
+        shellPosition1 = deployPosition;
+        ChaseVariableOverTime(
+            shellPosition1,
+            landPosition1,
+            gunshipAttackInterval * 2,
+            TimeChaseReevaluation.None
+        );
+        
+        Wait(gunshipAttackInterval, WaitBehavior.IgnoreCondition);
 
-            // not first attack
-            if(!isFirstShot){
-                // blast animation2
-                // play blast sound
-                PlayEffect(
-                    AllPlayers(), PlayEffect.RingExplosionSound,
-                    Color .White,
-                    landPosition2,
-                    MaxLength());
-                // play blast
-                PlayEffect(
-                    AllPlayers(), PlayEffect.GoodExplosion,
-                    Color.Orange,
-                    landPosition2,
-                    gunshipDamageRange);
-                // damage
-                Damage(
-                    PlayersWithinRadius(
-                        landPosition2, gunshipDamageRange,
-                        EnemyTeamOf(ep), RadiusLOS.Off
-                    ),
-                    ep, gunshipDamage
-                );
-            }
-            else{
-                isFirstShot = false;
-            }
-
-            // land animation2
-            // set landed point
-            landPosition2 =
-                targetPosition + 
-                RandomPosition(
-                    gunshipScatterRange,
-                    0,
-                    gunshipScatterRange
-                );
-            // shell land animation
-            shellPosition2 = deployPosition;
-            ChaseVariableOverTime(
-                shellPosition2,
-                landPosition2,
-                gunshipAttackInterval * 2,
-                TimeChaseReevaluation.None
-            );
-            Wait(gunshipAttackInterval, WaitBehavior.IgnoreCondition);
-            
-            // blast animation1
+        // first attack
+        if(isFirstShot){
+            isFirstShot = false;
+            // skip blast animation2
+        }
+        else{
+            // blast animation2
             // play blast sound
             PlayEffect(
                 AllPlayers(), PlayEffect.RingExplosionSound,
                 Color .White,
-                landPosition1,
+                landPosition2,
                 MaxLength());
             // play blast
             PlayEffect(
                 AllPlayers(), PlayEffect.GoodExplosion,
                 Color.Orange,
-                landPosition1,
+                landPosition2,
                 gunshipDamageRange);
             // damage
             Damage(
                 PlayersWithinRadius(
-                    landPosition1, gunshipDamageRange,
+                    landPosition2, gunshipDamageRange,
                     EnemyTeamOf(ep), RadiusLOS.Off
                 ),
                 ep, gunshipDamage
             );
+        }
 
-        }
-        else{
-            StopChasingVariable(shellPosition1);
-            shellPosition1 = deployPosition;
-            StopChasingVariable(shellPosition2);
-            shellPosition2 = deployPosition;
-            Wait(gunshipAttackInterval * 2, WaitBehavior.IgnoreCondition);
-        }
+        // land animation2
+        // set landed position by attackPosition with random scatter
+        landPosition2 =
+            attackPosition + 
+            RandomPosition(
+                gunshipScatterRange,
+                0,
+                gunshipScatterRange
+            );
+        // shell land animation
+        shellPosition2 = deployPosition;
+        ChaseVariableOverTime(
+            shellPosition2,
+                landPosition2,
+                gunshipAttackInterval * 2,
+                TimeChaseReevaluation.None
+            );
+
+        Wait(gunshipAttackInterval, WaitBehavior.IgnoreCondition);
+        
+        // blast animation1
+        // play blast sound
+        PlayEffect(
+            AllPlayers(), PlayEffect.RingExplosionSound,
+            Color .White,
+            landPosition1,
+            MaxLength());
+        // play blast
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodExplosion,
+            Color.Orange,
+            landPosition1,
+            gunshipDamageRange);
+        // damage
+        Damage(
+            PlayersWithinRadius(
+                landPosition1, gunshipDamageRange,
+                EnemyTeamOf(ep), RadiusLOS.Off
+            ),
+            ep, gunshipDamage
+        );
     }
 
     Wait(gunshipAttackInterval, WaitBehavior.IgnoreCondition);
@@ -1752,69 +1838,6 @@ void DoGunshipFire(define targetMode!, define attackCount!) playervar "DoGunship
     StopChasingVariable(shellPosition2);
     DestroyEffect(shellEffect1);
     DestroyEffect(shellEffect2);
-}
-
-void DoBeamSniper() playervar "DoBeamSniper"{
-    define beamSniperDamage! = 200;
-    define beamSniperDamageRange! = 3;
-
-    // charging fin
-    if(beamCharging){
-        // reset charge
-        beamCharging = false;
-        // deal damage to target on ballstic
-        define targets! = FilteredArray(
-            PlayersInViewAngle(ep, EnemyTeamOf(ep), 2.5),
-            IsAlive(ae)
-        );
-        Damage(targets, ep, beamSniperDamage);
-
-        // deal damage to target in landed blast range
-        targets = FilteredArray(
-            PlayersWithinRadius(beamAimPos, beamSniperDamageRange, EnemyTeamOf(ep), RadiusLOS.Off),
-            IsAlive(ae)
-        );
-        Damage(targets, ep, beamSniperDamage / 2);
-
-        // set offset for gun sight
-        define gunSightPos! = EyePosition() - Vector(0, 0.5, 0); 
-        // set landing position for penetration
-        define landPos! = EyePosition() +
-            (FacingDirectionOf() * MaxLength());
-
-        // play shot sound
-        PlayEffect(
-            AllPlayers(), PlayEffect.RingExplosionSound,
-            Color.Purple, ep, MaxLength());
-        // play shot fire
-        PlayEffect(
-            AllPlayers(), PlayEffect.BadExplosion,
-            Color.Purple, gunSightPos + (FacingDirectionOf() * 1), 1.0);
-        // play big blast with sound
-        PlayContinuousBlast(
-            Color.Purple,
-            beamAimPos,
-            beamSniperDamageRange,
-            3,
-            2);
-        // show ballistics for aiming
-        define beamEffect! = [];
-        beamEffect[0] = CreateBeamEffect(AllPlayers(),
-            BeamType.BadBeam, gunSightPos, beamAimPos,
-            Color.Purple, EffectRev.VisibleToPositionAndRadius);
-        // show ballistic for penetration
-        beamEffect[1] =  CreateBeamEffect(AllPlayers(),
-            BeamType.BadBeam, beamAimPos, landPos,
-            Color.Purple, EffectRev.VisibleToPositionAndRadius);
-
-        WaitPlayEffect();
-        DestroyEffect(beamEffect[0]);
-        DestroyEffect(beamEffect[1]); 
-    }
-    else{
-        // reset charge
-        beamCharging = false;
-    }
 }
 
 // TAG HeroMod/Trigger ----------
@@ -1900,7 +1923,8 @@ Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     (
-        selectHeroMod == HeroModType.BEAM_SNIPER
+        selectHeroMod == HeroModType.BEAM_SNIPER ||
+        selectHeroMod == HeroModType.GUNSHIP_GUNNER
     ) &&
     IsFiringPrimary()
 ){
@@ -1913,7 +1937,8 @@ Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     (
-        selectHeroMod == HeroModType.BEAM_SNIPER
+        selectHeroMod == HeroModType.BEAM_SNIPER ||
+        selectHeroMod == HeroModType.GUNSHIP_GUNNER
     ) &&
     !IsFiringPrimary()
 ){
@@ -1957,7 +1982,8 @@ if(
         selectHeroMod == HeroModType.GUNSHIP_REQUEST ||
         selectHeroMod == HeroModType.STRAFING_REQUEST ||
         selectHeroMod == HeroModType.TITAN_FORM ||
-        selectHeroMod == HeroModType.BEAM_SNIPER
+        selectHeroMod == HeroModType.BEAM_SNIPER ||
+        selectHeroMod == HeroModType.GUNSHIP_GUNNER
     ) &&
     IsUsingUltimate()
 ){
@@ -1989,6 +2015,7 @@ if(
         selectHeroMod == HeroModType.SUPER_ULT ||
         selectHeroMod == HeroModType.TITAN_FORM ||
         selectHeroMod == HeroModType.BEAM_SNIPER ||
+        selectHeroMod == HeroModType.GUNSHIP_GUNNER ||
         selectHeroMod == HeroModType.GUNSHIP_REQUEST ||
         selectHeroMod == HeroModType.STRAFING_REQUEST
     ) &&
