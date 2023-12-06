@@ -859,7 +859,7 @@ void SetMoveDir() playervar "SetMoveDir"{
             :
                 ProbabilityTrue(
                     // by lost health
-                    100 * (1 - NormalizedHealth())
+                    50 * (1 - NormalizedHealth())
                 )
         ){
             if(moveDirLR == NoDirection()){
@@ -2339,6 +2339,86 @@ define EnemyDensityRateOfAimTargetNear(in define dist):
         /
     NumberOfPlayers(EnemyTeamOf(ep));
 
+playervar define enableButtonControl;
+
+// implment as function, cuz parallel running by async call
+void StartButtonControlOfPrimaryFire()"StartButtonControlOfPrimaryFire"{
+    StartButtonControl(
+        Button.PrimaryFire,
+        primaryFireButtonBehaivor,
+        primaryFireButtonReleaseMin,
+        primaryFireButtonReleaseMax,
+        primaryFireButtonPressMin,
+        primaryFireButtonPressMax
+    );
+}
+
+void StartButtonControlOfSecondaryFire()"StartButtonControlOfSecondaryFire"{
+    StartButtonControl(
+        Button.SecondaryFire,
+        secondaryFireButtonBehaivor,
+        secondaryFireButtonReleaseMin,
+        secondaryFireButtonReleaseMax,
+        secondaryFireButtonPressMin,
+        secondaryFireButtonPressMax
+    );
+}
+
+void StartButtonControlOfAbility1()"StartButtonControlOfAbility1"{
+    StartButtonControl(
+        Button.Ability1,
+        ButtonBehaivor.ReleasePress,
+        ability1ButtonReleaseMin,
+        ability1ButtonReleaseMax,
+        ability1ButtonPressMin,
+        ability1ButtonPressMax
+    );
+}
+
+void StartButtonControlOfAbility2()"StartButtonControlOfAbility2"{
+    StartButtonControl(
+        Button.Ability2,
+        ButtonBehaivor.ReleasePress,
+        ability1ButtonReleaseMin,
+        ability1ButtonReleaseMax,
+        ability1ButtonPressMin,
+        ability1ButtonPressMax
+    );
+}
+
+void StartButtonControlOfUltimate()"StartButtonControlOfUltimate"{
+    StartButtonControl(
+        Button.Ultimate,
+        ButtonBehaivor.ReleasePress,
+        ultimateButtonReleaseMin,
+        ultimateButtonReleaseMax,
+        ultimateButtonPressMin,
+        ultimateButtonPressMax
+    );
+}
+
+void StartButtonControlOfCrouch()"StartButtonControlOfCrouch"{
+    StartButtonControl(
+        Button.Crouch,
+        ButtonBehaivor.ReleasePress,
+        ultimateButtonReleaseMin,
+        ultimateButtonReleaseMax,
+        ultimateButtonPressMin,
+        ultimateButtonPressMax
+    );
+}
+void StartButtonControlOfJump()"StartButtonControlOfJump"{
+
+    StartButtonControl(
+        Button.Jump,
+        ButtonBehaivor.ReleasePress,
+        jumpButtonReleaseMin,
+        jumpButtonReleaseMax,
+        jumpButtonPressMin,
+        jumpButtonPressMax
+    );
+}
+
 // can's implment as function, cuz need control instance each button
 void StartButtonControl(in define button, define buttonBehaivor!, define releaseMin, define releaseMax, define pressMin, define pressMax){
     if(noShooting) return;
@@ -2394,6 +2474,7 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                     ) * buttonControlReleaseScale,
                     WaitBehavior.AbortWhenFalse
                 );
+                AbortIf(!enableButtonControl);
 
                 if(
                     button == Button.Ultimate &&
@@ -2402,9 +2483,9 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                     // skip use ultimate whem alive enemies count is low
                     continue;
                 }
-                
-                StartHoldingButton(ep, button);
 
+                StartHoldingButton(ep, button);
+                
                 if(
                     button == Button.Jump &&
                     hasDoubleJumpButtonAbility &&
@@ -2412,8 +2493,10 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                 ){
                     // use double jump ability
                     Wait(RandomReal(0.1, 0.5), WaitBehavior.AbortWhenFalse);
+                    AbortIf(!enableButtonControl);
                     StopHoldingButton(ep, button);
                     Wait(RandomReal(0.1, 0.5), WaitBehavior.AbortWhenFalse);
+                    AbortIf(!enableButtonControl);
                     StartHoldingButton(ep, button);
                 }
 
@@ -2425,6 +2508,7 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                     ) * buttonControlPressScale,
                     WaitBehavior.AbortWhenFalse
                 );
+                AbortIf(!enableButtonControl);
 
                 StopHoldingButton(ep, button);
             }
@@ -2440,6 +2524,7 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                     ) * buttonControlReleaseScale,
                     WaitBehavior.AbortWhenFalse
                 );
+                AbortIf(!enableButtonControl);
 
                 // set button repeat during and flag
                 repeatDuring = 
@@ -2455,6 +2540,7 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                 ){
                     PressButton(ep, button);
                     Wait(0.25, WaitBehavior.AbortWhenFalse);
+                    AbortIf(!enableButtonControl);
                 }
             }
         }
@@ -2474,39 +2560,8 @@ if(
     isRepeatFiring = false;
 }
 
-// rule: "Bot/ButtonControl/compensateFire"
-// Event.OngoingPlayer
-// if(
-//     isBotEnableTeam &&
-//     IsDummyBot() &&
-//     actionState != ActionState.Non
-// ){
-//     if(
-//         // has aimTarget
-//         aimTarget != null &&
-//         // is idling fire
-//         !IsFiringPrimary() &&
-//         !IsFiringSecondary() &&
-//         !IsUsingAbility1() &&
-//         !IsUsingAbility2() &&
-//         !IsUsingUltimate()
-//     ){
-//         if(actionState == ActionState.Attack){
-//             StopHoldingButton(ep, FirstOf(supportButtons));
-//             StartHoldingButton(ep, FirstOf(attackButtons));
-//         }
-//         else if(actionState == ActionState.Support){
-//             StopHoldingButton(ep, FirstOf(attackButtons));
-//             StartHoldingButton(ep, FirstOf(supportButtons));
-//         }
-//     }
-//     Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-// }
-
-// TAG Bot/ButtonControl/PrimaryFire ----------
-playervar define enableButtonControl;
-
-rule: "Bot/ButtonControl/PrimaryFire/StartButtonControl"
+// TAG Bot/ButtonControl/StartButtonControl ----------
+rule: "Bot/ButtonControl/StartButtonControl"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
@@ -2515,135 +2570,13 @@ if(
 ){
     AbortIf(!isBotActive);
 
-    StartButtonControl(
-        Button.PrimaryFire,
-        primaryFireButtonBehaivor,
-        primaryFireButtonReleaseMin,
-        primaryFireButtonReleaseMax,
-        primaryFireButtonPressMin,
-        primaryFireButtonPressMax
-    );
-}
-
-// TAG Bot/ButtonControl/SecondaryFire ----------
-rule: "Bot/ButtonControl/SecondaryFire/StartButtonControl"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    enableButtonControl
-){
-    AbortIf(!isBotActive);
-
-    StartButtonControl(
-        Button.SecondaryFire,
-        secondaryFireButtonBehaivor,
-        secondaryFireButtonReleaseMin,
-        secondaryFireButtonReleaseMax,
-        secondaryFireButtonPressMin,
-        secondaryFireButtonPressMax
-    );
-}
-
-// TAG Bot/ButtonControl/Ability1 ----------
-rule: "Bot/ButtonControl/Ability1/StartButtonControl"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    enableButtonControl
-){
-    AbortIf(!isBotActive);
-
-    StartButtonControl(
-        Button.Ability1,
-        ButtonBehaivor.ReleasePress,
-        ability1ButtonReleaseMin,
-        ability1ButtonReleaseMax,
-        ability1ButtonPressMin,
-        ability1ButtonPressMax
-    );
-}
-
-// TAG Bot/ButtonControl/Ability2 ----------
-rule: "Bot/ButtonControl/Ability2/StartButtonControl"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    enableButtonControl
-){
-    AbortIf(!isBotActive);
-
-    StartButtonControl(
-        Button.Ability2,
-        ButtonBehaivor.ReleasePress,
-        ability2ButtonReleaseMin,
-        ability2ButtonReleaseMax,
-        ability2ButtonPressMin,
-        ability2ButtonPressMax
-    );
-}
-
-// TAG Bot/ButtonControl/Ultimate ----------
-rule: "Bot/ButtonControl/Ultimate/StartButtonControl"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    enableButtonControl &&
-    UltimateChargePercent() >= DefaultPercentage()
-){
-    AbortIf(!isBotActive);
-    
-    StartButtonControl(
-        Button.Ultimate,
-        ButtonBehaivor.ReleasePress,
-        ultimateButtonReleaseMin,
-        ultimateButtonReleaseMax,
-        ultimateButtonPressMin,
-        ultimateButtonPressMax
-    );
-}
-
-// TAG Bot/ButtonControl/Crouch ----------
-rule: "Bot/ButtonControl/Crouch/StartButtonControl"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    enableButtonControl
-){
-    AbortIf(!isBotActive);
-
-    StartButtonControl(
-        Button.Crouch,
-        ButtonBehaivor.ReleasePress,
-        crouchButtonReleaseMin,
-        crouchButtonReleaseMax,
-        crouchButtonPressMin,
-        crouchButtonPressMax
-    );
-}
-
-// TAG Bot/ButtonControl/Jump ----------
-rule: "Bot/ButtonControl/Jump/StartButtonControl"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    enableButtonControl
-){
-    AbortIf(!isBotActive);
-
-    StartButtonControl(
-        Button.Jump,
-        ButtonBehaivor.ReleasePress,
-        jumpButtonReleaseMin,
-        jumpButtonReleaseMax,
-        jumpButtonPressMin,
-        jumpButtonPressMax
-    );
+    async StartButtonControlOfJump();
+    async StartButtonControlOfCrouch();
+    async StartButtonControlOfPrimaryFire();
+    async StartButtonControlOfSecondaryFire();
+    async StartButtonControlOfAbility1();
+    async StartButtonControlOfAbility2();
+    async StartButtonControlOfUltimate();
 }
 
 // TAG Bot/ButtonControl/StopButtonControl ----------
@@ -2654,13 +2587,13 @@ if(
     IsDummyBot() &&
     !enableButtonControl
 ){
+    StopHoldingButton(ep, Button.Jump);
+    StopHoldingButton(ep, Button.Crouch);
     StopHoldingButton(ep, Button.PrimaryFire);
     StopHoldingButton(ep, Button.SecondaryFire);
     StopHoldingButton(ep, Button.Ability1);
     StopHoldingButton(ep, Button.Ability2);
     StopHoldingButton(ep, Button.Ultimate);
-    StopHoldingButton(ep, Button.Jump);
-    StopHoldingButton(ep, Button.Crouch);
     ClearButtonBit();
 }
 
@@ -2671,8 +2604,6 @@ if(
 // if(
 //     isBotEnableTeam &&
 //     IsDummyBot()
-//     // TeamOf() == enemyTeam &&
-//     // SlotOf() <= 3
 // ){
 //     // enable button text
 //     CreateInWorldText(
