@@ -22,12 +22,12 @@ Event.OngoingGlobal
         Hero.Reinhardt,
         Hero.Reinhardt,
         Hero.Reinhardt,
-        Hero.Reinhardt,
-        Hero.Reinhardt,
-        Hero.Reinhardt,
-        Hero.Reinhardt,
-        Hero.Reinhardt,
-        Hero.Reinhardt,
+        // Hero.Reinhardt,
+        // Hero.Reinhardt,
+        // Hero.Reinhardt,
+        // Hero.Reinhardt,
+        // Hero.Reinhardt,
+        // Hero.Reinhardt,
         Hero.Reinhardt
     ];
     
@@ -57,16 +57,51 @@ Event.OngoingGlobal
 }
 
 // TestCode -----------------------------------------------
-// rule: "TestCode"
-// Event.OngoingPlayer
-// if(
-//     hp == ep &&
-//     HasSpawned()
-// ){
-//     while(true){
-//         Wait(0.5);
-//     }
-// }
+playervar define _enableButtonControl;
+rule: "TestCode"
+Event.OngoingPlayer
+if(
+    hp == ep &&
+    HasSpawned() &&
+    IsButtonHeld(ep, Button.Interact)
+){
+    _enableButtonControl = true;
+    async StartButtonControl_PrimaryFire();
+    async StartButtonControl_SecondaryFire();
+}
+
+rule: "TestCode"
+Event.OngoingPlayer
+if(
+    hp == ep &&
+    HasSpawned() &&
+    !IsButtonHeld(ep, Button.Interact)
+){
+    _enableButtonControl = false;
+}
+
+
+void StartButtonControl_PrimaryFire()"StartButtonControl_PrimaryFire"{
+    StartButtonControl(Button.PrimaryFire);
+}
+
+void StartButtonControl_SecondaryFire()"StartButtonControl_SecondaryFire"{
+    StartButtonControl(Button.SecondaryFire);
+}
+
+void StartButtonControl(define button){
+    while(true){
+        dbgHudTxt(<"<1> <0> on", button, ep>);
+        Wait(RandomReal(1, 3), WaitBehavior.AbortWhenFalse);
+        if(!_enableButtonControl) break;
+
+        dbgHudTxt(<"<1> <0> off", button, ep>);
+        Wait(RandomReal(1, 3), WaitBehavior.AbortWhenFalse);
+        if(!_enableButtonControl) break;
+    }
+
+    dbgHudTxt(<"<1> <0> CONTROL END", button, ep>);
+}
 
 // TeamFormation -----------------------------------------------
 // rule: "TeamFormation/restart"
@@ -172,7 +207,7 @@ Event.OngoingGlobal
 {
     debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Red);
     debugHuds[Last()] = CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Red);
-    debugHuds[Last()] = CreateDebugHud("count Detect Trigger Server Load", countDetectTriggerServerLoad, Color.Orange);
+    debugHuds[Last()] = CreateDebugHud("count Wait Action By Server Load", countWaitActionByServerLoad, Color.Orange);
     debugHuds[Last()] = CreateDebugHud("Distance to aim pos", DistanceBetween(HostPlayer(), AimingPositonOf(HostPlayer())), Color.Orange);
     debugHuds[Last()] = CreateDebugHud("player team player num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, Color.Team1);
     debugHuds[Last()] = CreateDebugHud("enemy team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team2);
