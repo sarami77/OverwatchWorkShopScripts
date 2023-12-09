@@ -1488,6 +1488,7 @@ if(
 
 // TAG EnemyBot/EnemyAbility/SpawnRush ----------
 globalvar define spawnRushInterval;
+globalvar define spawnRushDurationRate;
 
 rule: "EnemyBot/EnemyAbility/SpawnRush"
 Event.OngoingGlobal
@@ -1511,9 +1512,10 @@ if(
     //     HudTextRev.Color, Spectators.VisibleAlways);
 
     // action
-    define spawnInteval! = RandomInteger(5, 15);
-    define rushSpawnCount! = RandomInteger(3, 5);
-    spawnInteval /= rushSpawnCount;
+    define spawnRushDuration! = RandomInteger(5, 15);
+    spawnRushDuration *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Duration Scale", 1.0, 0.01, 100, 2);
+    define rushSpawnInterval! = RandomInteger(1, 5);
+    define rushSpawnCount! = RoundToInteger(spawnRushDuration / rushSpawnInterval, Rounding.Down);
     for(; rushSpawnCount > 0; rushSpawnCount--){
         Respawn(
             FilteredArray(
@@ -1524,7 +1526,7 @@ if(
             )
         );
         
-        Wait(spawnInteval, WaitBehavior.IgnoreCondition);
+        Wait(rushSpawnInterval, WaitBehavior.IgnoreCondition);
         WaitUntilReleaseServerLoadLevel(ServerLoadLevel.Busy);
     }
 
@@ -2075,30 +2077,30 @@ if(
     }
 }
 
-// rule: "DebugPlayerAction"
-// Event.OngoingPlayer
-// Team.All
-// if(
-//     initCompleted &&
-//     TeamOf() == playerTeam &&
-//     HasSpawned() &&
-//     IsDummyBot() &&
-//     SlotOf() == 0
-// ){
-//     Wait(1);
-//     heroModType = HeroModType.GUNSHIP_GUNNER;
-//     UpdateHeroModText();
+rule: "DebugPlayerAction"
+Event.OngoingPlayer
+Team.All
+if(
+    initCompleted &&
+    TeamOf() == playerTeam &&
+    HasSpawned() &&
+    IsDummyBot() &&
+    SlotOf() == 0
+){
+    Wait(1);
+    heroModType = HeroModType.GUNSHIP_GUNNER;
+    UpdateHeroModText();
 
-//     while(true){
-//         if(!isTransformed){
-//             SetUltimateCharge(ep, 100);
-//             if(actionState != ActionState.Non){
-//                 PressButton(ep, Button.Ultimate);
-//             }
-//         }
-//         Wait(1);
-//     }
-// }
+    while(true){
+        if(!isTransformed){
+            SetUltimateCharge(ep, 100);
+            if(actionState != ActionState.Non){
+                PressButton(ep, Button.Ultimate);
+            }
+        }
+        Wait(1);
+    }
+}
 
 rule: "Debug/initDebugMode"
 Event.OngoingGlobal
@@ -2254,4 +2256,32 @@ if(
     spawnRushInterval = 0;
     WaitLongPressConfirm();
     shotCallInterval = 0;
+}
+
+rule: "Debug/deployGunship"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    HostPlayer() == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.PrimaryFire)
+){
+    // kill players on aim center
+    WaitLongPressConfirm();
+
+    define player! = 
+        FirstOf(
+            SortedArray(
+                FilteredArray(
+                    AllLivingPlayers(playerTeam),
+                    IsDummyBot(ae)
+                ),
+                DistanceBetween(ep, ae)
+            )
+        );
+
+    player.heroModType = HeroModType.GUNSHIP_GUNNER;
+    SetUltimateCharge(player, DefaultPercentage());
+    PressButton(player, Button.Ultimate);
 }
