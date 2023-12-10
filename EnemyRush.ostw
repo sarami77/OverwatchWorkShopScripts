@@ -150,33 +150,26 @@ if(
 }
 
 // TAG Player/Config ----------
-rule: "Player/Config/SetRespawnMaxTime"
-Event.OngoingGlobal
+rule: "Player/Config/SetRespawnMaxTimeAndOutline"
+Event.OngoingPlayer
 if(
-    initCompleted
+    initCompleted &&
+    HasSpawned()
 ){
-    while(true){
-        // show human player outline
-        define players! = AllPlayers();
-        players[CountOf(players)] = hp;
+    if(!IsDummyBot()){
+        // set outline if human pl;ayer
         StartForcingPlayerOutlines(
-            FilteredArray(
-                AllPlayers(playerTeam),
-                !IsDummyBot(ae)
-            ),
-            players,
+            ep,
+            AllPlayers(playerTeam),
             true,
             Color.Green,
             OutlineType.Always
         );
-
-        // set max respawn time
-        define respawnTime! = 10 * WorkshopSettingReal("Player Settings", "Max Respawn Time Scale", 1.0, 0, 100, 1);
-        SetRespawnMaxTime(AllPlayers(playerTeam), respawnTime);
-
-        // check Interval
-        WaitUpdateLongCycle();
     }
+
+    // set max respawn time
+    define respawnTime! = 10 * WorkshopSettingReal("Player Settings", "Max Respawn Time Scale", 1.0, 0, 100, 1);
+    SetRespawnMaxTime(ep, respawnTime);
 }
 
 // TAG Buddy/BotActive ----------
@@ -1512,7 +1505,7 @@ if(
     //     HudTextRev.Color, Spectators.VisibleAlways);
 
     // action
-    define spawnRushDuration! = RandomInteger(10, 30);
+    define spawnRushDuration! = RandomInteger(5, 30);
     spawnRushDuration *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Duration Scale", 1.0, 0.01, 100, 2);
     define rushSpawnInterval! = RandomInteger(1, 5);
     define rushSpawnCount! = RoundToInteger(spawnRushDuration / rushSpawnInterval, Rounding.Down);
@@ -2002,13 +1995,13 @@ if(
     BigMessage(AllPlayers(), "Final Stand !");
     slowControlHandler = SlowControlHandler.GameLogic;
     SetSlowMotion(10);
-
     Wait(0.25, WaitBehavior.IgnoreCondition);   // show slow
 
     // buff player team
     PlayEffectsToTeam(playerTeam);
-    Resurrect(AllPlayers(playerTeam));
-    Heal(AllPlayers(playerTeam), null, MaxValue());
+    Resurrect(AllDeadPlayers(playerTeam));
+    Heal(AllLivingPlayers(playerTeam), null, MaxValue());
+    SetUltimateCharge(AllLivingPlayers(playerTeam), 100);
     // buff enemy team
     spawnRushInterval = 0;
     shotCallInterval = 0;
