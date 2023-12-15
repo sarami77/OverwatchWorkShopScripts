@@ -93,7 +93,7 @@ if(
     }
 }
 
-// define addTimeScale: 0.0;
+// define addTimeScale: 1.25;
 
 // rule: "Round/AddMatchTime1"
 // Event.OngoingGlobal
@@ -101,7 +101,7 @@ if(
 //     IsGameInProgress()
 // ){
 //     // defualt 300
-//     SetMatchTime(MatchTime() + (300 * addTimeScale));
+//     SetMatchTime((300 * addTimeScale));
 // }
 
 // rule: "Round/AddMatchTime2"
@@ -157,7 +157,7 @@ if(
     HasSpawned()
 ){
     if(!IsDummyBot()){
-        // set outline if human pl;ayer
+        // set green outline to human player
         StartForcingPlayerOutlines(
             ep,
             AllPlayers(playerTeam),
@@ -511,7 +511,7 @@ define autoTuneDmgDltLimit:
     confirmGameDifficulty == GameDifficulty.INSANE ?    100 :
                                                         100 ;
 
-define upValueBase: 1.25;
+define upValueBase: 1.5;
 define upValueScale:
     confirmGameDifficulty == GameDifficulty.EASY ?      upValueBase * 1.0 : 
     confirmGameDifficulty == GameDifficulty.NORMAL ?    upValueBase * 1.0 : 
@@ -629,6 +629,7 @@ if(
         AddHealthPoolToPlayer(ep, HealthType.Shields, MaxHealth(ep) * 0.5, true, false);
     }
 
+    // set yellow outline to threat enemy
     if(IsThreatEnemy(ep)){
         StartForcingPlayerOutlines(
             ep,
@@ -2056,6 +2057,9 @@ if(
     define pastSecond = 1;
 
     while(true){
+        countDetectTriggerServerLoadPerSecond = countWaitActionByServerLoad / pastSecond;
+        pastSecond ++;
+
         // StartForcingPlayerOutlines(
         //     AllLivingPlayers(enemyTeam),
         //     hp,
@@ -2064,8 +2068,34 @@ if(
         //     OutlineType.Always
         // );
 
-        countDetectTriggerServerLoadPerSecond = countWaitActionByServerLoad / pastSecond;
-        pastSecond ++;
+        // auto recall gunship
+        if(
+            ProbabilityTrue(8 - (HumanPlayerNum(playerTeam) * 1) * 0.25) &&
+            IsGameInProgress()
+        ){
+            spawnRushInterval = 0;
+
+            define player! = 
+                FirstOf(
+                    SortedArray(
+                        FilteredArray(
+                            AllPlayers(playerTeam),
+                            IsDummyBot(ae) &&
+                            !ae.isTransformed
+                        ),
+                        DistanceBetween(CurrentObjectPosition(), ae)
+                    )
+                );
+            
+            player.heroModType = HeroModType.GUNSHIP_GUNNER;
+            player.heroModName = "* GUNSHIP GUNNER";
+            if(IsDead(player)){
+                Resurrect(player);
+            }
+            SetUltimateCharge(player, DefaultPercentage());
+            PressButton(player);
+        }
+
         Wait(1);
     }
 }
@@ -2078,17 +2108,11 @@ if(
 //         TeamOf() == playerTeam &&
 //         HasSpawned() &&
 //         IsDummyBot() &&
-//         SlotOf() == 0
+//         SlotOf() == 0 &&
 // ){
 //         Wait(1);
 //         while(true){
-//                 if(!isTransformed){
-//                         heroModType = HeroModType.GUNSHIP_GUNNER;
-//                         heroModName = "* GUNSHIP GUNNER";
-//                         SetUltimateCharge(ep, DefaultPercentage());
-//                         if(actionState != ActionState.Non){
-//                                 PressButton(ep, Button.Ultimate);
-//                }
+//             Wait(1);
 //         }
 // }
 
@@ -2177,6 +2201,18 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("Game Progress Diff", GameProgressDiff(playerTeam), Color.Team1);
         debugHuds[Last()] = CreateDebugHud("spawn Time scale", spawnTimeScale, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("spawn Interval", <"<0>, <1>, <2>, <3>",
+            FirstEnemyOf(EnemyType.Minion).confirmSpawnInterval,
+            FirstEnemyOf(EnemyType.Elite).confirmSpawnInterval,
+            FirstEnemyOf(EnemyType.SubBoss).confirmSpawnInterval,
+            FirstEnemyOf(EnemyType.Boss).confirmSpawnInterval>, Color.Team1);
+
+        debugHuds[Last()] = CreateDebugHud("spawn Rush Interval", spawnRushInterval, spawnRushInterval > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("combat Teleport Interval",
+            FirstThreatEnemy().combatTeleportInterval,
+            FirstThreatEnemy().combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("more Ult Prob", moreUltProb, moreUltProb <= 0 ? Color.Team1 : Color.Yellow);
     }
 
     if(
@@ -2195,17 +2231,6 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("Asset Number", enemyAssetNo, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("death Count", <"<0>, <1>, <2>, <3>", enemyDeathCount[0], enemyDeathCount[1], enemyDeathCount[2], enemyDeathCount[3]>, Color.Team1);
 
-        debugHuds[Last()] = CreateDebugHud("spawn Interval", <"<0>, <1>, <2>, <3>",
-            FirstEnemyOf(EnemyType.Minion).confirmSpawnInterval,
-            FirstEnemyOf(EnemyType.Elite).confirmSpawnInterval,
-            FirstEnemyOf(EnemyType.SubBoss).confirmSpawnInterval,
-            FirstEnemyOf(EnemyType.Boss).confirmSpawnInterval>, Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("spawn Rush Interval", spawnRushInterval, spawnRushInterval > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("combat Teleport Interval",
-            FirstThreatEnemy().combatTeleportInterval,
-            FirstThreatEnemy().combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("more Ult Prob", moreUltProb, moreUltProb <= 0 ? Color.Team1 : Color.Yellow);
     }
 }
 
@@ -2248,6 +2273,8 @@ if(
     shotCallInterval = 0;
 }
 
+playervar define tempName!;
+
 rule: "Debug/deployGunship"
 Event.OngoingPlayer
 Team.All
@@ -2264,15 +2291,20 @@ if(
         FirstOf(
             SortedArray(
                 FilteredArray(
-                    AllLivingPlayers(playerTeam),
-                    IsDummyBot(ae)
+                    AllPlayers(playerTeam),
+                    IsDummyBot(ae) &&
+                    !ae.isTransformed
                 ),
                 DistanceBetween(ep, ae)
             )
         );
-
+    
     player.heroModType = HeroModType.GUNSHIP_GUNNER;
     player.heroModName = "* GUNSHIP GUNNER";
+    if(IsDead(player)){
+        Resurrect(player);
+    }
     SetUltimateCharge(player, DefaultPercentage());
     PressButton(player, Button.Ultimate);
+    LoopIfConditionIsTrue();
 }
