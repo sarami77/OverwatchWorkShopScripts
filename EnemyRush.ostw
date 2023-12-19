@@ -2071,7 +2071,7 @@ if(
 
         // auto recall gunship
         if(
-            ProbabilityTrue((8 - (HumanPlayerNum(playerTeam) * 1)) * 0.5) &&
+            ProbabilityTrue((8 - (HumanPlayerNum(playerTeam) * 1)) * 0.25) &&
             IsGameInProgress()
         ){
             spawnRushInterval = 0;
@@ -2126,7 +2126,7 @@ if(
         debugMode = DebugMode.Non;
     }
     else{
-        debugMode = DebugMode.ShowParam;
+        debugMode = DebugMode.DebugParam;
         ShowDebugHud(hp);
     }
 }
@@ -2141,17 +2141,12 @@ if(
 ){
     // change debug mode
     WaitLongPressConfirm();
-    if(debugMode == DebugMode.Non){
-        debugMode = DebugMode.SlowLevelOnly;
-    }
-    else if(debugMode == DebugMode.SlowLevelOnly){
-        debugMode = DebugMode.ShowParam;
-    }
-    else if(debugMode == DebugMode.ShowParam){
-        debugMode = DebugMode.WithRecord;
-    }
-    else if(debugMode == DebugMode.WithRecord){
+    
+    if(debugMode >= DebugMode.Recording){
         debugMode = DebugMode.Non;
+    }
+    else{
+        debugMode ++;
     }
 
     // reload hud
@@ -2173,7 +2168,7 @@ define FirstThreatEnemy():
 // show debug icon and hud
 void ShowDebugHud(define player!)"ShowDebugHud"{
     if(
-        debugMode == DebugMode.WithRecord
+        debugMode >= DebugMode.Recording
     ){
         EnableInspectorRecording();
         debugHuds[Last()] = CreateDebugHud("●Recording", true, Color.Red);
@@ -2181,11 +2176,15 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
     else{
         DisableInspectorRecording();
     }
+
+    if(
+        debugMode >= DebugMode.Non
+    ){
+        debugHuds[Last()] = CreateDebugHud("human player Num", HumanPlayerNum(playerTeam), HumanPlayerNum(playerTeam) <= 1 ? Color.Team2 : Color.Yellow);
+    }
     
     if(
-        debugMode == DebugMode.SlowLevelOnly ||
-        debugMode == DebugMode.ShowParam ||
-        debugMode == DebugMode.WithRecord
+        debugMode >= DebugMode.ServerLoad
     ){
         debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(),
             isServerLoadLevel(ServerLoadLevel.Overload) ? Color.Red :
@@ -2197,27 +2196,10 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("count Game Logic Speed Decrease", countGameLogicSpeedDecrease, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("count Wait Action By Server Load", countWaitActionByServerLoad, Color.Orange);
         debugHuds[Last()] = CreateDebugHud("count Wait Action By Server Load Per Second", countDetectTriggerServerLoadPerSecond, Color.Orange);
-        debugHuds[Last()] = CreateDebugHud("human player Num", HumanPlayerNum(playerTeam), HumanPlayerNum(playerTeam) <= 1 ? Color.Team2 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("Game Progress Diff", GameProgressDiff(playerTeam), Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("spawn Time scale", spawnTimeScale, Color.Team1);
-        debugHuds[Last()] = CreateDebugHud("spawn Interval", <"<0>, <1>, <2>, <3>",
-            FirstEnemyOf(EnemyType.Minion).confirmSpawnInterval,
-            FirstEnemyOf(EnemyType.Elite).confirmSpawnInterval,
-            FirstEnemyOf(EnemyType.SubBoss).confirmSpawnInterval,
-            FirstEnemyOf(EnemyType.Boss).confirmSpawnInterval>, Color.Team1);
-
-        debugHuds[Last()] = CreateDebugHud("spawn Rush Interval", spawnRushInterval, spawnRushInterval > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("combat Teleport Interval",
-            FirstThreatEnemy().combatTeleportInterval,
-            FirstThreatEnemy().combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("more Ult Prob", moreUltProb, moreUltProb <= 0 ? Color.Team1 : Color.Yellow);
     }
 
     if(
-        debugMode == DebugMode.ShowParam ||
-        debugMode == DebugMode.WithRecord
+        debugMode >= DebugMode.DebugParam
     ){  
         // player team
         debugHuds[Last()] = CreateDebugHud("team player Num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, NumberOfLivingPlayers(playerTeam) >= NumberOfPlayers(playerTeam) ? Color.Team2 : Color.Yellow);
@@ -2230,7 +2212,20 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("reload Asset Interval", reloadEnemyAssetInterval, reloadEnemyAssetInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("Asset Number", enemyAssetNo, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("death Count", <"<0>, <1>, <2>, <3>", enemyDeathCount[0], enemyDeathCount[1], enemyDeathCount[2], enemyDeathCount[3]>, Color.Team1);
-
+        debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("Game Progress Diff", GameProgressDiff(playerTeam), Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("spawn Time scale", spawnTimeScale, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("spawn Interval", <"<0>, <1>, <2>, <3>",
+            FirstEnemyOf(EnemyType.Minion).confirmSpawnInterval,
+            FirstEnemyOf(EnemyType.Elite).confirmSpawnInterval,
+            FirstEnemyOf(EnemyType.SubBoss).confirmSpawnInterval,
+            FirstEnemyOf(EnemyType.Boss).confirmSpawnInterval>, Color.Team1);
+        debugHuds[Last()] = CreateDebugHud("spawn Rush Interval", spawnRushInterval, spawnRushInterval > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("combat Teleport Interval",
+            FirstThreatEnemy().combatTeleportInterval,
+            FirstThreatEnemy().combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("more Ult Prob", moreUltProb, moreUltProb <= 0 ? Color.Team1 : Color.Yellow);      
     }
 }
 
