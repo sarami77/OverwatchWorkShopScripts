@@ -1155,11 +1155,7 @@ if(
     // reset target
     aimTarget = null;
     // apply next state
-    SetActionState(ep, GetNextActionState());
-    Wait(1, WaitBehavior.IgnoreCondition);
-
-    WaitRandomAfterlReleaseServerLoadLevel(ServerLoadLevel.Hot);
-    LoopIfConditionIsTrue();
+    SetActionState(ep, ActionState.Non);
 }
 
 rule: "Bot/ActionState/StateControl"
@@ -1350,11 +1346,15 @@ void CallToNearBot()"CallToNearBot"{
     // check cooldown for reduce overrun
     // if already CoolingDown flag true, ignore action
     if(TeamOf() == Team.Team1){
-        if(isCallAttackCoolingDown1){return;}
+        if(isCallAttackCoolingDown1){
+            return;
+        }
         isCallAttackCoolingDown1 = true;
     }
-    else{
-        if(isCallAttackCoolingDown2){return;}
+    else if(TeamOf() == Team.Team2){
+        if(isCallAttackCoolingDown2){
+            return;
+        }
         isCallAttackCoolingDown2 = true;
     }
 
@@ -1400,6 +1400,7 @@ if(
     isCallAttackCoolingDown1 = false;
     isCallAttackCoolingDown2 = false;
     Loop();
+    // LoopIfConditionIsTrue();
 }
 
 // TAG Bot/ActionState/Non ----------
@@ -1410,12 +1411,12 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Non
 ){
-    // stop button
+    // reset button control
     enableButtonControl = false;
+    Wait(0.1, WaitBehavior.IgnoreCondition);
 
     // stop facing
     StopFacing(ep);
-
     // stop move
     StopMove(ep);
 
@@ -1438,21 +1439,19 @@ if(
 ){
     AbortIf(!isBotActive);
 
-    // reset for button control reload
+    // reset button control for change depending state button set
     enableButtonControl = false;
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
-    enableButtonControl = true;
+    Wait(0.1, WaitBehavior.IgnoreCondition);
 
     while(true){
+        // start button control
+        enableButtonControl = true;
         // start facing
         StartFacingAimTarget();
-
         // set moveDir for combat
         SetMoveDir();
-
         // start move by moveDir
         StartMove(ep);
-
         // hero unique action
         PolingHeroUniqueAction();
 
@@ -1471,21 +1470,19 @@ if(
 ){
     AbortIf(!isBotActive);
 
-    // reset for button control reload
+    // reset button control for change depending state button set
     enableButtonControl = false;
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
-    enableButtonControl = true;
+    Wait(0.1, WaitBehavior.IgnoreCondition);
 
     while(true){
+        // start button control
+        enableButtonControl = true;
         // start facing
         StartFacingAimTarget();
-
         // set moveDir for combat
         SetMoveDir();
-
         // start move by moveDir
         StartMove(ep);
-
         // hero unique action
         PolingHeroUniqueAction();
 
@@ -1537,7 +1534,8 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         if(
             isOutOfAmmo
         ){
-            // reload if out of ammo
+            Wait(1, WaitBehavior.AbortWhenFalse);
+            // reload
             PressButton(ep, Button.Reload);
         }
     }
@@ -1558,7 +1556,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         ){
             // melee
             PressButton(ep, Button.Melee);
-            Wait(0.5, WaitBehavior.IgnoreCondition);
+            Wait(0.5, WaitBehavior.AbortWhenFalse);
         }
 
         // hero unique action
@@ -1726,12 +1724,12 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             ){
                 // stop buton control for reduce reload cancel by fire
                 enableButtonControl = false;
-                Wait(0.1, WaitBehavior.IgnoreCondition);
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
                 PressButton(ep, Button.Reload);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
                 // check reload cancel until full load
                 while(IsReloading()){
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
+                    Wait(0.5, WaitBehavior.AbortWhenFalse);
                     if(
                         ProbabilityTrue(25 * (Ammo(ep, 0) / MaxAmmo(ep, 0)))  // reload cancel by ammo charge
                     ){
@@ -1950,9 +1948,9 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 enableButtonControl = false;
                 // use graple at target above
                 StartFacingPlayerAbovePosition(aimTarget, 5);
-                Wait(0.5, WaitBehavior.IgnoreCondition);
+                Wait(0.5, WaitBehavior.AbortWhenFalse);
                 StartHoldingButton(ep, Button.SecondaryFire);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
+                Wait(0.1, WaitBehavior.AbortWhenFalse);
                 // restore facing
                 StartFacingAimTarget();
             }
@@ -1965,7 +1963,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     // jump for pile driver
                     ApplyImpulse(ep, Up(),
                         10, Relative.ToWorld, ContraryMotion.Cancel);
-                    Wait(RandomReal(0.5, 1), WaitBehavior.IgnoreCondition);
+                    Wait(RandomReal(0.5, 1), WaitBehavior.AbortWhenFalse);
                 }
                 PressButton(ep, Button.Crouch);
             }
@@ -2127,7 +2125,7 @@ if(
         // stop current moving input
         StopMove(ep);
         // wait for start mode
-        Wait(waitForStartMove, WaitBehavior.IgnoreCondition);
+        Wait(waitForStartMove, WaitBehavior.AbortWhenFalse);
         // start move postion selecter to foward
         moveDirFB = Forward();
         moveDirLR = NoDirection();
@@ -2137,7 +2135,7 @@ if(
         // wait for arrival target
         define dist! = DistanceBetween(ep, aimTarget);
         dist = dist <= 5 ? 5 : dist;
-        Wait(dist * (moveSpeed), WaitBehavior.IgnoreCondition);
+        Wait(dist * (moveSpeed), WaitBehavior.AbortWhenFalse);
         // stop move if not multi position attack mode
         if(!multiPosAttack){
             StopMove(ep);
@@ -2147,7 +2145,7 @@ if(
             PressButton(ep, Button.PrimaryFire);
             if(tryCount < attackCount){
                 // button press with random interval
-                Wait(RandomReal(0.25, 0.5), WaitBehavior.IgnoreCondition);
+                Wait(RandomReal(0.25, 0.5), WaitBehavior.AbortWhenFalse);
             }
         }
         // reduce walking after ult
@@ -2191,13 +2189,13 @@ if(
         enableButtonControl = false;
         // place ult on ground
         StartFacingPlayerBetweenBelowPosition(aimTarget, 0.5);
-        Wait(0.5, WaitBehavior.IgnoreCondition);
+        Wait(0.5, WaitBehavior.AbortWhenFalse);
         if(ProbabilityTrue(isRotateProb)){
             PressButton(ep, Button.Ultimate);
-            Wait(0.1, WaitBehavior.IgnoreCondition);
+            Wait(0.1, WaitBehavior.AbortWhenFalse);
         }
         PressButton(ep, Button.PrimaryFire);
-        Wait(0.1, WaitBehavior.IgnoreCondition);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
         // restore facing
         StartFacingAimTarget();
         // restore buton control
@@ -2235,9 +2233,9 @@ if(
         StopHoldingButton(ep, Button.PrimaryFire);
         // place ability on ground
         StartFacingPlayerBetweenBelowPosition(aimTarget, 0.25);
-        Wait(0.5, WaitBehavior.IgnoreCondition);
+        Wait(0.5, WaitBehavior.AbortWhenFalse);
         PressButton(ep, Button.SecondaryFire);
-        Wait(0.1, WaitBehavior.IgnoreCondition);
+        Wait(0.1, WaitBehavior.AbortWhenFalse);
         // restore facing
         StartFacingAimTarget();
         // restore buton control
@@ -2278,7 +2276,7 @@ if(
                 BallTackleDirection(),
                 20, Relative.ToWorld, ContraryMotion.Incorporate);
             
-            Wait(0.5, WaitBehavior.IgnoreCondition);
+            Wait(0.5, WaitBehavior.AbortWhenFalse);
         }
 
         // try use graple at target above
@@ -2292,7 +2290,7 @@ if(
                 BallTackleDirection(),
                 20, Relative.ToWorld, ContraryMotion.Incorporate);
 
-            Wait(0.5, WaitBehavior.IgnoreCondition);
+            Wait(0.5, WaitBehavior.AbortWhenFalse);
         }
 
         // restore buton control
@@ -2441,14 +2439,14 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
             Button.Ability2
         ])
     ){
-        // if attack state buttons
+        // if attack state dependent buttons
         if(
             actionState == ActionState.Attack &&
             isMatchButton(button, attackButtons)
         ){
             startButton = true;
         }
-        // if support state buttons
+        // if support state dependent buttons
         else if(
             actionState == ActionState.Support &&
             isMatchButton(button, supportButtons)
@@ -2465,93 +2463,78 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
         StopHoldingButton(ep, button);
     }
     else{
-        // add button bit for debug 
-        AddButtonBit(button);
-
         // start button
         // release-press action
         if(buttonBehaivor == ButtonBehaivor.ReleasePress){
             while(true){
-                // button released during
-                WaitUntil(
-                    !enableButtonControl,
-                    0.01 + 
-                    RandomReal(
-                        releaseMin,
-                        releaseMax
-                    ) * buttonControlReleaseScale
-                    
-                );
-                AbortIf(!enableButtonControl);
-
-                if(
-                    button == Button.Ultimate &&
-                    ProbabilityTrue(100 * (1 - EnemyDensityRateOfAimTargetNear(ActionRange.Close)))
-                ){
-                    // skip use ultimate whem alive enemies count is low
-                    continue;
-                }
-
-                StartHoldingButton(ep, button);
-                
+                // start hold button
                 if(
                     button == Button.Jump &&
                     hasDoubleJumpButtonAbility &&
                     ProbabilityTrue(50)
                 ){
                     // use double jump ability
+                    StartHoldingButton(ep, button);
                     Wait(RandomReal(0.1, 0.5), WaitBehavior.AbortWhenFalse);
                     StopHoldingButton(ep, button);
-                    Wait(RandomReal(0.1, 0.5), WaitBehavior.AbortWhenFalse);
-                    AbortIf(!enableButtonControl);
-                    
+                    Wait(RandomReal(0.1, 0.5), WaitBehavior.AbortWhenFalse);                    
+                    StartHoldingButton(ep, button);
+                }
+                else if(
+                    button == Button.Ultimate &&
+                    ProbabilityTrue(100 * (1 - EnemyDensityRateOfAimTargetNear(ActionRange.Close)))
+                ){
+                    // skip press ultimate button whem alive enemies count is low
+                    Wait(0.1, WaitBehavior.AbortWhenFalse);
+                }
+                else{
                     StartHoldingButton(ep, button);
                 }
 
                 // button hold during
                 WaitUntil(
                     !enableButtonControl,
-                    0.01 + 
-                    RandomReal(
-                        pressMin,
-                        pressMax
-                    ) * buttonControlPressScale
+                    RandomReal(pressMin <= 0 ? 0.1 : pressMin, pressMax) * buttonControlReleaseScale
                 );
                 AbortIf(!enableButtonControl);
 
+                // stop hold button
                 StopHoldingButton(ep, button);
+
+                // button release during
+                WaitUntil(
+                    !enableButtonControl,
+                    RandomReal(releaseMin <= 0 ? 0.1 : releaseMin, releaseMax) * buttonControlReleaseScale
+                );
+                AbortIf(!enableButtonControl);
             }
         }
         // release-repeat action
         else if(buttonBehaivor == ButtonBehaivor.ReleaseRepeat){
             while(true){
-                // button released during
-                WaitUntil(
-                    !enableButtonControl,
-                    0.01 +  
-                    RandomReal(
-                        releaseMin,
-                        releaseMax
-                    ) * buttonControlReleaseScale
-                );
-                AbortIf(!enableButtonControl);
-
-                // set button repeat during and flag
-                repeatDuring = 
-                    RandomReal(
-                        pressMin,
-                        pressMax
-                    ) * buttonControlPressScale;
-                isRepeatFiring = true;
+                // set button repeat during
+                repeatDuring = RandomReal(pressMin <= 0 ? 0.1 : pressMin, pressMax) * buttonControlPressScale;
                 
-                // button repeat during
+                // start repeat button
+                isRepeatFiring = true;
                 while(
                     isRepeatFiring            
                 ){
                     PressButton(ep, button);
-                    WaitUntil(!enableButtonControl, 0.25);
+                    WaitUntil(
+                        !enableButtonControl,
+                        0.25
+                    );
                     AbortIf(!enableButtonControl);
                 }
+                // stop repeat button
+
+                // button release during
+                WaitUntil(
+                    !enableButtonControl,
+                    RandomReal(releaseMin <= 0 ? 0.1 : releaseMin, releaseMax) * buttonControlReleaseScale
+                );
+                AbortIf(!enableButtonControl);
             }
         }
         // else
@@ -2578,8 +2561,6 @@ if(
     IsDummyBot() &&
     enableButtonControl
 ){
-    AbortIf(!isBotActive);
-
     async StartButtonControlOfPrimaryFire();
     async StartButtonControlOfSecondaryFire();
     async StartButtonControlOfAbility1();
@@ -2604,7 +2585,6 @@ if(
     StopHoldingButton(ep, Button.Ultimate);
     StopHoldingButton(ep, Button.Jump);
     StopHoldingButton(ep, Button.Crouch);
-    ClearButtonBit();
 }
 
 // TAG Debug ----------
@@ -2613,22 +2593,25 @@ if(
 // Event.OngoingPlayer
 // if(
 //     isBotEnableTeam &&
-//     IsDummyBot()
+//     IsDummyBot()// &&
+//     // TeamOf() == playerTeam
 // ){
 //     // enable button text
 //     CreateInWorldText(
 //         AllPlayers(),
-//         <"Active = <0>\n\rState = <1>\n\rButton_Control = <2>\n\rButton_Bit = <3>",
-//         isBotActive,
-//         actionState == ActionState.Non ? "Non" :
+//         "Bot_Active = {0}
+//         Action_State = {1}
+//         Button_Control = {2}".Format([
+//             isBotActive ? "* true *" : "false",
+//             actionState == ActionState.Non ? "Non" :
 //             actionState == ActionState.Attack ? "Attack" :
-//             actionState == ActionState.Support ? "Support" :
-//             "Err",
-//         enableButtonControl,
-//         enableButtonBit>,
+//             actionState == ActionState.Support ? "Support" : "???",
+//             enableButtonControl ? "* true *" : "false"
+//         ])
+//         ,
 //         EyePosition(ep) + Vector(0, 1.25, 0),
-//         0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionAndString,
-//         isBotActive ? Color.Yellow : Color.White,
+//         0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
+//         enableButtonControl ? Color.Yellow : Color.White,
 //         Spectators.DefaultVisibility);
 
 //     // while(true){
@@ -2642,34 +2625,3 @@ if(
 //     //     Wait(1);
 //     // }
 // }
-
-playervar define enableButtonBit = allButtonBitsNon;   // fomrat is [9PS12U]
-define allButtonBitsNon:    900000;
-define PrimaryButtonBit:    010000;
-define SecondaryButtonBit:  001000;
-define Ability1ButtonBit:   000100;
-define Ability2ButtonBit:   000010;
-define UltimateButtonBit:   000001;
-
-void AddButtonBit(define button) playervar "AddButtonBit"{
-    // // add debug text
-    // if(button == Button.PrimaryFire){
-    //     enableButtonBit += PrimaryButtonBit;
-    // }
-    // else if(button == Button.SecondaryFire){
-    //     enableButtonBit += SecondaryButtonBit;
-    // }
-    // else if(button == Button.Ability1){
-    //     enableButtonBit += Ability1ButtonBit;
-    // }
-    // else if(button == Button.Ability2){
-    //     enableButtonBit += Ability2ButtonBit;
-    // }
-    // else if(button == Button.Ultimate){
-    //     enableButtonBit += UltimateButtonBit;
-    // }
-}
-
-void ClearButtonBit()"ClearButtonBit"{
-    // enableButtonBit = allButtonBitsNon;
-}

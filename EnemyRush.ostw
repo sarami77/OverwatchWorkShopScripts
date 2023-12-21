@@ -94,34 +94,34 @@ if(
     }
 }
 
-// define addTimeScale: 1.25;
+globalvar define matchTimeScale! = WorkshopSettingReal("Game Settings", "Match Time Scale", 1.0, 0.01, 100, 1);
 
-// rule: "Round/AddMatchTime1"
-// Event.OngoingGlobal
-// if(
-//     IsGameInProgress()
-// ){
-//     // defualt 300
-//     SetMatchTime((300 * addTimeScale));
-// }
+rule: "Round/AddMatchTime1"
+Event.OngoingGlobal
+if(
+    IsGameInProgress()
+){
+    // defualt set 300s
+    SetMatchTime((300 * matchTimeScale));
+}
 
-// rule: "Round/AddMatchTime2"
-// Event.OngoingGlobal
-// if(
-//     IsObjectiveComplete(0)
-// ){
-//     // defualt 180
-//     SetMatchTime(MatchTime() + (180 * addTimeScale));
-// }
+rule: "Round/AddMatchTime2"
+Event.OngoingGlobal
+if(
+    IsObjectiveComplete(0)
+){
+    // defualt add 180s
+    SetMatchTime(MatchTime() + (180 * matchTimeScale));
+}
 
-// rule: "Round/AddMatchTime3"
-// Event.OngoingGlobal
-// if(
-//     IsObjectiveComplete(1)
-// ){
-//     // defualt 120
-//     SetMatchTime(MatchTime() + (120 * addTimeScale));
-// }
+rule: "Round/AddMatchTime3"
+Event.OngoingGlobal
+if(
+    IsObjectiveComplete(1)
+){
+    // defualt add 120s
+    SetMatchTime(MatchTime() + (120 * matchTimeScale));
+}
 
 // TAG Object ----------
 globalvar define prevObjectPosition;
@@ -169,7 +169,7 @@ if(
     }
 
     // set max respawn time
-    define respawnTime! = 10 * WorkshopSettingReal("Player Settings", "Max Respawn Time Scale", 1.0, 0, 100, 1);
+    define respawnTime! = 10 * WorkshopSettingReal("Player Settings", "Max Respawn Time Scale", 1.0, 0.01, 100, 1);
     SetRespawnMaxTime(ep, respawnTime);
 }
 
@@ -357,7 +357,7 @@ define needBuddyNum:
     maxBuddyBotNum - PlayerNum();
 
 globalvar define maxBuddyBotNum! =
-    WorkshopSettingInteger("Ally Bot Settings (bot join game as proxy of player when slot empty)", "Filling Slot Count", 8, 0, 8, 1);
+    WorkshopSettingInteger("Ally Bot Settings", "Filling Slot Count (join as proxy when player slot absent)", 8, 0, 8, 1);
 
 globalvar define buddyAssetNo!;
 
@@ -460,7 +460,9 @@ if(
     canEnemyBotActive    
 ){
     if(
+        // has damage
         NormalizedHealth() < 1.0 ||
+        // has line of close player
         IsInLineOfSight(
             EyePosition(),
             EyePosition(ClosestPlayerTo(ep, EnemyTeamOf(ep))))
@@ -1328,12 +1330,12 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    // if(baseSmoke == null){
-    //     // base smoke
-    //     baseSmoke = CreateEffect(commonTeleportBasePosition != null ? AllPlayers() : null,
-    //         Effect.Cloud, enemyColor, commonTeleportBasePosition,
-    //         teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
-    // }
+    if(baseSmoke == null){
+        // base smoke
+        baseSmoke = CreateEffect(commonTeleportBasePosition != null ? AllPlayers() : null,
+            Effect.Cloud, enemyColor, commonTeleportBasePosition,
+            teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+    }
 
     // need check update
     if(!needUpdateCommonTeleportBasePosition){
@@ -1483,7 +1485,7 @@ if(
 
 // TAG EnemyBot/EnemyAbility/SpawnRush ----------
 globalvar define spawnRushInterval;
-globalvar define spawnRushDurationRate;
+globalvar define spawnRushCount;
 
 rule: "EnemyBot/EnemyAbility/SpawnRush"
 Event.OngoingGlobal
@@ -1491,7 +1493,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval
-    spawnRushInterval = ObjectProgressScaledInterval(playerTeam, 20, 40, 5);
+    spawnRushInterval = ObjectProgressScaledInterval(playerTeam, 20, 40, 10);
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.01, 100, 2);
     spawnRushInterval = RoundToInteger(spawnRushInterval, Rounding.Up);
     for(;spawnRushInterval > 0; spawnRushInterval--){
@@ -1509,9 +1511,9 @@ if(
     // action
     define spawnRushDuration! = RandomInteger(5, 20);
     spawnRushDuration *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Duration Scale", 1.0, 0.01, 100, 2);
-    define rushSpawnInterval! = RandomInteger(1, 5);
-    define rushSpawnCount! = RoundToInteger(spawnRushDuration / rushSpawnInterval, Rounding.Down);
-    for(; rushSpawnCount > 0; rushSpawnCount--){
+    define deployRushInterval! = RandomInteger(1, 5);
+    spawnRushCount = RoundToInteger(spawnRushDuration / deployRushInterval, Rounding.Down);
+    for(; spawnRushCount > 0; spawnRushCount--){
         Respawn(
             FilteredArray(
                 AllDeadPlayers(enemyTeam),
@@ -1521,7 +1523,7 @@ if(
             )
         );
         
-        Wait(rushSpawnInterval, WaitBehavior.IgnoreCondition);
+        Wait(deployRushInterval, WaitBehavior.IgnoreCondition);
         WaitUntilReleaseServerLoadLevel(ServerLoadLevel.Busy);
     }
 
@@ -1541,7 +1543,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval
-    shotCallInterval = ObjectProgressScaledInterval(playerTeam, 20, 40, 5);
+    shotCallInterval = ObjectProgressScaledInterval(playerTeam, 20, 40, 10);
     shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.01, 100, 3);
     shotCallInterval = RoundToInteger(shotCallInterval, Rounding.Up);
     for(;shotCallInterval > 0; shotCallInterval--){
@@ -1590,19 +1592,19 @@ if(
     IsThreatEnemy(ep)
 ){
     // set default interval
-    combatTeleportInterval = ObjectProgressScaledInterval(playerTeam, 10, 20, 5);
+    combatTeleportInterval = ObjectProgressScaledInterval(playerTeam, 10, 20, 10);
     combatTeleportInterval *= WorkshopSettingReal("Enemy Bot Settings", "(Sub Boss & Boss) Combat-Teleport Interval Scale", 1.0, 0.01, 100, 4);
     if(actionRangeMax == ActionRange.Melee){
         combatTeleportInterval *= 1;
     }
     else if(actionRangeMax == ActionRange.Close){
-        combatTeleportInterval *= 2;
+        combatTeleportInterval *= 1.5;
     } 
     else if(actionRangeMax == ActionRange.Middle){
-        combatTeleportInterval *= 3;
+        combatTeleportInterval *= 2.0;
     } 
     else if(actionRangeMax == ActionRange.Far){
-        combatTeleportInterval *= 4;
+        combatTeleportInterval *= 3;
     }
     combatTeleportInterval = RoundToInteger(combatTeleportInterval, Rounding.Up);
 
@@ -1610,12 +1612,12 @@ if(
 
     for(;combatTeleportInterval > 0; combatTeleportInterval --){
         if(
-            // player on object
-            IsPlayerOnObject &&
+            // player team close win
+            IsCloseWin(playerTeam) &&
             // enemy not on object
             !IsEnemyOnObject &&
-            // player team close win
-            IsCloseWin(playerTeam)
+            // player on object
+            IsPlayerOnObject
         ){
             // instantly teleport for defend object in finale phase
             isEmgTeleport = true;
@@ -1648,9 +1650,9 @@ if(
     actionState != ActionState.Non &&
     IsUsingUltimate()
 ){
-    moreUltProb = moreAbilityProb;
     WaitUntil(!IsUsingUltimate(), MaxValue());    
     
+    moreUltProb = moreAbilityProb;
     while(
         IsAlive() &&
         ProbabilityTrue(moreUltProb)
@@ -1661,14 +1663,14 @@ if(
         PressButton(ep, Button.Ultimate);
         WaitUntil(!IsUsingUltimate(), MaxValue());
     }
-
     moreUltProb = 0;
+
     WaitUntil(!IsUsingUltimate(), MaxValue());
     Wait(1, WaitBehavior.IgnoreCondition);
 }
 
-globalvar define decreaseProb =
-    WorkshopSettingReal("Enemy Bot Settings", "(Sub boss & Boss) Rapid-Fire-Ultimate Termination Scale", 1.0, 0, 10, 5) * 10;
+globalvar define decreaseProb! =
+    WorkshopSettingReal("Enemy Bot Settings", "(Sub boss & Boss) Rapid-Fire-Ultimate Termination Scale", 1.0, 0.01, 10, 5) * 10;
 
 rule: "EnemyBot/EnemyAbility/decreaseMultiUltimateProb"
 Event.OngoingGlobal
@@ -1775,7 +1777,7 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
 
     confirmSpawnInterval = ObjectProgressScaledInterval(playerTeam, eachMinSpawnInterval, eachMaxSpawnInterval, 0);
     confirmSpawnInterval *= spawnTimeScale;
-    confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Basic Spawn Intarval Scale", 1.0, 0, 100, 1);
+    confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Basic Spawn Intarval Scale", 1.0, 0.01, 100, 1);
     // SetRespawnMaxTime(ep, confirmSpawnInterval);
 }
 
@@ -1863,7 +1865,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set auto tune damage
     confirmDealtDamage = autoTuneDmgDlt;
     // apply setting scale
-    confirmDealtDamage *= WorkshopSettingReal("Enemy Bot Settings", "Enemy Deal Damage Scale", 1.0, 0, 100, 0);
+    confirmDealtDamage *= WorkshopSettingReal("Enemy Bot Settings", "Enemy Deal Damage Scale", 1.0, 0.01, 100, 0);
     // apply enemy type scale
     confirmDealtDamage *= eachDealtDamageScale;
     // apply team balance
@@ -2071,7 +2073,7 @@ if(
 
         // auto recall gunship
         if(
-            ProbabilityTrue((8 - (HumanPlayerNum(playerTeam) * 1)) * 0.25) &&
+            ProbabilityTrue((8 - (HumanPlayerNum(playerTeam)))  * 0.25) &&
             IsGameInProgress()
         ){
             spawnRushInterval = 0;
@@ -2089,7 +2091,7 @@ if(
                 );
             
             player.heroModType = HeroModType.GUNSHIP_GUNNER;
-            player.heroModName = "* GUNSHIP GUNNER";
+            player.heroModName = "GUNSHIP GUNNER *";
             if(IsDead(player)){
                 Resurrect(player);
             }
@@ -2221,6 +2223,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
             FirstEnemyOf(EnemyType.SubBoss).confirmSpawnInterval,
             FirstEnemyOf(EnemyType.Boss).confirmSpawnInterval>, Color.Team1);
         debugHuds[Last()] = CreateDebugHud("spawn Rush Interval", spawnRushInterval, spawnRushInterval > 5 ? Color.Team1 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("spawn Rush Count", spawnRushCount, spawnRushCount <= 0 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("combat Teleport Interval",
             FirstThreatEnemy().combatTeleportInterval,
