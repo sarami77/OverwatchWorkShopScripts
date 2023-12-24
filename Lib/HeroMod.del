@@ -200,8 +200,8 @@ if(
     // update text
     UpdateHeroModText();
     // play switch effect
-    PlayEffect(ep, PlayEffect.GoodPickupEffect, null, ep, 1);
-    PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 75);
+    PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.White, ep, 1);
+    PlayEffect(ep, PlayEffect.DebuffImpactSound, null, ep, 100);
 }
 
 // TAG HeroMod/Action ----------
@@ -742,7 +742,7 @@ void HeroMod_Action_TECHNICIAN(define trigger!) playervar "HeroMod_Action_TECHNI
         heroModDetail = 
             "kill enemy to..." + NL +
             "  + get 150% move speed status until 3 seconds" + NL +
-            "  + reset cooldown ability2(default E key)" + NL +
+            "  + reset cooldown ability2(default E) key" + NL +
             "  + reset cooldown secondary fire ability" + NL +
             "    * has 5 seconds cooldown to re-trigger" + NL + 
             "- receive heal 50%";
@@ -794,7 +794,7 @@ void HeroMod_Action_SURVIVALIST(define trigger!) playervar "HeroMod_Action_SURVI
         heroModDetail = 
             "lost 50% health..." + NL + 
             "  + get unkillable status until 3 seconds" + NL +
-            "  + auto use ability1(default Shift key) and reset cooldown" + NL +
+            "  + auto use ability1(default Shift) key and reset cooldown" + NL +
             "  + auto use jump ability and reset cooldown" + NL +
             "    * has 5 seconds cooldown to re-trigger" + NL + 
             "- receive heal 50%";
@@ -1549,7 +1549,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         heroModDetail = 
             "+ use ult to transform to gunship and rampage until 30 second" + NL +
             "  * gunship has powerful auto cannon with splash blast and barrage" + NL +
-            "  + long press melee key to shot ult charge as nuke cannon" + NL +
+            "  * long press melee key to shot ult charge as nuke cannon" + NL +
             "- every 3 seconds passed to lose 1% ult charge";
     }
     else if(
@@ -1587,7 +1587,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
             }
             StartModifyingHeroVoiceLines(ep, 0.1, false);
 
-            for(define remainSecond! = 30; remainSecond > 0; remainSecond--){
+            for(define remainSecond! = ep == hp ? 300 : 30; remainSecond > 0; remainSecond--){
                 if(IsDead()){
                     break;
                 }
@@ -1606,33 +1606,49 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
                     PressButton(ep, Button.Ability1);
                     Wait(0.5, WaitBehavior.IgnoreCondition);
                 }
-
+                
                 define dist! = DistanceBetween(ep, BelowPosition(ep));
                 define faceDir! = FacingDirectionOf();
-                define hightLimit! = 18;
+                define hightLimit! = 16;
                 
                 if(
-                    // too high
-                    dist > hightLimit + 3
+                    // aim downward
+                    YOf(faceDir) < 0 &&
+                    // is front blocked
+                    IsBlockedBetween(
+                        EyePosition(),
+                        ShiftedPosition(EyePosition(), VectorWithOutY(faceDir), 4)
+                    )
                 ){
-                    // push to down with force
+                    // down with force
                     ApplyImpulse(ep, 
-                        faceDir + Down(),
-                        0.1,
-                        Relative.ToWorld,
-                        ContraryMotion.Cancel);
-                }
-                else{
-                    // fly to up
-                    ApplyImpulse(ep, 
-                        dist < hightLimit ?
-                            faceDir + Up() :
-                            faceDir,
-                        1.25,
+                        Down(),
+                        2.0,
                         Relative.ToWorld,
                         ContraryMotion.Incorporate);
                 }
-                
+                else{
+                    define spd! = (hightLimit - dist) * 0.3;
+                    // fly
+                    ApplyImpulse(ep, 
+                        dist < hightLimit ?
+                            Up() :
+                            NoDirection(),
+                        dist < hightLimit ?
+                            spd:
+                            0,
+                        Relative.ToWorld,
+                        ContraryMotion.Incorporate);
+                        
+                    ApplyImpulse(ep, 
+                        YOf(faceDir) < 0 ?
+                            VectorWithOutY(faceDir) :
+                            faceDir,
+                        1.0,
+                        Relative.ToWorld,
+                        ContraryMotion.Incorporate);
+                }
+            
                 Wait(1.0, WaitBehavior.IgnoreCondition);
             }
 
@@ -1658,7 +1674,8 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         trigger == HeroModTrigger.USING_PRIMARY
     ){
         if(isTransformed){
-            define splashDamageRangeMinigun!: 2.0;
+            define splashDamageRangeMinigun!: 1.5;
+
             while(IsFiringPrimary()){
                 // get aimPosition
                 define aimPosition! = AimingPosition(40, EnemyTeamOf(ep));
