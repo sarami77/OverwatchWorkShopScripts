@@ -1525,6 +1525,8 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         // in idle
         actionState == ActionState.Non
     ){
+        // wait  
+        Wait(3, WaitBehavior.AbortWhenFalse);
         // reload by condition 
         PressButton(ep, Button.Reload);
     }
@@ -1533,7 +1535,6 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         if(
             isOutOfAmmo
         ){
-            Wait(1, WaitBehavior.AbortWhenFalse);
             // reload
             PressButton(ep, Button.Reload);
         }
@@ -1839,12 +1840,14 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 aimScatter = 0.1;
             }
 
-            // fallback by graple hook
+            define isClosed! = DistanceBetween(ep, aimTarget) <= ActionRange.Close;
+
             if(
-                ProbabilityTrue(75) &&
-                DistanceBetween(ep, aimTarget) <= ActionRange.Close
+                isClosed
             ){
+                // fallback by graple hook
                 if(
+                    ProbabilityTrue(25) &&
                     AbilityCooldown(ep, Button.Ability1) <= 0 &&
                     IsBlockedBetween(
                         EyePosition(ep),
@@ -1854,7 +1857,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     // use graple at backword
                     StopMove(ep);
                     StartFacingPlayerRetreatPosition(aimTarget, RandomReal(2, 5));
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
+                    Wait(1.0, WaitBehavior.IgnoreCondition);
                     PressButton(ep, Button.Ability1);
                     Wait(0.1, WaitBehavior.IgnoreCondition);
                     // restore aiming
@@ -1862,10 +1865,15 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     // restore facing
                     StartFacingAimTarget();
                 }
-                else if(ProbabilityTrue(50)){
-                    // fallback by non aiming fire
+                // fallback with non scorp
+                else if(
+                    ProbabilityTrue(25) &&
+                    IsButtonHeld(ep, Button.SecondaryFire)
+                ){
                     StopHoldingButton(ep, Button.SecondaryFire);
-                    StartHoldingButton(ep, Button.PrimaryFire);
+                    Wait(RandomReal(1.0, 3.0), WaitBehavior.IgnoreCondition);
+                    // restore aiming
+                    StartHoldingButton(ep, Button.SecondaryFire);
                 }
             }
         }

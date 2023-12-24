@@ -486,7 +486,7 @@ if(
 }
 
 // TAG EnemyBot/Config ----------
-define basicSpawnTimeBase: 10;
+define basicSpawnTimeBase: 8;
 define basicSpawnTimeScale: 1.0;
 
 define basicSpawnTimeMin: 
@@ -497,7 +497,7 @@ define basicSpawnTimeMin:
     confirmGameDifficulty == GameDifficulty.INSANE ?    basicSpawnTimeBase + (basicSpawnTimeScale * 5.0) :
                                                         basicSpawnTimeBase + (basicSpawnTimeScale * 5.0);
 
-define spawnTimeMinToMaxScale: 1.25;
+define spawnTimeMinToMaxScale: 1.5;
 
 define autoTuneDmgDltInitial :
     confirmGameDifficulty == GameDifficulty.EASY ?      20 :
@@ -2068,31 +2068,11 @@ if(
 
         // auto recall gunship
         if(
-            ProbabilityTrue((8 - (HumanPlayerNum(playerTeam)))) &&
-            ProbabilityTrue(10) &&
+            ProbabilityTrue((8 - (HumanPlayerNum(playerTeam))) * 10) &&
+            ProbabilityTrue(100) &&
             IsGameInProgress()
         ){
-            spawnRushInterval = 0;
-
-            define player! = 
-                FirstOf(
-                    SortedArray(
-                        FilteredArray(
-                            AllPlayers(playerTeam),
-                            IsDummyBot(ae) &&
-                            !ae.isTransformed
-                        ),
-                        DistanceBetween(CurrentObjectPosition(), ae)
-                    )
-                );
-            
-            player.heroModType = HeroModType.GUNSHIP_GUNNER;
-            player.heroModName = "GUNSHIP GUNNER *";
-            if(IsDead(player)){
-                Resurrect(player);
-            }
-            SetUltimateCharge(player, DefaultPercentage());
-            PressButton(player);
+            debugBuddyHeroPerk();
         }
 
         Wait(1);
@@ -2280,7 +2260,12 @@ if(
 ){
     // kill players on aim center
     WaitLongPressConfirm();
+    debugBuddyHeroPerk();
 
+    LoopIfConditionIsTrue();
+}
+
+void debugBuddyHeroPerk()"debugBuddyHeroPerk"{
     define player! = 
         FirstOf(
             SortedArray(
@@ -2293,12 +2278,16 @@ if(
             )
         );
     
-    player.heroModType = HeroModType.GUNSHIP_GUNNER;
-    player.heroModName = "* GUNSHIP GUNNER";
+
+    player.heroModType = RandomValueInArray([
+        HeroModType.BEAM_SNIPER
+        // HeroModType.TITAN_FORM,
+        // HeroModType.GUNSHIP_GUNNER
+    ]);
+
     if(IsDead(player)){
         Resurrect(player);
     }
     SetUltimateCharge(player, DefaultPercentage());
     PressButton(player, Button.Ultimate);
-    LoopIfConditionIsTrue();
 }

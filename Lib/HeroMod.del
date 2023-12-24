@@ -25,8 +25,8 @@ enum HeroModType{
     SURVIVALIST,
     ARTILLERY_SUPPORT,
     RAGE,
-    SHOT_CALL,
     FAST_CHARGE,
+    SHOT_CALL,
     SUPER_ULT,
     GRUDGE_LIGHTNING,
     GRUDGE_FIRE_BALL,
@@ -246,8 +246,8 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
         case HeroModType.SURVIVALIST:       HeroMod_Action_SURVIVALIST(trigger);                        break;
         case HeroModType.ARTILLERY_SUPPORT: HeroMod_Action_ARTILLERY_SUPPORT(trigger);                  break;
         case HeroModType.RAGE:              HeroMod_Action_RAGE(trigger);                               break;
-        case HeroModType.SHOT_CALL:         HeroMod_Action_SHOT_CALL(trigger);                          break;
         case HeroModType.FAST_CHARGE:       HeroMod_Action_FAST_CHARGE(trigger);                        break;
+        case HeroModType.SHOT_CALL:         HeroMod_Action_SHOT_CALL(trigger);                          break;
         case HeroModType.SUPER_ULT:         HeroMod_Action_SUPER_ULT(trigger);                          break;
         case HeroModType.GRUDGE_LIGHTNING:  HeroMod_Action_GRUDGE_LIGHTNING(trigger, inputPayload);     break;
         case HeroModType.GRUDGE_FIRE_BALL:  HeroMod_Action_GRUDGE_FIRE_BALL(trigger, inputPayload);     break;
@@ -891,6 +891,34 @@ void HeroMod_Action_RAGE(define trigger!) playervar "HeroMod_Action_RAGE"{
         SetUltimateCharge(ep, 0);
     }
 }
+// TAG FAST_CHARGE
+void HeroMod_Action_FAST_CHARGE(define trigger!) playervar "HeroMod_Action_FAST_CHARGE"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "FAST CHARGE";
+        heroModDetail = 
+            "+ every 1 second passed to gain 3% ult charge" + NL +
+            "- max health 50%";
+        SetMaxHealth(ep, 50);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetMaxHealth(ep, DefaultPercentage());
+    }
+    else if(
+        trigger == HeroModTrigger.CHARGING_ULT
+    ){
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        if(
+            IsGameInProgress() &&
+            UltimateChargePercent() < DefaultPercentage()
+        ){
+            SetUltimateCharge(ep, UltimateChargePercent() + 3);
+        }
+    }
+}
 // TAG SHOT_CALL
 void HeroMod_Action_SHOT_CALL(define trigger!) playervar "HeroMod_Action_SHOT_CALL"{
     if(
@@ -947,34 +975,6 @@ void HeroMod_Action_SHOT_CALL(define trigger!) playervar "HeroMod_Action_SHOT_CA
                 // PressButton(player, Button.PrimaryFire);
                 Wait(RandomReal(0.1, 0.3), WaitBehavior.AbortWhenFalse);
             }
-        }
-    }
-}
-// TAG FAST_CHARGE
-void HeroMod_Action_FAST_CHARGE(define trigger!) playervar "HeroMod_Action_FAST_CHARGE"{
-    if(
-        trigger == HeroModTrigger.ACTIVATE
-    ){
-        heroModName = "FAST CHARGE";
-        heroModDetail = 
-            "+ every 1 second passed to gain 3% ult charge" + NL +
-            "- max health 50%";
-        SetMaxHealth(ep, 50);
-    }
-    else if(
-        trigger == HeroModTrigger.DEACTIVATE
-    ){
-        SetMaxHealth(ep, DefaultPercentage());
-    }
-    else if(
-        trigger == HeroModTrigger.CHARGING_ULT
-    ){
-        Wait(1, WaitBehavior.AbortWhenFalse);
-        if(
-            IsGameInProgress() &&
-            UltimateChargePercent() < DefaultPercentage()
-        ){
-            SetUltimateCharge(ep, UltimateChargePercent() + 3);
         }
     }
 }
@@ -1305,8 +1305,8 @@ void HeroMod_Action_TITAN_FORM(define trigger!) playervar "HeroMod_Action_TITAN_
     ){
         heroModName = "TITAN FORM";
         heroModDetail = 
-            "+ use ult to transform to titan and rampage until 20 second" + NL +
-            "  * titan has super toughness, fast ability charge, wide range hammer attack" + NL +
+            "+ use ult to transform to titan and rampage until 30 second" + NL +
+            "  * titan has super toughness and wide range hammer attack" + NL +
             "- every 4 seconds passed to lose 1% ult charge";
     }
     else if(
@@ -1329,6 +1329,7 @@ void HeroMod_Action_TITAN_FORM(define trigger!) playervar "HeroMod_Action_TITAN_
             CancelPrimaryAction();
             define prevHero! = HeroOf();
             ForcePlayerHero(ep, Hero.Reinhardt);
+            Wait(0.1, WaitBehavior.IgnoreCondition);    // wait change hero
             SetHeroButtonControlPropety();
             SetMaxHealth(ep, 500);
             SetDamageDealt(ep, 250);
@@ -1341,7 +1342,7 @@ void HeroMod_Action_TITAN_FORM(define trigger!) playervar "HeroMod_Action_TITAN_
             }
             StartModifyingHeroVoiceLines(ep, 0.1, false);
 
-            for(define remainSecond! = 20; remainSecond > 0; remainSecond--){
+            for(define remainSecond! = 30; remainSecond > 0; remainSecond--){
                 if(IsDead()){
                     break;
                 }
@@ -1350,6 +1351,18 @@ void HeroMod_Action_TITAN_FORM(define trigger!) playervar "HeroMod_Action_TITAN_
                 }
                 SetAbilityCooldown(ep, Button.Ability1, 0);
                 SetAbilityCooldown(ep, Button.Ability2, 0);
+
+                if(
+                    IsDummyBot() &&
+                    actionState == ActionState.Attack
+                ){
+                    StartHoldingButton(ep, Button.PrimaryFire);
+                    StopHoldingButton(ep, Button.SecondaryFire);
+                    if(ProbabilityTrue(50)){
+                        PressButton(ep, Button.Jump);
+                    }
+                }
+
                 Wait(1, WaitBehavior.IgnoreCondition);
             }
 
@@ -1363,6 +1376,7 @@ void HeroMod_Action_TITAN_FORM(define trigger!) playervar "HeroMod_Action_TITAN_
             SetDamageDealt(ep, DefaultPercentage());
             ForcePlayerHero(ep, prevHero);
             StopForcingHero(ep);
+            Wait(0.1, WaitBehavior.IgnoreCondition);    // wait change hero
             SetHeroButtonControlPropety();
             // wait using ult fin for not retrigger (if hero not changed by some hero)
             WaitUntil(!IsUsingUltimate(), MaxValue());
@@ -1379,7 +1393,7 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
         heroModName = "BEAM SNIPER";
         heroModDetail = 
             "+ use ult to transform to beam sniper and rampage until 40 second" + NL +
-            "  * beam sniper has powerful beam rifle with landed blast and penetrate wall" + NL +
+            "  * beam sniper has powerful beam rifle with blast and penetrate wall" + NL +
             "- every 4 seconds passed to lose 1% ult charge";
         beamCharged = false;  // not charging
     }
@@ -1403,7 +1417,9 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
             CancelPrimaryAction();
             define prevHero! = HeroOf();
             ForcePlayerHero(ep, Hero.Widowmaker);
+            Wait(0.1, WaitBehavior.IgnoreCondition);    // wait change hero
             SetHeroButtonControlPropety();
+            SetMaxHealth(ep, 200);
             SetDamageDealt(ep, 300);
 
             for(define remainSecond! = 40; remainSecond > 0; remainSecond--){
@@ -1413,15 +1429,17 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
                 if(UltimateChargePercent() < DefaultPercentage()){
                     SetUltimateCharge(ep, UltimateChargePercent() + 20);
                 }
-                SetAbilityCooldown(ep, Button.Ability1, 0);
-                SetAbilityCooldown(ep, Button.Ability2, 0);
+                // SetAbilityCooldown(ep, Button.Ability1, 0);
+                // SetAbilityCooldown(ep, Button.Ability2, 0);
                 Wait(1, WaitBehavior.IgnoreCondition);
             }
 
             SetUltimateCharge(ep, 0);
+            SetMaxHealth(ep, DefaultPercentage());
             SetDamageDealt(ep, DefaultPercentage());
             ForcePlayerHero(ep, prevHero);
             StopForcingHero(ep);
+            Wait(0.1, WaitBehavior.IgnoreCondition);    // wait change hero
             SetHeroButtonControlPropety();
             // wait using ult fin for not retrigger (if hero not changed by some hero)
             WaitUntil(!IsUsingUltimate(), MaxValue());
@@ -1548,7 +1566,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         heroModName = "GUNSHIP GUNNER";
         heroModDetail = 
             "+ use ult to transform to gunship and rampage until 30 second" + NL +
-            "  * gunship has powerful auto cannon with splash blast and barrage" + NL +
+            "  * gunship has powerful auto cannon with blast and barrage" + NL +
             "  * long press melee key to shot ult charge as nuke cannon" + NL +
             "- every 4 seconds passed to lose 1% ult charge";
     }
@@ -1573,6 +1591,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
             CancelPrimaryAction();
             define prevHero! = HeroOf();
             ForcePlayerHero(ep, Hero.Bastion);
+            Wait(0.1, WaitBehavior.IgnoreCondition);    // wait change hero
             SetHeroButtonControlPropety();
             SetMaxHealth(ep, 300);
             SetGravity(ep, 1);
@@ -1663,6 +1682,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
             // ClearStatus(ep, Status.Rooted);
             ForcePlayerHero(ep, prevHero);
             StopForcingHero(ep);
+            Wait(0.1, WaitBehavior.IgnoreCondition);    // wait change hero
             SetHeroButtonControlPropety();
             // wait using ult fin for not retrigger (if hero not changed by some hero)
             WaitUntil(!IsUsingUltimate(), MaxValue());
