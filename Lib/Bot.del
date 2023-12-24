@@ -582,8 +582,8 @@ void SetHeroButtonControlPropety()"SetHeroButtonControlPropety"{
         aimScatter = 0.1;
         actionRangeMin = ActionRange.Middle;
         actionRangeMax = ActionRange.Far;
-        primaryFireButtonReleaseMin = 0.8;      // to charge enough sniper rifle
-        primaryFireButtonReleaseMax = 1.0;      // to suppress charge over sniper rifle
+        primaryFireButtonReleaseMin = 1.0;      // to charge enough sniper rifle
+        primaryFireButtonReleaseMax = 1.3;      // to suppress charge over sniper rifle
         primaryFireButtonPressMin = 0;          // to more use sniper rifle
         primaryFireButtonPressMax = 1;          // to more use sniper rifle
         secondaryFireButtonPressMin = 30;       // to more use scorp
@@ -1840,14 +1840,12 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 aimScatter = 0.1;
             }
 
-            define isClosed! = DistanceBetween(ep, aimTarget) <= ActionRange.Close;
-
             if(
-                isClosed
+                DistanceBetween(ep, aimTarget) <= ActionRange.Close
             ){
                 // fallback by graple hook
                 if(
-                    ProbabilityTrue(25) &&
+                    ProbabilityTrue(50 + ((1 - NormalizedHealth()) * 50)) &&
                     AbilityCooldown(ep, Button.Ability1) <= 0 &&
                     IsBlockedBetween(
                         EyePosition(ep),
@@ -1856,8 +1854,9 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 ){
                     // use graple at backword
                     StopMove(ep);
+                    StopHoldingButton(ep, Button.SecondaryFire);
                     StartFacingPlayerRetreatPosition(aimTarget, RandomReal(2, 5));
-                    Wait(1.0, WaitBehavior.IgnoreCondition);
+                    Wait(0.75, WaitBehavior.IgnoreCondition);
                     PressButton(ep, Button.Ability1);
                     Wait(0.1, WaitBehavior.IgnoreCondition);
                     // restore aiming
@@ -1867,7 +1866,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                 }
                 // fallback with non scorp
                 else if(
-                    ProbabilityTrue(25) &&
+                    ProbabilityTrue((1 - NormalizedHealth()) * 50) &&
                     IsButtonHeld(ep, Button.SecondaryFire)
                 ){
                     StopHoldingButton(ep, Button.SecondaryFire);
@@ -1931,11 +1930,11 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         else if(
             HeroOf() == Hero.Sojourn
         ){
-            // teleport enemy behind with shadow step 
+            // fire charged railgun 
             if(
-                ProbabilityTrue(75 * NormalizedHealth()) &&
                 IsUsingUltimate()
             ){
+                Wait(RandomReal(0, 1.0), WaitBehavior.IgnoreCondition);
                 // use charged railgun
                 PressButton(ep, Button.SecondaryFire);
             }
@@ -2476,6 +2475,16 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
         // release-press action
         if(buttonBehaivor == ButtonBehaivor.ReleasePress){
             while(true){
+                // stop hold button
+                StopHoldingButton(ep, button);
+
+                // button release during
+                WaitUntil(
+                    !enableButtonControl,
+                    RandomReal(releaseMin <= 0 ? 0.1 : releaseMin, releaseMax) * buttonControlReleaseScale
+                );
+                AbortIf(!enableButtonControl);
+
                 // start hold button
                 if(
                     button == Button.Jump &&
@@ -2506,21 +2515,18 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                     RandomReal(pressMin <= 0 ? 0.1 : pressMin, pressMax) * buttonControlReleaseScale
                 );
                 AbortIf(!enableButtonControl);
-
-                // stop hold button
-                StopHoldingButton(ep, button);
-
+            }
+        }
+        // release-repeat action
+        else if(buttonBehaivor == ButtonBehaivor.ReleaseRepeat){
+            while(true){
                 // button release during
                 WaitUntil(
                     !enableButtonControl,
                     RandomReal(releaseMin <= 0 ? 0.1 : releaseMin, releaseMax) * buttonControlReleaseScale
                 );
                 AbortIf(!enableButtonControl);
-            }
-        }
-        // release-repeat action
-        else if(buttonBehaivor == ButtonBehaivor.ReleaseRepeat){
-            while(true){
+
                 // set button repeat during
                 repeatDuring = RandomReal(pressMin <= 0 ? 0.1 : pressMin, pressMax) * buttonControlPressScale;
                 
@@ -2537,13 +2543,6 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                     AbortIf(!enableButtonControl);
                 }
                 // stop repeat button
-
-                // button release during
-                WaitUntil(
-                    !enableButtonControl,
-                    RandomReal(releaseMin <= 0 ? 0.1 : releaseMin, releaseMax) * buttonControlReleaseScale
-                );
-                AbortIf(!enableButtonControl);
             }
         }
         // else
