@@ -1014,7 +1014,7 @@ void HeroMod_Action_SUPER_ULT(define trigger!) playervar "HeroMod_Action_SUPER_U
             if(
                 ProbabilityTrue(50)
             ){
-                SetUltimateCharge(ep, 100);
+                SetUltimateCharge(ep, DefaultPercentage());
                 PlayEffect(ep, PlayEffect.BuffExplosionSound, null, ep, 100);
                 SmallMessage(ep, "gained more ult full charge!");
             }
@@ -1335,6 +1335,9 @@ void HeroMod_Action_TITAN_FORM(define trigger!) playervar "HeroMod_Action_TITAN_
             SetDamageDealt(ep, 250);
             Wait(0.1, WaitBehavior.IgnoreCondition);
             Heal(ep, null, MaxValue());
+            SetUltimateCharge(ep, DefaultPercentage());
+            PressButton(ep, Button.Ultimate);
+
             define tianScale! = 2.5;
             for(define scale! = 1; scale < tianScale; scale += 0.1){
                 StartScalingPlayer(ep, scale);
@@ -1420,16 +1423,17 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
             Wait(0.1, WaitBehavior.IgnoreCondition);    // wait change hero
             SetHeroButtonControlPropety();
             SetMaxHealth(ep, 200);
-            SetDamageDealt(ep, 300);
             Wait(0.1, WaitBehavior.IgnoreCondition);
             Heal(ep, null, MaxValue());
+            SetUltimateCharge(ep, DefaultPercentage());
+            PressButton(ep, Button.Ultimate);
 
             for(define remainSecond! = 40; remainSecond > 0; remainSecond--){
                 if(IsDead()){
                     break;
                 }
                 if(UltimateChargePercent() < DefaultPercentage()){
-                    SetUltimateCharge(ep, UltimateChargePercent() + 20);
+                    SetUltimateCharge(ep, UltimateChargePercent() + 5);
                 }
                 // SetAbilityCooldown(ep, Button.Ability1, 0);
                 // SetAbilityCooldown(ep, Button.Ability2, 0);
@@ -1438,7 +1442,6 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
 
             SetUltimateCharge(ep, 0);
             SetMaxHealth(ep, DefaultPercentage());
-            SetDamageDealt(ep, DefaultPercentage());
             ForcePlayerHero(ep, prevHero);
             StopForcingHero(ep);
             Wait(0.1, WaitBehavior.IgnoreCondition);    // wait change hero
@@ -1475,7 +1478,11 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
                     while(beamCharged){
                         // pre set aim pos
                         beamAimPos = AimingPosition(MaxLength(), EnemyTeamOf(ep));
-                        Wait(0.2, WaitBehavior.AbortWhenFalse);
+                        Wait(
+                            IsDummyBot() ? 
+                                0.2 :
+                                0.1,
+                            WaitBehavior.AbortWhenFalse);
                     }
                 }
             }
@@ -1493,21 +1500,24 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
         trigger == HeroModTrigger.USING_PRIMARY
     ){
         if(isTransformed){
-            define beamSniperDamage! = 100;
-            define beamSniperDamageRange! = 3;
+            define beamSniperDamage! = 200;
+            define beamSniperDamageRange! = 4;
 
             // charging fin
             if(beamCharged){
                 // reset charge
                 beamCharged = false;
+
+                // deal damage to target at direct hit
+                define targets! = AimingPlayer(MaxLength(), EnemyTeamOf(ep));
+                Damage(targets, ep, beamSniperDamage / 2);
                 // deal damage to target on ballstic
-                define targets! = FilteredArray(
+                targets = FilteredArray(
                     PlayersInViewAngle(ep, EnemyTeamOf(ep), 2.5),
                     IsAlive(ae)
                 );
                 Damage(targets, ep, beamSniperDamage);
-
-                // deal half damage to target in landed blast range
+                // deal damage to target in landed blast range
                 targets = FilteredArray(
                     PlayersWithinRadius(beamAimPos, beamSniperDamageRange, EnemyTeamOf(ep), RadiusLOS.Off),
                     IsAlive(ae)
