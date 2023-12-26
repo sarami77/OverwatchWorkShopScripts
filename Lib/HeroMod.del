@@ -1460,7 +1460,7 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
                 // avoid infinite loop
                 Wait(0.1, WaitBehavior.AbortWhenFalse);
                 // waiting charge fin
-                WaitUntil(IsFiringPrimary(), 1.2);
+                WaitUntil(IsFiringPrimary(), 1.15);
                 // primary fire interrupted before charging fin
                 if(IsFiringPrimary()){
                     // restart waiting
@@ -1525,9 +1525,13 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
                 Damage(targets, ep, beamSniperDamage / 2);
 
                 // set offset for gun sight
-                define gunSightPos! = EyePosition() - Vector(0, 0.5, 0); 
+                define gunSightPos! =
+                    EyePosition() +
+                    FacingDirectionOf() +
+                    Vector(0, IsDummyBot() ? -0.045 : -0.6, 0);
                 // set landing position for penetration
-                define landPos! = EyePosition() +
+                define landPos! =
+                    EyePosition() +
                     (FacingDirectionOf() * MaxLength());
 
                 // play shot sound
@@ -1537,7 +1541,18 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
                 // play shot fire
                 PlayEffect(
                     AllPlayers(), PlayEffect.BadExplosion,
-                    Color.Purple, gunSightPos + (FacingDirectionOf() * 1), 1.0);
+                    Color.Purple, gunSightPos, 1.0);
+
+                // show landed ballistics
+                define beamEffect! = [];
+                beamEffect[0] = CreateBeamEffect(ep,
+                    BeamType.BadBeam, gunSightPos, beamAimPos,
+                    Color.Purple, EffectRev.VisibleTo);
+                // show penetration ballistic
+                beamEffect[1] =  CreateBeamEffect(AllPlayers(),
+                    BeamType.BadBeam, beamAimPos, landPos,
+                    Color.Purple, EffectRev.VisibleTo);
+
                 // play big blast with sound
                 PlayContinuousBlast(
                     Color.Purple,
@@ -1547,21 +1562,11 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
                     2
                 );
 
-                // show ballistics for aiming
-                define beamEffect! = [];
-                beamEffect[0] = CreateBeamEffect(AllPlayers(),
-                    BeamType.BadBeam, gunSightPos, beamAimPos,
-                    Color.Purple, EffectRev.VisibleToPositionAndRadius);
-                // show ballistic for penetration
-                beamEffect[1] =  CreateBeamEffect(AllPlayers(),
-                    BeamType.BadBeam, beamAimPos, landPos,
-                    Color.Purple, EffectRev.VisibleToPositionAndRadius);
-
-                WaitPlayEffect();
+                Wait(0.6, WaitBehavior.IgnoreCondition);
 
                 // hide ballistics
                 DestroyEffect(beamEffect[0]);
-                DestroyEffect(beamEffect[1]); 
+                DestroyEffect(beamEffect[1]);
             }
             else{
                 // reset charge
@@ -1579,6 +1584,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         heroModDetail = 
             "+ use ult to transform to gunship and rampage until 30 second" + NL +
             "  * gunship has powerful auto cannon with blast and barrage" + NL +
+            "  * hold ability2(default E) key to descent" + NL +
             "  * long press melee key to shot ult charge as nuke cannon" + NL +
             "- every 4 seconds passed to lose 1% ult charge";
     }
@@ -1643,18 +1649,22 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
                 define hightLimit! = 16;
                 
                 if(
-                    // aim downward
-                    YOf(faceDir) < 0 &&
-                    // is front blocked
-                    IsBlockedBetween(
-                        EyePosition(),
-                        ShiftedPosition(EyePosition(), VectorWithOutY(faceDir), 4)
+                    // descent buton held
+                    IsButtonHeld(ep, Button.Ability2) ||
+                    (
+                        // aim downward
+                        YOf(faceDir) < 0 &&
+                        // is front blocked
+                        IsBlockedBetween(
+                            EyePosition(),
+                            ShiftedPosition(EyePosition(), VectorWithOutY(faceDir), 4)
+                        )
                     )
                 ){
                     // down with force
                     ApplyImpulse(ep, 
                         Down(),
-                        2.0,
+                        3.0,
                         Relative.ToWorld,
                         ContraryMotion.Incorporate);
                 }
