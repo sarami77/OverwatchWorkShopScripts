@@ -2332,26 +2332,24 @@ define BallTackleDirection()"BallTackleDirection"{
 define noShooting: false;   // for debug
 define noMoving: false;   // for debug
 
-enum ButtonControl{
-    button,
-    buttonBehaivor,
-    releaseMin,
-    releaseMax,
-    pressMin,
-    pressMax
-}
-
-playervar define isRepeatFiring;
-playervar define repeatDuring;
-
-Boolean isMatchButton(in define matchButton, in define butttons){
-    return IsTrueForAny(butttons, ae == matchButton);
-}
-
-define buttonControlPressScale: 1.0;
-define buttonControlReleaseScale: 1.0;
-
 playervar define enableButtonControl;
+
+// TAG Bot/ButtonControl/StartButtonControl ----------
+rule: "Bot/ButtonControl/StartButtonControl"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    enableButtonControl
+){
+    async StartButtonControlOfPrimaryFire();
+    async StartButtonControlOfSecondaryFire();
+    async StartButtonControlOfAbility1();
+    async StartButtonControlOfAbility2();
+    async StartButtonControlOfUltimate();
+    async StartButtonControlOfJump();
+    async StartButtonControlOfCrouch();
+}
 
 // implment as function, cuz parallel running by async call
 void StartButtonControlOfPrimaryFire()"StartButtonControlOfPrimaryFire"{
@@ -2420,7 +2418,6 @@ void StartButtonControlOfCrouch()"StartButtonControlOfCrouch"{
     );
 }
 void StartButtonControlOfJump()"StartButtonControlOfJump"{
-
     StartButtonControl(
         Button.Jump,
         ButtonBehaivor.ReleasePress,
@@ -2429,6 +2426,32 @@ void StartButtonControlOfJump()"StartButtonControlOfJump"{
         jumpButtonPressMin,
         jumpButtonPressMax
     );
+}
+
+// TAG Bot/ButtonControl/StopButtonControl ----------
+rule: "Bot/ButtonControl/StopButtonControl"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    !enableButtonControl
+){
+    StopHoldingButton(ep, Button.PrimaryFire);
+    StopHoldingButton(ep, Button.SecondaryFire);
+    StopHoldingButton(ep, Button.Ability1);
+    StopHoldingButton(ep, Button.Ability2);
+    StopHoldingButton(ep, Button.Ultimate);
+    StopHoldingButton(ep, Button.Jump);
+    StopHoldingButton(ep, Button.Crouch);
+}
+
+// TAG Bot/ButtonControl/Action ----------
+playervar define isRepeatFiring;
+playervar define repeatDuring;
+
+// can's implment as function, cuz need control instance each button
+Boolean isMatchButton(in define matchButton, in define butttons){
+    return IsTrueForAny(butttons, ae == matchButton);
 }
 
 // can's implment as function, cuz need control instance each button
@@ -2480,7 +2503,7 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                 // button release during
                 WaitUntil(
                     !enableButtonControl,
-                    RandomReal(releaseMin <= 0 ? 0.1 : releaseMin, releaseMax) * buttonControlReleaseScale
+                    RandomReal(releaseMin <= 0 ? 0.1 : releaseMin, releaseMax)
                 );
                 AbortIf(!enableButtonControl);
 
@@ -2511,7 +2534,7 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                 // button hold during
                 WaitUntil(
                     !enableButtonControl,
-                    RandomReal(pressMin <= 0 ? 0.1 : pressMin, pressMax) * buttonControlReleaseScale
+                    RandomReal(pressMin <= 0 ? 0.1 : pressMin, pressMax)
                 );
                 AbortIf(!enableButtonControl);
             }
@@ -2522,12 +2545,11 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                 // button release during
                 WaitUntil(
                     !enableButtonControl,
-                    RandomReal(releaseMin <= 0 ? 0.1 : releaseMin, releaseMax) * buttonControlReleaseScale
-                );
+                    RandomReal(releaseMin <= 0 ? 0.1 : releaseMin, releaseMax));
                 AbortIf(!enableButtonControl);
 
                 // set button repeat during
-                repeatDuring = RandomReal(pressMin <= 0 ? 0.1 : pressMin, pressMax) * buttonControlPressScale;
+                repeatDuring = RandomReal(pressMin <= 0 ? 0.1 : pressMin, pressMax);
                 
                 // start repeat button
                 isRepeatFiring = true;
@@ -2558,40 +2580,6 @@ if(
     // button repeat during
     Wait(repeatDuring, WaitBehavior.AbortWhenFalse);
     isRepeatFiring = false;
-}
-
-// TAG Bot/ButtonControl/StartButtonControl ----------
-rule: "Bot/ButtonControl/StartButtonControl"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    enableButtonControl
-){
-    async StartButtonControlOfPrimaryFire();
-    async StartButtonControlOfSecondaryFire();
-    async StartButtonControlOfAbility1();
-    async StartButtonControlOfAbility2();
-    async StartButtonControlOfUltimate();
-    async StartButtonControlOfJump();
-    async StartButtonControlOfCrouch();
-}
-
-// TAG Bot/ButtonControl/StopButtonControl ----------
-rule: "Bot/ButtonControl/StopButtonControl"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    !enableButtonControl
-){
-    StopHoldingButton(ep, Button.PrimaryFire);
-    StopHoldingButton(ep, Button.SecondaryFire);
-    StopHoldingButton(ep, Button.Ability1);
-    StopHoldingButton(ep, Button.Ability2);
-    StopHoldingButton(ep, Button.Ultimate);
-    StopHoldingButton(ep, Button.Jump);
-    StopHoldingButton(ep, Button.Crouch);
 }
 
 // TAG Debug ----------
