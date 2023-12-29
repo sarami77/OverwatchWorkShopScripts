@@ -16,6 +16,8 @@ define Last(define array) : CountOf(array);
 define NL: "\n\r";
 
 // TAG ServerOverLoading ----------
+
+define isServerLoadLevel(in define loadLevel): loadLevel <= ServerLoad();
 enum ServerLoadLevel{
     Overload = 255,
     Busy = 200,
@@ -23,24 +25,38 @@ enum ServerLoadLevel{
     Warm = 100,
     Cold = 50
 }
+
 globalvar define countWaitActionByServerLoad;
 
-define isServerLoadLevel(in define loadLevel): loadLevel <= ServerLoad();
-
-void WaitUntilReleaseServerLoadLevel(in define loadLevel){
-    if(isServerLoadLevel(loadLevel)){
+void WaitReleaseServerLoad(in define loadType!){
+    define loadLevel! = 
+            loadType == ServerLoadType.GameMain ?   ServerLoadLevel.Busy :
+            loadType == ServerLoadType.BotCreate ?  ServerLoadLevel.Overload :
+            loadType == ServerLoadType.BotAction ?  ServerLoadLevel.Hot :
+                                                    ServerLoadLevel.Overload;
+    define waitTimeLoadDistribution! = 
+            loadType == ServerLoadType.GameMain ?   1.0 :
+            loadType == ServerLoadType.BotCreate ?  0.0 :
+            loadType == ServerLoadType.BotAction ?  2.0 :
+                                                    0.0;
+    if(
+        isServerLoadLevel(loadLevel)
+    ){
         countWaitActionByServerLoad ++;
-        WaitUntil(!isServerLoadLevel(loadLevel), MaxValue());
+        
+        WaitUntil(
+            !isServerLoadLevel(loadLevel), MaxValue());
+        Wait(
+            RandomReal(0, waitTimeLoadDistribution),
+            WaitBehavior.IgnoreCondition
+        );
     }
 }
 
-void WaitRandomAfterlReleaseServerLoadLevel(in define loadLevel){
-    if(isServerLoadLevel(loadLevel)){
-        countWaitActionByServerLoad ++;
-        WaitUntil(!isServerLoadLevel(loadLevel), MaxValue());
-        
-        Wait(RandomReal(0.1, 3.0), WaitBehavior.IgnoreCondition);
-    }
+enum ServerLoadType{
+    GameMain,
+    BotCreate,
+    BotAction
 }
 
 // TAG LoopIndex ----------
