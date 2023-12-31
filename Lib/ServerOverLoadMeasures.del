@@ -75,26 +75,26 @@ globalvar define countWaitActionByServerLoad;
 
 void WaitReleaseServerLoad(in define loadType!){
     define loadLevel! = 
-            loadType == ServerLoadType.GameMain ?   ServerLoadLevel.Hot :
+            loadType == ServerLoadType.GameMain ?   ServerLoadLevel.Busy :
             loadType == ServerLoadType.BotCreate ?  ServerLoadLevel.Overload :
-            loadType == ServerLoadType.BotAction ?  ServerLoadLevel.Hot :
+            loadType == ServerLoadType.BotAction ?  ServerLoadLevel.Busy :
                                                     ServerLoadLevel.Cold;
-    define waitTimeLoadDist! = 
+    define waitTimeLoadDistMax! = 
             loadType == ServerLoadType.GameMain ?   3.0 :
-            loadType == ServerLoadType.BotCreate ?  0.0 :
             loadType == ServerLoadType.BotAction ?  3.0 :
                                                     0.0;
     if(
         isServerLoadLevel(loadLevel)
     ){
         countWaitActionByServerLoad ++;
-        
-        WaitUntil(
-            !isServerLoadLevel(loadLevel), MaxValue());
-        Wait(
-            RandomReal(0.0, waitTimeLoadDist + (countGameLogicSpeedDecrease * 1.0)),
-            WaitBehavior.IgnoreCondition
-        );
+        WaitUntil(!isServerLoadLevel(loadLevel), MaxValue());
+        if(waitTimeLoadDistMax > 0.01){
+            Wait(
+                RandomReal(0.01, waitTimeLoadDistMax + (countWaitActionByServerLoad * 0.5)),
+                WaitBehavior.IgnoreCondition
+            );
+        }
+
     }
 }
 
