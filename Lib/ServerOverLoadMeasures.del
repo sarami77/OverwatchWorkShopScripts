@@ -62,7 +62,6 @@ if(
 }
 
 // TAG ServerOverLoading ----------
-define isServerLoadLevel(in define loadLevel): loadLevel <= ServerLoad();
 enum ServerLoadLevel{
     Overload = 255,
     Busy = 200,
@@ -71,35 +70,38 @@ enum ServerLoadLevel{
     Cold = 50
 }
 
-globalvar define countWaitActionByServerLoad;
-
-void WaitReleaseServerLoad(in define loadType!){
-    define loadLevel! = 
-            loadType == ServerLoadType.GameMain ?   ServerLoadLevel.Busy :
-            loadType == ServerLoadType.BotCreate ?  ServerLoadLevel.Overload :
-            loadType == ServerLoadType.BotAction ?  ServerLoadLevel.Busy :
-                                                    ServerLoadLevel.Cold;
-    define waitTimeLoadDistMax! = 
-            loadType == ServerLoadType.GameMain ?   3.0 :
-            loadType == ServerLoadType.BotAction ?  3.0 :
-                                                    0.0;
-    if(
-        isServerLoadLevel(loadLevel)
-    ){
-        countWaitActionByServerLoad ++;
-        WaitUntil(!isServerLoadLevel(loadLevel), MaxValue());
-        if(waitTimeLoadDistMax > 0.01){
-            Wait(
-                RandomReal(0.01, waitTimeLoadDistMax + (countWaitActionByServerLoad * 0.5)),
-                WaitBehavior.IgnoreCondition
-            );
-        }
-
-    }
-}
+define isServerLoadLevel(in define loadLevel): loadLevel <= ServerLoad();
 
 enum ServerLoadType{
     GameMain,
     BotCreate,
     BotAction
 }
+
+globalvar define countWaitActionByServerLoad;
+
+void WaitReleaseServerLoad(in define loadType!){
+    define loadLevel! = 
+            loadType == ServerLoadType.GameMain ?   ServerLoadLevel.Busy :
+            loadType == ServerLoadType.BotCreate ?  ServerLoadLevel.Overload :
+            loadType == ServerLoadType.BotAction ?  ServerLoadLevel.Hot :
+                                                    ServerLoadLevel.Overload;
+    define waitTimeLoadDist! = 
+            loadType == ServerLoadType.GameMain ?   1.0 :
+            loadType == ServerLoadType.BotCreate ?  0.0 :
+            loadType == ServerLoadType.BotAction ?  2.0 + (countGameLogicSpeedDecrease * 0.5) :
+                                                    0.0;
+    if(
+        isServerLoadLevel(loadLevel)
+    ){
+        countWaitActionByServerLoad ++;
+        
+        WaitUntil(
+            !isServerLoadLevel(loadLevel), MaxValue());
+        Wait(
+            RandomReal(0, waitTimeLoadDist),
+            WaitBehavior.IgnoreCondition
+        );
+    }
+}
+
