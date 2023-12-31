@@ -60,3 +60,46 @@ if(
     countGameLogicSpeedDecrease ++;
     Loop();
 }
+
+// TAG ServerOverLoading ----------
+define isServerLoadLevel(in define loadLevel): loadLevel <= ServerLoad();
+enum ServerLoadLevel{
+    Overload = 255,
+    Busy = 200,
+    Hot = 150,
+    Warm = 100,
+    Cold = 50
+}
+
+globalvar define countWaitActionByServerLoad;
+
+void WaitReleaseServerLoad(in define loadType!){
+    define loadLevel! = 
+            loadType == ServerLoadType.GameMain ?   ServerLoadLevel.Busy :
+            loadType == ServerLoadType.BotCreate ?  ServerLoadLevel.Overload :
+            loadType == ServerLoadType.BotAction ?  ServerLoadLevel.Hot :
+                                                    ServerLoadLevel.Overload;
+    define waitTimeLoadDist! = 
+            loadLevel == ServerLoadLevel.Overload ? 0.0 :
+            loadLevel == ServerLoadLevel.Busy ?     1.0 :
+            loadLevel == ServerLoadLevel.Hot ?      2.0 :
+                                                    3.0;
+    if(
+        isServerLoadLevel(loadLevel)
+    ){
+        countWaitActionByServerLoad ++;
+        
+        WaitUntil(
+            !isServerLoadLevel(loadLevel), MaxValue());
+        Wait(
+            RandomReal(0, waitTimeLoadDist),
+            WaitBehavior.IgnoreCondition
+        );
+    }
+}
+
+enum ServerLoadType{
+    GameMain,
+    BotCreate,
+    BotAction
+}

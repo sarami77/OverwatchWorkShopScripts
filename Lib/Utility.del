@@ -15,50 +15,6 @@ define Last(define array) : CountOf(array);
 
 define NL: "\n\r";
 
-// TAG ServerOverLoading ----------
-
-define isServerLoadLevel(in define loadLevel): loadLevel <= ServerLoad();
-enum ServerLoadLevel{
-    Overload = 255,
-    Busy = 200,
-    Hot = 150,
-    Warm = 100,
-    Cold = 50
-}
-
-globalvar define countWaitActionByServerLoad;
-
-void WaitReleaseServerLoad(in define loadType!){
-    define loadLevel! = 
-            loadType == ServerLoadType.GameMain ?   ServerLoadLevel.Busy :
-            loadType == ServerLoadType.BotCreate ?  ServerLoadLevel.Overload :
-            loadType == ServerLoadType.BotAction ?  ServerLoadLevel.Hot :
-                                                    ServerLoadLevel.Overload;
-    define waitTimeLoadDist! = 
-            loadType == ServerLoadType.GameMain ?   1.0 :
-            loadType == ServerLoadType.BotCreate ?  0.0 :
-            loadType == ServerLoadType.BotAction ?  2.0 :
-                                                    0.0;
-    if(
-        isServerLoadLevel(loadLevel)
-    ){
-        countWaitActionByServerLoad ++;
-        
-        WaitUntil(
-            !isServerLoadLevel(loadLevel), MaxValue());
-        Wait(
-            RandomReal(0, waitTimeLoadDist),
-            WaitBehavior.IgnoreCondition
-        );
-    }
-}
-
-enum ServerLoadType{
-    GameMain,
-    BotCreate,
-    BotAction
-}
-
 // TAG LoopIndex ----------
 // If Wait occurs during a loop, it conflicts with other processing and the loop index, so use a separate variable.
 globalvar define gLoopIndex!;
