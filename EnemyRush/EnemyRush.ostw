@@ -150,6 +150,34 @@ if(
     }
 }
 
+// TAG FinalStand ----------
+rule: "FinalStand/FinalStand"
+Event.OngoingGlobal
+if(
+    IsGameInProgress() &&
+    IsOverTime()
+){
+    BigMessage(AllPlayers(), "Final Stand !");
+    slowControlHandler = SlowControlHandler.GameLogic;
+    SetSlowMotion(10);
+    Wait(0.25, WaitBehavior.IgnoreCondition);   // show slow
+
+    // buff player team
+    PlayEffectsToTeam(playerTeam);
+    Heal(AllLivingPlayers(playerTeam), null, MaxValue());
+    SetUltimateCharge(AllLivingPlayers(playerTeam), 100);
+    Resurrect(AllDeadPlayers(playerTeam));
+
+    // buff enemy team
+    spawnRushInterval = 0;
+    shotCallInterval = 0;
+
+    Wait(0.25, WaitBehavior.IgnoreCondition);   // show slow
+
+    SetSlowMotion(DefaultPercentage());
+    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
+}
+
 // TAG Player/Config ----------
 rule: "Player/Config/SetRespawnMaxTimeAndOutline"
 Event.OngoingPlayer
@@ -158,19 +186,43 @@ if(
     HasSpawned()
 ){
     if(!IsDummyBot()){
-        // set green outline to human player
-        StartForcingPlayerOutlines(
-            ep,
-            AllPlayers(playerTeam),
-            true,
-            Color.Green,
-            OutlineType.Always
-        );
+        // // set green outline to human player
+        // StartForcingPlayerOutlines(
+        //     ep,
+        //     AllPlayers(playerTeam),
+        //     true,
+        //     Color.Green,
+        //     OutlineType.Always
+        // );
     }
 
     // set max respawn time
     define respawnTime! = 10 * WorkshopSettingReal("Player Settings", "Max Respawn Time Scale", 1.0, 0.01, 100, 1);
     SetRespawnMaxTime(ep, respawnTime);
+}
+
+// TAG Player/HumanIcon ----------
+playervar define icon!;
+
+rule: "Player/Icon/showHumanIcon"
+Event.OngoingPlayer
+if(
+    playerTeam == TeamOf() &&
+    !IsDummyBot() &&
+    IsAlive()
+){
+    icon = CreateIcon(AllPlayers(), ep, Icon.Club,
+        IconRev.Position, Color.Team2, false);
+}
+
+rule: "Player/Config/hideHumanIcon"
+Event.OngoingPlayer
+if(
+    playerTeam == TeamOf() &&
+    !IsDummyBot() &&
+    !IsAlive()
+){
+    DestroyIcon(icon);
 }
 
 // TAG Buddy/BotActive ----------
@@ -523,14 +575,14 @@ define upValueScale:
     confirmGameDifficulty == GameDifficulty.INSANE ?    upValueBase * 1.0 : 
                                                         upValueBase * 1.0 ;
 
-define downValueBase: 1.0;
+define downValueBase: 0.333;
 define downValueScale:
-    confirmGameDifficulty == GameDifficulty.EASY ?      downValueBase * 3.0 :
-    confirmGameDifficulty == GameDifficulty.NORMAL ?    downValueBase * 2.5 :
-    confirmGameDifficulty == GameDifficulty.HARD ?      downValueBase * 2.0 :
-    confirmGameDifficulty == GameDifficulty.HELL ?      downValueBase * 1.5 :
+    confirmGameDifficulty == GameDifficulty.EASY ?      downValueBase * 5.0 :
+    confirmGameDifficulty == GameDifficulty.NORMAL ?    downValueBase * 4.0 :
+    confirmGameDifficulty == GameDifficulty.HARD ?      downValueBase * 3.0 :
+    confirmGameDifficulty == GameDifficulty.HELL ?      downValueBase * 2.0 :
     confirmGameDifficulty == GameDifficulty.INSANE ?    downValueBase * 1.0 :
-                                                        downValueBase * 3.0 ;
+                                                        downValueBase * 5.0 ;
 
 // TAG EnemyBot/EnemyType ----------
 playervar define eachDealtDamageScale!;
@@ -633,14 +685,14 @@ if(
     }
 
     // set yellow outline to threat enemy
-    if(IsThreatEnemy(ep)){
-        StartForcingPlayerOutlines(
-            ep,
-            AllPlayers(playerTeam),
-            true,
-            Color.Yellow,
-            OutlineType.Default
-        ); 
+    if(IsBossClassEnemy(ep)){
+        // StartForcingPlayerOutlines(
+        //     ep,
+        //     AllPlayers(playerTeam),
+        //     true,
+        //     Color.Yellow,
+        //     OutlineType.Default
+        // ); 
     }
 
     // update params
@@ -661,6 +713,28 @@ if(
         Heal(ep, null, MaxValue());
         Wait(0.5, WaitBehavior.IgnoreCondition);
     }
+}
+
+// TAG EnemyBot/BossIcon ----------
+rule: "Player/Icon/showHumanIcon"
+Event.OngoingPlayer
+if(
+    enemyTeam == TeamOf() &&
+    IsBossClassEnemy(ep) &&
+    IsAlive()
+){
+    icon = CreateIcon(AllPlayers(), ep, Icon.Skull,
+        IconRev.Position, Color.Team1, false);
+}
+
+rule: "Player/Config/hideHumanIcon"
+Event.OngoingPlayer
+if(
+    enemyTeam == TeamOf() &&
+    IsBossClassEnemy(ep) &&
+    !IsAlive()
+){
+    DestroyIcon(icon);
 }
 
 // TAG EnemyBot/Asset ----------
@@ -841,8 +915,8 @@ define enemyAssetNoLotteryList: [
     8,
 
     // fix hero asset
-    10,10,10,
-    11,11,11,
+    10,10,
+    11,11,
     12,
     13,
     14,
@@ -997,7 +1071,7 @@ void PlayEffectsToTeam(define team!) "PlayEffectsToTeam"{
 // TAG EnemyBot/Effect ----------
 define enemyColor: Color.Team1;
 
-define IsThreatEnemy(in define player):
+define IsBossClassEnemy(in define player):
     player.enemyType == EnemyType.SubBoss ||
     player.enemyType == EnemyType.Boss;
 
@@ -1192,16 +1266,21 @@ void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
 
     if(IsInSpawnRoom()){
         // wait all menber respawn
-        Wait(0.2, WaitBehavior.AbortWhenFalse);
+        Wait(0.5, WaitBehavior.AbortWhenFalse);
         // get teleport order
         define waitTeleportInterval! = 
             IndexOfArrayValue(
-                FilteredArray(
-                    AllPlayers(enemyTeam), IsInSpawnRoom(ae)
-                ),
-                ep
+                // SortedArray(
+                    FilteredArray(
+                        AllPlayers(enemyTeam),
+                        IsInSpawnRoom(ae)
+                    // ),
+                    // SlotOf(ae)
+                )
+            , ep
             ) *
-            0.2;
+            0.25;
+        dbgHudTxt(<"waitTeleportInterval = <0>", waitTeleportInterval>);
         // dist teleport timing
         Wait(waitTeleportInterval, WaitBehavior.AbortWhenFalse);
     }
@@ -1480,268 +1559,6 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG EnemyBot/EnemyAbility/SpawnRush ----------
-globalvar define spawnRushInterval;
-globalvar define spawnRushCount;
-
-rule: "EnemyBot/EnemyAbility/SpawnRush"
-Event.OngoingGlobal
-if(
-    IsGameInProgress()
-){
-    // set default interval
-    spawnRushInterval = ObjectProgressScaledInterval(playerTeam, 15, 30, 5);
-    spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.01, 100, 2);
-    spawnRushInterval = RoundToInteger(spawnRushInterval, Rounding.Up);
-    for(;spawnRushInterval > 0; spawnRushInterval--){
-        Wait(1, WaitBehavior.AbortWhenFalse);
-    }
-
-    // show text
-    // DestroyHudText(spawnRushWarningHud);
-    // spawnRushWarningHud = CreateHudText(AllPlayers(),
-    //     "ENEMY SPAWN RUSH INCOMING!", null, null,
-    //     Location.Top, 10,
-    //     warningIconColor, Color.White, Color.White,
-    //     HudTextRev.Color, Spectators.VisibleAlways);
-
-    // action
-    define spawnRushDuration! = RandomInteger(5, 15);
-    spawnRushDuration *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Duration Scale", 1.0, 0.01, 100, 2);
-    define deployRushInterval! = RandomInteger(1, 5);
-    spawnRushCount = RoundToInteger(spawnRushDuration / deployRushInterval, Rounding.Down);
-    for(; spawnRushCount > 0; spawnRushCount--){
-        Respawn(
-            FilteredArray(
-                AllDeadPlayers(enemyTeam),
-                (
-                    ae.enemyType != EnemyType.Boss
-                )
-            )
-        );
-        
-        Wait(deployRushInterval, WaitBehavior.IgnoreCondition);
-        WaitReleaseServerLoad(ServerLoadType.GameMain);
-    }
-
-    // hide text
-    // Wait(1, WaitBehavior.IgnoreCondition);
-    // DestroyHudText(spawnRushWarningHud);
-
-    LoopIfConditionIsTrue();
-}
-
-// TAG EnemyBot/EnemyAbility/ShotCall ----------
-globalvar define shotCallInterval;
-
-rule: "EnemyBot/EnemyAbility/ShotCall"
-Event.OngoingGlobal
-if(
-    IsGameInProgress()
-){
-    // set default interval
-    shotCallInterval = ObjectProgressScaledInterval(playerTeam, 20, 40, 5);
-    shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.01, 100, 3);
-    shotCallInterval = RoundToInteger(shotCallInterval, Rounding.Up);
-    for(;shotCallInterval > 0; shotCallInterval--){
-        Wait(1, WaitBehavior.AbortWhenFalse);
-    }
-
-    // show text
-    // DestroyHudText(shotCallWarningHud);
-    // shotCallWarningHud = CreateHudText(AllPlayers(),
-    //     "ENEMY ALL-OUT ULTIMATE INCOMING!", null, null,
-    //     Location.Top, 11,
-    //     warningIconColor, Color.White, Color.White,
-    //     HudTextRev.Color, Spectators.VisibleAlways);
-
-    // action
-    define activeEnemys! = AllPlayers(enemyTeam);
-    define shotCallDelay! = RandomReal(0.2, 1.0);
-    for(define scLoopIndex! = 0; scLoopIndex < CountOf(activeEnemys); scLoopIndex ++){
-        if(
-            IsAlive(activeEnemys[scLoopIndex]) &&
-            !IsInSpawnRoom(activeEnemys[scLoopIndex])
-        ){
-            SetUltimateCharge(activeEnemys[scLoopIndex], DefaultPercentage());
-            PressButton(activeEnemys[scLoopIndex], Button.Ultimate);
-
-            Wait(shotCallDelay, WaitBehavior.IgnoreCondition);
-            WaitReleaseServerLoad(ServerLoadType.GameMain);
-        }
-    }
-
-    // hide text
-    // Wait(1, WaitBehavior.IgnoreCondition);
-    // DestroyHudText(shotCallWarningHud);
-
-    LoopIfConditionIsTrue();
-}
-
-// TAG EnemyBot/EnemyAbility/CombatTeleport ----------
-playervar define combatTeleportInterval;
-
-rule: "EnemyBot/EnemyAbility/CombatTeleport"
-Event.OngoingPlayer
-if(
-    IsGameInProgress() &&
-    TeamOf() == enemyTeam &&
-    IsThreatEnemy(ep)
-){
-    // set default interval
-    combatTeleportInterval = ObjectProgressScaledInterval(playerTeam, 5, 10, 5);
-    combatTeleportInterval *= WorkshopSettingReal("Enemy Bot Settings", "(Sub Boss & Boss) Combat-Teleport Interval Scale", 1.0, 0.01, 100, 4);
-    if(actionRangeMax == ActionRange.Melee){
-        combatTeleportInterval *= 1;
-    }
-    else if(actionRangeMax == ActionRange.Close){
-        combatTeleportInterval *= 2.0;
-    } 
-    else if(actionRangeMax == ActionRange.Middle){
-        combatTeleportInterval *= 3.0;
-    } 
-    else if(actionRangeMax == ActionRange.Far){
-        combatTeleportInterval *= 4;
-    }
-    combatTeleportInterval = RoundToInteger(combatTeleportInterval, Rounding.Up);
-
-    define isEmgTeleport! = false;
-
-    for(;combatTeleportInterval > 0; combatTeleportInterval --){
-        if(
-            // player team close win
-            IsCloseWin(playerTeam) &&
-            // enemy not on object
-            !IsEnemyOnObject &&
-            // player on object
-            IsPlayerOnObject
-        ){
-            // instantly teleport for defend object in finale phase
-            isEmgTeleport = true;
-            break;
-        }
-
-        Wait(1, WaitBehavior.AbortWhenFalse);
-        WaitReleaseServerLoad(ServerLoadType.GameMain);
-    }
-
-    if(IsAlive()){
-        // teleport with teleport beam from body
-        // teleport with emergency by close lose
-        DoTeleport(true, isEmgTeleport);
-    }
-    LoopIfConditionIsTrue();
-}
-
-define moreAbilityProb: DefaultPercentage();
-define moreAbilityInterval: RandomReal(0.1, 3);
-
-globalvar define moreUltProb;
-
-rule: "EnemyBot/EnemyAbility/moreUltimate"
-Event.OngoingPlayer
-if(
-    TeamOf() == enemyTeam &&
-    IsThreatEnemy(ep) &&
-    IsAlive() &&
-    actionState != ActionState.Non &&
-    IsUsingUltimate()
-){
-    WaitUntil(!IsUsingUltimate(), MaxValue());    
-    
-    moreUltProb = moreAbilityProb;
-    while(
-        IsAlive() &&
-        IsProbabilityTrue(moreUltProb)
-    ){
-        SetUltimateCharge(ep, DefaultPercentage());
-        WaitReleaseServerLoad(ServerLoadType.GameMain);
-        Wait(moreAbilityInterval, WaitBehavior.IgnoreCondition);
-        PressButton(ep, Button.Ultimate);
-        WaitUntil(!IsUsingUltimate(), MaxValue());
-    }
-    moreUltProb = 0;
-
-    WaitUntil(!IsUsingUltimate(), MaxValue());
-    Wait(1, WaitBehavior.IgnoreCondition);
-}
-
-globalvar define decreaseProb! =
-    WorkshopSettingReal("Enemy Bot Settings", "(Sub boss & Boss) Rapid-Fire-Ultimate Termination Scale", 1.0, 0.01, 10, 5) * 10;
-
-rule: "EnemyBot/EnemyAbility/decreaseMultiUltimateProb"
-Event.OngoingGlobal
-if(
-    moreUltProb > 0
-){
-    moreUltProb -= moreUltProb < decreaseProb ? moreUltProb : decreaseProb;
-    Wait(1.0, WaitBehavior.IgnoreCondition);
-    LoopIfConditionIsTrue();
-}
-
-// rule: "EnemyBot/EnemyAbility/moreAbility1"
-// Event.OngoingPlayer
-// if(
-//     TeamOf() == enemyTeam &&
-//     IsThreatEnemy(ep) &&
-//     IsAlive() &&
-//     actionState != ActionState.Non &&
-//     IsUsingAbility1()
-// ){
-//     while(
-//         IsAlive() &&
-//         IsProbabilityTrue(moreAbilityProb)
-//     ){
-//         WaitUntil(!IsUsingAbility1(), 30);
-//         AddAbilityStock(Button.Ability1, 1);
-//         WaitReleaseServerLoad(ServerLoadType.GameMain);
-//         Wait(moreAbilityInterval, WaitBehavior.AbortWhenFalse);
-//         PressButton(ep, Button.Ability1);
-//     }
-// }
-
-// rule: "EnemyBot/EnemyAbility/moreAbility2"
-// Event.OngoingPlayer
-// if(
-//     TeamOf() == enemyTeam &&
-//     IsThreatEnemy(ep) &&
-//     IsAlive() &&
-//     actionState != ActionState.Non &&
-//     IsUsingAbility2()
-// ){
-//     while(
-//         IsAlive() &&
-//         IsProbabilityTrue(moreAbilityProb)
-//     ){
-//         WaitUntil(!IsUsingAbility2(), 30);
-//         AddAbilityStock(Button.Ability2, 1);
-//         WaitReleaseServerLoad(ServerLoadType.GameMain);
-//         Wait(moreAbilityInterval, WaitBehavior.AbortWhenFalse);
-//         PressButton(ep, Button.Ability2);
-//     }
-// }
-
-// rule: "EnemyBot/EnemyAbility/moreSecondary"
-// Event.OngoingPlayer
-// if(
-//     TeamOf() == enemyTeam &&
-//     IsThreatEnemy(ep) &&
-//     IsAlive() &&
-//     actionState != ActionState.Non &&
-//     IsFiringSecondary()
-// ){
-//     while(
-//         IsAlive() &&
-//         IsProbabilityTrue(moreAbilityProb)
-//     ){
-//         WaitUntil(!IsFiringSecondary(), 30);
-//         AddAbilityStock(Button.SecondaryFire, 1);
-//         WaitReleaseServerLoad(ServerLoadType.GameMain);
-//         Wait(moreAbilityInterval, WaitBehavior.IgnoreCondition);
-//         PressButton(ep, Button.SecondaryFire);
-//     }
-// }
-
 // TAG EnemyBot/SpawnInterval ----------
 
 define showDeadEffectTime: 1.0;
@@ -1917,32 +1734,6 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG EnemyBot/ResetAbilitys ----------
-// rule: "EnemyBot/ResetAbilitys/reset"
-// Event.OngoingPlayer
-// if(
-//     TeamOf() == enemyTeam &&
-//     IsThreatEnemy(ep) &&
-//     IsGameInProgress()
-// ){
-//     define buttons = [
-//         Button.PrimaryFire,
-//         Button.SecondaryFire,
-//         Button.Ability1,
-//         Button.Ability2, 
-//         Button.Jump,
-//         Button.Crouch
-//     ];
-//     for(define idx = 0; idx < CountOf(buttons); idx++){
-//         SetAbilityCooldown(ep, buttons[idx], 0);
-//         SetAbilityCharge(ep, buttons[idx], 3);
-//         SetAbilityResource(ep, buttons[idx], DefaultPercentage());
-//     }
-
-//     Wait(3, WaitBehavior.AbortWhenFalse);
-//     LoopIfConditionIsTrue();
-// }
-
 // TAG EnemyBot/ObstIcon ----------
 playervar define obstIcon;
 define warningIconColor: isBlink ? Color.Red : Color.Yellow;
@@ -1986,33 +1777,267 @@ if(
     }
 }
 
-// TAG FinalStand ----------
-rule: "FinalStand/FinalStand"
+// TAG EnemyBot/EnemyAbility/SpawnRush ----------
+globalvar define spawnRushInterval;
+globalvar define spawnRushCount;
+
+rule: "EnemyBot/EnemyAbility/SpawnRush"
 Event.OngoingGlobal
 if(
-    IsGameInProgress() &&
-    IsOverTime()
+    IsGameInProgress()
 ){
-    BigMessage(AllPlayers(), "Final Stand !");
-    slowControlHandler = SlowControlHandler.GameLogic;
-    SetSlowMotion(10);
-    Wait(0.25, WaitBehavior.IgnoreCondition);   // show slow
+    // set default interval
+    spawnRushInterval = ObjectProgressScaledInterval(playerTeam, 15, 30, 5);
+    spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.01, 100, 2);
+    spawnRushInterval = RoundToInteger(spawnRushInterval, Rounding.Up);
+    for(;spawnRushInterval > 0; spawnRushInterval--){
+        Wait(1, WaitBehavior.AbortWhenFalse);
+    }
 
-    // buff player team
-    PlayEffectsToTeam(playerTeam);
-    Heal(AllLivingPlayers(playerTeam), null, MaxValue());
-    SetUltimateCharge(AllLivingPlayers(playerTeam), 100);
-    Resurrect(AllDeadPlayers(playerTeam));
+    // show text
+    // DestroyHudText(spawnRushWarningHud);
+    // spawnRushWarningHud = CreateHudText(AllPlayers(),
+    //     "ENEMY SPAWN RUSH INCOMING!", null, null,
+    //     Location.Top, 10,
+    //     warningIconColor, Color.White, Color.White,
+    //     HudTextRev.Color, Spectators.VisibleAlways);
 
-    // buff enemy team
-    spawnRushInterval = 0;
-    shotCallInterval = 0;
+    // action
+    define spawnRushDuration! = RandomInteger(5, 15);
+    spawnRushDuration *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Duration Scale", 1.0, 0.01, 100, 2);
+    define deployRushInterval! = RandomInteger(1, 5);
+    spawnRushCount = RoundToInteger(spawnRushDuration / deployRushInterval, Rounding.Down);
+    for(; spawnRushCount > 0; spawnRushCount--){
+        Respawn(
+            FilteredArray(
+                AllDeadPlayers(enemyTeam),
+                (
+                    ae.enemyType != EnemyType.Boss
+                )
+            )
+        );
+        
+        Wait(deployRushInterval, WaitBehavior.IgnoreCondition);
+        WaitReleaseServerLoad(ServerLoadType.GameMain);
+    }
 
-    Wait(0.25, WaitBehavior.IgnoreCondition);   // show slow
+    // hide text
+    // Wait(1, WaitBehavior.IgnoreCondition);
+    // DestroyHudText(spawnRushWarningHud);
 
-    SetSlowMotion(DefaultPercentage());
-    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
+    LoopIfConditionIsTrue();
 }
+
+// TAG EnemyBot/EnemyAbility/ShotCall ----------
+globalvar define shotCallInterval;
+
+rule: "EnemyBot/EnemyAbility/ShotCall"
+Event.OngoingGlobal
+if(
+    IsGameInProgress()
+){
+    // set default interval
+    shotCallInterval = ObjectProgressScaledInterval(playerTeam, 20, 40, 5);
+    shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.01, 100, 3);
+    shotCallInterval = RoundToInteger(shotCallInterval, Rounding.Up);
+    for(;shotCallInterval > 0; shotCallInterval--){
+        Wait(1, WaitBehavior.AbortWhenFalse);
+    }
+
+    // show text
+    // DestroyHudText(shotCallWarningHud);
+    // shotCallWarningHud = CreateHudText(AllPlayers(),
+    //     "ENEMY ALL-OUT ULTIMATE INCOMING!", null, null,
+    //     Location.Top, 11,
+    //     warningIconColor, Color.White, Color.White,
+    //     HudTextRev.Color, Spectators.VisibleAlways);
+
+    // action
+    define activeEnemys! = AllPlayers(enemyTeam);
+    define shotCallDelay! = RandomReal(0.2, 1.0);
+    for(define scLoopIndex! = 0; scLoopIndex < CountOf(activeEnemys); scLoopIndex ++){
+        if(
+            IsAlive(activeEnemys[scLoopIndex]) &&
+            !IsInSpawnRoom(activeEnemys[scLoopIndex])
+        ){
+            SetUltimateCharge(activeEnemys[scLoopIndex], DefaultPercentage());
+            PressButton(activeEnemys[scLoopIndex], Button.Ultimate);
+
+            Wait(shotCallDelay, WaitBehavior.IgnoreCondition);
+            WaitReleaseServerLoad(ServerLoadType.GameMain);
+        }
+    }
+
+    // hide text
+    // Wait(1, WaitBehavior.IgnoreCondition);
+    // DestroyHudText(shotCallWarningHud);
+
+    LoopIfConditionIsTrue();
+}
+
+// TAG EnemyBot/EnemyAbility/CombatTeleport ----------
+playervar define combatTeleportInterval;
+
+rule: "EnemyBot/EnemyAbility/CombatTeleport"
+Event.OngoingPlayer
+if(
+    IsGameInProgress() &&
+    TeamOf() == enemyTeam &&
+    IsBossClassEnemy(ep)
+){
+    // set default interval
+    combatTeleportInterval = ObjectProgressScaledInterval(playerTeam, 5, 10, 5);
+    combatTeleportInterval *= WorkshopSettingReal("Enemy Bot Settings", "(Sub Boss & Boss) Combat-Teleport Interval Scale", 1.0, 0.01, 100, 4);
+    if(actionRangeMax == ActionRange.Melee){
+        combatTeleportInterval *= 1;
+    }
+    else if(actionRangeMax == ActionRange.Close){
+        combatTeleportInterval *= 2.0;
+    } 
+    else if(actionRangeMax == ActionRange.Middle){
+        combatTeleportInterval *= 3.0;
+    } 
+    else if(actionRangeMax == ActionRange.Far){
+        combatTeleportInterval *= 4;
+    }
+    combatTeleportInterval = RoundToInteger(combatTeleportInterval, Rounding.Up);
+
+    define isEmgTeleport! = false;
+
+    for(;combatTeleportInterval > 0; combatTeleportInterval --){
+        if(
+            // player team close win
+            IsCloseWin(playerTeam) &&
+            // enemy not on object
+            !IsEnemyOnObject &&
+            // player on object
+            IsPlayerOnObject
+        ){
+            // instantly teleport for defend object in finale phase
+            isEmgTeleport = true;
+            break;
+        }
+
+        Wait(1, WaitBehavior.AbortWhenFalse);
+        WaitReleaseServerLoad(ServerLoadType.GameMain);
+    }
+
+    if(IsAlive()){
+        // teleport with teleport beam from body
+        // teleport with emergency by close lose
+        DoTeleport(true, isEmgTeleport);
+    }
+    LoopIfConditionIsTrue();
+}
+
+define moreAbilityProb: DefaultPercentage();
+define moreAbilityInterval: RandomReal(0.1, 3);
+
+globalvar define moreUltProb;
+
+rule: "EnemyBot/EnemyAbility/moreUltimate"
+Event.OngoingPlayer
+if(
+    TeamOf() == enemyTeam &&
+    IsBossClassEnemy(ep) &&
+    IsAlive() &&
+    actionState != ActionState.Non &&
+    IsUsingUltimate()
+){
+    WaitUntil(!IsUsingUltimate(), MaxValue());    
+    
+    moreUltProb = moreAbilityProb;
+    while(
+        IsAlive() &&
+        IsProbabilityTrue(moreUltProb)
+    ){
+        SetUltimateCharge(ep, DefaultPercentage());
+        WaitReleaseServerLoad(ServerLoadType.GameMain);
+        Wait(moreAbilityInterval, WaitBehavior.IgnoreCondition);
+        PressButton(ep, Button.Ultimate);
+        WaitUntil(!IsUsingUltimate(), MaxValue());
+    }
+    moreUltProb = 0;
+
+    WaitUntil(!IsUsingUltimate(), MaxValue());
+    Wait(1, WaitBehavior.IgnoreCondition);
+}
+
+globalvar define decreaseProb! =
+    WorkshopSettingReal("Enemy Bot Settings", "(Sub boss & Boss) Rapid-Fire-Ultimate Termination Scale", 1.0, 0.01, 10, 5) * 10;
+
+rule: "EnemyBot/EnemyAbility/decreaseMultiUltimateProb"
+Event.OngoingGlobal
+if(
+    moreUltProb > 0
+){
+    moreUltProb -= moreUltProb < decreaseProb ? moreUltProb : decreaseProb;
+    Wait(1.0, WaitBehavior.IgnoreCondition);
+    LoopIfConditionIsTrue();
+}
+
+// rule: "EnemyBot/EnemyAbility/moreAbility1"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == enemyTeam &&
+//     IsBossClassEnemy(ep) &&
+//     IsAlive() &&
+//     actionState != ActionState.Non &&
+//     IsUsingAbility1()
+// ){
+//     while(
+//         IsAlive() &&
+//         IsProbabilityTrue(moreAbilityProb)
+//     ){
+//         WaitUntil(!IsUsingAbility1(), 30);
+//         AddAbilityStock(Button.Ability1, 1);
+//         WaitReleaseServerLoad(ServerLoadType.GameMain);
+//         Wait(moreAbilityInterval, WaitBehavior.AbortWhenFalse);
+//         PressButton(ep, Button.Ability1);
+//     }
+// }
+
+// rule: "EnemyBot/EnemyAbility/moreAbility2"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == enemyTeam &&
+//     IsBossClassEnemy(ep) &&
+//     IsAlive() &&
+//     actionState != ActionState.Non &&
+//     IsUsingAbility2()
+// ){
+//     while(
+//         IsAlive() &&
+//         IsProbabilityTrue(moreAbilityProb)
+//     ){
+//         WaitUntil(!IsUsingAbility2(), 30);
+//         AddAbilityStock(Button.Ability2, 1);
+//         WaitReleaseServerLoad(ServerLoadType.GameMain);
+//         Wait(moreAbilityInterval, WaitBehavior.AbortWhenFalse);
+//         PressButton(ep, Button.Ability2);
+//     }
+// }
+
+// rule: "EnemyBot/EnemyAbility/moreSecondary"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == enemyTeam &&
+//     IsBossClassEnemy(ep) &&
+//     IsAlive() &&
+//     actionState != ActionState.Non &&
+//     IsFiringSecondary()
+// ){
+//     while(
+//         IsAlive() &&
+//         IsProbabilityTrue(moreAbilityProb)
+//     ){
+//         WaitUntil(!IsFiringSecondary(), 30);
+//         AddAbilityStock(Button.SecondaryFire, 1);
+//         WaitReleaseServerLoad(ServerLoadType.GameMain);
+//         Wait(moreAbilityInterval, WaitBehavior.IgnoreCondition);
+//         PressButton(ep, Button.SecondaryFire);
+//     }
+// }
 
 // TAG Debug ----------
 
@@ -2142,8 +2167,8 @@ define Last():
 define FirstEnemyOf(in define enemyType):
     FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == enemyType));
 
-define FirstThreatEnemy():
-    FirstOf(FilteredArray(AllPlayers(enemyTeam), IsThreatEnemy(ae)));
+define FirstBossClassEnemy():
+    FirstOf(FilteredArray(AllPlayers(enemyTeam), IsBossClassEnemy(ae)));
 
 // show debug icon and hud
 void ShowDebugHud(define player!)"ShowDebugHud"{
@@ -2206,8 +2231,8 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         debugHuds[Last()] = CreateDebugHud("spawn Rush Count", spawnRushCount, spawnRushCount <= 0 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("combat Teleport Interval",
-            FirstThreatEnemy().combatTeleportInterval,
-            FirstThreatEnemy().combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
+            FirstBossClassEnemy().combatTeleportInterval,
+            FirstBossClassEnemy().combatTeleportInterval > 5 ? Color.Team1 : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("more Ult Prob", moreUltProb, moreUltProb <= 0 ? Color.Team1 : Color.Yellow);      
     }
 }
