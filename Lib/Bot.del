@@ -2452,6 +2452,7 @@ if(
     StopHoldingButton(ep, Button.Ultimate);
     StopHoldingButton(ep, Button.Jump);
     StopHoldingButton(ep, Button.Crouch);
+    ClearButtonBit();
 }
 
 // TAG Bot/ButtonControl/Action ----------
@@ -2509,9 +2510,6 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
         // release-press action
         if(buttonBehaivor == ButtonBehaivor.ReleasePress){
             while(true){
-                // stop hold button
-                StopHoldingButton(ep, button);
-
                 // button release during
                 WaitUntil(
                     !enableButtonControl,
@@ -2542,6 +2540,7 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                 else{
                     StartHoldingButton(ep, button);
                 }
+                SetButtonBit(button, true);
 
                 // button hold during
                 WaitUntil(
@@ -2549,6 +2548,10 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                     RandomReal(pressMin < minWaitTime ? minWaitTime : pressMin, pressMax)
                 );
                 if(!enableButtonControl){ return; }
+
+                // stop hold button
+                StopHoldingButton(ep, button);
+                SetButtonBit(button, false);
             }
         }
         // release-repeat action
@@ -2564,6 +2567,7 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                 repeatDuring = RandomReal(pressMin < minWaitTime ? minWaitTime : pressMin, pressMax);
                 
                 // start repeat button
+                SetButtonBit(button, true);
                 isRepeatFiring = true;
                 while(
                     isRepeatFiring            
@@ -2576,9 +2580,9 @@ void StartButtonControl(in define button, define buttonBehaivor!, define release
                     if(!enableButtonControl){ return; }
                 }
                 // stop repeat button
+                SetButtonBit(button, false);
             }
         }
-        // else
     }
 }
 
@@ -2596,39 +2600,73 @@ if(
 
 // TAG Debug ----------
 
-// rule: "Bot/Debug/ShowDebugInfo"
-// Event.OngoingPlayer
-// if(
-//     isBotEnableTeam &&
-//     IsDummyBot()// &&
-//     // TeamOf() == playerTeam
-// ){
-//     // enable button text
-//     CreateInWorldText(
-//         AllPlayers(),
-//         "Bot_Active = {0}
-//         Action_State = {1}
-//         Button_Control = {2}".Format([
-//             isBotActive ? "* true *" : "false",
-//             actionState == ActionState.Non ? "Non" :
-//             actionState == ActionState.Attack ? "Attack" :
-//             actionState == ActionState.Support ? "Support" : "???",
-//             enableButtonControl ? "* true *" : "false"
-//         ])
-//         ,
-//         EyePosition(ep) + Vector(0, 1.25, 0),
-//         0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
-//         enableButtonControl ? Color.Yellow : Color.White,
-//         Spectators.DefaultVisibility);
+rule: "Bot/Debug/ShowDebugInfo"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot()
+){
+    // // enable button text
+    // CreateInWorldText(
+    //     AllPlayers(),
+    //     <"Bot_Active = <0>\n\rAction_State = <1>\n\rButton_CONTROL = <2>\n\rButton_Flag = <3>",
+    //         isBotActive ? "true" : "false",
+    //             actionState == ActionState.Non ?        "Non" :
+    //             actionState == ActionState.Attack ?     "Attack" :
+    //             actionState == ActionState.Support ?    "Support" :
+    //                                                     "???",
+    //                 enableButtonControl,
+    //                     buttonFlagText
+    //     >,
+    //     EyePosition(ep) + Vector(0, 1.25, 0),
+    //     0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
+    //     enableButtonControl ? Color.Yellow : Color.White,
+    //     Spectators.DefaultVisibility);
 
-//     // while(true){
-//     //     // tagret line
-//     //     if(
-//     //         actionState != ActionState.Non &&
-//     //         aimTarget != null
-//     //     ){
-//     //         dbgPlyBemEft(EyePosition(ep), BodyPosition(aimTarget));
-//     //     }
-//     //     Wait(1);
-//     // }
-// }
+    // while(true){
+    //     // tagret line
+    //     if(
+    //         actionState != ActionState.Non &&
+    //         aimTarget != null
+    //     ){
+    //         dbgPlyBemEft(EyePosition(ep), BodyPosition(aimTarget));
+    //     }
+    //     Wait(1);
+    // }
+}
+
+define initialButtonFlag: [false, false, false, false, false, false, false];
+playervar define buttonFlag = initialButtonFlag;
+
+void SetButtonBit(define button, define state)"SetButtonBit"{
+    // switch(button){
+    //     case Button.PrimaryFire:    if(state) buttonFlag[0] = true;    else buttonFlag[0] = false; break;
+    //     case Button.SecondaryFire:  if(state) buttonFlag[1] = true;    else buttonFlag[1] = false; break;
+    //     case Button.Ability1:       if(state) buttonFlag[2] = true;    else buttonFlag[2] = false; break;
+    //     case Button.Ability2:       if(state) buttonFlag[3] = true;    else buttonFlag[3] = false; break;
+    //     case Button.Ultimate:       if(state) buttonFlag[4] = true;    else buttonFlag[4] = false; break;
+    //     case Button.Jump:           if(state) buttonFlag[5] = true;    else buttonFlag[5] = false; break;
+    //     case Button.Crouch:         if(state) buttonFlag[6] = true;    else buttonFlag[6] = false; break;
+    // }
+    // UpdateButtonFlagText();
+}
+
+void ClearButtonBit()"SetButtonBit"{
+    // buttonFlag = initialButtonFlag;
+    // UpdateButtonFlagText();
+}
+
+playervar define buttonFlagText;
+
+void UpdateButtonFlagText()"UpdateButtonFlagText"{
+    buttonFlagText = "";
+    for (define index = 0; index < CountOf(buttonFlag); index++)
+    {
+        if(buttonFlag[index]){
+            buttonFlagText = <"<0><1>", buttonFlagText, "1">;
+        }
+        else{
+            buttonFlagText = <"<0><1>", buttonFlagText, "0">;
+        }
+    }
+}
