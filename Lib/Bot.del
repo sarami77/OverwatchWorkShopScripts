@@ -839,9 +839,8 @@ void SetMoveDir() playervar "SetMoveDir"{
 
         // set distRate by actionState
         define distRate! = (actionState == ActionState.Attack) ? 1 : 0.5;
-
-        // by enemy count near target
-        define isManyEnemy! = IsProbabilityTrue(100 * (1 - EnemyDensityRateOfAimTargetNear(ActionRange.Close)));
+        // get enemy density
+        define enemyDensity! = EnemyDensityRateOfAimTargetNear(ActionRange.Close);
 
         if(
             // target is close
@@ -852,8 +851,8 @@ void SetMoveDir() playervar "SetMoveDir"{
         else if(
             // target is far
             distToTarget > (actionRangeMax * distRate) &&
-            // is not many enemy
-            !isManyEnemy
+            // by few enemy count in close
+            IsProbabilityTrue(100 * (1 - enemyDensity))
         ){
             moveDirFB = Forward();
         }
@@ -863,28 +862,37 @@ void SetMoveDir() playervar "SetMoveDir"{
         }
 
         // side step
-        // start sidestep
         if(
-            actionState == ActionState.Attack
-            ?
-                IsProbabilityTrue(
-                    // by lost health
-                    50 * (1 - NormalizedHealth()) + 
-                    // by target distance clsoe
-                    50 * (1 - (distToTarget / ActionRange.Far))  
-                )
-            :
-                IsProbabilityTrue(
-                    // by lost health
-                    50 * (1 - NormalizedHealth())
-                )
+            IsProbabilityTrue(
+                actionState == ActionState.Attack ? 
+                    // by target distance
+                    50 * (1 - (distToTarget / ActionRange.Far)) :
+                    // non prob
+                    0
+                        +
+                // by lost health
+                (50 * (1 - NormalizedHealth()))
+            )
         ){
-            if(moveDirLR == NoDirection()){
-                moveDirLR = RandomValueInArray([Right(), Left()]);
+            if(
+                 // by few enemy count in close range
+                IsProbabilityTrue(50 * (1 - enemyDensity))
+            ){
+                // start sidestep
+                if(
+                    moveDirLR == NoDirection()
+                ){
+                    // set sidestep
+                    moveDirLR = RandomValueInArray([Right(), Left()]);
+                }
+                else if(IsProbabilityTrue(75)){
+                    // change to reverse
+                    moveDirLR = -moveDirLR;
+                }
             }
-            else if(IsProbabilityTrue(75)){
-                // change sidestep to reverse
-                moveDirLR = -moveDirLR;
+            else{
+                // stop sidestep
+                moveDirLR = NoDirection();
             }
         }
         else{
@@ -2600,40 +2608,40 @@ if(
 
 // TAG Debug ----------
 
-rule: "Bot/Debug/ShowDebugInfo"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot()
-){
-    // // enable button text
-    // CreateInWorldText(
-    //     AllPlayers(),
-    //     <"Bot_Active = <0>\n\rAction_State = <1>\n\rButton_CONTROL = <2>\n\rButton_Flag = <3>",
-    //         isBotActive ? "true" : "false",
-    //             actionState == ActionState.Non ?        "Non" :
-    //             actionState == ActionState.Attack ?     "Attack" :
-    //             actionState == ActionState.Support ?    "Support" :
-    //                                                     "???",
-    //                 enableButtonControl,
-    //                     buttonFlagText
-    //     >,
-    //     EyePosition(ep) + Vector(0, 1.25, 0),
-    //     0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
-    //     enableButtonControl ? Color.Yellow : Color.White,
-    //     Spectators.DefaultVisibility);
+// rule: "Bot/Debug/ShowDebugInfo"
+// Event.OngoingPlayer
+// if(
+//     isBotEnableTeam &&
+//     IsDummyBot()
+// ){
+//     // enable button text
+//     CreateInWorldText(
+//         AllPlayers(),
+//         <"Bot_Active = <0>\n\rAction_State = <1>\n\rButton_CONTROL = <2>\n\rButton_Flag = <3>",
+//             isBotActive ? "true" : "false",
+//                 actionState == ActionState.Non ?        "Non" :
+//                 actionState == ActionState.Attack ?     "Attack" :
+//                 actionState == ActionState.Support ?    "Support" :
+//                                                         "???",
+//                     enableButtonControl,
+//                         buttonFlagText
+//         >,
+//         EyePosition(ep) + Vector(0, 1.25, 0),
+//         0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
+//         enableButtonControl ? Color.Yellow : Color.White,
+//         Spectators.DefaultVisibility);
 
-    // while(true){
-    //     // tagret line
-    //     if(
-    //         actionState != ActionState.Non &&
-    //         aimTarget != null
-    //     ){
-    //         dbgPlyBemEft(EyePosition(ep), BodyPosition(aimTarget));
-    //     }
-    //     Wait(1);
-    // }
-}
+//     while(true){
+//         // tagret line
+//         if(
+//             actionState != ActionState.Non &&
+//             aimTarget != null
+//         ){
+//             dbgPlyBemEft(EyePosition(ep), BodyPosition(aimTarget));
+//         }
+//         Wait(1);
+//     }
+// }
 
 define initialButtonFlag: [false, false, false, false, false, false, false];
 playervar define buttonFlag = initialButtonFlag;
