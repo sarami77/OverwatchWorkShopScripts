@@ -135,6 +135,7 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
+    Wait(0.1);
     prevObjectPosition = CurrentObjectPosition();
 
     while(true){
@@ -208,9 +209,11 @@ rule: "Player/Icon/showHumanIcon"
 Event.OngoingPlayer
 if(
     playerTeam == TeamOf() &&
+    HasSpawned() &&
     !IsDummyBot() &&
     IsAlive()
 ){
+    DestroyIcon(icon);
     icon = CreateIcon(AllPlayers(), ep, Icon.Club,
         IconRev.Position, Color.Team2, false);
 }
@@ -219,6 +222,7 @@ rule: "Player/Config/hideHumanIcon"
 Event.OngoingPlayer
 if(
     playerTeam == TeamOf() &&
+    HasSpawned() &&
     !IsDummyBot() &&
     !IsAlive()
 ){
@@ -549,7 +553,7 @@ define basicSpawnTimeMin:
     confirmGameDifficulty == GameDifficulty.INSANE ?    basicSpawnTimeBase + (basicSpawnTimeScale * 1.0) :
                                                         basicSpawnTimeBase + (basicSpawnTimeScale * 5.0);
 
-define spawnTimeMinToMaxScale: 1.5;
+define spawnTimeMinToMaxScale: 1.25;
 
 define autoTuneDmgDltInitial :
     confirmGameDifficulty == GameDifficulty.EASY ?      20 :
@@ -716,18 +720,19 @@ if(
 }
 
 // TAG EnemyBot/BossIcon ----------
-rule: "Player/Icon/showHumanIcon"
+rule: "Player/Icon/showBossIcon"
 Event.OngoingPlayer
 if(
     enemyTeam == TeamOf() &&
     IsBossClassEnemy(ep) &&
     IsAlive()
 ){
+    DestroyIcon(icon);
     icon = CreateIcon(AllPlayers(), ep, Icon.Skull,
         IconRev.Position, Color.Team1, false);
 }
 
-rule: "Player/Config/hideHumanIcon"
+rule: "Player/Config/hideBossIcon"
 Event.OngoingPlayer
 if(
     enemyTeam == TeamOf() &&
@@ -920,7 +925,7 @@ define enemyAssetNoLotteryList: [
     12,
     13,
     14,
-    15,15,15,
+    15,15,15,15,15,
     16
 
     // for debug
@@ -1083,17 +1088,17 @@ define isInCombat:
     );
 
 // TAG EnemyBot/Teleport ----------
-define teleportAreaSize: HasObjectDirection() ? ActionRange.Close : ActionRange.Close * 1.5;
-define teleportAreaOffsetDistFromObject: ActionRange.Far;
-define teleportAreaExtendScaleByBlockedAheadDist: 0.5;
+define teleportAreaSize: 8;
+define teleportAreaExtendScaleByNonObjectDirection: teleportAreaSize * 1.0;
+define teleportAreaExtendScaleByBlockedAheadDist: 0.4;
+define teleportAreaOffsetDistFromObject: 40;
 define minDistOfRenewCommonTeleportBasePosition: teleportAreaSize * 1.0;
-define probOfRenewCommonTeleportBasePosition: 10;
+define probOfRenewCommonTeleportBasePosition: 5;
 define probOfReuseCommonTeleportBasePosition: 90;
-define minDistToEnemyWhenTeleport: teleportAreaSize * 0.5;
 
 define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(playerTeam));
 define IsEnemyOnObject: (0 < NumberOfPlayersOnObjective(enemyTeam));
-define searchPositionInterval: 0.1;
+define searchPositionInterval: 0.2;
 define searchPositionTryCountMax: (1 / searchPositionInterval) * 3;
 
 playervar define teleportPosition;
@@ -1177,28 +1182,35 @@ define GetTeleportPositionByObjectDirection() playervar "GetTeleportPositionByOb
     // If there is a wall in the Object direction and the offset distance of the teleport area is not enough,
     //   increase the teleport area size by cut off distance
     if(
-            // has object direction
-            HasObjectDirection() &&
+        // has object direction
+        HasObjectDirection()
+    ){
+        if(
             // player on object
             IsPlayerOnObject
-    ){
-        // get blocked position of Object ahead
-        blockedPositionObjectAhead = BlockedPositon(teleportBasePosition, objectDirection, teleportAreaOffsetDistFromObject);
-        // change teleportBasePosition to blocked position
-        teleportBasePosition = blockedPositionObjectAhead;
-        // get teleportAreaExtendSize by cut off distance with scale
-        teleportAreaExtendSize =
-            (
-                // get cut off distance by blocked position
-                teleportAreaOffsetDistFromObject -
-                DistanceBetween(blockedPositionObjectAhead, blockedPositionObjectAhead)
-            ) *
-            // apply extend scale
-            teleportAreaExtendScaleByBlockedAheadDist;
+        ){
+            // get blocked position of Object ahead
+            blockedPositionObjectAhead = BlockedPositon(teleportBasePosition, objectDirection, teleportAreaOffsetDistFromObject);
+            // change teleportBasePosition to blocked position
+            teleportBasePosition = blockedPositionObjectAhead;
+            // get teleportAreaExtendSize by cut off distance with scale
+            teleportAreaExtendSize =
+                (
+                    // get cut off distance by blocked position
+                    teleportAreaOffsetDistFromObject -
+                    DistanceBetween(blockedPositionObjectAhead, blockedPositionObjectAhead)
+                ) *
+                // apply extend scale
+                teleportAreaExtendScaleByBlockedAheadDist;
+        }
+        else{
+            // clear extend size by non cut off distance of object direction
+            teleportAreaExtendSize = 0;
+        }
     }
     else{
-        // clear extend size by non cut off distance
-        teleportAreaExtendSize = 0;
+        // get teleportAreaExtendSize by fixed value of non object direction
+        teleportAreaExtendSize = teleportAreaExtendScaleByNonObjectDirection;
     }
 
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
@@ -1411,12 +1423,12 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    if(baseSmoke == null){
-        // base smoke
-        baseSmoke = CreateEffect(commonTeleportBasePosition != null ? AllPlayers() : null,
-            Effect.Cloud, enemyColor, commonTeleportBasePosition,
-            teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
-    }
+    // if(baseSmoke == null){
+    //     // base smoke
+    //     baseSmoke = CreateEffect(commonTeleportBasePosition != null ? AllPlayers() : null,
+    //         Effect.Cloud, enemyColor, commonTeleportBasePosition,
+    //         teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+    // }
 
     // need check update
     if(!needUpdateCommonTeleportBasePosition){
@@ -2048,36 +2060,36 @@ Team.All
 if(
     initCompleted
 ){
-    // // enemy common teleport positon icon
+    // // enemy common teleport positon blue icon
     // CreateIcon(commonTeleportBasePosition != null ? hp : null,
     //     commonTeleportBasePosition + PositionOffsetY1(), Icon.Spiral,
     //     IconRev.VisibleToAndPosition, enemyColor, true);
-    // // minDistOfRenewCommon ring
-    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
-    //     commonTeleportBasePosition + PositionOffsetY1(), minDistOfRenewCommonTeleportBasePosition, EffectRev.VisibleToPositionAndRadius);
-    // // teleportAreaSize ring
+    // // teleportAreaSize blue ring
     // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, enemyColor,
     //     commonTeleportBasePosition + PositionOffsetY1(), teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
-    // // object -> blockedPosition beam
+    // // minDistOfRenewCommon white ring
+    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, Color.White,
+    //     commonTeleportBasePosition + PositionOffsetY1(), minDistOfRenewCommonTeleportBasePosition * 0.97, EffectRev.VisibleToPositionAndRadius);
+    // // commonTeleportBasePosition -> blockedPosition or objectPosition white beam
+    // CreateBeamEffect(hp, BeamType.GoodBeam, 
+    //     PositionOffsetY1() + commonTeleportBasePosition, 
+    //     CurrentObjectOnPosition(),
+    //     Color.White, EffectRev.VisibleToPositionAndRadius);
+    // // blockedPositionObjectAhead blue orb
+    // CreateEffect(HasObjectDirection() ? hp : null,
+    //     Effect.Orb, enemyColor, blockedPositionObjectAhead,
+    //     1, EffectRev.VisibleToPositionAndRadius);
+    // // placable teleportPosition area size blue sphere
+    // CreateEffect(hp,
+    //     Effect.Sphere, enemyColor,
+    //     HasObjectDirection() ? blockedPositionObjectAhead : CurrentObjectOnPosition(),
+    //     teleportAreaSize + teleportAreaExtendSize,
+    //     EffectRev.VisibleToPositionAndRadius);
+    // // object -> blockedPosition blue beam
     // CreateBeamEffect(HasObjectDirection() ? hp : null, BeamType.BadBeam, 
     //     CurrentObjectOnPosition(),
     //     blockedPositionObjectAhead, 
     //     enemyColor, EffectRev.VisibleToPositionAndRadius);
-    // // commonTeleportBasePosition -> blockedPosition or objectPosition
-    // CreateBeamEffect(hp, BeamType.GoodBeam, 
-    //     PositionOffsetY1() + commonTeleportBasePosition, 
-    //     CurrentObjectOnPosition(),
-    //     enemyColor, EffectRev.VisibleToPositionAndRadius);
-    // // blockedPositionObjectAhead orb
-    // CreateEffect(HasObjectDirection() ? hp : null,
-    //     Effect.Orb, enemyColor, blockedPositionObjectAhead,
-    //     1, EffectRev.VisibleToPositionAndRadius);
-    // // placable teleportPosition area size ring
-    // CreateEffect(hp,
-    //     Effect.Sphere, enemyColor,
-    //     HasObjectDirection() ? blockedPositionObjectAhead : CurrentObjectOnPosition(),
-    //     HasObjectDirection() ? teleportAreaSize + teleportAreaExtendSize : teleportAreaSize,
-    //     EffectRev.VisibleToPositionAndRadius);
 
     define pastSecond = 1;
 
