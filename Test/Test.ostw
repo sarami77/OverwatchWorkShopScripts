@@ -3,7 +3,7 @@ import "../Lib/Debug.del";
 import "../Lib/Utility.del";
 import "../Lib/ServerOverLoadMeasures.del";
 import "../Lib/Bot.del";
-import "../Lib/HeroMod.del";
+// import "../Lib/HeroMod.del";
 
 // Builtin -----------------------------------------------
 globalvar define playerTeam = Team.Team1;
@@ -17,43 +17,29 @@ Event.OngoingGlobal
     Wait(5);
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 
+    define hero = Hero.Cassidy;
     define list = [
-        Hero.Widowmaker,
-        Hero.Hanzo,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero,
-        RandomHero
+        hero,
+        hero,
+        hero,
+        hero,
+        Hero.Reinhardt,
+        Hero.Reinhardt
     ];
-    CreateBotsByHeroList(list, enemyTeam);
+    // CreateBotsByHeroList(list, enemyTeam);
     // CreateBotsByHeroList(list, playerTeam);
 
     SetRespawnMaxTime(ap(ta), 3);
-    SetMaxHealth(ap(ta), 10000);
-    SetStatus(ap(playerTeam), null, Status.PhasedOut, MaxValue());
-    AllPlayers().watchUpdateRate = 60;
+    SetMaxHealth(ap(ta), 500);
+    // SetStatus(ap(ta), null, Status.PhasedOut, MaxValue());
+    Heal(ap(ta), null, MaxValue());
+    AllPlayers().watchUpdateRate = 1;
     AllPlayers().isBotActive = true;
     initCompleted = true;
 
     while(true){
-        // AllPlayers().heroModType = HeroModType.BEAM_SNIPER;
-        // SetUltimateCharge(ap(ta), DefaultPercentage());
-        // PressButton(ap(ta), Button.Ultimate);
-        Wait(40);
+        SetAbilityCooldown(ap(ta), Button.Ability1, 0);
+        Wait(1.0);
     }
 }
 
@@ -64,22 +50,54 @@ Event.OngoingPlayer
 if(
     ep == hp &&
     HasSpawned() &&
-    IsAlive() &&
-    IsCrouching()
+    IsAlive()
 ){
-    AllPlayers(enemyTeam).actionState = ActionState.Non;
+            if(
+                IsProbabilityTrue(50) &&
+                DistanceBetween(ep, aimTarget) <= ActionRange.Close &&
+                !IsUsingUltimate()  // for not ult cancel
+            ){
+                // use faning shot
+                StopHoldingButton(ep, Button.PrimaryFire);
+                PressButton(ep, Button.SecondaryFire);
+                Wait(0.7, WaitBehavior.IgnoreCondition);
+                if(
+                    AbilityCooldown(ep, Button.Ability1) <= 0 &&
+                    IsAlive(aimTarget)
+                ){
+                    PressButton(ep, Button.Ability1);
+                    Wait(0.5, WaitBehavior.IgnoreCondition);
+                    PressButton(ep, Button.SecondaryFire);
+                }
+            }
+        
+
+    Wait(3);
+    LoopIfConditionIsTrue();
 }
 
-rule: "TestCode"
-Event.OngoingPlayer
-if(
-    ep == hp &&
-    HasSpawned() &&
-    IsAlive() &&
-    !IsCrouching()
-){
-    AllPlayers(enemyTeam).actionState = ActionState.Attack;
-}
+
+// rule: "TestCode"
+// Event.OngoingPlayer
+// if(
+//     ep == hp &&
+//     HasSpawned() &&
+//     IsAlive() &&
+//     IsCrouching()
+// ){
+//     AllPlayers(enemyTeam).actionState = ActionState.Non;
+// }
+
+// rule: "TestCode"
+// Event.OngoingPlayer
+// if(
+//     ep == hp &&
+//     HasSpawned() &&
+//     IsAlive() &&
+//     !IsCrouching()
+// ){
+//     AllPlayers(enemyTeam).actionState = ActionState.Attack;
+// }
 
 
 // TeamFormation -----------------------------------------------
