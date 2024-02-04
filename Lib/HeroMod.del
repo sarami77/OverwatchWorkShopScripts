@@ -219,8 +219,8 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
             )
         );
         for(define index! = 0; index < CountOf(playerArray); index++){
-            define player! = playerArray[index];
-            SetUltimateCharge(player, UltimateChargePercent(player) + 30);
+            define target! = playerArray[index];
+            SetUltimateCharge(target, UltimateChargePercent(target) + 30);
         }
         break;
         default:
@@ -271,17 +271,19 @@ playervar define beamAimPos!;
 playervar define beamCharged!;
 
 define CanTouchPlayerList():
-    IsDummyBot(ep) ?
-        AllPlayers(playerTeam) :
-        PlayersInViewAngle(ep, playerTeam, 45);
-
-define CanTouchAE():
-    ae != ep &&
-    DistanceBetween(ep, ae) <= (
+    (
         IsDummyBot(ep) ?
-            6 :
-            3
+            AllPlayers(playerTeam) :
+            PlayersInViewAngle(ep, playerTeam, 45)
     );
+
+define CanTouchArrayEelement():
+    DistanceBetween(ep, ae) <= 
+        (
+            IsDummyBot(ep) ?
+                8 :
+                4
+        );
 
 // TAG HeroMod/Function ----------
 // TAG NO_MOD
@@ -571,8 +573,8 @@ void HeroMod_Action_HEALING_SYRINGE(define trigger!) playervar "HeroMod_Action_H
         heroModName = "HEALING SYRINGE";
         heroModDetail = 
             "long press melee key..." + NL +
-            "  + without near teammate to heal myself 200 health" + NL +
             "  + with near teammate to heal teammate 500 health" + NL +
+            "  + without near teammate to heal myself 250 health" + NL +
             "  - consume 20% ult charge";
     }
     else if(
@@ -589,11 +591,14 @@ void HeroMod_Action_HEALING_SYRINGE(define trigger!) playervar "HeroMod_Action_H
                         FilteredArray(
                             CanTouchPlayerList(),
                             (
-                                CanTouchAE() &&
-                                IsAlive(ae) &&
-                                IsDummyBot(ep) ?
-                                    NormalizedHealth(ae) < 0.5 :
-                                    NormalizedHealth(ae) < 1.0
+                                ae != ep &&
+                                CanTouchArrayEelement() &&
+                                (
+                                    IsAlive(ae) &&
+                                    IsDummyBot(ep) ?
+                                        NormalizedHealth(ae) < 0.5 :
+                                        NormalizedHealth(ae) < 1.0
+                                )
                             )
                         ),
                         DistanceBetween(ep, ae)
@@ -601,7 +606,8 @@ void HeroMod_Action_HEALING_SYRINGE(define trigger!) playervar "HeroMod_Action_H
                 );
 
             if(
-                target != null
+                target != null &&
+                NormalizedHealth(target) < NormalizedHealth(ep)
             ){
                 Heal(target, ep, 500);
                 SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
@@ -613,7 +619,7 @@ void HeroMod_Action_HEALING_SYRINGE(define trigger!) playervar "HeroMod_Action_H
                 SmallMessage(target, "Healed by "+ ep + HeroIconString(HeroOf(ep)));
             }
             else if(NormalizedHealth(ep) < 1.0){
-                Heal(ep, ep, 200);
+                Heal(ep, ep, 250);
                 SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
 
                 PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Yellow, ep, 1.5);
@@ -659,8 +665,11 @@ void HeroMod_Action_SAVIOR(define trigger!) playervar "HeroMod_Action_SAVIOR"{
                         FilteredArray(
                             CanTouchPlayerList(),
                             (
-                                CanTouchAE() &&
-                                IsDead(ae)
+                                ae != ep &&
+                                CanTouchArrayEelement() &&
+                                (
+                                    IsDead(ae)
+                                )
                             )
                         ),
                         DistanceBetween(ep, ae)
@@ -691,7 +700,7 @@ void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POW
         heroModDetail = 
             "long press melee key to near teammate..." + NL +
             "  - give my ult charge to teammate" + NL +
-            "  + gived ult charge increase to 150%" + NL +
+            "  + given ult charge increase to 150%" + NL +
             "    * overflowed ult charge return to myself ";
     }
     else if(
@@ -707,8 +716,11 @@ void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POW
                         FilteredArray(
                             CanTouchPlayerList(),
                             (
-                                CanTouchAE() &&
-                                UltimateChargePercent(ae) < DefaultPercentage()
+                                ae != ep &&
+                                CanTouchArrayEelement() &&
+                                (
+                                    UltimateChargePercent(ae) < DefaultPercentage()
+                                )
                             )
                         ),
                         DistanceBetween(ep, ae)
@@ -727,8 +739,8 @@ void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POW
                 PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.SkyBlue, target, 1.5);
                 PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
 
-                SmallMessage(ep, "Ult charge gived "+ target + HeroIconString(HeroOf(target)));
-                SmallMessage(target, "Ult charge gived by "+ ep + HeroIconString(HeroOf(ep)));
+                SmallMessage(ep, "Ult charge given "+ target + HeroIconString(HeroOf(target)));
+                SmallMessage(target, "Ult charge given by "+ ep + HeroIconString(HeroOf(ep)));
             }
         }
     }
@@ -742,7 +754,7 @@ void HeroMod_Action_TECHNICIAN(define trigger!) playervar "HeroMod_Action_TECHNI
         heroModDetail = 
             "kill enemy to..." + NL +
             "  + get 150% move speed status until 3 seconds" + NL +
-            "  + reset cooldown ability2(default E) key" + NL +
+            "  + reset cooldown right ability key" + NL +
             "  + reset cooldown secondary fire ability" + NL +
             "    * has 5 seconds cooldown to re-trigger" + NL + 
             "- receive heal 50%";
@@ -794,7 +806,7 @@ void HeroMod_Action_SURVIVALIST(define trigger!) playervar "HeroMod_Action_SURVI
         heroModDetail = 
             "lost 50% health..." + NL + 
             "  + get unkillable status until 3 seconds" + NL +
-            "  + auto use ability1(default Shift) key and reset cooldown" + NL +
+            "  + auto use left ability key and reset cooldown" + NL +
             "  + auto use jump ability and reset cooldown" + NL +
             "    * has 5 seconds cooldown to re-trigger" + NL + 
             "- receive heal 50%";
@@ -953,24 +965,24 @@ void HeroMod_Action_SHOT_CALL(define trigger!) playervar "HeroMod_Action_SHOT_CA
 
         // set ult full charge to players of teammate
         for(define index! = 0; index < CountOf(playerArray); index++){
-            define player! = playerArray[index];
-            SetUltimateCharge(player, 100);
-            SmallMessage(player, "gained ult full charge by "+ ep + HeroIconString(HeroOf()));
-            PlayEffect(player, PlayEffect.BuffExplosionSound, null, player, 100);
+            define target! = playerArray[index];
+            SetUltimateCharge(target, 100);
+            SmallMessage(target, "Full ult charge given by "+ ep + HeroIconString(HeroOf()));
+            PlayEffect(target, PlayEffect.BuffExplosionSound, null, target, 100);
         }
 
         // sync use ult by buddy
         for(define index! = 0; index < CountOf(playerArray); index++){
-            define player! = playerArray[index];
+            define target! = playerArray[index];
             if(
-                IsDummyBot(player) &&
+                IsDummyBot(target) &&
                 IsProbabilityTrue(70)
             ){
                 // bot use ult bt syc attack
-                PressButton(player, Button.Ultimate);
+                PressButton(target, Button.Ultimate);
                 Wait(0.1, WaitBehavior.AbortWhenFalse);
-                if(!IsUsingUltimate(player)){
-                    PressButton(player, Button.PrimaryFire);
+                if(!IsUsingUltimate(target)){
+                    PressButton(target, Button.PrimaryFire);
                 }
                 // PressButton(player, Button.PrimaryFire);
                 Wait(RandomReal(0.1, 0.3), WaitBehavior.AbortWhenFalse);
@@ -1580,8 +1592,9 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         heroModDetail = 
             "+ use ult to transform to gunship and rampage until 30 second" + NL +
             "  * gunship has powerful auto cannon with blast and barrage" + NL +
-            "  * hold ability2(default E) key to descent" + NL +
+            "  * press secondary fire key to shot grenade machine gun" + NL +
             "  * long press melee key to shot ult charge as nuke cannon" + NL +
+            "  * hold right ability key to descent" + NL +
             "- every 4 seconds passed to lose 1% ult charge";
     }
     else if(
