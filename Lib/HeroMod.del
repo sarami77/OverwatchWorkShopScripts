@@ -25,6 +25,7 @@ enum HeroModType{
     SURVIVALIST,
     ARTILLERY_SUPPORT,
     RAGE,
+    PAYBACK,
     FAST_CHARGE,
     SHOT_CALL,
     SUPER_ULT,
@@ -36,6 +37,7 @@ enum HeroModType{
     BEAM_SNIPER,
     GUNSHIP_GUNNER,
     ZOMBIE,
+    GUARD_DOG,
     LAST
 }
 
@@ -249,6 +251,7 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
         case HeroModType.FAST_CHARGE:       HeroMod_Action_FAST_CHARGE(trigger);                        break;
         case HeroModType.SHOT_CALL:         HeroMod_Action_SHOT_CALL(trigger);                          break;
         case HeroModType.SUPER_ULT:         HeroMod_Action_SUPER_ULT(trigger);                          break;
+        case HeroModType.PAYBACK:           HeroMod_Action_PAYBACK(trigger, inputPayload);                            break;
         case HeroModType.GRUDGE_LIGHTNING:  HeroMod_Action_GRUDGE_LIGHTNING(trigger, inputPayload);     break;
         case HeroModType.GRUDGE_FIRE_BALL:  HeroMod_Action_GRUDGE_FIRE_BALL(trigger, inputPayload);     break;
         case HeroModType.ARTILLERY_REQUEST: HeroMod_Action_ARTILLERY_REQUEST(trigger);                  break;
@@ -257,6 +260,7 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
         case HeroModType.BEAM_SNIPER:       HeroMod_Action_BEAM_SNIPER(trigger);                        break;
         case HeroModType.GUNSHIP_GUNNER:    HeroMod_Action_GUNSHIP_GUNNER(trigger);                     break;
         case HeroModType.ZOMBIE:            HeroMod_Action_ZOMBIE(trigger);                             break;
+        case HeroModType.GUARD_DOG:         HeroMod_Action_GUARD_DOG(trigger);                          break;
         default:
     }
 }
@@ -269,7 +273,13 @@ playervar define isTransformed!;
 // TAG BEAM_SNIPER
 playervar define beamAimPos!;
 playervar define beamCharged!;
+// TAG GUARD_DOG
+playervar define dogIconColor!;
+playervar define dogEntity;
+playervar define dogPos;
+playervar define dogDest!;
 
+// TAG HeroMod/Function ----------
 define CanTouchPlayerList():
     (
         IsDummyBot(ep) ?
@@ -285,7 +295,6 @@ define CanTouchArrayElement():
                 meleeRange
         );
 
-// TAG HeroMod/Function ----------
 // TAG NO_MOD
 void HeroMod_Action_NO_MOD(define trigger!) playervar "HeroMod_Action_NO_MOD"{
     if(
@@ -753,10 +762,10 @@ void HeroMod_Action_TECHNICIAN(define trigger!) playervar "HeroMod_Action_TECHNI
         heroModName = "TECHNICIAN";
         heroModDetail = 
             "kill enemy to..." + NL +
-            "  + get 150% move speed status until 3 seconds" + NL +
+            "  + get 150% move speed until 4 seconds" + NL +
             "  + reset cooldown right ability" + NL +
             "  + reset cooldown secondary fire ability" + NL +
-            "    * has 5 seconds cooldown to re-trigger" + NL + 
+            "    * has 4 seconds cooldown to re-trigger" + NL + 
             "- receive heal 50%";
         SetHealingReceived(ep, 50);
     }
@@ -789,12 +798,10 @@ void HeroMod_Action_TECHNICIAN(define trigger!) playervar "HeroMod_Action_TECHNI
             AddAbilityStock(buttonList[index], 1);
         }
 
-        Wait(3, WaitBehavior.IgnoreCondition);
+        Wait(4, WaitBehavior.IgnoreCondition);
 
         // reset fast status
         SetMoveSpeed(ep, DefaultPercentage());
-
-        Wait(2, WaitBehavior.IgnoreCondition);
     }
 }
 // TAG SURVIVALIST
@@ -805,10 +812,10 @@ void HeroMod_Action_SURVIVALIST(define trigger!) playervar "HeroMod_Action_SURVI
         heroModName = "SURVIVALIST";
         heroModDetail = 
             "lost 50% health..." + NL + 
-            "  + get unkillable status until 3 seconds" + NL +
+            "  + get unkillable until 3 seconds" + NL +
             "  + auto use left ability and reset cooldown" + NL +
             "  + auto use jump ability and reset cooldown" + NL +
-            "    * has 5 seconds cooldown to re-trigger" + NL + 
+            "    * has 6 seconds cooldown to re-trigger" + NL + 
             "- receive heal 50%";
         SetHealingReceived(ep, 50);
     }
@@ -857,7 +864,7 @@ void HeroMod_Action_SURVIVALIST(define trigger!) playervar "HeroMod_Action_SURVI
             AddAbilityStock(buttonList[index], 1);
         }
 
-        Wait(5, WaitBehavior.IgnoreCondition);
+        Wait(6, WaitBehavior.IgnoreCondition);
     }
 
 }
@@ -896,6 +903,30 @@ void HeroMod_Action_RAGE(define trigger!) playervar "HeroMod_Action_RAGE"{
         heroModDetail = 
             "+ at teammate dead, gain 30% ult charge" + NL +
             "- at myself dead, lose all ult charge";
+    }
+    else if(
+        trigger == HeroModTrigger.DEATH
+    ){
+        SetUltimateCharge(ep, 0);
+    }
+}
+// TAG PAYBACK
+void HeroMod_Action_PAYBACK(define trigger!, define inputPayload!) playervar "HeroMod_Action_PAYBACK"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "PAYBACK";
+        heroModDetail = 
+            "+ receive damage to charge ult charge" + NL +
+            "- at dead, lose all ult charge";
+    }
+    else if(
+        trigger == HeroModTrigger.RECEIVE_DAMAGE
+    ){
+        if(DefaultPercentage() <= UltimateChargePercent()){return;}
+
+        define gainCharge! = inputPayload * 0.15;
+        SetUltimateCharge(ep, UltimateChargePercent() + gainCharge);
     }
     else if(
         trigger == HeroModTrigger.DEATH
@@ -998,7 +1029,7 @@ void HeroMod_Action_SUPER_ULT(define trigger!) playervar "HeroMod_Action_SUPER_U
         heroModName = "SUPER ULT";
         heroModDetail = 
             "in ult using..." + NL +
-            "  + get invincible status" + NL +
+            "  + get invincible" + NL +
             "  + deal damage 300%" + NL +
             "  + deal heal 300%" + NL +
             "  + move speed 200%" + NL +
@@ -1087,6 +1118,7 @@ void HeroMod_Action_GRUDGE_LIGHTNING(define trigger!, define inputPayload!) play
         trigger == HeroModTrigger.RECEIVE_DAMAGE
     ){
         if(DefaultPercentage() <= grudgePower){return;}
+        
         define gainPower! = inputPayload * 0.1;
         if(grudgePower + gainPower > DefaultPercentage()){
             grudgePower = DefaultPercentage();
@@ -1856,6 +1888,85 @@ void HeroMod_Action_ZOMBIE(define trigger!) playervar "HeroMod_Action_ZOMBIE"{
     }
 }
 
+// TAG GUARD_DOG
+void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_DOG"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "GUARD DOG";
+        heroModDetail = 
+            "+ deploy guard drone to nearby" + NL +
+            "  * drone protect owner by stun and little damage nearby enemy" + NL +
+            "- receive heal 50%";
+        SetHealingReceived(ep, 50);
+
+        dogIconColor = Color.Blue;
+        dogEntity = [];
+        dogEntity[0] = CreateIcon(ep, dogPos + Vector(0, DistanceBetween(ep, dogPos) * -0.08 , 0), Icon.Happy, IconRev.PositionAndColor, dogIconColor, true);
+        dogEntity[1] = CreateEffect(ap(ta), Effect.Sphere, dogIconColor, dogPos, 0.25, EffectRev.PositionRadiusAndColor);
+        dogDest = PositionOf();
+        dogPos = PositionOf();
+        ChaseVariableAtRate(dogPos, dogDest + Vector(0, 1.0, 0), DistanceBetween(dogPos, dogDest) * 2, RateChaseReevaluation.DestinationAndRate);
+    }
+    else if(
+        trigger == HeroModTrigger.DEACTIVATE
+    ){
+        SetHealingReceived(ep, DefaultPercentage());
+        DestroyIcon(dogEntity[0]);
+        DestroyEffect(dogEntity[1]);
+        DestroyEffect(dogEntity[2]);
+        StopChasingVariable(dogPos);
+    }
+    else if(
+        trigger == HeroModTrigger.TIME_PASSED
+    ){
+        // config value
+        define dogWanderingRange! = 2.5;
+        define dogBiteRange! = 10;
+        define dogBiteDamage! = 50;
+
+        define target! = 
+            FirstOf(
+                SortedArray(
+                    FilteredArray(
+                        AllLivingPlayers(enemyTeam),
+                        (
+                            DistanceBetween(dogPos, ae) <= dogBiteRange
+                        )
+                    ),
+                    DistanceBetween(ep, ae)
+                )
+            );
+
+        if(
+            target != null &&
+            DistanceBetween(dogPos, ep) <= dogBiteRange * 2
+        ){
+            dogIconColor = Color.Yellow;
+
+            SetStatus(target, ep, Status.Stunned, 0.25);
+            Damage(target, ep, dogBiteDamage);
+            
+            DestroyEffect(dogEntity[2]);
+            dogEntity[2] = CreateBeamEffect(HostPlayer(),
+                BeamType.GoodBeam, dogPos, target,
+                Color.Yellow, EffectRev.PositionAndRadius);
+            Wait(0.25, WaitBehavior.IgnoreCondition);
+            DestroyEffect(dogEntity[2]);
+
+            dogDest = PositionOf(target) + RandomPosition(dogWanderingRange, dogWanderingRange / 4, dogWanderingRange);
+            Wait(RandomReal(1.0, 2.0), WaitBehavior.IgnoreCondition);
+        }
+        else{
+            dogIconColor = Color.Blue;
+
+            dogDest = PositionOf() + RandomPosition(dogWanderingRange, dogWanderingRange / 4, dogWanderingRange);
+            Wait(RandomReal(1.0, 3.0), WaitBehavior.IgnoreCondition);
+        }
+    }
+}
+
+
 // TAG HeroMod/SubFunction ----------
 enum ARTILLERY_FIRE_TARGHET_MODE{
     NEAR_PLAYER,
@@ -1867,7 +1978,6 @@ void HeroMod_Action_ARTILLERY_FIRE(define targetMode!, define attackCount!) play
     Wait(1.0, WaitBehavior.IgnoreCondition);
 
     // config value
-    // define artilleryTargetRange! = 20;
     define artilleryAttackInterval! = 0.33;
     define artilleryScatterRange! = 8.0;
     define artilleryDamageRange! = 6.0;
@@ -2108,7 +2218,8 @@ if(
         heroModType == HeroModType.POWER_CHARGING ||
         heroModType == HeroModType.ADRENALINE_RUSH ||
         heroModType == HeroModType.GRUDGE_FIRE_BALL ||
-        heroModType == HeroModType.GRUDGE_LIGHTNING
+        heroModType == HeroModType.GRUDGE_LIGHTNING ||
+        heroModType == HeroModType.GUARD_DOG
     ) &&
     IsGameInProgress()
 ){
@@ -2301,7 +2412,8 @@ Event.OnDamageTaken
 if(
     TeamOf() == playerTeam &&
     (
-        heroModType == HeroModType.GRUDGE_LIGHTNING
+        heroModType == HeroModType.PAYBACK ||
+        heroModType == HeroModType.GRUDGE_LIGHTNING        
     ) &&
     Attacker() != ep
 ){
@@ -2340,6 +2452,7 @@ if(
     TeamOf() == playerTeam &&
     (
         heroModType == HeroModType.RAGE ||
+        heroModType == HeroModType.PAYBACK ||
         heroModType == HeroModType.POWER_CHARGING ||
         heroModType == HeroModType.ZOMBIE
     )

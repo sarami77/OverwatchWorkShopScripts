@@ -6,9 +6,10 @@ import "../Lib/Bot.del";
 // import "../Lib/HeroMod.del";
 
 // Builtin -----------------------------------------------
-globalvar define playerTeam = Team.Team1;
-globalvar define enemyTeam =  Team.Team2;
-globalvar define initCompleted!;
+define playerTeam: Team.Team1;
+define enemyTeam: Team.Team2;
+
+playervar define dogPos;
 
 rule: "Builtin"
 Event.OngoingGlobal
@@ -16,72 +17,91 @@ Event.OngoingGlobal
     // DisableInspectorRecording();
     Wait(5);
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
-    initCompleted = true;
-    define list = AllHeroes();
-    for(define index! = 0; index < CountOf(list); index++){
-        dbgHudTxt(<"<0> is <1>", index, list[index]>);
-    }
-
-    for(define index! = 0; index < CountOf(list); index++){
         
-        // define aHero = RandomValueInArray(list);
-        define aHero = Hero.Brigitte;
-        // define aHero = list[index];
-        define assetList = [
-            aHero,aHero,aHero,aHero,aHero,aHero,aHero,aHero
-        ];
-        
-        DestroyBots(enemyTeam);
-        DestroyBots(playerTeam);
-        CreateBotsByHeroList(assetList, enemyTeam);
-        CreateBotsByHeroList(assetList, playerTeam);
+    define assetList = [
+        RandomHero,
+        RandomHero,
+        RandomHero,
+        RandomHero,
+        RandomHero];
+    
+    DestroyBots(enemyTeam);
+    DestroyBots(playerTeam);
+    CreateBotsByHeroList(assetList, enemyTeam);
+    CreateBotsByHeroList(assetList, playerTeam);
 
-        SetRespawnMaxTime(ap(ta), 5);
-        SetMaxHealth(ap(ta), 200);
-        SetStatus(ap(ta), null, Status.Unkillable, MaxValue());
-        Wait(0.5);
-        Heal(ap(ta), null, MaxValue());
-        AllPlayers().watchUpdateRate = 2;
-        AllPlayers().isBotActive = true;
+    SetRespawnMaxTime(ap(ta), 3);
+    SetMaxHealth(ap(ta), 200); Wait(0.5); Heal(ap(ta), null, MaxValue());
+    // SetStatus(ap(ta), null, Status.Unkillable, MaxValue()); 
+    AllPlayers().watchUpdateRate = 2;
+    AllPlayers().isBotActive = true;
 
-        Wait(10.0);
+    // Wait(10.0);
 
-        SetUltimateCharge(AllPlayers(), 100);
-        Wait(0.1);
-        Resurrect(AllPlayers());
-        Wait(0.1);
-        PressButton(AllPlayers(), Button.Ultimate);
-        Wait(0.1);
-        PressButton(AllPlayers(), Button.PrimaryFire);
-        
-        Wait(10.0);
-    }
+    // SetUltimateCharge(AllPlayers(), 100);
+    // Wait(0.1);
+    // Resurrect(AllPlayers());
+    // Wait(0.1);
+    // PressButton(AllPlayers(), Button.Ultimate);
+    // Wait(0.1);
+    // PressButton(AllPlayers(), Button.PrimaryFire);
+    
+    // Wait(10.0);
+    
 }
 
 // TestCode -----------------------------------------------
 
-// rule: "TestCode"
-// Event.OngoingPlayer
-// if(
-//     ep == hp &&
-//     HasSpawned() &&
-//     IsAlive() &&
-//     IsCrouching()
-// ){
-//     AllPlayers(enemyTeam).actionState = ActionState.Non;
-// }
+rule: "TestCode"
+Event.OngoingPlayer
+if(
+    ep == hp &&
+    HasSpawned() &&
+    IsAlive()
+){
 
-// rule: "TestCode"
-// Event.OngoingPlayer
-// if(
-//     ep == hp &&
-//     HasSpawned() &&
-//     IsAlive() &&
-//     !IsCrouching()
-// ){
-//     AllPlayers(enemyTeam).actionState = ActionState.Attack;
-// }
 
+        while(heroModType == HeroModType.GUARD_DOG){
+            define target! = 
+                FirstOf(
+                    SortedArray(
+                        FilteredArray(
+                            AllLivingPlayers(enemyTeam),
+                            (
+                                DistanceBetween(dogPos, ae) <= dogBiteRange
+                            )
+                        ),
+                        DistanceBetween(ep, ae)
+                    )
+                );
+
+            if(
+                target != null &&
+                DistanceBetween(dogPos, ep) <= dogBiteRange * 2
+            ){
+                dogIconColor = Color.Yellow;
+
+                SetStatus(target, ep, Status.Stunned, 1);
+                Damage(target, ep, dogBiteDamage);
+                DestroyEffect(dogEntity[2]);
+                dogEntity[2] = CreateBeamEffect(HostPlayer(),
+                    BeamType.GoodBeam, dogPos, target,
+                    Color.Yellow, EffectRev.PositionAndRadius);
+                Wait(0.25, WaitBehavior.IgnoreCondition);
+                DestroyEffect(dogEntity[2]);
+
+                dogDest = PositionOf(target) + RandomPosition(dogWanderingRange, dogWanderingRange / 4, dogWanderingRange);
+                Wait(RandomReal(1.0, 2.0), WaitBehavior.IgnoreCondition);
+            }
+            else{
+                dogIconColor = Color.Blue;
+
+                dogDest = PositionOf() + RandomPosition(dogWanderingRange, dogWanderingRange / 4, dogWanderingRange);
+                Wait(RandomReal(1.0, 3.0), WaitBehavior.IgnoreCondition);
+            }
+        }
+
+}
 
 // TeamFormation -----------------------------------------------
 // rule: "TeamFormation/restart"
