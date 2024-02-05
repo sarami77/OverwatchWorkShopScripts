@@ -208,21 +208,21 @@ if(
 
 // TAG HeroMod/Action ----------
 void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) playervar "DoHeroModAction"{
-    // TAG HeroModTrigger Action
+    // TAG HeroModTriggerAction
     switch(trigger){
         // TAG TEAMMATE_DEATH
         // give ult charge to player with RAGE
         case HeroModTrigger.TEAMMATE_DEATH:
-        define playerArray! = FilteredArray(
+        define ragePlayers! = FilteredArray(
             AllPlayers(playerTeam),
             (
                 ae != ep &&
                 ae.heroModType == HeroModType.RAGE
             )
         );
-        for(define index! = 0; index < CountOf(playerArray); index++){
-            define target! = playerArray[index];
-            SetUltimateCharge(target, UltimateChargePercent(target) + 30);
+        for(define index! = 0; index < CountOf(ragePlayers); index++){
+            define target! = ragePlayers[index];
+            SetUltimateCharge(target, UltimateChargePercent(target) + 40);
         }
         break;
         default:
@@ -274,8 +274,8 @@ playervar define isTransformed!;
 playervar define beamAimPos!;
 playervar define beamCharged!;
 // TAG GUARD_DOG
-playervar define dogIconColor!;
-playervar define dogEntity;
+playervar define isDogAttaking!;
+playervar define dogEntity!;
 playervar define dogPos;
 playervar define dogDest!;
 
@@ -901,7 +901,7 @@ void HeroMod_Action_RAGE(define trigger!) playervar "HeroMod_Action_RAGE"{
     ){
         heroModName = "RAGE";
         heroModDetail = 
-            "+ at teammate dead, gain 30% ult charge" + NL +
+            "+ at teammate dead, gain 40% ult charge" + NL +
             "- at myself dead, lose all ult charge";
     }
     else if(
@@ -925,7 +925,7 @@ void HeroMod_Action_PAYBACK(define trigger!, define inputPayload!) playervar "He
     ){
         if(DefaultPercentage() <= UltimateChargePercent()){return;}
 
-        define gainCharge! = inputPayload * 0.15;
+        define gainCharge! = inputPayload * 0.17;
         SetUltimateCharge(ep, UltimateChargePercent() + gainCharge);
     }
     else if(
@@ -1897,16 +1897,28 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
         heroModDetail = 
             "+ deploy guard drone to nearby" + NL +
             "  * drone protect owner by stun and little damage nearby enemy" + NL +
+            "  * drone notify owner of nearby enemies by warning color icon" + NL +
             "- receive heal 50%";
         SetHealingReceived(ep, 50);
 
-        dogIconColor = Color.Blue;
-        dogEntity = [];
-        dogEntity[0] = CreateIcon(ep, dogPos + Vector(0, DistanceBetween(ep, dogPos) * -0.08 , 0), Icon.Happy, IconRev.PositionAndColor, dogIconColor, true);
-        dogEntity[1] = CreateEffect(ap(ta), Effect.Sphere, dogIconColor, dogPos, 0.25, EffectRev.PositionRadiusAndColor);
+        isDogAttaking = false;
         dogDest = PositionOf();
         dogPos = PositionOf();
-        ChaseVariableAtRate(dogPos, dogDest + Vector(0, 1.0, 0), DistanceBetween(dogPos, dogDest) * 2, RateChaseReevaluation.DestinationAndRate);
+
+        dogEntity = [];
+        dogEntity[0] = CreateIcon(ep, dogPos + Vector(0, DistanceBetween(ep, dogPos) * -0.08 , 0),
+            Icon.Happy, IconRev.PositionAndColor,
+            isDogAttaking ?
+                warningIconColor :
+                Color.Team2, true);
+        dogEntity[1] = CreateEffect(ap(ta), Effect.Sphere,
+            isDogAttaking ?
+                Color.Yellow :
+                Color.Team2,
+            dogPos, 0.2, EffectRev.PositionRadiusAndColor);
+
+        ChaseVariableAtRate(dogPos, dogDest + Vector(0, 1.0, 0), DistanceBetween(dogPos, dogDest) * 3, RateChaseReevaluation.DestinationAndRate);
+        // ChaseVariableOverTime(dogPos, dogDest + Vector(0, 1.0, 0), 1.0, TimeChaseReevaluation.DestinationAndDuration);
     }
     else if(
         trigger == HeroModTrigger.DEACTIVATE
@@ -1942,9 +1954,9 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
             target != null &&
             DistanceBetween(dogPos, ep) <= dogBiteRange * 2
         ){
-            dogIconColor = Color.Yellow;
+            isDogAttaking = true;
 
-            SetStatus(target, ep, Status.Stunned, 0.25);
+            SetStatus(target, ep, Status.Stunned, 0.5);
             Damage(target, ep, dogBiteDamage);
             
             DestroyEffect(dogEntity[2]);
@@ -1955,14 +1967,13 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
             DestroyEffect(dogEntity[2]);
 
             dogDest = PositionOf(target) + RandomPosition(dogWanderingRange, dogWanderingRange / 4, dogWanderingRange);
-            Wait(RandomReal(1.0, 2.0), WaitBehavior.IgnoreCondition);
         }
         else{
-            dogIconColor = Color.Blue;
-
+            isDogAttaking = false;
             dogDest = PositionOf() + RandomPosition(dogWanderingRange, dogWanderingRange / 4, dogWanderingRange);
-            Wait(RandomReal(1.0, 3.0), WaitBehavior.IgnoreCondition);
         }
+
+        Wait(RandomReal(0.5, 2.0), WaitBehavior.IgnoreCondition);
     }
 }
 
@@ -2220,8 +2231,7 @@ if(
         heroModType == HeroModType.GRUDGE_FIRE_BALL ||
         heroModType == HeroModType.GRUDGE_LIGHTNING ||
         heroModType == HeroModType.GUARD_DOG
-    ) &&
-    IsGameInProgress()
+    )
 ){
     DoHeroModAction(heroModType, HeroModTrigger.TIME_PASSED, null);
     LoopIfConditionIsTrue();
