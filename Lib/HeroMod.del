@@ -1902,7 +1902,6 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
         SetHealingReceived(ep, 50);
 
         isDogAttaking = false;
-        dogDest = PositionOf();
         dogPos = PositionOf();
 
         dogEntity = [];
@@ -1916,9 +1915,6 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
                 Color.Yellow :
                 Color.Team2,
             dogPos, 0.2, EffectRev.PositionRadiusAndColor);
-
-        ChaseVariableAtRate(dogPos, dogDest + Vector(0, 1.0, 0), DistanceBetween(dogPos, dogDest) * 3, RateChaseReevaluation.DestinationAndRate);
-        // ChaseVariableOverTime(dogPos, dogDest + Vector(0, 1.0, 0), 1.0, TimeChaseReevaluation.DestinationAndDuration);
     }
     else if(
         trigger == HeroModTrigger.DEACTIVATE
@@ -1936,9 +1932,17 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
         define dogActionInterval! = [0.5, 2.0];
         define dogWanderingRange! = 5;
         define dogBiteRange! = 10;
-        define dogRetreatRange! = 15;
+        define dogRetreatRange! = 20;
         define dogBiteDamage! = 50;
 
+        // set action interval by random
+        define interval! = RandomReal(dogActionInterval[0], dogActionInterval[1]);
+
+        // start move by interval half
+        ChaseVariableOverTime(dogPos, dogDest, interval / 2, TimeChaseReevaluation.DestinationAndDuration);
+        Wait(interval / 2, WaitBehavior.IgnoreCondition);
+
+        // find attack target
         define target! = 
             FirstOf(
                 SortedArray(
@@ -1953,29 +1957,40 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
             );
 
         if(
+            // has target
             target != null &&
-            DistanceBetween(target, ep) <= dogRetreatRange
+            // not far to event player
+            DistanceBetween(ep, target) <= dogRetreatRange
         ){
             isDogAttaking = true;
-
+            // damage and stun target
             SetStatus(target, ep, Status.Stunned, 0.5);
             Damage(target, ep, dogBiteDamage);
-            
+            // blink beam 
             DestroyEffect(dogEntity[2]);
             dogEntity[2] = CreateBeamEffect(HostPlayer(),
                 BeamType.GoodBeam, dogPos, BodyPosition(target),
                 Color.Yellow, EffectRev.PositionAndRadius);
             Wait(0.1, WaitBehavior.IgnoreCondition);
             DestroyEffect(dogEntity[2]);
+            // set dest to target nearby
+            dogDest =
+                PositionOf(target) +
+                RandomPosition(dogWanderingRange, dogWanderingRange / 2, dogWanderingRange) +
+                Vector(0, dogWanderingRange / 2, 0);
 
-            dogDest = PositionOf(target) + RandomPosition(dogWanderingRange, dogWanderingRange / 4, dogWanderingRange);
         }
         else{
             isDogAttaking = false;
-            dogDest = PositionOf() + RandomPosition(dogWanderingRange, dogWanderingRange / 4, dogWanderingRange);
+            // set dest to event player nearby
+            dogDest =
+                PositionOf() +
+                RandomPosition(dogWanderingRange, dogWanderingRange / 2, dogWanderingRange) +
+                Vector(0, dogWanderingRange / 2, 0);
         }
 
-        Wait(RandomReal(dogActionInterval[0], dogActionInterval[1]), WaitBehavior.IgnoreCondition);
+        // wait by interval half
+        Wait(interval / 2, WaitBehavior.IgnoreCondition);
     }
 }
 
