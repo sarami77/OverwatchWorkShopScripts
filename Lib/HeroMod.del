@@ -175,9 +175,13 @@ if(
 
 define HealerMods():
     [
+        HeroModType.NO_MOD,
         HeroModType.MEDIC,
+        HeroModType.MEDIC,
+        HeroModType.BIRD_MAN,
         HeroModType.GRUDGE_FIRE_BALL,
-        HeroModType.BIRD_MAN
+        HeroModType.FIXED_TURRET,
+        HeroModType.GUARD_DOG
     ];
 
 rule: "HeroMod/switchSelectHeroMod"
@@ -1742,7 +1746,12 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
             SetMaxHealth(ep, DefaultPercentage());
             SetGravity(ep, DefaultPercentage());
             // ClearStatus(ep, Status.Rooted);
-            ForcePlayerHero(ep, prevHero);
+            if(prevHero != Hero.Bastion){
+                ForcePlayerHero(ep, prevHero);
+            }
+            else{
+                Resurrect();
+            }
             StopForcingHero(ep);
             SetButtonControlPropety();
             // wait using ult fin for not retrigger (if hero not changed by some hero)
@@ -2302,12 +2311,27 @@ if(
         ) ||
         (
             IsDummyBot() &&
-            IsButtonHeld(ep, Button.PrimaryFire) &&
-            IsProbabilityTrue(50)
+            IsButtonHeld(ep, Button.PrimaryFire)
         )
     )
 ){
     WaitLongPressConfirm();
+
+    if(IsDummyBot()){
+        define prob! = 50;
+        if(
+            heroModType == HeroModType.BIRD_MAN ||
+            heroModType == HeroModType.GRUDGE_FIRE_BALL ||
+            heroModType == HeroModType.GRUDGE_LIGHTNING
+        ){
+            prob /= 2;
+        }
+
+        if(IsProbabilityTrue(100 - prob)){
+            Abort();
+        }
+    }
+
     DoHeroModAction(heroModType, HeroModTrigger.LONG_PRESS_MELEE_KEY, null);
 }
 
