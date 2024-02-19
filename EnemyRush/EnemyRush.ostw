@@ -594,7 +594,6 @@ playervar define eachDealtDamageScale!;
 playervar define eachMaxSpawnInterval!;
 playervar define eachMinSpawnInterval!;
 playervar define eachChargeUltInterval!;
-playervar define eachBodyScale!;
 playervar define eachDeathCost!;
 
 define dealHealScale: IsSupportHero(HeroOf()) ? 3.0 : 1.0;
@@ -628,8 +627,7 @@ if(
         eachChargeUltInterval = 60;
         eachMinSpawnInterval =  basicSpawnTimeMin * 1;
         eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
-        eachBodyScale =         0.7;
-        StartScalingPlayer(ep, eachBodyScale, false);
+        StartScalingPlayer(ep, 0.7, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
     }
     else if(enemyType == EnemyType.Elite){
@@ -645,8 +643,7 @@ if(
         eachChargeUltInterval = 30;
         eachMinSpawnInterval =  basicSpawnTimeMin * 2;
         eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
-        eachBodyScale =         1.0;
-        StartScalingPlayer(ep, eachBodyScale, false);
+        StartScalingPlayer(ep, 1.0, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
     }
     else if(enemyType == EnemyType.SubBoss){
@@ -662,8 +659,7 @@ if(
         eachChargeUltInterval = 15;
         eachMinSpawnInterval =  basicSpawnTimeMin * 4;
         eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
-        eachBodyScale =         1.5;
-        StartScalingPlayer(ep, eachBodyScale, false);
+        StartScalingPlayer(ep, 1.5, false);
         StartModifyingHeroVoiceLines(ep, 0.5, false);
     }
     else if(enemyType == EnemyType.Boss){
@@ -679,8 +675,7 @@ if(
         eachChargeUltInterval = 15;
         eachMinSpawnInterval =  basicSpawnTimeMin * 6;
         eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
-        eachBodyScale =         2.5;
-        StartScalingPlayer(ep, eachBodyScale, false);
+        StartScalingPlayer(ep, 2.5, false);
         StartModifyingHeroVoiceLines(ep, 0.1, false);
         
         // set addtinal health
@@ -1066,15 +1061,13 @@ void PlayEffectsToTeam(define team!) "PlayEffectsToTeam"{
     for(define playersIndex! = 0; playersIndex < CountOf(players); playersIndex ++){
         // play blast
         PlayEffect(
-            AllPlayers(), PlayEffect.BadExplosion,
+            AllPlayers(), PlayEffect.GoodPickupEffect,
             TeamOf(players[playersIndex]) == enemyTeam ?
                 enemyColor :
                 Color.Yellow,
-            BodyPosition(players[playersIndex]),
-            TeamOf(players[playersIndex]) == enemyTeam ?
-                players[playersIndex].eachBodyScale * 1.5 : 
-                1.5
-            );
+            players[playersIndex],
+            1
+        );
     }
     Wait(0.1, WaitBehavior.IgnoreCondition);
 }
@@ -1333,26 +1326,23 @@ void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
 }
 
 define showTeleportBeamTime: 0.5;
-define scaleBodySizeToEffectSize: 1.5;
 
 void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "PlayTeleportEffect"{
-    define effectSize! = eachBodyScale * scaleBodySizeToEffectSize;
-
     // if before teleport
     if(isBefore){
         // play teleport shadow to own position
-        PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, PositionOf(ep), effectSize);
+        PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, PositionOf(ep), 1);
         // play teleport blast to teleport positon
-        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, teleportPosition, effectSize);
+        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, enemyColor, teleportPosition, 2);
         // show teleport beam to own position
         DestroyEffect(telBeam);
-        // define fromSky! = true;
+
         telBeam = CreateBeamEffect(AllPlayers(),
             BeamType.BadBeam,
             isBeamFromBody ? 
-                PositionOf() + Vector(0, eachBodyScale * 1.2, 0) :
+                BodyPosition(ep) :
                 teleportPosition + Vector(0, 30, 0),
-            teleportPosition + Vector(0, eachBodyScale * 1.2, 0),
+            teleportPosition,
             enemyColor, EffectRev.VisibleToPositionAndRadius);
         // wait for show teleport shadow of before
         Wait(showTeleportBeamTime, WaitBehavior.IgnoreCondition);
@@ -1361,7 +1351,7 @@ void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "Pla
         // hide teleport beam to teleport positon
         DestroyEffect(telBeam);
         // play teleport shadow to teleport positon
-        PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, PositionOf(ep), effectSize);
+        PlayEffect(AllPlayers(), PlayEffect.BadPickupEffect, enemyColor, PositionOf(ep), 1);
         // play teleport sound
         PlayEffect(AllPlayers(), PlayEffect.RingExplosionSound, null, PositionOf(ep), 75);
     }
@@ -2147,11 +2137,14 @@ if(
 // Team.All
 // if(
 //     ep == hp &&
-//     initCompleted
+//     HasSpawned() &&
+//     IsJumping()
 // ){
-//     SetUltimateCharge(ep, 0);
-//     Wait(1);
-//     Loop();
+//     define player = RandomValueInArray(AllPlayers(playerTeam));
+//     player.heroModType = HeroModType.SHOT_CALL;
+//     SetUltimateCharge(player, 100);
+//     // Wait(1);
+//     // Loop();
 // }
 
 rule: "DebugPlayJoinPlayerSound"
