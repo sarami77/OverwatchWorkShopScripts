@@ -210,7 +210,10 @@ if(
 }
 
 // TAG Player/HumanIcon ----------
-playervar define icon!;
+playervar define humanIcon!;
+
+define isHumanIconActive: 
+    IsAlive();
 
 rule: "Player/HumanIcon/show"
 Event.OngoingPlayer
@@ -218,10 +221,11 @@ if(
     playerTeam == TeamOf() &&
     HasSpawned() &&
     !IsDummyBot() &&
-    IsAlive()
+    isHumanIconActive
 ){
-    DestroyIcon(icon);
-    icon = CreateIcon(AllPlayers(), ep, Icon.Club,
+    // show club icon to human players for easy to find other human from human player
+    DestroyIcon(humanIcon);
+    humanIcon = CreateIcon(AllPlayers(), ep, Icon.Club,
         IconRev.Position, Color.Team2, false);
 }
 
@@ -231,9 +235,9 @@ if(
     playerTeam == TeamOf() &&
     HasSpawned() &&
     !IsDummyBot() &&
-    !IsAlive()
+    !isHumanIconActive
 ){
-    DestroyIcon(icon);
+    DestroyIcon(humanIcon);
 }
 
 // TAG Buddy/BotActive ----------
@@ -628,6 +632,43 @@ if(
     // enemy bot don't retreat
     enableRetreat = false;
 
+    // update config
+    UpdateEachEnemyType();
+    UpdateEachDealtDamage();
+    UpdateEachSpawnInterval();
+}
+
+rule: "EnemyBot/Config/update"
+Event.OngoingPlayer
+if(
+    TeamOf() == enemyTeam &&
+    enemyType != EnemyType.Non &&
+    IsGameInProgress()
+){
+    // update config
+    UpdateEachEnemyType();
+    UpdateEachDealtDamage();
+    UpdateEachSpawnInterval();
+
+    WaitUpdateLongCycle();
+    LoopIfConditionIsTrue();
+}
+
+rule: "EnemyBot/Config/setFullHealth"
+Event.OngoingPlayer
+if(
+    TeamOf() == enemyTeam &&
+    enemyType != EnemyType.Non &&
+    IsAlive()
+){
+    // heal to max health for AddHealthPoolToPlayer
+    // wait changing max health
+    Wait(0.5, WaitBehavior.IgnoreCondition);
+    Heal(ep, null, MaxValue());
+}
+
+// TAG EnemyBot/Config/UpdateEachEnemyType ----------
+void UpdateEachEnemyType()"UpdateEachEnemyType"{
     // setEnemyType
     if(enemyType == EnemyType.Minion){
         StartForcingDummyBotName(ep, "Minion");
@@ -698,42 +739,33 @@ if(
         AddHealthPoolToPlayer(ep, HealthType.Armor, MaxHealth(ep) * 0.5, true, false);
         AddHealthPoolToPlayer(ep, HealthType.Shields, MaxHealth(ep) * 0.5, true, false);
     }
-
-    // set yellow outline to threat enemy
-    if(IsBossClass(ep)){
-        // StartForcingPlayerOutlines(
-        //     ep,
-        //     AllPlayers(playerTeam),
-        //     true,
-        //     Color.Yellow,
-        //     OutlineType.Default
-        // ); 
-    }
-
-    // update params
-    UpdateEachDealtDamage();
-    UpdateEachSpawnInterval();
 }
 
-rule: "EnemyBot/EnemyType/setFullHealth"
-Event.OngoingPlayer
-if(
-    TeamOf() == enemyTeam &&
-    enemyType != EnemyType.Non &&
-    IsAlive()
-){
-    // heal to max health for AddHealthPoolToPlayer
-    Wait(0.5, WaitBehavior.IgnoreCondition);
-    Heal(ep, null, MaxValue());
-}
-
-// TAG EnemyBot/SpawnInterval ----------
+// TAG EnemyBot/Config/SpawnInterval ----------
 define showDeadEffectTime: 1.0;
 globalvar define spawnTimeScale;
 playervar define confirmSpawnInterval;
 
+rule: "EnemyBot/Config/SpawnInterval/waitingRespawn"
+Event.OnDeath
+if(
+    TeamOf() == enemyTeam
+){
+    // wait for show dead effect
+    Wait(showDeadEffectTime, WaitBehavior.AbortWhenFalse);
+    // if sucide, skip wait timer
+    if(Attacker() != ep){
+        // wait for respawn by each timer
+        Wait(confirmSpawnInterval, WaitBehavior.AbortWhenFalse);
+    }
+    Respawn();
+}
+
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
+    // tune enemy spawen interval for make close match
     define diff! = GameProgressDiff(playerTeam);
+
+    // player team advantage, fast enemy respawn
     if(70 <= diff){
         spawnTimeScale = 0;
     }
@@ -743,9 +775,11 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     else if(10 <= diff && diff < 40){
         spawnTimeScale = 0.5;
     }
+    // team even, default enemy respawn
     else if(-10 <= diff && diff < 10){
         spawnTimeScale = 1.0;
     }
+    // enemy team advantage, slow enemy respawn
     else if(-40 <= diff && diff < -10){
         spawnTimeScale = 1.33;
     }
@@ -756,90 +790,15 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
         spawnTimeScale = 2.0;
     }
 
+    // set default interval by object progress
     confirmSpawnInterval = ObjectProgressScaledInterval(playerTeam, eachMinSpawnInterval, eachMaxSpawnInterval, 0);
+    // apply each enemy type scale
     confirmSpawnInterval *= spawnTimeScale;
+    // apply workshop setting
     confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Basic Spawn Intarval Scale", 1.0, 0.01, 100, 1);
-    // SetRespawnMaxTime(ep, confirmSpawnInterval);
 }
 
-rule: "EnemyBot/SpawnInterval/update"
-Event.OngoingPlayer
-if(
-    TeamOf() == enemyTeam &&
-    enemyType != EnemyType.Non &&
-    IsGameInProgress()
-){
-    UpdateEachSpawnInterval();
-    WaitUpdateLongCycle();
-    LoopIfConditionIsTrue();
-}
-
-rule: "EnemyBot/SpawnInterval/waitRespawn"
-Event.OnDeath
-if(
-    TeamOf() == enemyTeam &&
-    IsDead()
-){
-    Wait(showDeadEffectTime, WaitBehavior.AbortWhenFalse);
-    if(Attacker() != ep){
-        Wait(confirmSpawnInterval, WaitBehavior.AbortWhenFalse);
-    }
-    Respawn();
-    // fail safe
-    Wait(1, WaitBehavior.AbortWhenFalse);
-    LoopIfConditionIsTrue();
-}
-
-// TAG EnemyBot/DealtDamage ----------
-globalvar define autoTuneDmgDlt;
-globalvar define enemyDeathCount = [0,0,0,0];  // for debug
-globalvar define playerDeathCount = 0;  // for debug
-
-rule: "EnemyBot/DealtDamage/init"
-Event.OngoingGlobal
-if(
-    confirmGameDifficulty != GameDifficulty.NO_VOTE
-){
-    autoTuneDmgDlt = autoTuneDmgDltInitial;
-}
-
-rule: "EnemyBot/DealtDamage/upTune"
-Event.OnDeath
-if(
-    TeamOf() == enemyTeam &&
-    Attacker() != ep
-){
-    define upValue! = eachDeathCost;
-    upValue *= upValueScale;
-    autoTuneDmgDlt += upValue;
-    autoTuneDmgDlt = autoTuneDmgDlt > autoTuneDmgDltLimit ? autoTuneDmgDltLimit : autoTuneDmgDlt;
-
-    enemyDeathCount[ep.enemyType - 1] ++;
-        // dbgLogFile(<"autoTuneDmgDlt = <0>, upValue = <1>, enemyDeathCount[<2>] = <3>", autoTuneDmgDlt, upValue, ep.enemyType - 1, enemyDeathCount[ep.enemyType - 1]>);
-}
-
-rule: "EnemyBot/DealtDamage/downTune"
-Event.OnDeath
-if(
-    TeamOf() == playerTeam &&
-    Attacker() != ep
-){
-    define downValue! = NumberOfSlots(playerTeam) / NumberOfPlayers(playerTeam);
-    if(!IsDummyBot(ep)){
-        downValue *= 3;
-    }
-    else{
-        downValue *= 1;
-    }
-    
-    downValue *= downValueScale;
-    autoTuneDmgDlt -= downValue;
-    autoTuneDmgDlt = autoTuneDmgDlt < autoTuneDmgDltInitial ? autoTuneDmgDltInitial : autoTuneDmgDlt;
-
-    playerDeathCount ++;
-        // dbgLogFile(<"autoTuneDmgDlt = <0>, downValue = <2>, playerDeathCount = <2>", autoTuneDmgDlt, downValue, playerDeathCount>);
-}
-
+// TAG EnemyBot/Config/DealtDamage ----------
 playervar define confirmDealtDamage;
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
@@ -854,16 +813,79 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     SetDamageDealt(ep, confirmDealtDamage);
 }
 
-rule: "EnemyBot/DealtDamage/update"
-Event.OngoingPlayer
+globalvar define autoTuneDmgDlt;
+globalvar define enemyDeathCount = [0,0,0,0];  // for debug
+globalvar define playerDeathCount = 0;  // for debug
+
+rule: "EnemyBot/Config/DealtDamage/init"
+Event.OngoingGlobal
+if(
+    confirmGameDifficulty != GameDifficulty.NO_VOTE
+){
+    autoTuneDmgDlt = autoTuneDmgDltInitial;
+}
+
+rule: "EnemyBot/Config/DealtDamage/upTune"
+Event.OnDeath
 if(
     TeamOf() == enemyTeam &&
-    enemyType != EnemyType.Non &&
+    Attacker() != ep
+){
+    // up enemy deal damage by enemy dead, tune detailed difficulty
+    define upValue! = eachDeathCost;
+    upValue *= upValueScale;
+    // up deal damage
+    autoTuneDmgDlt += upValue;
+    autoTuneDmgDlt = autoTuneDmgDlt > autoTuneDmgDltLimit ? autoTuneDmgDltLimit : autoTuneDmgDlt;
+    // death count for debug
+    enemyDeathCount[ep.enemyType - 1] ++;
+}
+
+rule: "EnemyBot/Config/DealtDamage/downTune"
+Event.OnDeath
+if(
+    TeamOf() == playerTeam &&
+    Attacker() != ep
+){
+    // down enemy deal damage by player dead, tune detailed difficulty
+    define downValue! = NumberOfSlots(playerTeam) / NumberOfPlayers(playerTeam);
+
+    if(!IsDummyBot(ep)){
+        // human player has influence 3times 
+        downValue *= 3;
+    }
+    else{
+        // bot player has single influence
+        downValue *= 1;
+    }
+    downValue *= downValueScale;
+    // down deal damage
+    autoTuneDmgDlt -= downValue;
+    autoTuneDmgDlt = autoTuneDmgDlt < autoTuneDmgDltInitial ? autoTuneDmgDltInitial : autoTuneDmgDlt;
+    // death count for debug
+    playerDeathCount ++;
+}
+
+// TAG EnemyBot/Config/ReceivedDamage ----------
+globalvar define confirmReceiveDamage;
+
+rule: "EnemyBot/Config/ReceivedDamage/update"
+Event.OngoingGlobal
+if(
     IsGameInProgress()
 ){
-    UpdateEachDealtDamage();
+    UpdateGlobalReceivedDamage();
+    
     WaitUpdateLongCycle();
     LoopIfConditionIsTrue();
+}
+
+void UpdateGlobalReceivedDamage()"UpdateGlobalReceivedDamage"{
+    // set base damage
+    confirmReceiveDamage = DefaultPercentage();
+    // apply team balance
+    confirmReceiveDamage *= ConvertToBalancedValue(1.5, playerTeam);
+    SetDamageReceived(AllPlayers(enemyTeam), confirmReceiveDamage);
 }
 
 // TAG EnemyBot/ChargeUltimate ----------
@@ -877,27 +899,6 @@ if(
 ){
     SetUltimateCharge(ep, UltimateChargePercent() + (DefaultPercentage() / eachChargeUltInterval));
     WaitUpdateASecond();
-    LoopIfConditionIsTrue();
-}
-
-// TAG EnemyBot/ReceivedDamage ----------
-globalvar define confirmReceiveDamage;
-
-void UpdateEachReceivedDamage()"UpdateEachReceivedDamage"{
-    // set base damage
-    confirmReceiveDamage = DefaultPercentage();
-    // apply team balance
-    confirmReceiveDamage *= ConvertToBalancedValue(1.5, playerTeam);
-    SetDamageReceived(AllPlayers(enemyTeam), confirmReceiveDamage);
-}
-
-rule: "EnemyBot/ReceivedDamage/update"
-Event.OngoingGlobal
-if(
-    IsGameInProgress()
-){
-    UpdateEachReceivedDamage();
-    WaitUpdateLongCycle();
     LoopIfConditionIsTrue();
 }
 
@@ -920,15 +921,17 @@ if(
 // TAG EnemyBot/CautionIcon ----------
 playervar define cautionIcon;
 
+define isCautionIconActive: 
+    IsPlayerOnObject &&
+    IsOnObjective(ep);
+
 rule: "EnemyBot/CautionIcon/show"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    (
-        IsPlayerOnObject &&
-        IsOnObjective(ep)
-    )
+    isCautionIconActive
 ){
+    // show caution icon to enemys for easy to find interfering enemy from player
     DestroyIcon(cautionIcon);
     cautionIcon = CreateIcon(AllPlayers(playerTeam), ep, Icon.ExclamationMark,
         IconRev.PositionAndColor, cautionColor, true);
@@ -938,41 +941,39 @@ rule: "EnemyBot/CautionIcon/hide"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    !(
-        IsPlayerOnObject &&
-        IsOnObjective(ep)
-    )
+    !isCautionIconActive
 ){
     DestroyIcon(cautionIcon);
 }
 
-// TAG EnemyBot/BossIcon ----------
-rule: "EnemyBot/BossIcon/show"
+// TAG EnemyBot/ThreatIcon ----------
+playervar define threatIcon;
+
+define isThreatIconActive: 
+    IsAlive() &&
+    !IsInSpawnRoom();
+
+rule: "EnemyBot/ThreatIcon/show"
 Event.OngoingPlayer
 if(
     enemyTeam == TeamOf() &&
     IsBossClass(ep) &&
-    (
-        IsAlive() &&
-        !IsInSpawnRoom()
-    )
+    isThreatIconActive
 ){
-    DestroyIcon(icon);
-    icon = CreateIcon(AllPlayers(), ep, Icon.Skull,
+    // show threat icon to boss enemys for easy to caution enemy from player
+    DestroyIcon(threatIcon);
+    threatIcon = CreateIcon(AllPlayers(), ep, Icon.Skull,
         IconRev.Position, Color.Team1, false);
 }
 
-rule: "EnemyBot/BossIcon/hide"
+rule: "EnemyBot/ThreatIcon/hide"
 Event.OngoingPlayer
 if(
     enemyTeam == TeamOf() &&
     IsBossClass(ep) &&
-    !(
-        IsAlive() &&
-        !IsInSpawnRoom()
-    )
+    !isThreatIconActive
 ){
-    DestroyIcon(icon);
+    DestroyIcon(threatIcon);
 }
 
 // TAG EnemyBot/Asset ----------
@@ -1725,7 +1726,7 @@ if(
     Attacker() == ep
 ){
     if(IsProbabilityTrue(25)){
-        // reset position by enemy sucide of invalid position
+        // reset position by enemy sucide in invalid position
         needUpdateCommonTeleportBasePosition = true;
     }
 }
@@ -1802,7 +1803,6 @@ if(
         DoTeleport(false, false);
     }
 
-
     LoopIfConditionIsTrue();
 }
 
@@ -1815,21 +1815,15 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    // set default interval
+    // set default interval by object progress
     spawnRushInterval = ObjectProgressScaledInterval(playerTeam, 20, 40, 5);
+    // apply workshop setting
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.01, 100, 2);
+    // round for counting
     spawnRushInterval = RoundToInteger(spawnRushInterval, Rounding.Up);
     for(;spawnRushInterval > 0; spawnRushInterval--){
         Wait(1, WaitBehavior.IgnoreCondition);
     }
-
-    // show text
-    // DestroyHudText(spawnRushWarningHud);
-    // spawnRushWarningHud = CreateHudText(AllPlayers(),
-    //     "ENEMY SPAWN RUSH INCOMING!", null, null,
-    //     Location.Top, 10,
-    //     warningIconColor, Color.White, Color.White,
-    //     HudTextRev.Color, Spectators.VisibleAlways);
 
     // action
     define spawnRushDuration! = RandomInteger(5, 20);
@@ -1850,10 +1844,6 @@ if(
         WaitReleaseServerLoad(ServerLoadType.GameMain);
     }
 
-    // hide text
-    // Wait(1, WaitBehavior.IgnoreCondition);
-    // DestroyHudText(spawnRushWarningHud);
-
     LoopIfConditionIsTrue();
 }
 
@@ -1865,21 +1855,15 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    // set default interval
+    // set default interval by object progress
     shotCallInterval = ObjectProgressScaledInterval(playerTeam, 20, 40, 5);
+    // apply workshop setting
     shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.01, 100, 3);
+    // round for counting
     shotCallInterval = RoundToInteger(shotCallInterval, Rounding.Up);
     for(;shotCallInterval > 0; shotCallInterval--){
         Wait(1, WaitBehavior.IgnoreCondition);
     }
-
-    // show text
-    // DestroyHudText(shotCallWarningHud);
-    // shotCallWarningHud = CreateHudText(AllPlayers(),
-    //     "ENEMY ALL-OUT ULTIMATE INCOMING!", null, null,
-    //     Location.Top, 11,
-    //     warningIconColor, Color.White, Color.White,
-    //     HudTextRev.Color, Spectators.VisibleAlways);
 
     // action
     define activeEnemys! = AllPlayers(enemyTeam);
@@ -1897,10 +1881,6 @@ if(
         }
     }
 
-    // hide text
-    // Wait(1, WaitBehavior.IgnoreCondition);
-    // DestroyHudText(shotCallWarningHud);
-
     LoopIfConditionIsTrue();
 }
 
@@ -1914,9 +1894,11 @@ if(
     TeamOf() == enemyTeam &&
     IsBossClass(ep)
 ){
-    // set default interval
+    // set default interval by object progress
     combatTeleportInterval = ObjectProgressScaledInterval(playerTeam, 10, 20, 5);
+    // apply workshop setting
     combatTeleportInterval *= WorkshopSettingReal("Enemy Bot Settings", "(Sub Boss & Boss) Combat-Teleport Interval Scale", 1.0, 0.01, 100, 4);
+    // apply scale by each enemy action range
     if(actionRangeMax == ActionRange.Melee){
         combatTeleportInterval *= 1;
     }
