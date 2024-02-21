@@ -599,6 +599,12 @@ define downValueScale:
                                                         downValueScaleBase * 1.1 ;
 
 // TAG EnemyBot/EnemyType ----------
+define enemyColor: Color.Team1;
+
+define IsBossClass(in define player):
+    player.enemyType == EnemyType.SubBoss ||
+    player.enemyType == EnemyType.Boss;
+
 playervar define eachDealtDamageScale!;
 playervar define eachMaxSpawnInterval!;
 playervar define eachMinSpawnInterval!;
@@ -694,7 +700,7 @@ if(
     }
 
     // set yellow outline to threat enemy
-    if(IsBossClassEnemy(ep)){
+    if(IsBossClass(ep)){
         // StartForcingPlayerOutlines(
         //     ep,
         //     AllPlayers(playerTeam),
@@ -726,7 +732,7 @@ rule: "Player/Icon/showBossIcon"
 Event.OngoingPlayer
 if(
     enemyTeam == TeamOf() &&
-    IsBossClassEnemy(ep) &&
+    IsBossClass(ep) &&
     (
         IsAlive() &&
         !IsInSpawnRoom()
@@ -741,7 +747,7 @@ rule: "Player/Config/hideBossIcon"
 Event.OngoingPlayer
 if(
     enemyTeam == TeamOf() &&
-    IsBossClassEnemy(ep) &&
+    IsBossClass(ep) &&
     !(
         IsAlive() &&
         !IsInSpawnRoom()
@@ -1077,21 +1083,6 @@ void PlayEffectsToTeam(define team!) "PlayEffectsToTeam"{
     }
     Wait(0.1, WaitBehavior.IgnoreCondition);
 }
-
-
-// TAG EnemyBot/Effect ----------
-define enemyColor: Color.Team1;
-
-define IsBossClassEnemy(in define player):
-    player.enemyType == EnemyType.SubBoss ||
-    player.enemyType == EnemyType.Boss;
-
-define isInCombat:
-    actionState != ActionState.Non &&
-    (
-        IsAlive() &&
-        !IsInSpawnRoom()
-    );
 
 // TAG EnemyBot/Teleport ----------
 define teleportAreaSize: 8;
@@ -1736,6 +1727,20 @@ if(
     LoopIfConditionIsTrue();
 }
 
+// TAG EnemyBot/ChargeUltimate ----------
+rule: "EnemyBot/ChargeUltimate/charge"
+Event.OngoingPlayer
+if(
+    TeamOf() == enemyTeam &&
+    enemyType != EnemyType.Non &&
+    IsGameInProgress() &&
+    !IsUsingUltimate()
+){
+    SetUltimateCharge(ep, UltimateChargePercent() + (DefaultPercentage() / eachChargeUltInterval));
+    WaitUpdateASecond();
+    LoopIfConditionIsTrue();
+}
+
 // TAG EnemyBot/ReceivedDamage ----------
 globalvar define confirmReceiveDamage;
 
@@ -1754,20 +1759,6 @@ if(
 ){
     UpdateEachReceivedDamage();
     WaitUpdateLongCycle();
-    LoopIfConditionIsTrue();
-}
-
-// TAG EnemyBot/ChargeUltimate ----------
-rule: "EnemyBot/ChargeUltimate/charge"
-Event.OngoingPlayer
-if(
-    TeamOf() == enemyTeam &&
-    enemyType != EnemyType.Non &&
-    IsGameInProgress() &&
-    !IsUsingUltimate()
-){
-    SetUltimateCharge(ep, UltimateChargePercent() + (DefaultPercentage() / eachChargeUltInterval));
-    WaitUpdateASecond();
     LoopIfConditionIsTrue();
 }
 
@@ -1920,7 +1911,7 @@ Event.OngoingPlayer
 if(
     IsGameInProgress() &&
     TeamOf() == enemyTeam &&
-    IsBossClassEnemy(ep)
+    IsBossClass(ep)
 ){
     // set default interval
     combatTeleportInterval = ObjectProgressScaledInterval(playerTeam, 10, 20, 5);
@@ -1976,7 +1967,7 @@ rule: "EnemyBot/EnemyAbility/moreUltimate"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    IsBossClassEnemy(ep) &&
+    IsBossClass(ep) &&
     IsAlive() &&
     actionState != ActionState.Non &&
     IsUsingUltimate()
@@ -2228,7 +2219,7 @@ define FirstEnemyOf(in define enemyType):
     FirstOf(FilteredArray(AllPlayers(enemyTeam), ae.enemyType == enemyType));
 
 define FirstBossClassEnemy():
-    FirstOf(FilteredArray(AllPlayers(enemyTeam), IsBossClassEnemy(ae)));
+    FirstOf(FilteredArray(AllPlayers(enemyTeam), IsBossClass(ae)));
 
 // show debug icon and hud
 void ShowDebugHud(define player!)"ShowDebugHud"{
