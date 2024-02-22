@@ -573,7 +573,7 @@ define autoTuneDmgDltInitial :
     confirmGameDifficulty == GameDifficulty.LEGENDARY ? 70 :
     confirmGameDifficulty == GameDifficulty.INSANITY ?  90 :
                                                         0  ; 
- 
+
 define autoTuneDmgDltLimit:
     confirmGameDifficulty == GameDifficulty.EASY ?      50  :
     confirmGameDifficulty == GameDifficulty.NORMAL ?    60  :
@@ -609,67 +609,28 @@ define IsBossClass(in define player):
     player.enemyType == EnemyType.SubBoss ||
     player.enemyType == EnemyType.Boss;
 
+define dealHealScale: IsSupportHero(HeroOf()) ? 2.0 : 1.0;
+
 playervar define eachDealtDamageScale!;
 playervar define eachMaxSpawnInterval!;
 playervar define eachMinSpawnInterval!;
 playervar define eachChargeUltInterval!;
 playervar define eachDeathCost!;
 
-define dealHealScale: IsSupportHero(HeroOf()) ? 2.0 : 1.0;
-
-rule: "EnemyBot/Config/init"
+rule: "EnemyBot/Config/update"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
     IsDummyBot() &&
     HasSpawned() &&
     enemyType != EnemyType.Non &&
-    confirmGameDifficulty != GameDifficulty.NO_VOTE
+    confirmGameDifficulty != GameDifficulty.NO_VOTE &&
+    IsGameInProgress()
 ){
     // disable builtin respawn for avoid auto teamup
     DisableRespawning();
-
-    // enemy bot don't retreat
-    enableRetreat = false;
-
-    // update config
-    UpdateEachEnemyType(true);
-    UpdateEachDealtDamage();
-    UpdateEachSpawnInterval();
-}
-
-rule: "EnemyBot/Config/update"
-Event.OngoingPlayer
-if(
-    TeamOf() == enemyTeam &&
-    enemyType != EnemyType.Non &&
-    IsGameInProgress()
-){
-    // update config
-    UpdateEachEnemyType(false);
-    UpdateEachDealtDamage();
-    UpdateEachSpawnInterval();
-
-    WaitUpdateLongCycle();
-    LoopIfConditionIsTrue();
-}
-
-rule: "EnemyBot/Config/setFullHealth"
-Event.OngoingPlayer
-if(
-    TeamOf() == enemyTeam &&
-    enemyType != EnemyType.Non &&
-    IsAlive()
-){
-    // heal to max health for AddHealthPoolToPlayer
-    // wait changing max health
-    Wait(0.5, WaitBehavior.IgnoreCondition);
-    Heal(ep, null, MaxValue());
-}
-
-// TAG EnemyBot/Config/UpdateEachEnemyType ----------
-void UpdateEachEnemyType(define isFisrtSetup!)"UpdateEachEnemyType"{
-    // setEnemyType
+    
+    // init config by enemy type
     if(enemyType == EnemyType.Minion){
         StartForcingDummyBotName(ep, "Minion");
         watchUpdateRate =       4;
@@ -680,8 +641,6 @@ void UpdateEachEnemyType(define isFisrtSetup!)"UpdateEachEnemyType"{
         SetHealingDealt(ep,     25 * dealHealScale);
 
         eachDealtDamageScale =  0.25;
-        eachMinSpawnInterval =  basicSpawnTimeMin * 1;
-        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
         eachChargeUltInterval = 60;
         StartScalingPlayer(ep, 0.7, false);
         StartModifyingHeroVoiceLines(ep, 1.5, false);
@@ -696,8 +655,6 @@ void UpdateEachEnemyType(define isFisrtSetup!)"UpdateEachEnemyType"{
         SetHealingDealt(ep,     100 * dealHealScale);
 
         eachDealtDamageScale =  1.0;
-        eachMinSpawnInterval =  basicSpawnTimeMin * 2;
-        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
         eachChargeUltInterval = 30;
         StartScalingPlayer(ep, 1.0, false);
         StartModifyingHeroVoiceLines(ep, 1.0, false);
@@ -712,8 +669,6 @@ void UpdateEachEnemyType(define isFisrtSetup!)"UpdateEachEnemyType"{
         SetHealingDealt(ep,     200 * dealHealScale);
 
         eachDealtDamageScale =  1.5;
-        eachMinSpawnInterval =  basicSpawnTimeMin * 4;
-        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
         eachChargeUltInterval = 15;
         StartScalingPlayer(ep, 1.5, false);
         StartModifyingHeroVoiceLines(ep, 0.5, false);
@@ -728,42 +683,59 @@ void UpdateEachEnemyType(define isFisrtSetup!)"UpdateEachEnemyType"{
         SetHealingDealt(ep,     200 * dealHealScale);
 
         eachDealtDamageScale =  2.0;
-        eachMinSpawnInterval =  basicSpawnTimeMin * 4;
-        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
         eachChargeUltInterval = 15;
         StartScalingPlayer(ep, 2.5, false);
         StartModifyingHeroVoiceLines(ep, 0.1, false);
         
-        if(isFisrtSetup){
-            // set addtinal health and total health 2000%
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-            AddHealthPoolToPlayer(ep, HealthType.Armor, MaxHealth(ep) * 0.5, true, false);
-            AddHealthPoolToPlayer(ep, HealthType.Shields, MaxHealth(ep) * 0.5, true, false);
-        }
+        // set addtinal health and total health 2000%
+        // wait max health change finish
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        AddHealthPoolToPlayer(ep, HealthType.Armor, MaxHealth(ep) * 0.5, true, false);
+        AddHealthPoolToPlayer(ep, HealthType.Shields, MaxHealth(ep) * 0.5, true, false);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        Heal(ep, null, MaxValue());
+    }
+
+    while(true){
+        // update config
+        UpdateEachSpawnInterval();
+        UpdateEachDealtDamage();
+
+        WaitUpdateLongCycle();
     }
 }
 
-// TAG EnemyBot/Config/SpawnInterval ----------
-define showDeadEffectTime: 1.0;
-globalvar define spawnTimeScale;
-playervar define confirmSpawnInterval;
-
-rule: "EnemyBot/Config/SpawnInterval/waitingRespawn"
-Event.OnDeath
-if(
-    TeamOf() == enemyTeam
-){
-    // wait for show dead effect
-    Wait(showDeadEffectTime, WaitBehavior.AbortWhenFalse);
-    // if sucide, skip wait timer
-    if(Attacker() != ep){
-        // wait for respawn by each timer
-        Wait(confirmSpawnInterval, WaitBehavior.AbortWhenFalse);
-    }
-    Respawn();
+void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
+    // set auto tune damage
+    confirmDealtDamage = autoTuneDmgDlt;
+    // apply setting scale
+    confirmDealtDamage *= WorkshopSettingReal("Enemy Bot Settings", "Enemy Deal Damage Scale", 1.0, 0.01, 100, 0);
+    // apply enemy type scale
+    confirmDealtDamage *= eachDealtDamageScale;
+    // apply team balance
+    confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
+    SetDamageDealt(ep, confirmDealtDamage);
 }
 
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
+    // set spawn interval min max
+    if(enemyType == EnemyType.Minion){
+        eachMinSpawnInterval =  basicSpawnTimeMin * 1;
+        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
+    }
+    else if(enemyType == EnemyType.Elite){
+        eachMinSpawnInterval =  basicSpawnTimeMin * 2;
+        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
+    }
+    else if(enemyType == EnemyType.SubBoss){
+        eachMinSpawnInterval =  basicSpawnTimeMin * 4;
+        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
+    }
+    else if(enemyType == EnemyType.Boss){
+        eachMinSpawnInterval =  basicSpawnTimeMin * 4;
+        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
+    }
+
     // tune enemy spawen interval for make close match
     define diff! = GameProgressDiff(playerTeam);
 
@@ -800,21 +772,28 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Basic Spawn Intarval Scale", 1.0, 0.01, 100, 1);
 }
 
-// TAG EnemyBot/Config/DealtDamage ----------
-playervar define confirmDealtDamage;
+// TAG EnemyBot/Config/SpawnInterval ----------
+define showDeadEffectTime: 1.0;
+globalvar define spawnTimeScale;
+playervar define confirmSpawnInterval;
 
-void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
-    // set auto tune damage
-    confirmDealtDamage = autoTuneDmgDlt;
-    // apply setting scale
-    confirmDealtDamage *= WorkshopSettingReal("Enemy Bot Settings", "Enemy Deal Damage Scale", 1.0, 0.01, 100, 0);
-    // apply enemy type scale
-    confirmDealtDamage *= eachDealtDamageScale;
-    // apply team balance
-    confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
-    SetDamageDealt(ep, confirmDealtDamage);
+rule: "EnemyBot/Config/SpawnInterval/waitingRespawn"
+Event.OnDeath
+if(
+    TeamOf() == enemyTeam
+){
+    // wait for show dead effect
+    Wait(showDeadEffectTime, WaitBehavior.AbortWhenFalse);
+    // if sucide, skip wait timer
+    if(Attacker() != ep){
+        // wait for respawn by each timer
+        Wait(confirmSpawnInterval, WaitBehavior.AbortWhenFalse);
+    }
+    Respawn();
 }
 
+// TAG EnemyBot/Config/DealtDamage ----------
+playervar define confirmDealtDamage;
 globalvar define autoTuneDmgDlt;
 globalvar define enemyDeathCount = [0,0,0,0];  // for debug
 globalvar define playerDeathCount = 0;  // for debug
@@ -876,10 +855,11 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    UpdateGlobalReceivedDamage();
-    
-    WaitUpdateLongCycle();
-    LoopIfConditionIsTrue();
+    while(true){
+        UpdateGlobalReceivedDamage();
+
+        WaitUpdateLongCycle();
+    }
 }
 
 void UpdateGlobalReceivedDamage()"UpdateGlobalReceivedDamage"{
@@ -1165,7 +1145,7 @@ define enemyAssetNoLotteryList: [
     16
 
     // for debug
-    // 30
+    // 23
 ];
 
 
