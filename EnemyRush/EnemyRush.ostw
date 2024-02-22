@@ -705,16 +705,24 @@ if(
     }
 }
 
-void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
-    // set auto tune damage
-    confirmDealtDamage = autoTuneDmgDlt;
-    // apply setting scale
-    confirmDealtDamage *= WorkshopSettingReal("Enemy Bot Settings", "Enemy Deal Damage Scale", 1.0, 0.01, 100, 0);
-    // apply enemy type scale
-    confirmDealtDamage *= eachDealtDamageScale;
-    // apply team balance
-    confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
-    SetDamageDealt(ep, confirmDealtDamage);
+// TAG EnemyBot/Config/SpawnInterval ----------
+define showDeadEffectTime: 1.0;
+globalvar define spawnTimeScale;
+playervar define confirmSpawnInterval;
+
+rule: "EnemyBot/Config/SpawnInterval/waitingRespawn"
+Event.OnDeath
+if(
+    TeamOf() == enemyTeam
+){
+    // wait for show dead effect
+    Wait(showDeadEffectTime, WaitBehavior.AbortWhenFalse);
+    // if sucide, skip wait timer
+    if(Attacker() != ep){
+        // wait for respawn by each timer
+        Wait(confirmSpawnInterval, WaitBehavior.AbortWhenFalse);
+    }
+    Respawn();
 }
 
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
@@ -772,26 +780,6 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Basic Spawn Intarval Scale", 1.0, 0.01, 100, 1);
 }
 
-// TAG EnemyBot/Config/SpawnInterval ----------
-define showDeadEffectTime: 1.0;
-globalvar define spawnTimeScale;
-playervar define confirmSpawnInterval;
-
-rule: "EnemyBot/Config/SpawnInterval/waitingRespawn"
-Event.OnDeath
-if(
-    TeamOf() == enemyTeam
-){
-    // wait for show dead effect
-    Wait(showDeadEffectTime, WaitBehavior.AbortWhenFalse);
-    // if sucide, skip wait timer
-    if(Attacker() != ep){
-        // wait for respawn by each timer
-        Wait(confirmSpawnInterval, WaitBehavior.AbortWhenFalse);
-    }
-    Respawn();
-}
-
 // TAG EnemyBot/Config/DealtDamage ----------
 playervar define confirmDealtDamage;
 globalvar define autoTuneDmgDlt;
@@ -845,6 +833,18 @@ if(
     autoTuneDmgDlt = autoTuneDmgDlt < autoTuneDmgDltInitial ? autoTuneDmgDltInitial : autoTuneDmgDlt;
     // death count for debug
     playerDeathCount ++;
+}
+
+void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
+    // set auto tune damage
+    confirmDealtDamage = autoTuneDmgDlt;
+    // apply setting scale
+    confirmDealtDamage *= WorkshopSettingReal("Enemy Bot Settings", "Enemy Deal Damage Scale", 1.0, 0.01, 100, 0);
+    // apply enemy type scale
+    confirmDealtDamage *= eachDealtDamageScale;
+    // apply team balance
+    confirmDealtDamage /= ConvertToBalancedValue(1.5, playerTeam);
+    SetDamageDealt(ep, confirmDealtDamage);
 }
 
 // TAG EnemyBot/Config/ReceivedDamage ----------
@@ -1141,7 +1141,7 @@ define enemyAssetNoLotteryList: [
     12,
     13,
     14,
-    15,15,15,15,
+    15,15,
     16
 
     // for debug
