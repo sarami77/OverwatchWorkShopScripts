@@ -129,20 +129,109 @@ rule: "Vote/confirmGameDifficulty"
 Event.OngoingGlobal
 if(
     IsGameInProgress()
+    //  || IsJumping(hp)    // debug
 ){
-    // make votedList
-    define votedList! = [];
-    for(define idx! = 0; idx < NumberOfPlayers(playerTeam); idx++){
-        define player! = PlayersInSlot(idx, playerTeam);
-        // not include INIT, NO_VOTE, LAST in votedList
+                    // show type value
+                    // dbgHudTxt(<"EASY      = <0>", GameDifficulty.EASY>);
+                    // dbgHudTxt(<"NORMAL    = <0>", GameDifficulty.NORMAL>);
+                    // dbgHudTxt(<"HARD      = <0>", GameDifficulty.HARD>);
+                    // dbgHudTxt(<"EXPERT    = <0>", GameDifficulty.EXPERT>);
+                    // dbgHudTxt(<"LEGENDARY = <0>", GameDifficulty.LEGENDARY>);
+                    // dbgHudTxt(<"INSANITY  = <0>", GameDifficulty.INSANITY>);
+                    // Wait(0.5);
+                    
+                    // make random vote
+                    // for(define index! = 0; index < CountOf(AllPlayers(playerTeam)); index++){
+                    //     define player! = AllPlayers(playerTeam)[index];
+                    //     player.voteGameDifficulty = RandomValueInArray([
+                    //         GameDifficulty.INIT,
+                    //         GameDifficulty.NO_VOTE,
+                    //         GameDifficulty.EASY,
+                    //         GameDifficulty.NORMAL,
+                    //         GameDifficulty.HARD,
+                    //         GameDifficulty.EXPERT,
+                    //         GameDifficulty.LEGENDARY,
+                    //         GameDifficulty.INSANITY,
+                    //         GameDifficulty.LAST
+                    //     ]);
+                    //     if(index == 3){
+                    //         player.voteGameDifficulty = GameDifficulty.EXPERT;
+                    //     }
+                    //     else if(index == 4){
+                    //         player.voteGameDifficulty = GameDifficulty.NORMAL;
+                    //     }
+                    //     dbgHudTxt(<"<0> voteGameDifficulty = <1>", player, player.voteGameDifficulty>);
+                    // }
+                    // Wait(0.5);
+
+    // make voteCountList
+    define voteCountList! = [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    ];
+    define voteIndexList! = [
+        GameDifficulty.INIT,
+        GameDifficulty.NO_VOTE,
+        GameDifficulty.EASY,
+        GameDifficulty.NORMAL,
+        GameDifficulty.HARD,
+        GameDifficulty.EXPERT,
+        GameDifficulty.LEGENDARY,
+        GameDifficulty.INSANITY,
+        GameDifficulty.LAST
+    ];
+    for(define idx! = 0; idx < CountOf(AllPlayers(playerTeam)); idx++){
+        define player! = AllPlayers(playerTeam)[idx];
+        define voteIndex! = IndexOfArrayValue(voteIndexList, player.voteGameDifficulty);
+        voteCountList[voteIndex] += 1;
+    }
+
+    /// reset count of can't vote game diffculty type
+    voteCountList[GameDifficulty.INIT]      = 0;
+    voteCountList[GameDifficulty.NO_VOTE]   = 0;
+    voteCountList[GameDifficulty.LAST]      = 0;
+
+                    // for(define index! = 0; index < CountOf(voteCountList); index++){
+                    //     dbgHudTxt(<"voteCountList[<0>] = <1>", index, voteCountList[index]>);
+                    // }
+                    // Wait(0.5);
+
+    // find most voteIndex
+    define mostVoteIndex! = -1;
+    define currentMostVoteCount! = 0;
+    for(define idx! = 0; idx < CountOf(voteCountList); idx++){
+        // if most count vote, get index
+        //   if vote count same, select after vote idx
         if(
-            player.voteGameDifficulty != GameDifficulty.INIT &&
-            player.voteGameDifficulty != GameDifficulty.NO_VOTE &&
-            player.voteGameDifficulty != GameDifficulty.LAST
-        ){
-            votedList[CountOf(votedList)] = player.voteGameDifficulty;
+            0 < voteCountList[idx]  &&
+            currentMostVoteCount <= voteCountList[idx]
+        ){ 
+            currentMostVoteCount = voteCountList[idx];  
+            mostVoteIndex = idx;
         }
     }
+    
+    // get most vote count difficluty
+    define mostVoteCountDifficluty!;
+    if(mostVoteIndex < 0){
+        // if not found index
+        // set difficult to NORMAL as default
+        mostVoteCountDifficluty = GameDifficulty.NORMAL;
+    }
+    else{
+        mostVoteCountDifficluty = voteIndexList[mostVoteIndex];
+    }
+
+                    // dbgHudTxt(<"mostVoteIndex = <0>", mostVoteIndex>);
+                    // dbgHudTxt(<"mostVoteCountDifficluty = <0>", mostVoteCountDifficluty>);
+                    // Wait(0.5);
 
     // override vote by host debug key
     if(
@@ -159,16 +248,14 @@ if(
         // set difficult from game setting
         confirmGameDifficulty = settingGameDifficulty;
     }
-    // players has votes
-    else if(0 < CountOf(votedList)){
-        // set difficult from votedList
-        confirmGameDifficulty = RandomValueInArray(votedList);
-    }
-    // set normal as default
+    // not override vote
     else{
-        // set difficult to easy as default
-        confirmGameDifficulty = GameDifficulty.NORMAL;
+        // set difficult from vote count difficluty
+        confirmGameDifficulty = mostVoteCountDifficluty;
     }
+
+                    // dbgHudTxt(<"confirmGameDifficulty = <0>", ConfirmGameDifficultyText(confirmGameDifficulty)>);
+                    // Wait(0.5);
 }
 
 playervar define gameDiffText!;
