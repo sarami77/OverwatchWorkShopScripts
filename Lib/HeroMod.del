@@ -289,7 +289,7 @@ define CanTouchPlayerList():
     (
         IsDummyBot(ep) ?
             AllPlayers(playerTeam) :
-            PlayersInViewAngle(ep, playerTeam, 45)
+            PlayersInViewAngle(ep, playerTeam, 90)
     );
 
 define CanTouchArrayElement():
@@ -587,8 +587,30 @@ void HeroMod_Action_HEALING_SYRINGE(define trigger!) playervar "HeroMod_Action_H
         heroModDetail = 
             "long press melee key..." + NL +
             "  + with near teammate to heal teammate 500 health" + NL +
+            "    * teammate flashe white if can heal" + NL +
             "  + without near teammate to heal myself 250 health" + NL +
             "  - lose 20% ult charge";
+    }
+    else if(
+        trigger == HeroModTrigger.TIME_PASSED
+    ){
+        define consumeUltCharge! = 20;
+        if(
+            IsAlive() &&
+            UltimateChargePercent() >= consumeUltCharge
+        ){
+            define targets! = FilteredArray(
+                AllLivingPlayers(playerTeam),
+                NormalizedHealth(ae) < 1.0
+            );
+            for(define index! = 0; index < CountOf(targets); index++){
+                // play white effect
+                PlayEffect(
+                    ep, PlayEffect.GoodPickupEffect,
+                    Color.White, targets[index], 1);
+            }
+        }
+        Wait(2, WaitBehavior.AbortWhenFalse);
     }
     else if(
         trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
@@ -650,6 +672,7 @@ void HeroMod_Action_SAVIOR(define trigger!) playervar "HeroMod_Action_SAVIOR"{
         heroModDetail = 
             "long press melee key to near dead teammate..." + NL +
             "  + revive teammate" + NL +
+            "    * teammate flashe white if can revive" + NL +
             "  - lose 50% ult charge";
     }
     else if(
@@ -720,8 +743,29 @@ void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POW
         heroModDetail = 
             "long press melee key to near teammate..." + NL +
             "  - give my ult charge to teammate" + NL +
+            "    * teammate flashe white if can give" + NL +
             "  + given ult charge increase to 150%" + NL +
             "    * overflowed ult charge return to myself ";
+    }
+    else if(
+        trigger == HeroModTrigger.TIME_PASSED
+    ){
+        if(
+            IsAlive() &&
+            UltimateChargePercent() > 0
+        ){
+            define targets! = FilteredArray(
+                AllLivingPlayers(playerTeam),
+                UltimateChargePercent(ae) < DefaultPercentage()
+            );
+            for(define index! = 0; index < CountOf(targets); index++){
+                // play white effect
+                PlayEffect(
+                    ep, PlayEffect.GoodPickupEffect,
+                    Color.White, targets[index], 1);
+            }
+        }
+        Wait(2, WaitBehavior.AbortWhenFalse);
     }
     else if(
         trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
@@ -739,6 +783,7 @@ void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POW
                                 ae != ep &&
                                 CanTouchArrayElement() &&
                                 (
+                                    IsAlive(ae) &&
                                     UltimateChargePercent(ae) < DefaultPercentage()
                                 )
                             )
@@ -2281,7 +2326,9 @@ Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     (
+        heroModType == HeroModType.HEALING_SYRINGE ||
         heroModType == HeroModType.SAVIOR ||
+        heroModType == HeroModType.POWERFUL_GIFT ||
         heroModType == HeroModType.POWER_CHARGING ||
         heroModType == HeroModType.ADRENALINE_RUSH ||
         heroModType == HeroModType.GRUDGE_FIRE_BALL ||
