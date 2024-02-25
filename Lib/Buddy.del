@@ -125,8 +125,6 @@ void SetFollowTarget()"SetFollowTarget"{
 
 define buddyReturnTimeScale : 0.7;
 
-playervar define isInitialTeleport! = true;
-
 void TeleportToFollowTarget()"TeleportToFollowTarget"{
     define teleportPos!;
     
@@ -154,19 +152,19 @@ void TeleportToFollowTarget()"TeleportToFollowTarget"{
     }
 
     if(
-        // not teleport by first spawn for entity created
-        !isInitialTeleport &&
+        // is respawn
+        IsInSpawnRoom() &&
         // not teleport by sucided
         !isSucided
     ){
-        // wait by distance to teleportPos
+        // wait as long as it takes to walk to the front line
         Wait(
             (DistanceBetween(ep, teleportPos) / walkMeterPerSec) * buddyReturnTimeScale,
             WaitBehavior.AbortWhenFalse);
     }
-
-    isInitialTeleport = false;
-    isSucided = false;
+    else{
+        isSucided = false;
+    }
 
     // WaitUntil(
     //     (
@@ -182,17 +180,16 @@ void TeleportToFollowTarget()"TeleportToFollowTarget"{
     Teleport(ep, teleportPos);
 }
 
-rule: "Buddy/Teleport/init"
+rule: "Buddy/Teleport/teleportByEntitySpawned"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     IsDummyBot() &&
-    HasSpawned() &&
-    IsInSpawnRoom()
+    HasSpawned()
 ){
     // set follow target
     SetFollowTarget();
-    // teleport to follow target
+    // initial teleport to follow target
     TeleportToFollowTarget();
 }
 
@@ -205,6 +202,9 @@ if(
     IsAlive() &&
     actionState == ActionState.Non
 ){
+    // wait for interrupt initial teleport if entity spawned
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
+
     // try follow movement by loop
     define followTryCount! = 0;
     while(followTryCount < followTryCountMax){
