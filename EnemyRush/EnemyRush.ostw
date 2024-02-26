@@ -1311,8 +1311,6 @@ define teleportAreaExtendScaleByNonObjectDirection: teleportAreaSize * 1.0;    /
 define teleportAreaExtendScaleByBlockedAheadDist: 0.4;
 define teleportAreaOffsetDistFromObject: ActionRange.CanFind;   // bot can find other range
 define minDistOfRenewCommonTeleportBasePosition: teleportAreaSize * 1.0;    // same as teleportAreaSize
-define probOfRenewCommonTeleportBasePosition: 5;
-define probOfReuseCommonTeleportBasePosition: 90;
 
 define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(playerTeam));
 define IsEnemyOnObject: (0 < NumberOfPlayersOnObjective(enemyTeam));
@@ -1595,9 +1593,7 @@ void DoTeleport(define isBeamFromBody!, define isEmgTeleport!)"DoTeleport"{
         // set teleportPosition
         else{
             if(
-                commonTeleportBasePosition != null &&
-                // by prob
-                IsProbabilityTrue(probOfReuseCommonTeleportBasePosition)
+                commonTeleportBasePosition != null
             ){
                 needGetNewPosition = false;
             }
@@ -1636,6 +1632,7 @@ void DoTeleport(define isBeamFromBody!, define isEmgTeleport!)"DoTeleport"{
             teleportPosition = GetTeleportPositionByClosestPlayer();
         }
 
+        // if need renew common position
         if(
             needUpdateCommonTeleportBasePosition
         ){
@@ -1652,7 +1649,6 @@ void DoTeleport(define isBeamFromBody!, define isEmgTeleport!)"DoTeleport"{
         // set teleportPosition by reuse common position
         teleportPosition = GetTeleportPositionByCommonPosition();
     }
-
 
     if(
         teleportPosition != null
@@ -1689,12 +1685,6 @@ if(
             needUpdateCommonTeleportBasePosition = true;
         }
         else if(
-            // by prob
-            IsProbabilityTrue(probOfRenewCommonTeleportBasePosition)
-        ){
-            needUpdateCommonTeleportBasePosition = true;
-        }
-        else if(
             // too close to near enemy
             DistanceBetween(
                 commonTeleportBasePosition,
@@ -1705,9 +1695,11 @@ if(
         else if(
             // player on object
             IsPlayerOnObject &&
-            HasObjectDirection() ?
+            HasObjectDirection()
+            ?
                 // position too far from bloeckd position
-                DistanceBetween(commonTeleportBasePosition, blockedPositionObjectAhead) > teleportAreaSize + teleportAreaExtendSize :
+                DistanceBetween(commonTeleportBasePosition, blockedPositionObjectAhead) > teleportAreaSize + teleportAreaExtendSize
+            :
                 // position too far from object position
                 DistanceBetween(commonTeleportBasePosition, CurrentObjectPosition()) > teleportAreaSize
         ){
@@ -1718,8 +1710,14 @@ if(
             IsPlayerOnObject &&
             // Has not line to objectPosition or blockedPosition
             !IsInLineOfSight(
-                PositionOffsetY1() + commonTeleportBasePosition,
-                CurrentObjectOnPosition(),
+                commonTeleportBasePosition,
+                HasObjectDirection()
+                ?
+                    // position has not line from bloeckd position
+                    blockedPositionObjectAhead
+                :
+                    // position has not line from object position
+                    CurrentObjectPosition(),
                 BarrierLOS.NoBarriersBlock)
         ){
             needUpdateCommonTeleportBasePosition = true;
