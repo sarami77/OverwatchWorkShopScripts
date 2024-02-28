@@ -20,8 +20,8 @@ enum HeroModType{
     POWER_CHARGING,
     HEALING_SYRINGE,
     SAVIOR,
-    INSTANT_BUNKER,
     POWERFUL_GIFT,
+    INSTANT_BUNKER,
     TECHNICIAN,
     SURVIVALIST,
     ARTILLERY_SUPPORT,
@@ -250,8 +250,8 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
         case HeroModType.POWER_CHARGING:    HeroMod_Action_POWER_CHARGING(trigger);                     break;
         case HeroModType.HEALING_SYRINGE:   HeroMod_Action_HEALING_SYRINGE(trigger);                    break;
         case HeroModType.SAVIOR:            HeroMod_Action_SAVIOR(trigger);                             break;
-        case HeroModType.INSTANT_BUNKER:    HeroMod_Action_INSTANT_BUNKER(trigger);                     break;
         case HeroModType.POWERFUL_GIFT:     HeroMod_Action_POWERFUL_GIFT(trigger);                      break;
+        case HeroModType.INSTANT_BUNKER:    HeroMod_Action_INSTANT_BUNKER(trigger);                     break;
         case HeroModType.TECHNICIAN:        HeroMod_Action_TECHNICIAN(trigger);                         break;
         case HeroModType.SURVIVALIST:       HeroMod_Action_SURVIVALIST(trigger);                        break;
         case HeroModType.ARTILLERY_SUPPORT: HeroMod_Action_ARTILLERY_SUPPORT(trigger);                  break;
@@ -592,8 +592,8 @@ void HeroMod_Action_HEALING_SYRINGE(define trigger!) playervar "HeroMod_Action_H
         heroModDetail = 
             "long press melee key..." + NL +
             "  + with near teammate to heal teammate 500 health" + NL +
-            "    * teammate flashe white if can heal" + NL +
-            "  + without near teammate to heal myself 250 health" + NL +
+            "    * teammate blink white if you can heal" + NL +
+            "  + without near teammate to heal yourself 250 health" + NL +
             "  - lose 20% ult charge";
     }
     else if(
@@ -681,7 +681,7 @@ void HeroMod_Action_SAVIOR(define trigger!) playervar "HeroMod_Action_SAVIOR"{
         heroModDetail = 
             "long press melee key to near dead teammate..." + NL +
             "  + revive teammate" + NL +
-            "    * teammate flashe white if can revive" + NL +
+            "    * teammate blink white if you can revive" + NL +
             "  - lose 50% ult charge";
     }
     else if(
@@ -746,80 +746,6 @@ void HeroMod_Action_SAVIOR(define trigger!) playervar "HeroMod_Action_SAVIOR"{
         }
     }
 }
-// TAG INSTANT_BUNKER
-void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_INSTANT_BUNKER"{
-    if(
-        trigger == HeroModTrigger.ACTIVATE
-    ){
-        heroModName = "INSTANT BUNKER";
-        heroModDetail = 
-            "long press melee key..." + NL +
-            "  + deploy safe zone to my positon and protect teammate around" + NL +
-            "    + disable any damage and knockback in safezone players" + NL +
-            "    + heal 25 health in safezone players each 1 second pass" + NL +
-            "  - lose ult charge 10% by each 1 second pass"+ NL +
-            "    * continue deploying until ULT charge empty";
-    }
-    else if(
-        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
-    ){
-        define consumeUltCharge! = 10;
-        if(
-            IsAlive() &&
-            UltimateChargePercent() >= consumeUltCharge
-        ){
-            define bunkerPos! = BelowPosition(PositionOf());
-            define bunkerRange! = 6;
-            define bunkerEntity! = [];
-
-            PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Orange, bunkerPos, 3);
-            PlayEffect(AllPlayers(), PlayEffect.BuffExplosionSound, null, bunkerPos, 100);
-
-            DestroyEffect(bunkerEntity[0]);
-            DestroyInWorldText(bunkerEntity[1]);
-            DestroyIcon(bunkerEntity[2]);
-            bunkerEntity[0] = CreateEffect(AllPlayers(), Effect.Ring,
-                Color.Orange,
-                bunkerPos, bunkerRange, EffectRev.None);
-            bunkerEntity[1] = CreateInWorldText(AllPlayers(),
-                "SAFE ZONE",
-                bunkerPos + Vector(0, 1.5, 0), basicInWorldTextSize * 2, Clipping.ClipAgainstSurfaces,
-                InworldTextRev.VisibleToPositionAndString, Color.Orange, Spectators.DefaultVisibility);
-            bunkerEntity[2] = CreateIcon(AllPlayers(), bunkerPos,
-                Icon.ArrowDown, IconRev.PositionAndColor, Color.Orange, true);
-
-            while(
-                UltimateChargePercent() > 0
-            ){
-                define target! = 
-                    FilteredArray(
-                        AllLivingPlayers(playerTeam),
-                        (
-                            DistanceBetween(bunkerPos, ae) <= bunkerRange
-                        )
-                    );
-
-                for(define index! = 0; index < CountOf(target); index++){
-                    PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Orange, target[index], 1);
-                }                
-                PlayEffect(target, PlayEffect.BuffImpactSound, Color.Orange, bunkerPos, 100);
-                SetStatus(target, ep, Status.PhasedOut, 1.5);
-                Heal(target, ep, 25);
-                SetUltimateCharge(ep, UltimateChargePercent() - 10);
-                if(UltimateChargePercent() <= 0)
-                {
-                    // Ends when charge is empty
-                    break;
-                }
-                Wait(1, WaitBehavior.IgnoreCondition);
-            }
-
-            DestroyEffect(bunkerEntity[0]);
-            DestroyInWorldText(bunkerEntity[1]);
-            DestroyIcon(bunkerEntity[2]);
-        }
-    }
-}
 // TAG POWERFUL_GIFT
 void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POWERFUL_GIFT"{
     if(
@@ -828,10 +754,10 @@ void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POW
         heroModName = "POWERFUL GIFT";
         heroModDetail = 
             "long press melee key to near teammate..." + NL +
-            "  - give my ult charge to teammate" + NL +
-            "    * teammate flashe white if can give" + NL +
+            "  - give your ult charge to teammate" + NL +
+            "    * teammate blink white if you can give" + NL +
             "  + given ult charge increase to 150%" + NL +
-            "    * overflowed ult charge return to myself ";
+            "    * overflowed ult charge return to yourself ";
     }
     else if(
         trigger == HeroModTrigger.TIME_PASSED
@@ -896,6 +822,80 @@ void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POW
                 SmallMessage(ep, "Ult charge given "+ target + HeroIconString(HeroOf(target)));
                 SmallMessage(target, "Ult charge given by "+ ep + HeroIconString(HeroOf(ep)));
             }
+        }
+    }
+}
+// TAG INSTANT_BUNKER
+void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_INSTANT_BUNKER"{
+    if(
+        trigger == HeroModTrigger.ACTIVATE
+    ){
+        heroModName = "INSTANT BUNKER";
+        heroModDetail = 
+            "long press melee key..." + NL +
+            "  + deploy safe zone to your positon and protect teammate around" + NL +
+            "    + disable any damage and knockback in safezone players" + NL +
+            "    + heal 25 health in safezone players each 1 second pass" + NL +
+            "  - lose ult charge 10% by each 1 second pass"+ NL +
+            "    * continue deploying until ULT charge empty";
+    }
+    else if(
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+    ){
+        define consumeUltCharge! = 10;
+        if(
+            IsAlive() &&
+            UltimateChargePercent() >= consumeUltCharge
+        ){
+            define bunkerPos! = BelowPosition(PositionOf());
+            define bunkerRange! = 6;
+            define bunkerEntity! = [];
+
+            PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Orange, bunkerPos, 3);
+            PlayEffect(AllPlayers(), PlayEffect.BuffExplosionSound, null, bunkerPos, 100);
+
+            DestroyEffect(bunkerEntity[0]);
+            DestroyInWorldText(bunkerEntity[1]);
+            DestroyIcon(bunkerEntity[2]);
+            bunkerEntity[0] = CreateEffect(AllPlayers(), Effect.Ring,
+                Color.Orange,
+                bunkerPos, bunkerRange, EffectRev.None);
+            bunkerEntity[1] = CreateInWorldText(AllPlayers(),
+                "SAFE ZONE",
+                bunkerPos + Vector(0, 1.5, 0), basicInWorldTextSize * 2, Clipping.ClipAgainstSurfaces,
+                InworldTextRev.VisibleToPositionAndString, Color.Orange, Spectators.DefaultVisibility);
+            bunkerEntity[2] = CreateIcon(AllPlayers(), bunkerPos,
+                Icon.ArrowDown, IconRev.PositionAndColor, Color.Orange, true);
+
+            while(
+                UltimateChargePercent() > 0
+            ){
+                define target! = 
+                    FilteredArray(
+                        AllLivingPlayers(playerTeam),
+                        (
+                            DistanceBetween(bunkerPos, ae) <= bunkerRange
+                        )
+                    );
+
+                for(define index! = 0; index < CountOf(target); index++){
+                    PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Orange, target[index], 1);
+                }                
+                PlayEffect(target, PlayEffect.BuffImpactSound, Color.Orange, bunkerPos, 100);
+                SetStatus(target, ep, Status.PhasedOut, 1.5);
+                Heal(target, ep, 25);
+                SetUltimateCharge(ep, UltimateChargePercent() - 10);
+                if(UltimateChargePercent() <= 0)
+                {
+                    // Ends when charge is empty
+                    break;
+                }
+                Wait(1, WaitBehavior.IgnoreCondition);
+            }
+
+            DestroyEffect(bunkerEntity[0]);
+            DestroyInWorldText(bunkerEntity[1]);
+            DestroyIcon(bunkerEntity[2]);
         }
     }
 }
@@ -1021,7 +1021,7 @@ void HeroMod_Action_ARTILLERY_SUPPORT(define trigger!) playervar "HeroMod_Action
         heroModName = "ARTILLERY SUPPORT";
         heroModDetail = 
             "lost 50% health..." + NL + 
-            "  + incoming artillery and attack enemy nearby myself for protect" + NL + 
+            "  + incoming artillery and attack enemy nearby yourself for protect" + NL + 
             "    * has 10 seconds cooldown to re-trigger" + NL + 
             "- receive heal 50%";
         SetHealingReceived(ep, 50);
@@ -1047,7 +1047,7 @@ void HeroMod_Action_RAGE(define trigger!) playervar "HeroMod_Action_RAGE"{
         heroModName = "RAGE";
         heroModDetail = 
             "+ at teammate dead, gain 40% ult charge" + NL +
-            "- at myself dead, lose all ult charge";
+            "- at yourself dead, lose all ult charge";
     }
     else if(
         trigger == HeroModTrigger.DEATH
@@ -1115,7 +1115,7 @@ void HeroMod_Action_SHOT_CALL(define trigger!) playervar "HeroMod_Action_SHOT_CA
         heroModName = "SHOT CALL";
         heroModDetail = 
             "+ use ult to all teammates gain ult full charge" + NL +
-            "  * each bot teammate use ult with me for combo attack" + NL +
+            "  * each bot teammate use ult with you for combo attack" + NL +
             "- every 6 seconds passed to lose 1% ult charge";
     }
     else if(
@@ -2021,7 +2021,7 @@ void HeroMod_Action_ZOMBIE(define trigger!) playervar "HeroMod_Action_ZOMBIE"{
     ){
         heroModName = "ZOMBIE";
         heroModDetail = 
-            "+ at dead, revive myself after 5 seconds" + NL +
+            "+ at dead, revive yourself after 5 seconds" + NL +
             "  * in over time is excluded" + NL +
             "  * long press melee key in dead to force return to spawn room" + NL +
             "- max health 50%" + NL +
@@ -2069,8 +2069,8 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
         heroModName = "GUARD DOG";
         heroModDetail = 
             "+ deploy guard drone to nearby" + NL +
-            "  * drone patrol nearby me and protect by stun enemy" + NL +
-            "  * drone notify me of nearby enemy by caution color icon" + NL +
+            "  * drone patrol nearby you and protect by stun enemy" + NL +
+            "  * drone notify you of nearby enemy by caution blink icon" + NL +
             "- receive heal 50%";
         SetHealingReceived(ep, 50);
 
