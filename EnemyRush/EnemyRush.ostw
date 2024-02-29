@@ -443,24 +443,39 @@ if(
             // assetNo changed
             prevAssetNo != buddyAssetNo
         ){
+            // release force reload flag
+            forceReloadBuddyAsset = false;
             // save current assetNo
             prevAssetNo = buddyAssetNo;
-            // save avg ult charge of bots
-            define ultCharge! = GetAvgUltChgOfDummyBot(playerTeam);
-            // create bots by asset
-            DestroyBots(playerTeam);
-            CreateBotsByAssetWithMutexLock(buddyAssetList[buddyAssetNo], playerTeam, needBuddyNum);
-            // restore avg ult charge of bots
-            SetAvgUltChgOfDummyBot(playerTeam, ultCharge);
-        }
+            // get asset
+            define asset! = buddyAssetList[buddyAssetNo];
 
-        // relealse force reload
-        forceReloadBuddyAsset = false;
-        // wait start intarval until game start.
-        WaitUntil(IsGameInProgress() || forceReloadBuddyAsset, MaxValue());
+            // valid asset
+            if(
+                0 < CountOf(asset)
+            ){
+                // save avg ult charge of bots before reload asset
+                define ultCharge! = GetAvgUltChgOfDummyBot(playerTeam);
+                // reload bots by asset
+                DestroyBots(playerTeam);
+                CreateBotsByAssetWithMutexLock(asset, playerTeam, needBuddyNum);
+                // restore avg ult charge of bots
+                SetAvgUltChgOfDummyBot(playerTeam, ultCharge);
+                // wait start intarval until game start.
+                WaitUntil(IsGameInProgress() || forceReloadBuddyAsset, MaxValue());
 
-        for(;reloadBuddyAssetInterval > 0 && !forceReloadBuddyAsset; reloadBuddyAssetInterval--){
-            Wait(1, WaitBehavior.IgnoreCondition);
+                for(
+                    ;
+                    // if forceReloadBuddyAsset, skip interval count and reload asset instanty
+                    reloadBuddyAssetInterval > 0 && !forceReloadBuddyAsset;
+                    reloadBuddyAssetInterval--
+                ){
+                    Wait(1, WaitBehavior.IgnoreCondition);
+                }
+            }
+            else{
+                errLog(<"buddy asset is invalid">);
+            }
         }
     }
 }
@@ -491,7 +506,6 @@ if(
             // save current playerNum
             prevPlayerNum = PlayerNum();
             // force reload asset
-            //  but skip change assetNo, reset interval
             forceReloadBuddyAsset = true;
         }
 
@@ -1143,7 +1157,7 @@ define enemyAssetNoLotteryList: [
 // TAG EnemyBot/Asset/Interval ----------
 globalvar define reloadEnemyAssetInterval! = -1;
 globalvar define enemyAssetNo! = -1;
-globalvar define hasProgressAssetNo! = false;
+globalvar define forceReloadEnemyAsset! = false;
 
 rule: "EnemyBot/Asset/Interval/reloadReloadEnemyAsset"
 Event.OngoingGlobal
@@ -1157,12 +1171,11 @@ if(
         )
     )
 ){
-    while(true){
-        // play effect at all enemy
-        PlayEffectsToTeam(enemyTeam);
+    define prevAssetNo! = -1;
 
-        // if hasProgressAssetNo, skip change assetNo
-        if(!hasProgressAssetNo){
+    while(true){
+        // if force reload, skip change assetNo and set interval
+        if(!forceReloadEnemyAsset){
             // choice asset by random
             enemyAssetNo = RandomValueInArray(enemyAssetNoLotteryList);
             // set default interval
@@ -1171,21 +1184,43 @@ if(
             sameHero = RandomHero;
         }
 
-        // relealse hasProgressAssetNo
-        hasProgressAssetNo = false;
+        if(
+            // force reload
+            forceReloadBuddyAsset ||
+            // assetNo changed
+            prevAssetNo != enemyAssetNo
+        ){
+            // release force reload flag
+            forceReloadEnemyAsset = false;
+            // save current assetNo
+            prevAssetNo = enemyAssetNo;
+            // get asset
+            define asset! = enemyAssetList[enemyAssetNo];
 
-        // create bots by asset
-        DestroyBots(enemyTeam);
-        CreateBotsByAssetWithMutexLock(enemyAssetList[enemyAssetNo], enemyTeam, maxCreateEnemyBotNum);
-        // wait start intarval until game start.
-        WaitUntil(IsGameInProgress(), MaxValue());
+            // valid asset
+            if(
+                0 < CountOf(asset)
+            ){
+                // play effect at all enemy
+                PlayEffectsToTeam(enemyTeam);
+                // reload bots by asset
+                DestroyBots(enemyTeam);
+                CreateBotsByAssetWithMutexLock(asset, enemyTeam, maxCreateEnemyBotNum);
+                // wait start intarval until game start.
+                WaitUntil(IsGameInProgress(), MaxValue());
 
-        for(;
-            reloadEnemyAssetInterval > 0 &&
-            // if hasProgressAssetNo, skip interval count and reload asset
-            !hasProgressAssetNo;
-            reloadEnemyAssetInterval--){
-            Wait(1, WaitBehavior.IgnoreCondition);
+                for(
+                    ;
+                    // if hasProgressAssetNo, skip interval count and reload asset instanty
+                    reloadEnemyAssetInterval > 0 && !forceReloadEnemyAsset;
+                    reloadEnemyAssetInterval--
+                ){
+                    Wait(1, WaitBehavior.IgnoreCondition);
+                }
+            }
+            else{
+                errLog(<"enemy asset is invalid">);
+            }
         }
     }
 }
@@ -1252,8 +1287,8 @@ if(
             // set interval from progress asset interval
             enemyAssetNo = progressAssetNo;
             reloadEnemyAssetInterval = progressAssetInterval;
-            // set flag for skip change assetNo
-            hasProgressAssetNo = true;
+            // force reload asset
+            forceReloadEnemyAsset = true;
         }
 
         // check Interval
@@ -1322,6 +1357,19 @@ define IsEnemyOnObject: (0 < NumberOfPlayersOnObjective(enemyTeam));
 define searchPositionInterval: 0.2;
 define searchPositionTryCountMax: 10;
 
+define CanSnapMapSurface()"CanSnapMapSurface"{
+    // walkable position is far
+    return 
+    !(
+        (
+            CurrentMap() == Map.Kings_Row ||
+            CurrentMap() == Map.Kings_Row_Winter
+        )
+            &&
+        ObjectiveIndex() == 0
+    );
+}
+
 playervar define teleportPosition;
 globalvar define commonTeleportBasePosition;
 
@@ -1355,16 +1403,9 @@ define GetTeleportPositionByClosestPlayer() globalvar "GetTeleportPositionByClos
 
     define teleportBasePosition = PositionOf(ClosestPlayerTo(objectPosition, playerTeam));
 
-    if(
-        // walkable position is far
-        (
-            CurrentMap() == Map.Kings_Row ||
-            CurrentMap() == Map.Kings_Row_Winter
-        )
-            &&
-        ObjectiveIndex() == 0
-    ){
-        canTelPosition =
+    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
+        // select teleportPosition from middle of Object and teleportBasePosition
+        define candidatePosition = 
             teleportBasePosition
                 + 
             (
@@ -1378,27 +1419,10 @@ define GetTeleportPositionByClosestPlayer() globalvar "GetTeleportPositionByClos
                 teleportAreaSize,
                 teleportAreaSize
             );
-        return canTelPosition;
-    }
 
-    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
-        // select teleportPosition from middle of Object and teleportBasePosition
-        define candidatePosition =
-            NearestWalkablePosition(
-                teleportBasePosition
-                    + 
-                (
-                    DirectionTowards(teleportBasePosition, objectPosition)
-                        *
-                    DistanceBetween(teleportBasePosition, objectPosition) * 0.5
-                )
-                    +
-                RandomPosition(
-                    teleportAreaSize,
-                    teleportAreaSize,
-                    teleportAreaSize
-                )
-            );
+        if(CanSnapMapSurface()){
+            candidatePosition = NearestWalkablePosition(candidatePosition);
+        }
 
         if(
             // can encount player
@@ -1454,15 +1478,17 @@ define GetTeleportPositionByObject() globalvar "GetTeleportPositionByObject"{
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from teleportBasePosition around
         define candidatePosition = 
-            NearestWalkablePosition(
-                teleportBasePosition
-                    +
-                RandomPosition(
-                    teleportAreaSize + teleportAreaExtendSize,
-                    teleportAreaSize + teleportAreaExtendSize,
-                    teleportAreaSize + teleportAreaExtendSize
-                )
-            );
+            teleportBasePosition
+                +
+            RandomPosition(
+                teleportAreaSize + teleportAreaExtendSize,
+                teleportAreaSize + teleportAreaExtendSize,
+                teleportAreaSize + teleportAreaExtendSize
+        );
+
+        if(CanSnapMapSurface()){
+            candidatePosition = NearestWalkablePosition(candidatePosition);
+        }
 
         if(
             // can encount player
@@ -1490,15 +1516,17 @@ define GetTeleportPositionByCommonPosition() playervar "GetTeleportPositionByCom
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from teleportBasePosition around
         define candidatePosition = 
-            NearestWalkablePosition(
-                teleportBasePosition
-                    +
-                RandomPosition(
-                    teleportAreaSize,
-                    teleportAreaSize,
-                    teleportAreaSize
-                )
+            teleportBasePosition
+                +
+            RandomPosition(
+                teleportAreaSize,
+                teleportAreaSize,
+                teleportAreaSize
             );
+
+        if(CanSnapMapSurface()){
+            candidatePosition = NearestWalkablePosition(candidatePosition);
+        }
 
         if(
             // can encount player
@@ -1729,6 +1757,8 @@ if(
             commonTeleportBasePosition = newPosition;
             // release update flag
             needUpdateCommonTeleportBasePosition = false;
+
+            // dbgHudTxt(<"! position update">);
         }
         else{
             // dbgHudTxt(<"! position not found">);
@@ -1736,6 +1766,7 @@ if(
     }
 
     WaitUpdateMediumCycle();
+    WaitReleaseServerLoad(ServerLoadType.GameMain);
     LoopIfConditionIsTrue();
 }
 
@@ -1743,6 +1774,7 @@ rule: "EnemyBot/Teleport/clearCommonTeleportBasePosition"
 Event.OnDeath
 if(
     TeamOf() == enemyTeam &&
+    commonTeleportBasePosition != null &&
     Attacker() == ep
 ){
     if(IsProbabilityTrue(25)){
@@ -1756,7 +1788,8 @@ Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
     IsGameInProgress() &&
-    IsInSpawnRoom()
+    IsInSpawnRoom() &&
+    commonTeleportBasePosition != null
 ){
     DoTeleport(false, false);
     Wait(1, WaitBehavior.AbortWhenFalse);
@@ -2018,42 +2051,42 @@ Team.All
 if(
     initCompleted
 ){
-    // // commonTeleportBasePosition orb
-    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Orb, Color.White,
-    //     PositionOffsetY1() + commonTeleportBasePosition, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
-    // // positionObjectAhead orb
-    // CreateEffect(positionObjectAhead != null ? hp : null, Effect.Orb, Color.Red,
-    //     positionObjectAhead, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+    // commonTeleportBasePosition orb
+    CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Orb, Color.White,
+        PositionOffsetY1() + commonTeleportBasePosition, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+    // positionObjectAhead orb
+    CreateEffect(positionObjectAhead != null ? hp : null, Effect.Orb, Color.Red,
+        positionObjectAhead, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
 
-    // // minDistOfRenewCommonTeleportBasePosition white ring
-    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, Color.Yellow,
-    //     PositionOffsetY1() + commonTeleportBasePosition, minDistOfRenewCommonTeleportBasePosition * 0.95, EffectRev.VisibleToPositionAndRadius);
-    // // teleportAreaSize ring
-    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, Color.Red,
-    //     PositionOffsetY1() + commonTeleportBasePosition, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+    // minDistOfRenewCommonTeleportBasePosition white ring
+    CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, Color.Yellow,
+        PositionOffsetY1() + commonTeleportBasePosition, minDistOfRenewCommonTeleportBasePosition * 0.95, EffectRev.VisibleToPositionAndRadius);
+    // teleportAreaSize ring
+    CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, Color.Red,
+        PositionOffsetY1() + commonTeleportBasePosition, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
 
-    // // placable teleportPosition area size sphere
-    // CreateEffect(hp,
-    //     Effect.Sphere, Color.Red,
-    //     HasObjectDirection() ? positionObjectAhead : CurrentObjectOnPosition(),
-    //     teleportAreaSize + teleportAreaExtendSize,
-    //     EffectRev.VisibleToPositionAndRadius);
+    // placable teleportPosition area size sphere
+    CreateEffect(hp,
+        Effect.Sphere, Color.Red,
+        HasObjectDirection() ? positionObjectAhead : CurrentObjectOnPosition(),
+        teleportAreaSize + teleportAreaExtendSize,
+        EffectRev.VisibleToPositionAndRadius);
 
-    // // object -> positionObjectAhead beam
-    // CreateBeamEffect(HasObjectDirection() ? hp : null, BeamType.GoodBeam, 
-    //     CurrentObjectOnPosition(),
-    //     positionObjectAhead, 
-    //     Color.Red, EffectRev.VisibleToPositionAndRadius);
-    // // positionObjectAhead or object -> commonTeleportBasePosition beam
-    // CreateBeamEffect(hp, BeamType.GoodBeam, 
-    //     HasObjectDirection() ? positionObjectAhead : CurrentObjectOnPosition(),
-    //     PositionOffsetY1() + commonTeleportBasePosition, 
-    //     Color.White, EffectRev.VisibleToPositionAndRadius);
-    // // commonTeleportBasePosition -> host player or object beam
-    // CreateBeamEffect(HasSpawned(hp) ? hp : null, BeamType.GoodBeam, 
-    //     PositionOffsetY1() + commonTeleportBasePosition, 
-    //     PositionOffsetY1() + hp,
-    //     Color.Blue, EffectRev.VisibleToPositionAndRadius);
+    // object -> positionObjectAhead beam
+    CreateBeamEffect(HasObjectDirection() ? hp : null, BeamType.GoodBeam, 
+        CurrentObjectOnPosition(),
+        positionObjectAhead, 
+        Color.Red, EffectRev.VisibleToPositionAndRadius);
+    // positionObjectAhead or object -> commonTeleportBasePosition beam
+    CreateBeamEffect(hp, BeamType.GoodBeam, 
+        HasObjectDirection() ? positionObjectAhead : CurrentObjectOnPosition(),
+        PositionOffsetY1() + commonTeleportBasePosition, 
+        Color.White, EffectRev.VisibleToPositionAndRadius);
+    // commonTeleportBasePosition -> host player or object beam
+    CreateBeamEffect(HasSpawned(hp) ? hp : null, BeamType.GoodBeam, 
+        PositionOffsetY1() + commonTeleportBasePosition, 
+        PositionOffsetY1() + hp,
+        Color.Blue, EffectRev.VisibleToPositionAndRadius);
 
     define pastSecond = 1;
 
