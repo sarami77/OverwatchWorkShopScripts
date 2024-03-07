@@ -418,7 +418,8 @@ void HeroMod_Action_BIRD_MAN(define trigger!) playervar "HeroMod_Action_BIRD_MAN
         SetMaxHealth(ep, DefaultPercentage());
     }
     else if(
-        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
+        IsAlive()
     ){
         ApplyImpulse(ep, 
             Down(),
@@ -536,7 +537,8 @@ void HeroMod_Action_ADRENALINE_RUSH(define trigger!) playervar "HeroMod_Action_A
             trigger == HeroModTrigger.TIME_PASSED
         ){
             SetDamageDealt(ep, (DefaultPercentage() + addValue));
-            SetMoveSpeed(ep, (DefaultPercentage() + addValue));             
+            SetMoveSpeed(ep, (DefaultPercentage() + addValue));       
+            
             Wait(1, WaitBehavior.AbortWhenFalse);
         }
     }
@@ -566,7 +568,6 @@ void HeroMod_Action_HEALING_SYRINGE(define trigger!) playervar "HeroMod_Action_H
     else if(
         trigger == HeroModTrigger.TIME_PASSED
     ){
-
         if(
             IsAlive() &&
             UltimateChargePercent() >= consumeUltCharge
@@ -585,56 +586,55 @@ void HeroMod_Action_HEALING_SYRINGE(define trigger!) playervar "HeroMod_Action_H
                     Color.White, targets[index], 1);
             }
         }
+
         Wait(2, WaitBehavior.AbortWhenFalse);
     }
     else if(
-        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
+        IsAlive() &&
+        UltimateChargePercent() >= consumeUltCharge
     ){
-        if(
-            IsAlive() &&
-            UltimateChargePercent() >= consumeUltCharge
-        ){
-            define target! = 
-                FirstOf(
-                    SortedArray(
-                        FilteredArray(
-                            CanTouchPlayerList(),
+        define target! = 
+            FirstOf(
+                SortedArray(
+                    FilteredArray(
+                        CanTouchPlayerList(),
+                        (
+                            ae != ep &&
+                            CanTouchArrayElement() &&
                             (
-                                ae != ep &&
-                                CanTouchArrayElement() &&
-                                (
-                                    IsAlive(ae) &&
-                                    IsDummyBot(ep) ?
-                                        NormalizedHealth(ae) < 0.5 :
-                                        NormalizedHealth(ae) < 1.0
-                                )
+                                IsAlive(ae) &&
+                                IsDummyBot(ep) ?
+                                    NormalizedHealth(ae) < 0.5 :
+                                    NormalizedHealth(ae) < 1.0
                             )
-                        ),
-                        DistanceBetween(ep, ae)
-                    )
-                );
+                        )
+                    ),
+                    DistanceBetween(ep, ae)
+                )
+            );
 
-            if(
-                target != null &&
-                NormalizedHealth(target) < NormalizedHealth(ep)
-            ){
-                Heal(target, ep, 500);
-                SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
+        if(
+            target != null &&
+            NormalizedHealth(target) < NormalizedHealth(ep)
+        ){
+            Heal(target, ep, 500);
+            SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
 
-                PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Yellow, target, 1);
-                PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
-                
-                SmallMessage(ep, "Healed "+ target + HeroIconString(HeroOf(target)));
-                SmallMessage(target, "Healed by "+ ep + HeroIconString(HeroOf(ep)));
-            }
-            else if(NormalizedHealth(ep) < 1.0){
-                Heal(ep, ep, 250);
-                SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
-
-                PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Yellow, ep, 1);
-                PlayEffect(ep, PlayEffect.BuffExplosionSound, null, ep, 100);
-            }
+            PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Yellow, target, 1);
+            PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
+            
+            SmallMessage(ep, "Healed "+ target + HeroIconString(HeroOf(target)));
+            SmallMessage(target, "Healed by "+ ep + HeroIconString(HeroOf(ep)));
         }
+        else if(NormalizedHealth(ep) < 1.0){
+            Heal(ep, ep, 250);
+            SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
+
+            PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Yellow, ep, 1);
+            PlayEffect(ep, PlayEffect.BuffExplosionSound, null, ep, 100);
+        }
+        
     }
 }
 // TAG SAVIOR
@@ -671,45 +671,43 @@ void HeroMod_Action_SAVIOR(define trigger!) playervar "HeroMod_Action_SAVIOR"{
                     Color.White, targets[index], 1);
             }
         }
+
         Wait(2, WaitBehavior.AbortWhenFalse);
     }
     else if(
-        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
+        IsAlive() &&
+        UltimateChargePercent() >= consumeUltCharge
     ){
-        if(
-            IsAlive() &&
-            UltimateChargePercent() >= consumeUltCharge
-        ){
-            define target! = 
-                FirstOf(
-                    SortedArray(
-                        FilteredArray(
-                            CanTouchPlayerList(),
+        define target! = 
+            FirstOf(
+                SortedArray(
+                    FilteredArray(
+                        CanTouchPlayerList(),
+                        (
+                            ae != ep &&
+                            CanTouchArrayElement() &&
                             (
-                                ae != ep &&
-                                CanTouchArrayElement() &&
-                                (
-                                    IsDead(ae)
-                                )
+                                IsDead(ae)
                             )
-                        ),
-                        DistanceBetween(ep, ae)
-                    )
-                );
-            
-            if(
-                target != null
-            ){
-                Resurrect(target);
-                SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
+                        )
+                    ),
+                    DistanceBetween(ep, ae)
+                )
+            );
+        
+        if(
+            target != null
+        ){
+            Resurrect(target);
+            SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
 
-                PlayEffect(AllPlayers(), PlayEffect.RingExplosion, Color.Yellow, target, 1.5);
-                PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Yellow, target, 1);
-                PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
+            PlayEffect(AllPlayers(), PlayEffect.RingExplosion, Color.Yellow, target, 1.5);
+            PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Yellow, target, 1);
+            PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
 
-                SmallMessage(ep, "Revived "+ target + HeroIconString(HeroOf(target)));
-                SmallMessage(target, "Revived by "+ ep + HeroIconString(HeroOf(ep)));
-            }
+            SmallMessage(ep, "Revived "+ target + HeroIconString(HeroOf(target)));
+            SmallMessage(target, "Revived by "+ ep + HeroIconString(HeroOf(ep)));
         }
     }
 }
@@ -747,53 +745,53 @@ void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POW
                     Color.White, targets[index], 1);
             }
         }
+
         Wait(2, WaitBehavior.AbortWhenFalse);
     }
     else if(
-        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
+        IsAlive() &&
+        UltimateChargePercent() > 0
     ){
-        if(
-            IsAlive() &&
-            UltimateChargePercent() > 0
-        ){
-            define target! = 
-                FirstOf(
-                    SortedArray(
-                        FilteredArray(
-                            CanTouchPlayerList(),
+        define target! = 
+            FirstOf(
+                SortedArray(
+                    FilteredArray(
+                        CanTouchPlayerList(),
+                        (
+                            ae != ep &&
+                            CanTouchArrayElement() &&
                             (
-                                ae != ep &&
-                                CanTouchArrayElement() &&
-                                (
-                                    IsAlive(ae) &&
-                                    UltimateChargePercent(ae) < DefaultPercentage()
-                                )
+                                IsAlive(ae) &&
+                                UltimateChargePercent(ae) < DefaultPercentage()
                             )
-                        ),
-                        DistanceBetween(ep, ae)
-                    )
-                );
-            
-            if(
-                target != null
-            ){
-                define charge! = UltimateChargePercent() * 1.5;
-                define fillableCharge! = DefaultPercentage() - UltimateChargePercent(target);
-                define remainCharge! = charge - fillableCharge;
-                SetUltimateCharge(target, UltimateChargePercent(target) + charge);
-                SetUltimateCharge(ep, remainCharge);
+                        )
+                    ),
+                    DistanceBetween(ep, ae)
+                )
+            );
+        
+        if(
+            target != null
+        ){
+            define charge! = UltimateChargePercent() * 1.5;
+            define fillableCharge! = DefaultPercentage() - UltimateChargePercent(target);
+            define remainCharge! = charge - fillableCharge;
+            SetUltimateCharge(target, UltimateChargePercent(target) + charge);
+            SetUltimateCharge(ep, remainCharge);
 
-                PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.SkyBlue, target, 1);
-                PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
+            PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.SkyBlue, target, 1);
+            PlayEffect([ep, target], PlayEffect.BuffExplosionSound, null, target, 100);
 
-                SmallMessage(ep, "Ult charge given "+ target + HeroIconString(HeroOf(target)));
-                SmallMessage(target, "Ult charge given by "+ ep + HeroIconString(HeroOf(ep)));
-            }
+            SmallMessage(ep, "Ult charge given "+ target + HeroIconString(HeroOf(target)));
+            SmallMessage(target, "Ult charge given by "+ ep + HeroIconString(HeroOf(ep)));
         }
     }
 }
 // TAG INSTANT_BUNKER
 void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_INSTANT_BUNKER"{
+    define consumeUltCharge! = 10;
+
     if(
         trigger == HeroModTrigger.ACTIVATE
     ){
@@ -807,67 +805,63 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
             "    * continue deploying until ULT charge empty";
     }
     else if(
-        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
+        IsAlive() &&
+        UltimateChargePercent() >= consumeUltCharge
     ){
-        define consumeUltCharge! = 10;
-        if(
-            IsAlive() &&
-            UltimateChargePercent() >= consumeUltCharge
-        ){
-            if(IsDummyBot()){
-                SetUltimateCharge(ep, UltimateChargePercent() + 50);
-            }
-
-            define bunkerPos! = BelowPosition(PositionOf());
-            define bunkerRange! = 6;
-            define bunkerEntity! = [];
-
-            PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Orange, bunkerPos, 3);
-            PlayEffect(AllPlayers(), PlayEffect.BuffExplosionSound, null, bunkerPos, 100);
-
-            DestroyEffect(bunkerEntity[0]);
-            DestroyInWorldText(bunkerEntity[1]);
-            DestroyIcon(bunkerEntity[2]);
-            bunkerEntity[0] = CreateEffect(AllPlayers(), Effect.Ring,
-                Color.Orange,
-                bunkerPos, bunkerRange, EffectRev.None);
-            bunkerEntity[1] = CreateInWorldText(AllPlayers(),
-                <"SAFE ZONE UNTIL <0> SECOND", RoundToInteger(UltimateChargePercent() / consumeUltCharge, Rounding.Up)>,
-                bunkerPos + Vector(0, 1.5, 0), basicInWorldTextSize * 2, Clipping.ClipAgainstSurfaces,
-                InworldTextRev.VisibleToPositionAndString, Color.Orange, Spectators.DefaultVisibility);
-            bunkerEntity[2] = CreateIcon(AllPlayers(), bunkerPos,
-                Icon.ArrowDown, IconRev.PositionAndColor, Color.Orange, true);
-
-            while(
-                UltimateChargePercent() > 0
-            ){
-                define target! = 
-                    FilteredArray(
-                        AllLivingPlayers(playerTeam),
-                        (
-                            DistanceBetween(bunkerPos, ae) <= bunkerRange
-                        )
-                    );
-
-                for(define index! = 0; index < CountOf(target); index++){
-                    PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Orange, target[index], 1);
-                }                
-                PlayEffect(target, PlayEffect.BuffImpactSound, Color.Orange, bunkerPos, 100);
-                SetStatus(target, ep, Status.PhasedOut, 1.5);
-                Heal(target, ep, 25);
-                SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
-                if(UltimateChargePercent() <= 0)
-                {
-                    // Ends when charge is empty
-                    break;
-                }
-                Wait(1, WaitBehavior.IgnoreCondition);
-            }
-
-            DestroyEffect(bunkerEntity[0]);
-            DestroyInWorldText(bunkerEntity[1]);
-            DestroyIcon(bunkerEntity[2]);
+        if(IsDummyBot()){
+            SetUltimateCharge(ep, UltimateChargePercent() + 50);
         }
+
+        define bunkerPos! = BelowPosition(PositionOf());
+        define bunkerRange! = 6;
+        define bunkerEntity! = [];
+
+        PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Orange, bunkerPos, 3);
+        PlayEffect(AllPlayers(), PlayEffect.BuffExplosionSound, null, bunkerPos, 100);
+
+        DestroyEffect(bunkerEntity[0]);
+        DestroyInWorldText(bunkerEntity[1]);
+        DestroyIcon(bunkerEntity[2]);
+        bunkerEntity[0] = CreateEffect(AllPlayers(), Effect.Ring,
+            Color.Orange,
+            bunkerPos, bunkerRange, EffectRev.None);
+        bunkerEntity[1] = CreateInWorldText(AllPlayers(),
+            <"SAFE ZONE UNTIL <0> SECOND", RoundToInteger(UltimateChargePercent() / consumeUltCharge, Rounding.Up)>,
+            bunkerPos + Vector(0, 1.5, 0), basicInWorldTextSize * 2, Clipping.ClipAgainstSurfaces,
+            InworldTextRev.VisibleToPositionAndString, Color.Orange, Spectators.DefaultVisibility);
+        bunkerEntity[2] = CreateIcon(AllPlayers(), bunkerPos,
+            Icon.ArrowDown, IconRev.PositionAndColor, Color.Orange, true);
+
+        while(
+            UltimateChargePercent() > 0
+        ){
+            define target! = 
+                FilteredArray(
+                    AllLivingPlayers(playerTeam),
+                    (
+                        DistanceBetween(bunkerPos, ae) <= bunkerRange
+                    )
+                );
+
+            for(define index! = 0; index < CountOf(target); index++){
+                PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Orange, target[index], 1);
+            }                
+            PlayEffect(target, PlayEffect.BuffImpactSound, Color.Orange, bunkerPos, 100);
+            SetStatus(target, ep, Status.PhasedOut, 1.5);
+            Heal(target, ep, 25);
+            SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
+            if(UltimateChargePercent() <= 0)
+            {
+                // Ends when charge is empty
+                break;
+            }
+            Wait(1, WaitBehavior.IgnoreCondition);
+        }
+
+        DestroyEffect(bunkerEntity[0]);
+        DestroyInWorldText(bunkerEntity[1]);
+        DestroyIcon(bunkerEntity[2]);
     }
 }
 // TAG TECHNICIAN
@@ -1037,10 +1031,9 @@ void HeroMod_Action_PAYBACK(define trigger!, define inputPayload!) playervar "He
             "- at dead, lose all ult charge";
     }
     else if(
-        trigger == HeroModTrigger.RECEIVE_DAMAGE
+        trigger == HeroModTrigger.RECEIVE_DAMAGE &&
+        DefaultPercentage() > UltimateChargePercent()
     ){
-        if(DefaultPercentage() <= UltimateChargePercent()){return;}
-
         define gainCharge! = inputPayload * 0.15;
         SetUltimateCharge(ep, UltimateChargePercent() + gainCharge);
     }
@@ -1245,6 +1238,7 @@ void HeroMod_Action_GRUDGE_LIGHTNING(define trigger!, define inputPayload!) play
         else if(
             trigger == HeroModTrigger.TIME_PASSED
         ){
+
             Wait(1, WaitBehavior.AbortWhenFalse);
         }
     }
@@ -1254,10 +1248,9 @@ void HeroMod_Action_GRUDGE_LIGHTNING(define trigger!, define inputPayload!) play
         SetHealingReceived(ep, DefaultPercentage());
     }
     else if(
-        trigger == HeroModTrigger.RECEIVE_DAMAGE
+        trigger == HeroModTrigger.RECEIVE_DAMAGE &&
+        DefaultPercentage() > grudgePower
     ){
-        if(DefaultPercentage() <= grudgePower){return;}
-        
         define gainPower! = inputPayload * 0.1;
         if(grudgePower + gainPower > DefaultPercentage()){
             grudgePower = DefaultPercentage();
@@ -1267,60 +1260,58 @@ void HeroMod_Action_GRUDGE_LIGHTNING(define trigger!, define inputPayload!) play
         }
     }
     else if(
-        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
+        IsAlive() &&
+        grudgePower > 0
     ){
-        if(
+        if(IsDummyBot()){
+            StartHoldingButton(ep, Button.Melee);
+        }
+
+        define landPos;
+        define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
+            EyePosition() + Vector(0, -0.1, 0), landPos,
+            Color.SkyBlue, EffectRev.VisibleToPositionAndRadius);
+
+        define aimPos;
+        define scatter;
+        define targets;
+        define case = 0;
+        while(
             IsAlive() &&
+            IsButtonHeld(ep, Button.Melee) &&
             grudgePower > 0
         ){
-            if(IsDummyBot()){
-                StartHoldingButton(ep, Button.Melee);
+            if(case == 0){
+                define dist! = DistanceBetween(EyePosition(), landPos);
+                aimPos = AimingPosition(40, null);
+                scatter = dist * 0.04;
+
+                // get inside sight players
+                targets = PlayersInViewAngle(ep, EnemyTeamOf(ep), 4);
+                // add ryacast hit player
+                targets[Last(targets)] = AimingPlayer(40, EnemyTeamOf(ep));
+                SetStatus(targets, ep, Status.Stunned, 0.5);
+                Damage(targets, ep, 40);
+                PlayEffect(AllPlayers(), PlayEffect.DebuffImpactSound, Color.White, ep, 50);
+
+                grudgePower -= 3;
+                grudgePower = grudgePower < 0 ? 0 : grudgePower;
+
+                define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
+                heroModDetail = "[ATTACK ABILITY]" + NL +
+                    "+ receive damage to charge grudge power (now "+ currentValue +"% / 100%)" + NL +
+                    "+ hold melee key to shot grudge power as continuous lightning and stun" + NL +
+                    "- receive heal 50%";
             }
 
-            define landPos;
-            define ballisticEffect! = CreateBeamEffect(AllPlayers(), BeamType.BadBeam,
-                EyePosition() + Vector(0, -0.1, 0), landPos,
-                Color.SkyBlue, EffectRev.VisibleToPositionAndRadius);
+            landPos = aimPos + RandomPosition(scatter, scatter, scatter);
 
-            define aimPos;
-            define scatter;
-            define targets;
-            define count = 0;
-            while(
-                IsAlive() &&
-                IsButtonHeld(ep, Button.Melee) &&
-                grudgePower > 0
-            ){
-                if(count == 0){
-                    grudgePower -= 3;
-                    grudgePower = grudgePower < 0 ? 0 : grudgePower;
-
-                    define currentValue! = RoundToInteger(grudgePower, Rounding.Nearest);
-                    heroModDetail = 
-            "+ receive damage to charge grudge power (now "+ currentValue +"% / 100%)" + NL +
-            "+ hold melee key to shot grudge power as continuous lightning and stun" + NL +
-            "- receive heal 50%";
-
-                    define dist! = DistanceBetween(EyePosition(), landPos);
-                    aimPos = AimingPosition(40, null);
-                    scatter = dist * 0.04;
-
-                    // get inside sight players
-                    targets = PlayersInViewAngle(ep, EnemyTeamOf(ep), 4);
-                    // add ryacast hit player
-                    targets[Last(targets)] = AimingPlayer(40, EnemyTeamOf(ep));
-                    SetStatus(targets, ep, Status.Stunned, 0.5);
-                    Damage(targets, ep, 40);
-                    PlayEffect(AllPlayers(), PlayEffect.DebuffImpactSound, Color.White, ep, 50);
-                }
-
-                landPos = aimPos + RandomPosition(scatter, scatter, scatter);
-
-                count = count < 10 ? count + 1 : 0;
-                Wait(0.01, WaitBehavior.IgnoreCondition);
-            }
-            DestroyEffect(ballisticEffect);
+            case = case < 10 ? case + 1 : 0;
+            Wait(0.01, WaitBehavior.IgnoreCondition);
         }
+        DestroyEffect(ballisticEffect);
+        
     }
 }
 // TAG GRUDGE_FIRE_BALL
@@ -1345,6 +1336,7 @@ void HeroMod_Action_GRUDGE_FIRE_BALL(define trigger!, define inputPayload!) play
         else if(
             trigger == HeroModTrigger.TIME_PASSED
         ){
+
             Wait(1, WaitBehavior.AbortWhenFalse);
         }
     }
@@ -1354,9 +1346,9 @@ void HeroMod_Action_GRUDGE_FIRE_BALL(define trigger!, define inputPayload!) play
         SetHealingReceived(ep, DefaultPercentage());
     }
     else if(
-        trigger == HeroModTrigger.DEAL_HEAL
+        trigger == HeroModTrigger.DEAL_HEAL &&
+        DefaultPercentage() > grudgePower
     ){
-        if(DefaultPercentage() <= grudgePower){return;}
         define gainPower! = inputPayload * 0.15;
         if(grudgePower + gainPower > DefaultPercentage()){
             grudgePower = DefaultPercentage();
@@ -1366,9 +1358,13 @@ void HeroMod_Action_GRUDGE_FIRE_BALL(define trigger!, define inputPayload!) play
         }
     }
     else if(
-        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
+        IsAlive() &&
+        grudgePower > 0
     ){
-        HeroMod_Action_FIRE_BALL_FIRE();
+        define power! = grudgePower;
+        grudgePower = 0;
+        HeroMod_Action_FIRE_BALL_FIRE(power);
     }
 }
 // TAG ARTILLERY_REQUEST
@@ -1504,69 +1500,68 @@ void HeroMod_Action_TITAN_FORM(define trigger!) playervar "HeroMod_Action_TITAN_
         }
     }
     else if(
-        trigger == HeroModTrigger.USING_ULT
+        trigger == HeroModTrigger.USING_ULT &&
+        !isTransformed
     ){
-        if(!isTransformed){
-            isTransformed = true;
+        isTransformed = true;
 
-            CancelPrimaryAction();
-            define prevHero! = HeroOf();
-            ForcePlayerHero(ep, Hero.Reinhardt);
-            SetButtonControlPropety();
-            SetMaxHealth(ep, 500);
-            SetDamageDealt(ep, 250);
+        CancelPrimaryAction();
+        define prevHero! = HeroOf();
+        ForcePlayerHero(ep, Hero.Reinhardt);
+        SetButtonControlPropety();
+        SetMaxHealth(ep, 500);
+        SetDamageDealt(ep, 250);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        Heal(ep, null, MaxValue());
+        SetUltimateCharge(ep, DefaultPercentage());
+        PressButton(ep, Button.Ultimate);
+
+        define tianScale! = 2.5;
+        for(define scale! = 1; scale < tianScale; scale += 0.1){
+            StartScalingPlayer(ep, scale);
             Wait(0.1, WaitBehavior.IgnoreCondition);
-            Heal(ep, null, MaxValue());
-            SetUltimateCharge(ep, DefaultPercentage());
-            PressButton(ep, Button.Ultimate);
-
-            define tianScale! = 2.5;
-            for(define scale! = 1; scale < tianScale; scale += 0.1){
-                StartScalingPlayer(ep, scale);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-            }
-            StartModifyingHeroVoiceLines(ep, 0.1, false);
-
-            for(define remainSecond! = 25; remainSecond > 0; remainSecond--){
-                if(IsDead()){
-                    break;
-                }
-                if(UltimateChargePercent() < DefaultPercentage()){
-                    SetUltimateCharge(ep, UltimateChargePercent() + 25);
-                }
-                SetAbilityCooldown(ep, Button.Ability1, 0);
-                SetAbilityCooldown(ep, Button.Ability2, 0);
-
-                if(
-                    IsDummyBot() &&
-                    actionState == ActionState.Attack
-                ){
-                    StartHoldingButton(ep, Button.PrimaryFire);
-                    StopHoldingButton(ep, Button.SecondaryFire);
-                    if(IsProbabilityTrue(50)){
-                        PressButton(ep, Button.Jump);
-                    }
-                }
-
-                Wait(1, WaitBehavior.IgnoreCondition);
-            }
-
-            StopModifyingHeroVoiceLines(ep);
-            for(define scale! = tianScale; scale > 1.0; scale -= 0.1){
-                StartScalingPlayer(ep, scale);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-            }
-            SetUltimateCharge(ep, 0);
-            SetMaxHealth(ep, DefaultPercentage());
-            SetDamageDealt(ep, DefaultPercentage());
-            ForcePlayerHero(ep, prevHero);
-            StopForcingHero(ep);
-            SetButtonControlPropety();
-            // wait using ult fin for not retrigger (if hero not changed by some hero)
-            WaitUntil(!IsUsingUltimate(), MaxValue());
-
-            isTransformed = false;
         }
+        StartModifyingHeroVoiceLines(ep, 0.1, false);
+
+        for(define remainSecond! = 25; remainSecond > 0; remainSecond--){
+            if(IsDead()){
+                break;
+            }
+            if(UltimateChargePercent() < DefaultPercentage()){
+                SetUltimateCharge(ep, UltimateChargePercent() + 25);
+            }
+            SetAbilityCooldown(ep, Button.Ability1, 0);
+            SetAbilityCooldown(ep, Button.Ability2, 0);
+
+            if(
+                IsDummyBot() &&
+                actionState == ActionState.Attack
+            ){
+                StartHoldingButton(ep, Button.PrimaryFire);
+                StopHoldingButton(ep, Button.SecondaryFire);
+                if(IsProbabilityTrue(50)){
+                    PressButton(ep, Button.Jump);
+                }
+            }
+
+            Wait(1, WaitBehavior.IgnoreCondition);
+        }
+
+        StopModifyingHeroVoiceLines(ep);
+        for(define scale! = tianScale; scale > 1.0; scale -= 0.1){
+            StartScalingPlayer(ep, scale);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+        }
+        SetUltimateCharge(ep, 0);
+        SetMaxHealth(ep, DefaultPercentage());
+        SetDamageDealt(ep, DefaultPercentage());
+        ForcePlayerHero(ep, prevHero);
+        StopForcingHero(ep);
+        SetButtonControlPropety();
+        // wait using ult fin for not retrigger (if hero not changed by some hero)
+        WaitUntil(!IsUsingUltimate(), MaxValue());
+
+        isTransformed = false;
     }
 }
 // TAG BEAM_SNIPER
@@ -1593,164 +1588,159 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
         }
     }
     else if(
-        trigger == HeroModTrigger.USING_ULT
+        trigger == HeroModTrigger.USING_ULT &&
+        !isTransformed
     ){
-        if(!isTransformed){
-            isTransformed = true;
+        isTransformed = true;
 
-            CancelPrimaryAction();
-            define prevHero! = HeroOf();
-            ForcePlayerHero(ep, Hero.Widowmaker);
-            SetButtonControlPropety();
-            SetMaxHealth(ep, 200);
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-            Heal(ep, null, MaxValue());
-            SetUltimateCharge(ep, DefaultPercentage());
-            PressButton(ep, Button.Ultimate);
+        CancelPrimaryAction();
+        define prevHero! = HeroOf();
+        ForcePlayerHero(ep, Hero.Widowmaker);
+        SetButtonControlPropety();
+        SetMaxHealth(ep, 200);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        Heal(ep, null, MaxValue());
+        SetUltimateCharge(ep, DefaultPercentage());
+        PressButton(ep, Button.Ultimate);
 
-            for(define remainSecond! = 40; remainSecond > 0; remainSecond--){
-                if(IsDead()){
-                    break;
-                }
-                if(UltimateChargePercent() < DefaultPercentage()){
-                    SetUltimateCharge(ep, UltimateChargePercent() + 5);
-                }
-                // SetAbilityCooldown(ep, Button.Ability1, 0);
-                // SetAbilityCooldown(ep, Button.Ability2, 0);
-                Wait(1, WaitBehavior.IgnoreCondition);
+        for(define remainSecond! = 40; remainSecond > 0; remainSecond--){
+            if(IsDead()){
+                break;
             }
-
-            SetUltimateCharge(ep, 0);
-            SetMaxHealth(ep, DefaultPercentage());
-            ForcePlayerHero(ep, prevHero);
-            StopForcingHero(ep);
-            SetButtonControlPropety();
-            // wait using ult fin for not retrigger (if hero not changed by some hero)
-            WaitUntil(!IsUsingUltimate(), MaxValue());
-
-            isTransformed = false;
+            if(UltimateChargePercent() < DefaultPercentage()){
+                SetUltimateCharge(ep, UltimateChargePercent() + 5);
+            }
+            // SetAbilityCooldown(ep, Button.Ability1, 0);
+            // SetAbilityCooldown(ep, Button.Ability2, 0);
+            Wait(1, WaitBehavior.IgnoreCondition);
         }
+
+        SetUltimateCharge(ep, 0);
+        SetMaxHealth(ep, DefaultPercentage());
+        ForcePlayerHero(ep, prevHero);
+        StopForcingHero(ep);
+        SetButtonControlPropety();
+        // wait using ult fin for not retrigger (if hero not changed by some hero)
+        WaitUntil(!IsUsingUltimate(), MaxValue());
+
+        isTransformed = false;
     }
     else if(
-        trigger == HeroModTrigger.USING_SECONDARY
+        trigger == HeroModTrigger.USING_SECONDARY &&
+        isTransformed
     ){
-        if(isTransformed){
-            while(IsFiringSecondary()){
-                // avoid infinite loop
-                Wait(0.1, WaitBehavior.AbortWhenFalse);
-                // waiting charge fin
-                WaitUntil(IsFiringPrimary(), 1.15);
-                // primary fire interrupted before charging fin
-                if(IsFiringPrimary()){
-                    // restart waiting
-                    continue;
-                }
-                // scorping ended
-                else if(!IsFiringSecondary()){
-                    // clear waiting
-                    Abort();
-                }
-                else if(IsFiringSecondary()){
-                    // charge fin
-                    beamCharged = true;
-                    // update aim pos
-                    while(beamCharged){
-                        // pre set aim pos
-                        beamAimPos = AimingPosition(MaxLength(), EnemyTeamOf(ep));
-                        Wait(
-                            IsDummyBot() ? 
-                                0.2 :
-                                0.1,
-                            WaitBehavior.AbortWhenFalse);
-                    }
+        while(IsFiringSecondary()){
+            // avoid infinite loop
+            Wait(0.1, WaitBehavior.AbortWhenFalse);
+            // waiting charge fin
+            WaitUntil(IsFiringPrimary(), 1.15);
+            // primary fire interrupted before charging fin
+            if(IsFiringPrimary()){
+                // restart waiting
+                continue;
+            }
+            // scorping ended
+            else if(!IsFiringSecondary()){
+                // clear waiting
+                Abort();
+            }
+            else if(IsFiringSecondary()){
+                // charge fin
+                beamCharged = true;
+                // update aim pos
+                while(beamCharged){
+                    // pre set aim pos
+                    beamAimPos = AimingPosition(MaxLength(), EnemyTeamOf(ep));
+                    Wait(
+                        IsDummyBot() ? 
+                            0.2 :
+                            0.1,
+                        WaitBehavior.AbortWhenFalse);
                 }
             }
         }
     }
     else if(
-        trigger == HeroModTrigger.NOT_USING_SECONDARY
+        trigger == HeroModTrigger.NOT_USING_SECONDARY &&
+        isTransformed
     ){
-        if(isTransformed){
+        beamCharged = false;
+    }
+    else if(
+        trigger == HeroModTrigger.USING_PRIMARY &&
+        isTransformed
+    ){
+        define beamSniperDamage! = 300;
+        define beamSniperDamageRange! = 4;
+
+        // charging fin
+        if(beamCharged){
+            // reset charge
             beamCharged = false;
+
+            // deal damage to target at direct hit
+            define targets! = AimingPlayer(MaxLength(), EnemyTeamOf(ep));
+            Damage(targets, ep, beamSniperDamage);
+            // deal damage to target on ballstic
+            targets = FilteredArray(
+                PlayersInViewAngle(ep, EnemyTeamOf(ep), 2.5),
+                IsAlive(ae)
+            );
+            Damage(targets, ep, beamSniperDamage / 2);
+            // deal damage to target in landed blast range
+            targets = FilteredArray(
+                PlayersWithinRadius(beamAimPos, beamSniperDamageRange, EnemyTeamOf(ep), RadiusLOS.Off),
+                IsAlive(ae)
+            );
+            Damage(targets, ep, beamSniperDamage / 2);
+
+            // set offset for gun sight
+            define gunSightPos! =
+                EyePosition() +
+                FacingDirectionOf() +
+                Vector(0, IsDummyBot() ? -0.045 : -0.6, 0);
+            // set landing position for penetration
+            define landPos! =
+                EyePosition() +
+                (FacingDirectionOf() * MaxLength());
+
+            // play shot sound
+            PlayEffect(
+                AllPlayers(), PlayEffect.RingExplosionSound,
+                Color.Purple, ep, MaxLength());
+            // play shot fire
+            PlayEffect(
+                AllPlayers(), PlayEffect.BadExplosion,
+                Color.Purple, gunSightPos, 1.0);
+
+            // show landed ballistics
+            define beamEffect! = [];
+            beamEffect[0] = CreateBeamEffect(AllPlayers(),
+                BeamType.BadBeam, gunSightPos, beamAimPos,
+                Color.Purple, EffectRev.VisibleTo);
+            // show penetration ballistic
+            beamEffect[1] =  CreateBeamEffect(AllPlayers(),
+                BeamType.BadBeam, beamAimPos, landPos,
+                Color.Purple, EffectRev.VisibleTo);
+
+            // play big blast with sound
+            PlayContinuousBlast(
+                Color.Purple,
+                beamAimPos,
+                beamSniperDamageRange,
+                3,
+                2
+            );
+
+            Wait(0.6, WaitBehavior.IgnoreCondition);
+
+            // hide ballistics
+            DestroyEffect(beamEffect[0]);
+            DestroyEffect(beamEffect[1]);
         }
-    }
-
-    else if(
-        trigger == HeroModTrigger.USING_PRIMARY
-    ){
-        if(isTransformed){
-            define beamSniperDamage! = 300;
-            define beamSniperDamageRange! = 4;
-
-            // charging fin
-            if(beamCharged){
-                // reset charge
-                beamCharged = false;
-
-                // deal damage to target at direct hit
-                define targets! = AimingPlayer(MaxLength(), EnemyTeamOf(ep));
-                Damage(targets, ep, beamSniperDamage);
-                // deal damage to target on ballstic
-                targets = FilteredArray(
-                    PlayersInViewAngle(ep, EnemyTeamOf(ep), 2.5),
-                    IsAlive(ae)
-                );
-                Damage(targets, ep, beamSniperDamage / 2);
-                // deal damage to target in landed blast range
-                targets = FilteredArray(
-                    PlayersWithinRadius(beamAimPos, beamSniperDamageRange, EnemyTeamOf(ep), RadiusLOS.Off),
-                    IsAlive(ae)
-                );
-                Damage(targets, ep, beamSniperDamage / 2);
-
-                // set offset for gun sight
-                define gunSightPos! =
-                    EyePosition() +
-                    FacingDirectionOf() +
-                    Vector(0, IsDummyBot() ? -0.045 : -0.6, 0);
-                // set landing position for penetration
-                define landPos! =
-                    EyePosition() +
-                    (FacingDirectionOf() * MaxLength());
-
-                // play shot sound
-                PlayEffect(
-                    AllPlayers(), PlayEffect.RingExplosionSound,
-                    Color.Purple, ep, MaxLength());
-                // play shot fire
-                PlayEffect(
-                    AllPlayers(), PlayEffect.BadExplosion,
-                    Color.Purple, gunSightPos, 1.0);
-
-                // show landed ballistics
-                define beamEffect! = [];
-                beamEffect[0] = CreateBeamEffect(AllPlayers(),
-                    BeamType.BadBeam, gunSightPos, beamAimPos,
-                    Color.Purple, EffectRev.VisibleTo);
-                // show penetration ballistic
-                beamEffect[1] =  CreateBeamEffect(AllPlayers(),
-                    BeamType.BadBeam, beamAimPos, landPos,
-                    Color.Purple, EffectRev.VisibleTo);
-
-                // play big blast with sound
-                PlayContinuousBlast(
-                    Color.Purple,
-                    beamAimPos,
-                    beamSniperDamageRange,
-                    3,
-                    2
-                );
-
-                Wait(0.6, WaitBehavior.IgnoreCondition);
-
-                // hide ballistics
-                DestroyEffect(beamEffect[0]);
-                DestroyEffect(beamEffect[1]);
-            }
-            else{
-                // reset charge
-                beamCharged = false;
-            }
+        else{
+            // reset charge
+            beamCharged = false;
         }
     }
 }
@@ -1780,209 +1770,203 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         }
     }
     else if(
-        trigger == HeroModTrigger.USING_ULT
-        
+        trigger == HeroModTrigger.USING_ULT &&
+        !isTransformed
     ){
-        if(!isTransformed){
-            isTransformed = true;
+        isTransformed = true;
 
-            CancelPrimaryAction();
-            define prevHero! = HeroOf();
-            ForcePlayerHero(ep, Hero.Bastion);
-            SetButtonControlPropety();
-            SetMaxHealth(ep, 300);
-            SetGravity(ep, 1);
-            PressButton(ep, Button.Jump);
-            // SetStatus(ep, null, Status.Rooted, MaxValue());
+        CancelPrimaryAction();
+        define prevHero! = HeroOf();
+        ForcePlayerHero(ep, Hero.Bastion);
+        SetButtonControlPropety();
+        SetMaxHealth(ep, 300);
+        SetGravity(ep, 1);
+        PressButton(ep, Button.Jump);
+        // SetStatus(ep, null, Status.Rooted, MaxValue());
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        Heal(ep, null, MaxValue());
+        define tianScale! = 2.5;
+        for(define scale! = 1; scale < tianScale; scale += 0.1){
+            StartScalingPlayer(ep, scale);
             Wait(0.1, WaitBehavior.IgnoreCondition);
-            Heal(ep, null, MaxValue());
-            define tianScale! = 2.5;
-            for(define scale! = 1; scale < tianScale; scale += 0.1){
-                StartScalingPlayer(ep, scale);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
+        }
+        StartModifyingHeroVoiceLines(ep, 0.1, false);
+
+        for(define remainSecond! = 30; remainSecond > 0; remainSecond--){
+            if(IsDead()){
+                break;
             }
-            StartModifyingHeroVoiceLines(ep, 0.1, false);
+            if(UltimateChargePercent() < DefaultPercentage()){
+                SetUltimateCharge(ep, UltimateChargePercent() + 5);
+            }
+            if(AbilityCooldown(ep, Button.SecondaryFire) > 5){
+                SetAbilityCooldown(ep, Button.SecondaryFire, 5);
+            }
 
-            for(define remainSecond! = 30; remainSecond > 0; remainSecond--){
-                if(IsDead()){
-                    break;
-                }
-                if(UltimateChargePercent() < DefaultPercentage()){
-                    SetUltimateCharge(ep, UltimateChargePercent() + 5);
-                }
-                if(AbilityCooldown(ep, Button.SecondaryFire) > 5){
-                    SetAbilityCooldown(ep, Button.SecondaryFire, 5);
-                }
-
-                if(
-                    !IsInAlternateForm() &&
-                    !IsFiringSecondary()
-                ){
-                    SetAbilityCooldown(ep, Button.Ability1, 0);
-                    PressButton(ep, Button.Ability1);
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
-                }
-                
-                define dist! = DistanceBetween(ep, BelowPosition(ep));
-                define faceDir! = FacingDirectionOf();
-                define hightLimit! = 16;
-                
-                if(
-                    // descent buton held
-                    IsButtonHeld(ep, Button.Crouch) ||
-                    (
-                        // aim downward
-                        YOf(faceDir) < 0 &&
-                        // is front blocked
-                        IsBlockedBetween(
-                            EyePosition(),
-                            ShiftedPosition(EyePosition(), VectorWithOutY(faceDir), 4)
-                        )
-                    )
-                ){
-                    // down with force
-                    ApplyImpulse(ep, 
-                        Down(),
-                        3.0,
-                        Relative.ToWorld,
-                        ContraryMotion.Incorporate);
-                }
-                else{
-                    define spd! = (hightLimit - dist) * 0.3;
-                    // fly
-                    ApplyImpulse(ep, 
-                        dist < hightLimit ?
-                            Up() :
-                            NoDirection(),
-                        dist < hightLimit ?
-                            spd:
-                            0,
-                        Relative.ToWorld,
-                        ContraryMotion.Incorporate);
-                        
-                    ApplyImpulse(ep, 
-                        YOf(faceDir) < 0 ?
-                            VectorWithOutY(faceDir) :
-                            faceDir,
-                        1.0,
-                        Relative.ToWorld,
-                        ContraryMotion.Incorporate);
-                }
+            if(
+                !IsInAlternateForm() &&
+                !IsFiringSecondary()
+            ){
+                SetAbilityCooldown(ep, Button.Ability1, 0);
+                PressButton(ep, Button.Ability1);
+                Wait(0.5, WaitBehavior.IgnoreCondition);
+            }
             
-                Wait(1.0, WaitBehavior.IgnoreCondition);
-            }
-
-            StopModifyingHeroVoiceLines(ep);
-            for(define scale! = tianScale; scale > 1.0; scale -= 0.1){
-                StartScalingPlayer(ep, scale);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-            }
-            SetUltimateCharge(ep, 0);
-            SetMaxHealth(ep, DefaultPercentage());
-            SetGravity(ep, DefaultPercentage());
-            // ClearStatus(ep, Status.Rooted);
-            if(prevHero != Hero.Bastion){
-                ForcePlayerHero(ep, prevHero);
+            define dist! = DistanceBetween(ep, BelowPosition(ep));
+            define faceDir! = FacingDirectionOf();
+            define hightLimit! = 16;
+            
+            if(
+                // descent buton held
+                IsButtonHeld(ep, Button.Crouch) ||
+                (
+                    // aim downward
+                    YOf(faceDir) < 0 &&
+                    // is front blocked
+                    IsBlockedBetween(
+                        EyePosition(),
+                        ShiftedPosition(EyePosition(), VectorWithOutY(faceDir), 4)
+                    )
+                )
+            ){
+                // down with force
+                ApplyImpulse(ep, 
+                    Down(),
+                    3.0,
+                    Relative.ToWorld,
+                    ContraryMotion.Incorporate);
             }
             else{
-                Resurrect();
+                define spd! = (hightLimit - dist) * 0.3;
+                // fly
+                ApplyImpulse(ep, 
+                    dist < hightLimit ?
+                        Up() :
+                        NoDirection(),
+                    dist < hightLimit ?
+                        spd:
+                        0,
+                    Relative.ToWorld,
+                    ContraryMotion.Incorporate);
+                    
+                ApplyImpulse(ep, 
+                    YOf(faceDir) < 0 ?
+                        VectorWithOutY(faceDir) :
+                        faceDir,
+                    1.0,
+                    Relative.ToWorld,
+                    ContraryMotion.Incorporate);
             }
-            StopForcingHero(ep);
-            SetButtonControlPropety();
-            // wait using ult fin for not retrigger (if hero not changed by some hero)
-            WaitUntil(!IsUsingUltimate(), MaxValue());
-            
-            isTransformed = false;
+        
+            Wait(1.0, WaitBehavior.IgnoreCondition);
         }
+
+        StopModifyingHeroVoiceLines(ep);
+        for(define scale! = tianScale; scale > 1.0; scale -= 0.1){
+            StartScalingPlayer(ep, scale);
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+        }
+        SetUltimateCharge(ep, 0);
+        SetMaxHealth(ep, DefaultPercentage());
+        SetGravity(ep, DefaultPercentage());
+        // ClearStatus(ep, Status.Rooted);
+        if(prevHero != Hero.Bastion){
+            ForcePlayerHero(ep, prevHero);
+        }
+        else{
+            Resurrect();
+        }
+        StopForcingHero(ep);
+        SetButtonControlPropety();
+        // wait using ult fin for not retrigger (if hero not changed by some hero)
+        WaitUntil(!IsUsingUltimate(), MaxValue());
+        
+        isTransformed = false;
     }
     else if(
-        trigger == HeroModTrigger.USING_PRIMARY
+        trigger == HeroModTrigger.USING_PRIMARY &&
+        isTransformed
     ){
-        if(isTransformed){
-            define splashDamageRangeMinigun!: 1.5;
+        define splashDamageRangeMinigun!: 1.5;
 
-            while(IsFiringPrimary()){
-                // get aimPosition
-                define aimPosition! = AimingPosition(40, EnemyTeamOf(ep));
-                define scat! = DistanceBetween(EyePosition(), aimPosition) * 0.03;
-                define landPosition! = aimPosition + RandomPosition(scat, scat, scat);
-                // splash damage
-                Damage(
-                    PlayersWithinRadius(
-                        landPosition, splashDamageRangeMinigun,
-                        enemyTeam, RadiusLOS.Off),
-                    ep, 25);
-                // play blast
-                PlayEffect(
-                    AllPlayers(), PlayEffect.BadExplosion,
-                    Color.Orange,
-                    landPosition,
-                    splashDamageRangeMinigun);
-
-                Wait(
-                    !IsInAlternateForm() ? 0.2 : 0.1,
-                    WaitBehavior.IgnoreCondition);
-            }
-        }
-    }
-    else if(
-        trigger == HeroModTrigger.USING_SECONDARY
-    ){
-        if(isTransformed){
-            for(define remainShot! = 15; remainShot > 0; remainShot--)
-            {
-                if(
-                    !isTransformed ||
-                    IsDead()
-                ){
-                    break;
-                }
-                PressButton(ep, Button.SecondaryFire);
-                CancelPrimaryAction();
-                SetAbilityCooldown(ep, Button.SecondaryFire, 0);
-
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-            }
-        }
-    }
-    else if(
-        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
-    ){
-        if(
-            isTransformed &&
-            UltimateChargePercent(ep) > 0
-        ){
-            define chargeRate! = UltimateChargePercent() / 100;
-
-            // play blast sound
-            PlayEffect(
-                AllPlayers(), PlayEffect.RingExplosionSound,
-                Color.White,
-                ep,
-                chargeRate * 200);
-            PlayEffect(
-                AllPlayers(), PlayEffect.DebuffImpactSound,
-                Color.White,
-                ep,
-                chargeRate * 200);
+        while(IsFiringPrimary()){
+            // get aimPosition
+            define aimPosition! = AimingPosition(40, EnemyTeamOf(ep));
+            define scat! = DistanceBetween(EyePosition(), aimPosition) * 0.03;
+            define landPosition! = aimPosition + RandomPosition(scat, scat, scat);
+            // splash damage
+            Damage(
+                PlayersWithinRadius(
+                    landPosition, splashDamageRangeMinigun,
+                    enemyTeam, RadiusLOS.Off),
+                ep, 25);
             // play blast
-            PlayEffect(
-                AllPlayers(), PlayEffect.GoodExplosion,
-                Color.White,
-                EyePosition() + (FacingDirectionOf() * 5),
-                chargeRate * 10);
             PlayEffect(
                 AllPlayers(), PlayEffect.BadExplosion,
                 Color.Orange,
-                EyePosition() + (FacingDirectionOf() * 5),
-                chargeRate * 10);
+                landPosition,
+                splashDamageRangeMinigun);
 
-            grudgePower = UltimateChargePercent();
-            SetUltimateCharge(ep, 0);
-            ApplyImpulse(ep, -1 * FacingDirectionOf(), chargeRate * 15, Relative.ToWorld, ContraryMotion.Incorporate);           
-
-            HeroMod_Action_FIRE_BALL_FIRE();
+            Wait(
+                !IsInAlternateForm() ? 0.2 : 0.1,
+                WaitBehavior.IgnoreCondition);
         }
+    }
+    else if(
+        trigger == HeroModTrigger.USING_SECONDARY &&
+        isTransformed
+    ){
+        for(define remainShot! = 15; remainShot > 0; remainShot--)
+        {
+            if(
+                !isTransformed ||
+                IsDead()
+            ){
+                break;
+            }
+            PressButton(ep, Button.SecondaryFire);
+            CancelPrimaryAction();
+            SetAbilityCooldown(ep, Button.SecondaryFire, 0);
+
+            Wait(0.1, WaitBehavior.IgnoreCondition);
+        }
+    }
+    else if(
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
+        isTransformed &&
+        IsAlive() &&
+        UltimateChargePercent(ep) > 0
+    ){
+        define chargeRate! = UltimateChargePercent() / 100;
+
+        // play blast sound
+        PlayEffect(
+            AllPlayers(), PlayEffect.RingExplosionSound,
+            Color.White,
+            ep,
+            chargeRate * 200);
+        PlayEffect(
+            AllPlayers(), PlayEffect.DebuffImpactSound,
+            Color.White,
+            ep,
+            chargeRate * 200);
+        // play blast
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodExplosion,
+            Color.White,
+            EyePosition() + (FacingDirectionOf() * 5),
+            chargeRate * 10);
+        PlayEffect(
+            AllPlayers(), PlayEffect.BadExplosion,
+            Color.Orange,
+            EyePosition() + (FacingDirectionOf() * 5),
+            chargeRate * 10);
+
+        ApplyImpulse(ep, -1 * FacingDirectionOf(), chargeRate * 15, Relative.ToWorld, ContraryMotion.Incorporate);           
+
+        define power! = UltimateChargePercent();
+        SetUltimateCharge(ep, 0);
+        HeroMod_Action_FIRE_BALL_FIRE(power);
     }
 }
 // TAG ZOMBIE
@@ -2007,28 +1991,22 @@ void HeroMod_Action_ZOMBIE(define trigger!) playervar "HeroMod_Action_ZOMBIE"{
         SetHealingReceived(ep, DefaultPercentage());
     }
     else if(
-        trigger == HeroModTrigger.DEATH
+        trigger == HeroModTrigger.DEATH &&
+        !IsOverTime()
     ){
-        if(
-            !IsOverTime()
-        ){
-            Wait(5, WaitBehavior.AbortWhenFalse);
-            if(IsDeadByAbyss()){
-                Teleport(ep, NearestWalkablePosition(ep));
-                Wait(0.1, WaitBehavior.AbortWhenFalse);
-            }
-            SetStatus(ep, null, Status.Invincible, 3);
-            Resurrect(ep);
+        Wait(5, WaitBehavior.AbortWhenFalse);
+        if(IsDeadByAbyss()){
+            Teleport(ep, NearestWalkablePosition(ep));
+            Wait(0.1, WaitBehavior.AbortWhenFalse);
         }
+        SetStatus(ep, null, Status.Invincible, 3);
+        Resurrect(ep);
     }
     else if(
-        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY
+        trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
+        IsDead()
     ){
-        if(
-            IsDead()
-        ){
-            Respawn();
-        }
+        Respawn();
     }
 }
 
@@ -2180,16 +2158,6 @@ void HeroMod_Action_ARTILLERY_FIRE(define targetMode!, define attackCount!) play
             targetMode == ARTILLERY_FIRE_TARGHET_MODE.NEAR_AIM_POS ?  AimingPosition(40, EnemyTeamOf(ep)) :
             null;
         define target! = basePosition;
-        // FirstOf(
-        //     SortedArray(
-        //         FilteredArray(
-        //             AllLivingPlayers(EnemyTeamOf(ep)),
-        //             DistanceBetween(basePosition, ae) <= artilleryTargetRange
-        //         ),
-        //         DistanceBetween(basePosition, ae)
-        //     )
-        // );
-
         
         define attackPosition!;
         if(
@@ -2326,54 +2294,48 @@ void HeroMod_Action_ARTILLERY_FIRE(define targetMode!, define attackCount!) play
 }
 
 // TAG HeroMod_Action_FIRE_BALL_FIRE
-void HeroMod_Action_FIRE_BALL_FIRE(){
-    if(
-        IsAlive() &&
-        grudgePower > 0
-    ){
-        define ballSpeed! = 30;
-        define ballSize! = grudgePower * 0.025;
-        define ballDamage! = grudgePower * 5;
-        define ballBlastRange! = grudgePower * 0.15;
-        define ballBlastCount! = RoundToInteger(grudgePower / 25, Rounding.Down);
-        ballBlastCount = ballBlastCount < 1 ? 1 : ballBlastCount;
-        define minCollisionSize! = ballSpeed / 20;
-        define collisionSize! = ballSize;
-        collisionSize = collisionSize < minCollisionSize ? minCollisionSize : collisionSize;
-        grudgePower = 0;
+void HeroMod_Action_FIRE_BALL_FIRE(define power!) playervar "HeroMod_Action_FIRE_BALL_FIRE"{
+    define ballSpeed! = 30;
+    define ballSize! = power * 0.025;
+    define ballDamage! = power * 5;
+    define ballBlastRange! = power * 0.15;
+    define ballBlastCount! = RoundToInteger(power / 25, Rounding.Down);
+    ballBlastCount = ballBlastCount < 1 ? 1 : ballBlastCount;
+    define minCollisionSize! = ballSpeed / 20;
+    define collisionSize! = ballSize;
+    collisionSize = collisionSize < minCollisionSize ? minCollisionSize : collisionSize;
 
-        define ballPos = EyePosition() + Vector(0, -0.1, 0);
-        define aimPos! = AimingPosition(40, null);
-        define effects! = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
-            ballPos, ballSize, EffectRev.PositionAndRadius);
+    define ballPos = EyePosition() + Vector(0, -0.1, 0);
+    define aimPos! = AimingPosition(40, null);
+    define effects! = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
+        ballPos, ballSize, EffectRev.PositionAndRadius);
 
-        ChaseVariableAtRate(
-            ballPos, aimPos, ballSpeed,
-            RateChaseReevaluation.DestinationAndRate);
-        while(
-            // not
-            !(
-                // hit aimed position
-                DistanceBetween(ballPos, aimPos) <= 0 ||
-                // hit enemy
-                (
-                    DistanceBetween(ballPos, ClosestPlayerTo(ballPos, EnemyTeamOf(ep))) <= collisionSize &&
-                    IsAlive(ClosestPlayerTo(ballPos, EnemyTeamOf(ep)))
-                )
+    ChaseVariableAtRate(
+        ballPos, aimPos, ballSpeed,
+        RateChaseReevaluation.DestinationAndRate);
+    while(
+        // not
+        !(
+            // hit aimed position
+            DistanceBetween(ballPos, aimPos) <= 0 ||
+            // hit enemy
+            (
+                DistanceBetween(ballPos, ClosestPlayerTo(ballPos, EnemyTeamOf(ep))) <= collisionSize &&
+                IsAlive(ClosestPlayerTo(ballPos, EnemyTeamOf(ep)))
             )
-        ){
-            PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-        }
-        StopChasingVariable(ballPos);
-        DestroyEffect(effects);
-        
-        define targets! = PlayersWithinRadius(ballPos, collisionSize < minCollisionSize ? minCollisionSize : ballBlastRange, EnemyTeamOf(ep), RadiusLOS.Off);
-        ApplyBlastImpulse(targets, ballPos, ballBlastRange);
-        SetStatus(targets, ep, Status.Burning, 3);
-        Damage(targets, ep, ballDamage);
-        PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
+        )
+    ){
+        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
     }
+    StopChasingVariable(ballPos);
+    DestroyEffect(effects);
+    
+    define targets! = PlayersWithinRadius(ballPos, collisionSize < minCollisionSize ? minCollisionSize : ballBlastRange, EnemyTeamOf(ep), RadiusLOS.Off);
+    ApplyBlastImpulse(targets, ballPos, ballBlastRange);
+    SetStatus(targets, ep, Status.Burning, 3);
+    Damage(targets, ep, ballDamage);
+    PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
 }
 
 // TAG HeroMod/Trigger ----------
