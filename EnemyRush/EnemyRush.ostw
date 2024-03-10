@@ -3,7 +3,7 @@ import "../Lib/Debug.del";
 import "../Lib/Utility.del";
 import "../Lib/ServerOverLoadMeasures.del";
 import "../Lib/Bot.del";
-import "../Lib/Buddy.del";
+import "../Lib/FriendBot.del";
 import "../Lib/Vote.del";
 import "../Lib/HeroMod.del";
 
@@ -285,34 +285,34 @@ if(
     DestroyIcon(humanIcon);
 }
 
-// TAG Buddy/BotActive ----------
-define canBuddyBotActive:
+// TAG FriendBot/BotActive ----------
+define canFriendBotBotActive:
     IsAlive();
 
-rule: "Buddy/BotActive/activate"
+rule: "FriendBot/BotActive/activate"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     IsDummyBot() &&
     HasSpawned() &&
-    canBuddyBotActive
+    canFriendBotBotActive
 ){
     isBotActive = true;
 }
 
-rule: "Buddy/BotActive/deactive"
+rule: "FriendBot/BotActive/deactive"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
     IsDummyBot() &&
     HasSpawned() &&
-    !canBuddyBotActive
+    !canFriendBotBotActive
 ){
     isBotActive = false;
 }
 
-// TAG Buddy/Config ----------
-rule: "Buddy/Config/init"
+// TAG FriendBot/Config ----------
+rule: "FriendBot/Config/init"
 Event.OngoingPlayer
 if(
     TeamOf() == playerTeam &&
@@ -322,13 +322,13 @@ if(
     watchUpdateRate = 1.0;
 }
 
-// TAG Buddy/Asset ----------
-globalvar define maxBuddyBotNum! =
-    WorkshopSettingInteger("Ally Bot Settings", "Bot Count (when player slot empty, join instead. will switch to player by join.)", 8, 0, 8, 1);
+// TAG FriendBot/Asset ----------
+globalvar define maxFriendBotBotNum! =
+    WorkshopSettingInteger("Friend Bot Settings", "Bot Count (when player slot empty, join instead. will switch to player by join.)", 8, 0, 8, 1);
 
-define pMax: maxBuddyBotNum;
+define pMax: maxFriendBotBotNum;
 
-define buddyAssetList:
+define FriendBotAssetList:
     [
         // fix hero asset
         [   // assetNo 0
@@ -419,7 +419,7 @@ define buddyAssetList:
         ]
     ];
 
-define buddyAssetNoLotteryList: [
+define FriendBotAssetNoLotteryList: [
     // fix hero asset
     0, 0,
     1, 1,
@@ -454,7 +454,7 @@ void CreateBotsByAssetWithMutexLock(in define asset!, in define team!, in define
     isLockedCreateBotsByAsset = false;
 }
 
-// TAG Buddy/Asset/Interval ----------
+// TAG FriendBot/Asset/Interval ----------
 define PlayerNum():
     CountOf(
         FilteredArray(
@@ -463,7 +463,7 @@ define PlayerNum():
         )
     );
 
-define BuddyNum():
+define FriendBotNum():
     CountOf(
         FilteredArray(
             AllPlayers(playerTeam),
@@ -471,17 +471,17 @@ define BuddyNum():
         )
     );
 
-define needBuddyNum:
-    maxBuddyBotNum - PlayerNum();
+define needFriendBotNum:
+    maxFriendBotBotNum - PlayerNum();
 
-globalvar define buddyAssetNo!;
+globalvar define FriendBotAssetNo!;
 
-globalvar define forceReloadBuddyAsset! = false;
+globalvar define forceReloadFriendBotAsset! = false;
 
 define AssetChangeInterval(): RandomInteger(120, 180);
-globalvar define reloadBuddyAssetInterval! = -1;
+globalvar define reloadFriendBotAssetInterval! = -1;
 
-rule: "Buddy/BotAssetInterval/reloadReloadBuddyAsset"
+rule: "FriendBot/BotAssetInterval/reloadReloadFriendBotAsset"
 Event.OngoingGlobal
 if(
     initCompleted
@@ -490,23 +490,23 @@ if(
 
     while(true){
         // if force reload, skip change assetNo and set interval
-        if(!forceReloadBuddyAsset){
+        if(!forceReloadFriendBotAsset){
             // choice asset by random
-            buddyAssetNo = RandomValueInArray(buddyAssetNoLotteryList);
+            FriendBotAssetNo = RandomValueInArray(FriendBotAssetNoLotteryList);
             // set default interval
-            reloadBuddyAssetInterval = AssetChangeInterval();
+            reloadFriendBotAssetInterval = AssetChangeInterval();
         }
 
         if(
             // force reload
-            forceReloadBuddyAsset ||
+            forceReloadFriendBotAsset ||
             // assetNo changed
-            prevAssetNo != buddyAssetNo
+            prevAssetNo != FriendBotAssetNo
         ){
             // save current assetNo
-            prevAssetNo = buddyAssetNo;
+            prevAssetNo = FriendBotAssetNo;
             // get asset
-            define asset! = buddyAssetList[buddyAssetNo];
+            define asset! = FriendBotAssetList[FriendBotAssetNo];
 
             // valid asset
             if(
@@ -516,23 +516,23 @@ if(
                 define ultCharge! = GetAvgUltChgOfDummyBot(playerTeam);
                 // reload bots by asset
                 DestroyBots(playerTeam);
-                CreateBotsByAssetWithMutexLock(asset, playerTeam, needBuddyNum);
+                CreateBotsByAssetWithMutexLock(asset, playerTeam, needFriendBotNum);
                 // restore avg ult charge of bots
                 SetAvgUltChgOfDummyBot(playerTeam, ultCharge);
                 // wait start intarval until game start.
-                WaitUntil(IsGameInProgress() || forceReloadBuddyAsset, MaxValue());
+                WaitUntil(IsGameInProgress() || forceReloadFriendBotAsset, MaxValue());
                 // release force reload flag
-                forceReloadBuddyAsset = false;
+                forceReloadFriendBotAsset = false;
 
                 for(
                     ;
-                    reloadBuddyAssetInterval > 0;
-                    reloadBuddyAssetInterval--
+                    reloadFriendBotAssetInterval > 0;
+                    reloadFriendBotAssetInterval--
                 ){
                     Wait(1, WaitBehavior.IgnoreCondition);
                     if(
                         // interrupt force reload
-                        forceReloadBuddyAsset ||
+                        forceReloadFriendBotAsset ||
                         // create bot error
                         0 >= NumberOfPlayers(playerTeam)
                     ){
@@ -541,7 +541,7 @@ if(
                 }
             }
             else{
-                errLog(<"buddy asset is invalid">);
+                errLog(<"FriendBot asset is invalid">);
             }
         }
 
@@ -550,7 +550,7 @@ if(
     }
 }
 
-rule: "Buddy/tuneAssetMemberNum"
+rule: "FriendBot/tuneAssetMemberNum"
 Event.OngoingGlobal
 if(
     initCompleted
@@ -558,7 +558,7 @@ if(
     define prevPlayerNum! = -1;
 
     // set initial asset no
-    buddyAssetNo = RandomValueInArray(buddyAssetNoLotteryList);
+    FriendBotAssetNo = RandomValueInArray(FriendBotAssetNoLotteryList);
 
     while(true){
         if(
@@ -567,16 +567,16 @@ if(
             (
                 // playerNum changed
                 prevPlayerNum != PlayerNum() ||
-                // not filed by need buddy number
-                BuddyNum() != needBuddyNum ||
+                // not filed by need FriendBot number
+                FriendBotNum() != needFriendBotNum ||
                 // entity num than over slot num
-                PlayerNum() + BuddyNum() > NumberOfSlots(playerTeam)
+                PlayerNum() + FriendBotNum() > NumberOfSlots(playerTeam)
             )
         ){
             // save current playerNum
             prevPlayerNum = PlayerNum();
             // force reload asset
-            forceReloadBuddyAsset = true;
+            forceReloadFriendBotAsset = true;
         }
 
         // check Interval
@@ -2334,8 +2334,8 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
     ){  
         // player team
         debugHuds[Last()] = CreateDebugHud("team player Num", <"<0> / <1>", NumberOfLivingPlayers(playerTeam), NumberOfPlayers(playerTeam)>, NumberOfLivingPlayers(playerTeam) >= NumberOfPlayers(playerTeam) ? Color.Team2 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("reload Asset Interval", reloadBuddyAssetInterval, reloadBuddyAssetInterval > 5 ? Color.Team2 : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("asset Number", buddyAssetNo, Color.Team2);
+        debugHuds[Last()] = CreateDebugHud("reload Asset Interval", reloadFriendBotAssetInterval, reloadFriendBotAssetInterval > 5 ? Color.Team2 : Color.Yellow);
+        debugHuds[Last()] = CreateDebugHud("asset Number", FriendBotAssetNo, Color.Team2);
         debugHuds[Last()] = CreateDebugHud("death Count", playerDeathCount, Color.Team2);
 
         // enemy team
@@ -2380,7 +2380,7 @@ if(
     reloadEnemyAssetInterval = 0;
     WaitLongPressConfirm();
     WaitUntil(reloadEnemyAssetInterval > 0, 10);
-    reloadBuddyAssetInterval = 0;
+    reloadFriendBotAssetInterval = 0;
 }
 
 rule: "Debug/triggerRushAndShotCall"
