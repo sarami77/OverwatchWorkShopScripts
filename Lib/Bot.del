@@ -284,7 +284,7 @@ void SetMoveDir() playervar "SetMoveDir"{
         // get distRate by actionState
         define distRate! = (actionState == ActionState.Attack) ? 1 : 0.5;
         // get enemy density
-        define enemyDensity! = EnemyDensityRateOfAimTargetNear(ActionRange.Close);
+        define enemyDensity! = EnemyDensityRateOfTargetNear(aimTarget, ActionRange.Close);
 
         // front/back
         if(
@@ -1242,10 +1242,15 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             if(
                 AbilityCooldown(ep, Button.Ability2) <= 0 &&
                 // by own health low
-                IsProbabilityTrue(100 * (1 - NormalizedHealth()))
+                IsProbabilityTrue(150 * (1 - NormalizedHealth()))
             ){
-                // throw trance locator at backword
-                StartFacingPlayerRetreatPosition(aimTarget, 5);
+                // aim to backword
+                StartFacingPosition(
+                    ep +
+                    (VectorWithOutY(-FacingDirectionOf()) * 5) + 
+                    Vector(0, 5, 0) +
+                    RandomPosition(2.5, 2.5, 2.5)                    
+                );
                 StopMove(ep);
                 Wait(0.5, WaitBehavior.IgnoreCondition);
                 PressButton(ep, Button.Ability2);
@@ -1270,9 +1275,7 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             if(
                 AbilityCooldown(ep, Button.Ability2) <= 0 &&
                 actionState == ActionState.Support &&
-                (
-                    NormalizedHealth(aimTarget) <= 0.5
-                )
+                NormalizedHealth(aimTarget) <= 0.5
             ){
                 // use life grip
                 PressButton(ep, Button.Ability2);
@@ -1281,14 +1284,17 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             if(
                 AbilityCooldown(ep, Button.Ability1) <= 0 &&
                 !IsUsingAbility1(ep) &&
-                (
-                    IsProbabilityTrue(25) ||
-                    NormalizedHealth() <= 0.5
-                )
+                // by own health low
+                IsProbabilityTrue(150 * (1 - NormalizedHealth()))
             ){
-                // use lift on own below
+                // aim to own step
                 StopMove(ep);
-                StartFacingPlayerBetweenBelowPosition(aimTarget, 0.01);
+                StartFacingPosition(
+                    BelowPosition(
+                        ep + 
+                        VectorWithOutY(FacingDirectionOf()) * 0.1
+                    )
+                );
                 Wait(0.5, WaitBehavior.IgnoreCondition);
                 PressButton(ep, Button.Ability1);
                 Wait(0.1, WaitBehavior.IgnoreCondition);
@@ -1337,19 +1343,33 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             if(
                 DistanceBetween(ep, aimTarget) <= ActionRange.Close
             ){
+                define detectDist! = 20;
                 // fallback by graple hook
                 if(
-                    IsProbabilityTrue(((1 - NormalizedHealth()) * 75)) &&
                     AbilityCooldown(ep, Button.Ability1) <= 0 &&
                     IsBlockedBetween(
                         EyePosition(ep),
-                        EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * 16)
+                        EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * detectDist)
                     )
                 ){
                     StopMove(ep);
                     StopHoldingButton(ep, Button.SecondaryFire);
-                    StartFacingPlayerRetreatPosition(aimTarget, RandomReal(2, 5));
-                    Wait(0.75, WaitBehavior.IgnoreCondition);
+                    define blockedPos! = BlockedPositon(ep, VectorWithOutY(-FacingDirectionOf()), detectDist);
+                    define blockedDist! = DistanceBetween(ep, blockedPos);
+                    define cutoffDist! = detectDist - blockedDist;
+                    // aim to backward wall
+                    StartFacingPosition(
+                        blockedPos +
+                        Vector(0, cutoffDist, 0) +
+                        // too close to wall
+                        (blockedDist <= 2.5 ?
+                            // aim without random for touch wall
+                            RandomPosition(0, 0, 0)
+                        :
+                            // aim with random
+                            RandomPosition(3, 3, 3))
+                    );
+                    Wait(0.5, WaitBehavior.IgnoreCondition);
                     PressButton(ep, Button.Ability1);
                     Wait(0.1, WaitBehavior.IgnoreCondition);
                     // restore aiming
@@ -1357,9 +1377,9 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
                     // restore facing
                     StartFacingAimTarget();
                 }
-                // fallback with hip fire
+                // fallback without aiming
                 else if(
-                    IsProbabilityTrue((1 - NormalizedHealth()) * 75) &&
+                    IsProbabilityTrue(50) &&
                     IsButtonHeld(ep, Button.SecondaryFire)
                 ){
                     StopHoldingButton(ep, Button.SecondaryFire);
@@ -1453,19 +1473,34 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         else if(
             hero == Hero.WreckingBall
         ){
+            define detectDist! = 21;
+
             // use graple hook and tackle
             if(
                 IsProbabilityTrue(75) &&
                 AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
                 IsBlockedBetween(
                     EyePosition(ep),
-                    EyePosition(ep) + (VectorWithOutY(FacingDirectionOf(ep)) * 20)
+                    EyePosition(ep) + (VectorWithOutY(FacingDirectionOf(ep)) * detectDist)
                 )
             ){
                 // stop buton control for reduce ball form cancel by fire
                 enableButtonControl = false;
-                // use graple at target above
-                StartFacingPlayerAbovePosition(aimTarget, 5);
+                define blockedPos! = BlockedPositon(ep, VectorWithOutY(FacingDirectionOf()), detectDist);
+                define blockedDist! = DistanceBetween(ep, blockedPos);
+                define cutoffDist! = detectDist - blockedDist;
+                // aim to target above
+                StartFacingPosition(
+                    blockedPos +
+                    Vector(0, cutoffDist, 0) +
+                    // too close to wall
+                    (blockedDist <= 2.5 ?
+                        // aim without random for touch wall
+                        RandomPosition(0, 0, 0)
+                    :
+                        // aim with random
+                        RandomPosition(3, 3, 3))
+                );
                 Wait(0.5, WaitBehavior.IgnoreCondition);
                 StartHoldingButton(ep, Button.SecondaryFire);
                 Wait(0.1, WaitBehavior.IgnoreCondition);
@@ -1713,17 +1748,19 @@ if(
             PressButton(ep, Button.Ultimate);
             Wait(0.1, WaitBehavior.IgnoreCondition);
         }
-        // aim on ground
-        StartFacingPlayerBetweenBelowPosition(aimTarget, 0.5);
+        // aim between on ground
+        StartFacingPosition(
+            BelowPosition(
+                ShiftedPosition(
+                    ep,
+                    VectorTowards(ep, aimTarget),
+                    DistanceBetween(ep, aimTarget) * 0.5
+                )
+            )
+        );
         Wait(0.5, WaitBehavior.IgnoreCondition);
-
-        // try button press by 3time
-        for(define tryCount! = 0; tryCount < 3; tryCount++){
-            PressButton(ep, Button.PrimaryFire);
-            Wait(0.5, WaitBehavior.IgnoreCondition);
-            if(IsUsingUltimate()) break;
-        }
-        
+        PressButton(ep, Button.PrimaryFire);
+        Wait(0.5, WaitBehavior.IgnoreCondition);
         // restore facing
         StartFacingAimTarget();
         // restore buton control
@@ -1760,18 +1797,22 @@ if(
     if(isCanAction){
         // stop buton control for reduce cancel
         enableButtonControl = false;
+        // cancel hold SecondaryFire
+        CancelPrimaryAction();
         StopHoldingButton(ep, Button.PrimaryFire);
-        // aim on ground
-        StartFacingPlayerBetweenBelowPosition(aimTarget, 0.25);
+        // aim between on ground
+        StartFacingPosition(
+            BelowPosition(
+                ShiftedPosition(
+                    ep,
+                    VectorTowards(ep, aimTarget),
+                    DistanceBetween(ep, aimTarget) * 0.25
+                )
+            )
+        );
         Wait(0.5, WaitBehavior.IgnoreCondition);
-
-        // try button press by 3time
-        for(define tryCount! = 0; tryCount < 3; tryCount++){
-            PressButton(ep, Button.SecondaryFire);
-            Wait(0.5, WaitBehavior.IgnoreCondition);
-            if(IsFiringSecondary()) break;
-        }
-
+        PressButton(ep, Button.SecondaryFire);
+        Wait(0.5, WaitBehavior.IgnoreCondition);
         // restore facing
         StartFacingAimTarget();
         // restore buton control
@@ -1810,21 +1851,21 @@ if(
             IsFiringSecondary()
         ){
             // accsell for ball tackle
-            ApplyImpulse(ep, 
-                BallTackleDirection(),
-                20, Relative.ToWorld, ContraryMotion.Incorporate);
-            
+            BallTackle();
             Wait(0.5, WaitBehavior.IgnoreCondition);
         }
 
         // try Impulse press by 3time
         for(define tryCount! = 0; tryCount < 3; tryCount++){
+            if(
+                !IsInAlternateForm() ||
+                SpeedOf() <= 10
+            ){
+                break;
+            }
             // accsell for ball tackle by inertia movement
-            ApplyImpulse(ep, 
-                BallTackleDirection(),
-                20, Relative.ToWorld, ContraryMotion.Incorporate);
+            BallTackle();
             Wait(0.5, WaitBehavior.IgnoreCondition);
-            if(!IsInAlternateForm()) break;
         }
 
         // restore buton control
@@ -1832,18 +1873,21 @@ if(
     }
 }
 
-define BallTackleDirection()"BallTackleDirection"{
-    define dir;
-    if(
-        SpeedOf() >= 10
-    ){
-        // nearest enemy of grapple crow pos
-        dir = DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep)));
-    }
-    else{
-        dir = -1 * DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep)));
-    }
-    return dir;
+void BallTackle() playervar "BallTackle"{
+    // if(
+    //     SpeedOf() <= 10
+    // ){
+    //     // direct to target inverse for make distance
+    //     ApplyImpulse(ep, 
+    //         -1 * DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))),
+    //         25, Relative.ToWorld, ContraryMotion.Cancel);
+    // }
+    // else{
+        // direct to target
+        ApplyImpulse(ep, 
+            DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))),
+            25, Relative.ToWorld, ContraryMotion.Incorporate);
+    // }
 }
 
 // TAG Bot/ButtonControl/Propety ----------
@@ -2617,7 +2661,7 @@ void StartButtonControl(in define button, in define buttonBehaivor!, in define r
                         // is using ult already
                         IsUsingUltimate() ||
                         // enemy density low
-                        IsProbabilityTrue(50 * (1 - EnemyDensityRateOfAimTargetNear(ActionRange.Close)))
+                        IsProbabilityTrue(50 * (1 - EnemyDensityRateOfTargetNear(aimTarget, ActionRange.Close)))
                     )                
                 ){
                     // skip press ultimate button 
