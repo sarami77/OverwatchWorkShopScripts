@@ -1780,6 +1780,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         ForcePlayerHero(ep, Hero.Bastion);
         SetButtonControlPropety();
         SetMaxHealth(ep, 300);
+        SetDamageDealt(ep, 200);
         SetGravity(ep, 1);
         PressButton(ep, Button.Jump);
         // SetStatus(ep, null, Status.Rooted, MaxValue());
@@ -1796,11 +1797,21 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
             if(IsDead()){
                 break;
             }
+
             if(UltimateChargePercent() < DefaultPercentage()){
                 SetUltimateCharge(ep, UltimateChargePercent() + 5);
             }
+
             if(AbilityCooldown(ep, Button.SecondaryFire) > 5){
                 SetAbilityCooldown(ep, Button.SecondaryFire, 5);
+            }
+
+            if(IsUsingUltimate()){
+                CancelPrimaryAction();
+                SetFacing(ep, DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))), Relative.ToWorld);
+                Wait(0.1, WaitBehavior.IgnoreCondition);
+                SetUltimateCharge(ep, DefaultPercentage());
+                HeroMod_Action_FIRE_NUKE_CANON();
             }
 
             if(
@@ -1868,6 +1879,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         }
         SetUltimateCharge(ep, 0);
         SetMaxHealth(ep, DefaultPercentage());
+        SetDamageDealt(ep, DefaultPercentage());
         SetGravity(ep, DefaultPercentage());
         // ClearStatus(ep, Status.Rooted);
         if(prevHero != Hero.Bastion){
@@ -1898,8 +1910,8 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
             Damage(
                 PlayersWithinRadius(
                     landPosition, splashDamageRangeMinigun,
-                    enemyTeam, RadiusLOS.Off),
-                ep, 25);
+                    EnemyTeamOf(ep), RadiusLOS.Off),
+                ep, 30);
             // play blast
             PlayEffect(
                 AllPlayers(), PlayEffect.BadExplosion,
@@ -1937,36 +1949,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         IsAlive() &&
         UltimateChargePercent(ep) > 0
     ){
-        define chargeRate! = UltimateChargePercent() / 100;
-
-        // play blast sound
-        PlayEffect(
-            AllPlayers(), PlayEffect.RingExplosionSound,
-            Color.White,
-            ep,
-            chargeRate * 200);
-        PlayEffect(
-            AllPlayers(), PlayEffect.DebuffImpactSound,
-            Color.White,
-            ep,
-            chargeRate * 200);
-        // play blast
-        PlayEffect(
-            AllPlayers(), PlayEffect.GoodExplosion,
-            Color.White,
-            EyePosition() + (FacingDirectionOf() * 5),
-            chargeRate * 10);
-        PlayEffect(
-            AllPlayers(), PlayEffect.BadExplosion,
-            Color.Orange,
-            EyePosition() + (FacingDirectionOf() * 5),
-            chargeRate * 10);
-
-        ApplyImpulse(ep, -1 * FacingDirectionOf(), chargeRate * 15, Relative.ToWorld, ContraryMotion.Incorporate);           
-
-        define power! = UltimateChargePercent();
-        SetUltimateCharge(ep, 0);
-        HeroMod_Action_FIRE_BALL_FIRE(power);
+        HeroMod_Action_FIRE_NUKE_CANON();
     }
 }
 // TAG ZOMBIE
@@ -2069,7 +2052,7 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
             FirstOf(
                 SortedArray(
                     FilteredArray(
-                        AllLivingPlayers(enemyTeam),
+                        AllLivingPlayers(EnemyTeamOf(ep)),
                         (
                             DistanceBetween(dogPos, ae) <= dogAttackRange
                         )
@@ -2338,6 +2321,40 @@ void HeroMod_Action_FIRE_BALL_FIRE(define power!) playervar "HeroMod_Action_FIRE
     PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
 }
 
+// TAG HeroMod_Action_FIRE_NUKE_CANON
+void HeroMod_Action_FIRE_NUKE_CANON() playervar "HeroMod_Action_FIRE_NUKE_CANON"{
+    define chargeRate! = UltimateChargePercent() / 100;
+
+    // play blast sound
+    PlayEffect(
+        AllPlayers(), PlayEffect.RingExplosionSound,
+        Color.White,
+        ep,
+        chargeRate * 200);
+    PlayEffect(
+        AllPlayers(), PlayEffect.DebuffImpactSound,
+        Color.White,
+        ep,
+        chargeRate * 200);
+    // play blast
+    PlayEffect(
+        AllPlayers(), PlayEffect.GoodExplosion,
+        Color.White,
+        EyePosition() + (FacingDirectionOf() * 5),
+        chargeRate * 10);
+    PlayEffect(
+        AllPlayers(), PlayEffect.BadExplosion,
+        Color.Orange,
+        EyePosition() + (FacingDirectionOf() * 5),
+        chargeRate * 10);
+
+    ApplyImpulse(ep, -1 * FacingDirectionOf(), chargeRate * 15, Relative.ToWorld, ContraryMotion.Incorporate);           
+
+    define power! = UltimateChargePercent();
+    SetUltimateCharge(ep, 0);
+        HeroMod_Action_FIRE_BALL_FIRE(power);
+}
+
 // TAG HeroMod/Trigger ----------
 playervar define isUltUsed!;
 
@@ -2408,32 +2425,39 @@ if(
             IsButtonHeld(ep, Button.Melee)
         ) ||
         (
-            IsDummyBot() &&
-            IsButtonHeld(ep, Button.PrimaryFire)
+            IsDummyBot()
         )
     )
 ){
-    WaitLongPressConfirm();
-
-    if(IsDummyBot()){
+    if(!IsDummyBot()){
+        WaitLongPressConfirm();
+        DoHeroModAction(heroModType, HeroModTrigger.LONG_PRESS_MELEE_KEY, null);
+    }
+    else{
+        // Bots are determined based on cycles instead of button presses
         define prob!;
         if(
             heroModType == HeroModType.INSTANT_BUNKER ||
-            heroModType == HeroModType.GRUDGE_FIRE_BALL ||
+            heroModType == HeroModType.GRUDGE_FIRE_BALL
+        ){
+            prob = 50 * (EnemyDensityRateOfAimTargetNear(ActionRange.Close));
+        }
+        else if(
             heroModType == HeroModType.GUNSHIP_GUNNER
         ){
-            prob = 80 * (EnemyDensityRateOfAimTargetNear(ActionRange.Close));
+            prob = 100 * (EnemyDensityRateOfAimTargetNear(ActionRange.Close));
         }
         else{
-            prob = 40;
+            prob = 50;
         }
 
-        if(IsProbabilityTrue(100 - prob)){
-            Abort();
+        if(IsProbabilityTrue(prob)){
+            DoHeroModAction(heroModType, HeroModTrigger.LONG_PRESS_MELEE_KEY, null);
         }
+
+        Wait(3, WaitBehavior.IgnoreCondition);
+        LoopIfConditionIsTrue();
     }
-
-    DoHeroModAction(heroModType, HeroModTrigger.LONG_PRESS_MELEE_KEY, null);
 }
 
 // TAG USING_PRIMARY
