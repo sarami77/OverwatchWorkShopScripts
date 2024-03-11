@@ -2620,6 +2620,7 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
         ){
             startButton = true;
         }
+        // else
     }
     else{
         startButton = true;
@@ -2631,18 +2632,23 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
     }
     else{
         // start button
-        // release-press action
-        if(buttonBehaivor == ButtonBehaivor.ReleasePress){
-            while(enableButtonControl){
-                // button release during
-                WaitUntil(
-                    !enableButtonControl,
-                    RandomReal(releaseMin, releaseMax)
-                );
-                if(!enableButtonControl){ return; }
-
+        while(enableButtonControl){
+            // release-press action
+            if(buttonBehaivor == ButtonBehaivor.ReleasePress){
                 // start hold button
                 if(
+                    button == Button.Ultimate &&
+                    (
+                        // is using ult already
+                        IsUsingUltimate() ||
+                        // enemy density low
+                        IsProbabilityTrue(50 * (1 - EnemyDensityRateOfTargetNear(aimTarget, ActionRange.Close)))
+                    )                
+                ){
+                    // wait only, skip hold ultimate button 
+                    Wait(0.1, WaitBehavior.IgnoreCondition);
+                }
+                else if(
                     button == Button.Jump &&
                     hasDoubleJumpButtonAbility &&
                     IsProbabilityTrue(50)
@@ -2654,42 +2660,19 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                     Wait(RandomReal(0.1, 0.5), WaitBehavior.IgnoreCondition);                    
                     StartHoldingButton(ep, button);
                 }
-                else if(
-                    button == Button.Ultimate &&
-                    (
-                        // is using ult already
-                        IsUsingUltimate() ||
-                        // enemy density low
-                        IsProbabilityTrue(50 * (1 - EnemyDensityRateOfTargetNear(aimTarget, ActionRange.Close)))
-                    )                
-                ){
-                    // skip press ultimate button 
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                }
                 else{
                     StartHoldingButton(ep, button);     // SetButtonBit(button, true);
                 }
-                        
+                
                 // button hold during
-                WaitUntil(
-                    !enableButtonControl,
-                    RandomReal(pressMin, pressMax)
-                );
+                WaitUntil(!enableButtonControl, RandomReal(pressMin, pressMax));
                 if(!enableButtonControl){ return; }
 
                 // stop hold button
                 StopHoldingButton(ep, button);          // SetButtonBit(button, false);
             }
-        }
-        // release-repeat action
-        else if(buttonBehaivor == ButtonBehaivor.ReleaseRepeat){
-            while(enableButtonControl){
-                // button release during
-                WaitUntil(
-                    !enableButtonControl,
-                    RandomReal(releaseMin, releaseMax));
-                if(!enableButtonControl){ return; }
-
+            // release-repeat action
+            else if(buttonBehaivor == ButtonBehaivor.ReleaseRepeat){
                 // set button repeat during
                 repeatDuring = RandomReal(pressMin, pressMax);
                 
@@ -2698,16 +2681,19 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                 while(
                     isRepeatFiring            
                 ){
+                    // button repeat during
                     PressButton(ep, button);
-                    WaitUntil(
-                        !enableButtonControl,
-                        0.25
-                    );
+                    WaitUntil(!enableButtonControl, 0.25);
                     if(!enableButtonControl){ return; }
                 }
+                
                 // stop repeat button
                                                         // SetButtonBit(button, false);
             }
+            
+            // button release during
+            WaitUntil(!enableButtonControl, RandomReal(releaseMin, releaseMax));
+            if(!enableButtonControl){ return; }
         }
     }
 }
