@@ -425,6 +425,46 @@ define BlockedPositonByLocalVector(define player!, define localVector!, define d
     return blockedPosition;
 }
 
+define GetHasWallDirection(define player!, define detectDist!)"GetHasWallDirection"{
+    define checkDir! = RandomizedArray([Backward(), Right(), Left(), Forward()]);
+    define hasWallDir!;
+
+    for(define index! = 0; index < CountOf(checkDir); index++){
+        if(
+            IsBlockedBetween(
+                EyePosition(),
+                EyePosition() + (WorldVectorOf(checkDir[index], player) * detectDist)
+            )
+        ){
+            hasWallDir = checkDir[index];
+            break;
+        }
+    }
+    return hasWallDir;
+}
+
+define StartFacingWallPosition(define hasWallDir!, define detectDist!) playervar "GetHasWallDirection"{
+    define blockedPos! = BlockedPositon(ep, WorldVectorOf(hasWallDir, ep), detectDist);
+    define blockedDist! = DistanceBetween(ep, blockedPos);
+    define cutoffDist! = detectDist - blockedDist;
+    // aim to backward wall
+    StartFacingPosition(
+        // blocked as base
+        blockedPos +
+        // add hight by cutoff
+        Vector(0, cutoffDist, 0) +
+        // too close to wall
+        (blockedDist <= 2.5 ?
+            // aim without random for touch wall
+            RandomPosition(0, 0, 0)
+        :
+            // aim with random
+            RandomPosition(5, 5, 5))
+    );
+
+    return hasWallDir;
+}
+
 void StartFacingPlayer(define player!, define facingRate!) playervar "StartFacingPlayer"{
     if(
         player != null &&

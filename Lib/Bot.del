@@ -1343,44 +1343,29 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
             if(
                 DistanceBetween(ep, aimTarget) <= ActionRange.Close
             ){
-                define detectDist! = 20;
                 // fallback by graple hook
                 if(
-                    IsProbabilityTrue(50) &&
-                    AbilityCooldown(ep, Button.Ability1) <= 0 &&
-                    IsBlockedBetween(
-                        EyePosition(ep),
-                        EyePosition(ep) + (VectorWithOutY(-FacingDirectionOf(ep)) * detectDist)
-                    )
+                    IsProbabilityTrue(75) &&
+                    AbilityCooldown(ep, Button.Ability1) <= 0
                 ){
-                    StopMove(ep);
-                    StopHoldingButton(ep, Button.SecondaryFire);
-                    define blockedPos! = BlockedPositon(ep, VectorWithOutY(-FacingDirectionOf()), detectDist);
-                    define blockedDist! = DistanceBetween(ep, blockedPos);
-                    define cutoffDist! = detectDist - blockedDist;
-                    // aim to backward wall
-                    StartFacingPosition(
-                        blockedPos +
-                        Vector(0, cutoffDist, 0) +
-                        // too close to wall
-                        (blockedDist <= 2.5 ?
-                            // aim without random for touch wall
-                            RandomPosition(0, 0, 0)
-                        :
-                            // aim with random
-                            RandomPosition(3, 3, 3))
-                    );
-                    Wait(0.5, WaitBehavior.IgnoreCondition);
-                    PressButton(ep, Button.Ability1);
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                    // restore aiming
-                    StartHoldingButton(ep, Button.SecondaryFire);
-                    // restore facing
-                    StartFacingAimTarget();
+                    define detectDist! = 20;
+                    define hasWallDir! = GetHasWallDirection(ep, detectDist);
+                    if(hasWallDir != null){
+                        StopMove(ep);
+                        StopHoldingButton(ep, Button.SecondaryFire);
+                        StartFacingWallPosition(hasWallDir, detectDist);
+                        Wait(0.5, WaitBehavior.IgnoreCondition);
+                        PressButton(ep, Button.Ability1);
+                        Wait(0.1, WaitBehavior.IgnoreCondition);
+                        // restore aiming
+                        StartHoldingButton(ep, Button.SecondaryFire);
+                        // restore facing
+                        StartFacingAimTarget();
+                    }
                 }
                 // fallback without aiming
                 else if(
-                    IsProbabilityTrue(50) &&
+                    IsProbabilityTrue(75) &&
                     IsButtonHeld(ep, Button.SecondaryFire)
                 ){
                     StopHoldingButton(ep, Button.SecondaryFire);
@@ -1474,39 +1459,23 @@ void PolingHeroUniqueAction() playervar "PolingHeroUniqueAction"{
         else if(
             hero == Hero.WreckingBall
         ){
-            define detectDist! = 21;
-
             // use graple hook and tackle
             if(
                 IsProbabilityTrue(75) &&
-                AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
-                IsBlockedBetween(
-                    EyePosition(ep),
-                    EyePosition(ep) + (VectorWithOutY(FacingDirectionOf(ep)) * detectDist)
-                )
+                AbilityCooldown(ep, Button.SecondaryFire) <= 0
             ){
-                // stop buton control for reduce ball form cancel by fire
-                enableButtonControl = false;
-                define blockedPos! = BlockedPositon(ep, VectorWithOutY(FacingDirectionOf()), detectDist);
-                define blockedDist! = DistanceBetween(ep, blockedPos);
-                define cutoffDist! = detectDist - blockedDist;
-                // aim to target above
-                StartFacingPosition(
-                    blockedPos +
-                    Vector(0, cutoffDist, 0) +
-                    // too close to wall
-                    (blockedDist <= 2.5 ?
-                        // aim without random for touch wall
-                        RandomPosition(0, 0, 0)
-                    :
-                        // aim with random
-                        RandomPosition(3, 3, 3))
-                );
-                Wait(0.5, WaitBehavior.IgnoreCondition);
-                StartHoldingButton(ep, Button.SecondaryFire);
-                Wait(0.1, WaitBehavior.IgnoreCondition);
-                // restore facing
-                StartFacingAimTarget();
+                define detectDist! = 21;
+                define hasWallDir! = GetHasWallDirection(ep, detectDist);
+                if(hasWallDir != null){
+                    // stop buton control for reduce ball form cancel by fire
+                    enableButtonControl = false;
+                    StartFacingWallPosition(hasWallDir, detectDist);
+                    Wait(0.5, WaitBehavior.IgnoreCondition);
+                    StartHoldingButton(ep, Button.SecondaryFire);
+                    Wait(0.1, WaitBehavior.IgnoreCondition);
+                    // restore facing
+                    StartFacingAimTarget();
+                }
             }
             // use pile driver
             if(
@@ -1856,39 +1825,24 @@ if(
             Wait(0.5, WaitBehavior.IgnoreCondition);
         }
 
-        // try Impulse press by 3time
-        for(define tryCount! = 0; tryCount < 3; tryCount++){
-            if(
-                !IsInAlternateForm() ||
-                SpeedOf() <= 10
-            ){
-                break;
-            }
-            // accsell for ball tackle by inertia movement
-            BallTackle();
-            Wait(0.5, WaitBehavior.IgnoreCondition);
-        }
-
         // restore buton control
         enableButtonControl = true;
     }
 }
 
 void BallTackle() playervar "BallTackle"{
-    // if(
-    //     SpeedOf() <= 10
-    // ){
-    //     // direct to target inverse for make distance
-    //     ApplyImpulse(ep, 
-    //         -1 * DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))),
-    //         25, Relative.ToWorld, ContraryMotion.Cancel);
-    // }
-    // else{
-        // direct to target
-        ApplyImpulse(ep, 
-            DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))),
-            25, Relative.ToWorld, ContraryMotion.Incorporate);
-    // }
+    define dir!;
+    if(
+        SpeedOf() <= 10
+    ){
+        dir = 1;
+    }
+    else{
+        dir = -1;
+    }
+    ApplyImpulse(ep, 
+        dir * DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))),
+        25, Relative.ToWorld, ContraryMotion.Incorporate);
 }
 
 // TAG Bot/ButtonControl/Propety ----------
