@@ -802,7 +802,8 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
             "    + disable any damage and knockback in safezone players" + NL +
             "    + heal 25 health in safezone players every 1 second passed" + NL +
             "  - lose ult charge 10% by every 1 second passed"+ NL +
-            "    * continue deploying until ULT charge empty";
+            "    * continue deploying until ULT charge empty"+ NL +
+            "    * safezone will shrink to personal size by 10 seconds passed";
     }
     else if(
         trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
@@ -814,7 +815,7 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
         }
 
         define bunkerPos! = BelowPosition(PositionOf());
-        define bunkerRange! = 6;
+        define bunkerRange = 6;
         define bunkerEntity! = [];
 
         PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Orange, bunkerPos, 3);
@@ -825,7 +826,7 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
         DestroyIcon(bunkerEntity[2]);
         bunkerEntity[0] = CreateEffect(AllPlayers(), Effect.Ring,
             Color.Orange,
-            bunkerPos, bunkerRange, EffectRev.None);
+            bunkerPos, bunkerRange, EffectRev.PositionAndRadius);
         bunkerEntity[1] = CreateInWorldText(AllPlayers(),
             <"Safe zone until <0> seconds", RoundToInteger(UltimateChargePercent() / consumeUltCharge, Rounding.Up)>,
             bunkerPos + Vector(0, 1.5, 0), basicInWorldTextSize * 2, Clipping.ClipAgainstSurfaces,
@@ -833,6 +834,7 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
         bunkerEntity[2] = CreateIcon(AllPlayers(), bunkerPos,
             Icon.ArrowDown, IconRev.PositionAndColor, Color.Orange, true);
 
+        define duaringCount!;
         while(
             UltimateChargePercent() > 0
         ){
@@ -856,9 +858,15 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
                 // Ends when charge is empty
                 break;
             }
+            duaringCount ++;
+            if(duaringCount == 10){
+                duaringCount = 0;
+                ChaseVariableAtRate(bunkerRange, 0.5, 1.0, RateChaseReevaluation.None);
+            }
             Wait(1, WaitBehavior.IgnoreCondition);
         }
 
+        StopChasingVariable(bunkerRange);
         DestroyEffect(bunkerEntity[0]);
         DestroyInWorldText(bunkerEntity[1]);
         DestroyIcon(bunkerEntity[2]);
