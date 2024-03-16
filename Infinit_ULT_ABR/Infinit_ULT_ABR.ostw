@@ -1,0 +1,97 @@
+// 70EKM
+import "Infinit_ULT_ABR.setting.json";
+
+globalvar define t1_inf_abr_enable;
+globalvar define t1_inf_ult_enable;
+globalvar define t2_inf_abr_enable;
+globalvar define t2_inf_ult_enable;
+
+rule: "Initialize"
+Event.OngoingGlobal
+{
+    t1_inf_abr_enable = WorkshopSettingToggle("Team1 Settings", "Infinite Ability1", true, 0);
+    t1_inf_ult_enable = WorkshopSettingToggle("Team1 Settings", "Infinite Ultimate1", true, 1);
+    t2_inf_abr_enable = WorkshopSettingToggle("Team2 Settings", "Infinite Ability2", true, 0);
+    t2_inf_ult_enable = WorkshopSettingToggle("Team2 Settings", "Infinite Ultimate2", true, 1);
+}
+
+define GetInfAbrEnableTeam() globalvar "GetInfAbrEnableTeam"{
+    define targetTeam;
+    if(
+        t1_inf_abr_enable &&
+        t2_inf_abr_enable
+    ){
+        targetTeam = Team.All;
+    }
+    else if(
+        t1_inf_abr_enable
+    ){
+        targetTeam = Team.Team1;
+    }
+    else if(
+        t2_inf_abr_enable
+    ){
+        targetTeam = Team.Team2;
+    }
+    else{
+        targetTeam = null;
+    }
+    return targetTeam;
+}
+
+define GetInfUltEnableTeam() globalvar "GetInfUltEnableTeam"{
+    define targetTeam;
+    if(
+        t1_inf_ult_enable &&
+        t2_inf_ult_enable
+    ){
+        targetTeam = Team.All;
+    }
+    else if(
+        t1_inf_ult_enable
+    ){
+        targetTeam = Team.Team1;
+    }
+    else if(
+        t2_inf_ult_enable
+    ){
+        targetTeam = Team.Team2;
+    }
+    else{
+        targetTeam = null;
+    }
+    return targetTeam;
+}
+
+rule: "Infinite/ability"
+Event.OngoingGlobal
+{
+    define buttonArray = [
+        Button.Jump,
+        Button.Crouch,
+        Button.PrimaryFire,
+        Button.SecondaryFire,
+        Button.Ability1,
+        Button.Ability2
+    ];
+
+    define targetTeam = GetInfAbrEnableTeam();
+    for(define index! = 0; index < CountOf(buttonArray); index++){
+        SetAbilityCooldown(AllPlayers(targetTeam), buttonArray[index], 0);
+        SetAbilityCharge(AllPlayers(targetTeam), buttonArray[index], 100);
+        SetAbilityResource(AllPlayers(targetTeam), buttonArray[index], 100);
+    }
+
+    Wait(0.5);
+    Loop();
+}
+
+rule: "Infinite/ultimate"
+Event.OngoingGlobal
+{
+    define targetTeam = GetInfUltEnableTeam();
+    SetUltimateCharge(AllPlayers(targetTeam), 100);
+
+    Wait(0.5);
+    Loop();
+}
