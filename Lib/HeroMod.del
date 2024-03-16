@@ -803,7 +803,7 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
             "    + heal 25 health in safezone players every 1 second passed" + NL +
             "  - lose ult charge 10% by every 1 second passed"+ NL +
             "    * continue deploying until ULT charge empty"+ NL +
-            "    * safezone will shrink to personal size by 10 seconds passed";
+            "    * lose ult charge increases every 10 seconds passed";
     }
     else if(
         trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
@@ -815,7 +815,7 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
         }
 
         define bunkerPos! = BelowPosition(PositionOf());
-        define bunkerRange = 6;
+        define bunkerRange! = 6;
         define bunkerEntity! = [];
 
         PlayEffect(AllPlayers(), PlayEffect.GoodExplosion, Color.Orange, bunkerPos, 3);
@@ -852,21 +852,25 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
             PlayEffect(target, PlayEffect.BuffImpactSound, Color.Orange, bunkerPos, 100);
             SetStatus(target, ep, Status.PhasedOut, 1.5);
             Heal(target, ep, 25);
+            
+            if(duaringCount == 10){
+                duaringCount = 0;
+                consumeUltCharge += 5;
+            }
+            else{
+                duaringCount ++;
+            }
             SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
+
             if(UltimateChargePercent() <= 0)
             {
                 // Ends when charge is empty
                 break;
             }
-            duaringCount ++;
-            if(duaringCount == 10){
-                duaringCount = 0;
-                ChaseVariableAtRate(bunkerRange, 0.5, 1.0, RateChaseReevaluation.None);
-            }
+
             Wait(1, WaitBehavior.IgnoreCondition);
         }
 
-        StopChasingVariable(bunkerRange);
         DestroyEffect(bunkerEntity[0]);
         DestroyInWorldText(bunkerEntity[1]);
         DestroyIcon(bunkerEntity[2]);
