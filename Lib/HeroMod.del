@@ -1814,17 +1814,34 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
             if(AbilityCooldown(ep, Button.SecondaryFire) > 5){
                 SetAbilityCooldown(ep, Button.SecondaryFire, 5);
             }
-
+            
+            // shot nuke as ult triggered
             if(IsUsingUltimate()){
                 CancelPrimaryAction();
-                // aim closest enemy
-                StartFacingPosition(ClosestPlayerTo(ep, EnemyTeamOf(ep)));
+                define aimPos! = PositionOf(
+                        FirstOf(
+                            SortedArray(
+                                FilteredArray(
+                                    AllLivingPlayers(EnemyTeamOf(ep)),
+                                    // has lien
+                                    IsInLineOfSight(ep, ae)
+                                ),
+                                DistanceBetween(ep, ae)
+                            )
+                        )
+                    );
+                if(aimPos == null){
+                    aimPos = BelowPosition(ep);
+                }
+                // auto aim enemy
+                StartFacingPosition(aimPos);
                 Wait(1.0, WaitBehavior.IgnoreCondition);
                 StopFacing(ep);
                 SetUltimateCharge(ep, DefaultPercentage());
                 HeroMod_Action_FIRE_NUKE_CANON();
             }
 
+            // change to assult mode
             if(
                 !IsInAlternateForm() &&
                 !IsFiringSecondary()
@@ -1834,10 +1851,11 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
                 Wait(0.5, WaitBehavior.IgnoreCondition);
             }
             
-            define dist! = DistanceBetween(ep, BelowPosition(ep));
             define faceDir! = FacingDirectionOf();
+            define dist! = DistanceBetween(ep, BelowPosition(ep));
             define hightLimit! = 16;
             
+            // apply impulse
             if(
                 // descent buton held
                 IsButtonHeld(ep, Button.Crouch) ||
@@ -1854,23 +1872,24 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
                 // down with force
                 ApplyImpulse(ep, 
                     Down(),
-                    3.0,
+                    4.0,
                     Relative.ToWorld,
                     ContraryMotion.Incorporate);
             }
             else{
-                define spd! = (hightLimit - dist) * 0.3;
-                // fly
+                // get speed by dist to hightLimit
+                define speed! = (hightLimit - dist) * 0.3;
+                // float impulse
                 ApplyImpulse(ep, 
                     dist < hightLimit ?
                         Up() :
                         NoDirection(),
                     dist < hightLimit ?
-                        spd:
+                        speed:
                         0,
                     Relative.ToWorld,
                     ContraryMotion.Incorporate);
-                    
+                // facing impulse
                 ApplyImpulse(ep, 
                     YOf(faceDir) < 0 ?
                         VectorWithOutY(faceDir) :
@@ -1880,7 +1899,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
                     ContraryMotion.Incorporate);
             }
         
-            Wait(1.0, WaitBehavior.IgnoreCondition);
+            Wait(1, WaitBehavior.IgnoreCondition);
         }
 
         StopModifyingHeroVoiceLines(ep);
