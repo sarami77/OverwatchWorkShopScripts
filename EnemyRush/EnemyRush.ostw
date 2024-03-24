@@ -643,7 +643,7 @@ define upValueScale:
     confirmGameDifficulty == GameDifficulty.INSANITY ?  upValueScaleBase * 1 :
                                                         upValueScaleBase * 1 ;
 
-define downValueScaleBase: 1.25;
+define downValueScaleBase: 1.5;
 define downValueScale:
     confirmGameDifficulty == GameDifficulty.EASY ?      downValueScaleBase * 1.0 :
     confirmGameDifficulty == GameDifficulty.NORMAL ?    downValueScaleBase * 0.9 :
@@ -1354,10 +1354,10 @@ if(
 
 // TAG EnemyBot/Teleport ----------
 define teleportAreaSize: 6;
-define teleportAreaExtendSizeScaleByNonObjectDirection: 1.5;
-define teleportAreaExtendSizeScaleByCutoffDist: 0.5;
+define teleportAreaExtendSizeScaleByNonObjectDirection: 1.75;
+define teleportAreaExtendSizeScaleByCutoffDist: 0.75;
 define teleportAreaOffsetDistFromObject: ActionRange.CanFind;   // bot can find other range
-define minDistOfRenewCommonTeleportBasePosition: teleportAreaSize * 1;    // same as teleportAreaSize
+define updateRangeOfTeleportArea: teleportAreaSize * 0.95;    // same as teleportAreaSize
 
 define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(humanTeam));
 define IsEnemyOnObject: (0 < NumberOfPlayersOnObjective(enemyTeam));
@@ -1389,11 +1389,6 @@ define CanEncountPosition(define position)"CanEncountPosition"{
         // position valid
         position != null
                 &&
-        // // position not close to near player
-        // !DistanceBetween(
-            //     commonTeleportBasePosition,
-            //     ClosestPlayerTo(commonTeleportBasePosition, humanTeam)) < minDistOfRenewCommonTeleportBasePosition    
-                //         &&
         // Has line to near player
         IsInLineOfSight(
             PositionOffsetY1() + position,
@@ -1653,7 +1648,7 @@ Event.OngoingGlobal
 if(
     IsGameInProgress()
 ){
-    define objectPos = CurrentObjectOnPosition();
+    define objectPos! = CurrentObjectOnPosition();
 
     if(HasObjectDirection()){
         // get blockedPos by extension line collision position
@@ -1674,16 +1669,16 @@ if(
             commonTeleportBasePosition == null
         ){
             needUpdateCommonTeleportBasePosition = true;
-            // dbgHudTxt(<"update position by position invalid">);
+            // dbgHudTxt(<"UP POS BY POS INV">);
         }
         else if(
-            // position close to near player
+            // position too close player
             DistanceBetween(
                 commonTeleportBasePosition,
-                ClosestPlayerTo(commonTeleportBasePosition, humanTeam)) < minDistOfRenewCommonTeleportBasePosition        
+                ClosestPlayerTo(commonTeleportBasePosition, humanTeam)) < updateRangeOfTeleportArea        
         ){
             needUpdateCommonTeleportBasePosition = true;
-            // dbgHudTxt(<"update position by close to near player">);
+            // dbgHudTxt(<"UP POS BY CRS PLR">);
         }
         else{
             if(
@@ -1691,6 +1686,7 @@ if(
                 IsPlayerOnObject
             ){
                 if(
+                    // too far from object
                     // has payload
                     HasObjectDirection() ?
                         // position too far to bloeckd position
@@ -1706,9 +1702,10 @@ if(
                         ) > teleportAreaSize
                 ){
                     needUpdateCommonTeleportBasePosition = true;
-                    // dbgHudTxt(<"update position by too far to object">);
+                    // dbgHudTxt(<"UP POS BY FAR">);
                 }
                 else if(
+                    // non line from object
                     // has payload
                     HasObjectDirection() ?
                         // position has not line to bloeckd position
@@ -1726,10 +1723,10 @@ if(
                         )
                 ){
                     needUpdateCommonTeleportBasePosition = true;
-                    // dbgHudTxt(<"update position by has not line to object">);
+                    // dbgHudTxt(<"UP POS BY NON LINE">);
                 }
                 else{
-                    // dbgHudTxt(<"* keep position with player on object">);
+                    // dbgHudTxt(<"POS KEP">);
                 }
             }
             else{
@@ -1742,10 +1739,10 @@ if(
                     )
                 ){
                     needUpdateCommonTeleportBasePosition = true;
-                    // dbgHudTxt(<"update position by has not line to closest player">);
+                    // dbgHudTxt(<"UP POS BY NON PLR">);
                 }
                 else{
-                    // dbgHudTxt(<"* keep position with not player on object">);
+                    // dbgHudTxt(<"POS KEP">);
                 }
             }
         } 
@@ -1782,14 +1779,14 @@ if(
             // release update flag
             needUpdateCommonTeleportBasePosition = false;
 
-            // dbgHudTxt(<"! position update">);
+            // dbgHudTxt(<"UP POS OK">);
         }
         else{
-            // dbgHudTxt(<"! position not found">);
+            // dbgHudTxt(<"UP POS NG">);
         }
     }
 
-    WaitUpdateASecond();
+    WaitUpdateMediumCycle();
     WaitReleaseServerLoad(ServerLoadType.GameMain);
     LoopIfConditionIsTrue();
 }
@@ -1894,7 +1891,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    spawnRushInterval = ObjectProgressScaledInterval(humanTeam, 20, 40, 5);
+    spawnRushInterval = ObjectProgressScaledInterval(humanTeam, 25, 50, 5);
     // apply workshop setting
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 0.2, 0.0, 100, 2);
     // round for counting
@@ -2073,43 +2070,48 @@ rule: "DebugGlobalAction"
 Event.OngoingGlobal
 Team.All
 if(
-    initCompleted
+    initCompleted &&
+    IsGameInProgress()
 ){
     // // commonTeleportBasePosition orb
-    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Orb, Color.White,
+    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Cloud, Color.Team1,
+    //     PositionOffsetY1() + commonTeleportBasePosition, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+
+    // // commonTeleportBasePosition orb
+    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Orb, Color.Red,
     //     PositionOffsetY1() + commonTeleportBasePosition, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
     // // positionObjectAhead orb
-    // CreateEffect(positionObjectAhead != null ? hp : null, Effect.Orb, Color.Red,
+    // CreateEffect(positionObjectAhead != null ? hp : null, Effect.Orb, Color.White,
     //     positionObjectAhead, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
 
-    // // minDistOfRenewCommonTeleportBasePosition white ring
-    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, Color.Yellow,
-    //     PositionOffsetY1() + commonTeleportBasePosition, minDistOfRenewCommonTeleportBasePosition * 0.95, EffectRev.VisibleToPositionAndRadius);
     // // teleportAreaSize ring
     // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, Color.Red,
     //     PositionOffsetY1() + commonTeleportBasePosition, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+    // // updateRangeOfTeleportArea ring
+    // CreateEffect(commonTeleportBasePosition != null ? hp : null, Effect.Ring, Color.Yellow,
+    //     PositionOffsetY1() + commonTeleportBasePosition, updateRangeOfTeleportArea, EffectRev.VisibleToPositionAndRadius);
 
     // // placable teleportPosition area size sphere
     // CreateEffect(hp,
-    //     Effect.Sphere, Color.Red,
+    //     Effect.Sphere, Color.White,
     //     HasObjectDirection() ? positionObjectAhead : CurrentObjectOnPosition(),
-    //     teleportAreaSize + teleportAreaExtendSize,
+    //     HasObjectDirection() ? teleportAreaSize + teleportAreaExtendSize : teleportAreaSize,
     //     EffectRev.VisibleToPositionAndRadius);
 
     // // object -> positionObjectAhead beam
     // CreateBeamEffect(HasObjectDirection() ? hp : null, BeamType.GoodBeam, 
     //     CurrentObjectOnPosition(),
     //     positionObjectAhead, 
-    //     Color.Red, EffectRev.VisibleToPositionAndRadius);
+    //     Color.White, EffectRev.VisibleToPositionAndRadius);
     // // positionObjectAhead or object -> commonTeleportBasePosition beam
     // CreateBeamEffect(hp, BeamType.GoodBeam, 
     //     HasObjectDirection() ? positionObjectAhead : CurrentObjectOnPosition(),
     //     PositionOffsetY1() + commonTeleportBasePosition, 
-    //     Color.White, EffectRev.VisibleToPositionAndRadius);
+    //     Color.Red, EffectRev.VisibleToPositionAndRadius);
     // // commonTeleportBasePosition -> host player or object beam
-    // CreateBeamEffect(HasSpawned(hp) ? hp : null, BeamType.GoodBeam, 
+    // CreateBeamEffect(hp, BeamType.GoodBeam, 
+    //     HasSpawned(hp) ? PositionOffsetY1() + hp : CurrentObjectOnPosition(),
     //     PositionOffsetY1() + commonTeleportBasePosition, 
-    //     PositionOffsetY1() + hp,
     //     Color.Blue, EffectRev.VisibleToPositionAndRadius);
 
     define pastSecond = 1;
@@ -2120,7 +2122,7 @@ if(
 
         // auto recall gunship
         if(
-            IsProbabilityTrue((8 - (HumanPlayerNum(humanTeam))) * 1.0) &&
+            IsProbabilityTrue(GameProgressDiff(humanTeam) * -0.3) &&
             IsGameInProgress()
         ){
             forceHeroMod();
@@ -2343,26 +2345,30 @@ if(
 
 void forceHeroMod()"forceHeroMod"{
     define player! = 
-        FirstOf(
-            SortedArray(
-                FilteredArray(
-                    AllPlayers(humanTeam),
-                    (
-                        IsDummyBot(ae) &&
-                        !ae.isTransformed
-                    )
-                ),
-                DistanceBetween(ae, CurrentObjectPosition())
+        RandomValueInArray(
+            FilteredArray(
+                AllPlayers(humanTeam),
+                (
+                    IsDummyBot(ae) &&
+                    !ae.isTransformed
+                )
             )
         );
 
     player.heroModType = RandomValueInArray([
-        // HeroModType.ARTILLERY_REQUEST,
-        // HeroModType.STRAFING_REQUEST,
-        // HeroModType.GRUDGE_FIRE_BALL,
-        // HeroModType.GRUDGE_LIGHTNING,
-        // HeroModType.BEAM_SNIPER,
-        // HeroModType.TITAN_FORM,
+        HeroModType.HEALING_SYRINGE,
+        HeroModType.SAVIOR,
+        HeroModType.POWERFUL_GIFT,
+        HeroModType.SUPER_ULT,
+        HeroModType.SHOT_CALL,
+        HeroModType.ARTILLERY_REQUEST,
+        HeroModType.STRAFING_REQUEST,
+        HeroModType.GRUDGE_FIRE_BALL,
+        HeroModType.GRUDGE_LIGHTNING,
+        HeroModType.BEAM_SNIPER,
+        HeroModType.TITAN_FORM,
+        HeroModType.GUNSHIP_GUNNER,
+        HeroModType.GUNSHIP_GUNNER,
         HeroModType.GUNSHIP_GUNNER
     ]);
 
