@@ -33,8 +33,8 @@ Event.OngoingGlobal
     // Stop records to reduce server load
     DisableInspectorRecording();
 
-    // If run it right after loading the server, some scripts fail, so wait 3 seconds
-    Wait(5, WaitBehavior.AbortWhenFalse);
+    // If run it right after loading the server, some scripts fail, so wait 6 seconds
+    Wait(6, WaitBehavior.AbortWhenFalse);
 
     // Start watch over load
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
@@ -603,7 +603,7 @@ if(
 }
 
 // TAG EnemyBot/Config ----------
-define basicSpawnTimeBase: 12.0;
+define basicSpawnTimeBase: 14.0;
 define basicSpawnTimeMin:
     confirmGameDifficulty == GameDifficulty.EASY ?      basicSpawnTimeBase * 1.0 :
     confirmGameDifficulty == GameDifficulty.NORMAL ?    basicSpawnTimeBase * 0.9 :
@@ -612,7 +612,7 @@ define basicSpawnTimeMin:
     confirmGameDifficulty == GameDifficulty.LEGENDARY ? basicSpawnTimeBase * 0.5 :
     confirmGameDifficulty == GameDifficulty.INSANITY ?  basicSpawnTimeBase * 0.3 :
                                                         basicSpawnTimeBase * 1.0 ;
-define spawnTimeMinToMaxScale: 1.5;
+define spawnTimeMinToMaxScale: 1.25;
 
 define autoTuneDmgDltBase: 20;
 
@@ -1091,13 +1091,10 @@ globalvar define forceReloadEnemyAsset! = false;
 rule: "EnemyBot/Asset/Interval/reloadReloadEnemyAsset"
 Event.OngoingGlobal
 if(
-    initCompleted &&
+    IsGameInProgress() ||
     (
-        IsGameInProgress() ||
-        (
-            IsInSetup() &&
-            MatchTime() <= 5
-        )
+        IsInSetup() &&
+        MatchTime() <= 5
     )
 ){
     while(true){
@@ -1161,7 +1158,6 @@ if(
 rule: "EnemyBot/Asset/Interval/reloadBotAssetIntervalByProgress"
 Event.OngoingGlobal
 if(
-    initCompleted &&
     IsGameInProgress()
 ){
     define progressStage! = 0;
@@ -1561,17 +1557,17 @@ define maxDelayTime: 3.0;
 void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
     if(teleportPosition == null){return;}
 
-    if(IsInSpawnRoom()){
-        Wait(
-            // each order
-            SlotOf() *
-            // delay time unit by max delay time
-            (maxDelayTime / NumberOfPlayers(enemyTeam)) * 
-            // scale by alive bot num (not include self)
-            (NumberOfLivingPlayers(enemyTeam) - 1) / (NumberOfPlayers(enemyTeam) - 1), 
-            WaitBehavior.AbortWhenFalse
-        );
-    }
+    // if(IsInSpawnRoom()){
+    //     Wait(
+    //         // each order
+    //         SlotOf() *
+    //         // delay time unit by max delay time
+    //         (maxDelayTime / NumberOfPlayers(enemyTeam)) * 
+    //         // scale by alive bot num (not include self)
+    //         (NumberOfLivingPlayers(enemyTeam) - 1) / (NumberOfPlayers(enemyTeam) - 1), 
+    //         WaitBehavior.AbortWhenFalse
+    //     );
+    // }
 
     // show pre teleport effect
     PlayTeleportEffect(true, isBeamFromBody);
@@ -1893,7 +1889,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    spawnRushInterval = ObjectProgressScaledInterval(humanTeam, 20, 40) + RandomInteger(0, 5);
+    spawnRushInterval = ObjectProgressScaledInterval(humanTeam, 30, 60) + RandomInteger(0, 5);
     // apply workshop setting
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.0, 100, 2);
     // round for counting
@@ -1932,7 +1928,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    shotCallInterval = ObjectProgressScaledInterval(humanTeam, 20, 40) + RandomInteger(0, 5);
+    shotCallInterval = ObjectProgressScaledInterval(humanTeam, 30, 60) + RandomInteger(0, 5);
     // apply workshop setting
     shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.0, 100, 3);
     // round for counting
@@ -2072,7 +2068,6 @@ rule: "DebugGlobalAction"
 Event.OngoingGlobal
 Team.All
 if(
-    initCompleted &&
     IsGameInProgress()
 ){
     // // commonTeleportBasePosition orb
@@ -2150,7 +2145,6 @@ rule: "DebugPlayJoinPlayerSound"
 Event.OnPlayerJoin
 Team.All
 if(
-    initCompleted &&
     !IsDummyBot()
 ){
     define positionArray! = [
