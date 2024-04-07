@@ -26,10 +26,10 @@ Event.OngoingGlobal
         // Hero.Symmetra
     ];
     
-    DestroyBots(enemyTeam);
-    DestroyBots(humanTeam);
-    CreateBotsByHeroList(assetList, enemyTeam);
-    CreateBotsByHeroList(assetList, humanTeam);
+    // DestroyBots(enemyTeam);
+    // DestroyBots(humanTeam);
+    // CreateBotsByHeroList(assetList, enemyTeam);
+    // CreateBotsByHeroList(assetList, humanTeam);
 
     SetRespawnMaxTime(ap(ta), 1);
     SetMaxHealth(ap(ta), 100); Wait(0.5); Heal(ap(ta), null, MaxValue());
@@ -52,14 +52,69 @@ Event.OngoingGlobal
 // TestCode -----------------------------------------------
 define cautionColor: Color.Yellow;
 
+globalvar define portalPosition;
+
 rule: "TestCode"
 Event.OngoingPlayer
 if(
     ep == hp &&
     HasSpawned()
 ){
-    Wait(1);    
-    LoopIfConditionIsTrue();
+    define scale = 100;
+    CreateIcon(AllPlayers(), portalPosition, Icon.Spiral,
+        IconRev.VisibleToPositionAndColor, Color.Purple, true);
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Purple, portalPosition, 1, EffectRev.VisibleToPositionRadiusAndColor);
+
+    Wait(3);
+    ForceSpawnRoom(Team.Team1, 2);
+    // Wait(0.1);
+    define lookPos = SpawnPoints(Team.Team1)[0];
+    Teleport(ep, lookPos);
+    Wait(3);
+    ForceSpawnRoom(Team.Team2, 0);
+    // Wait(0.1);
+    lookPos = SpawnPoints(Team.Team2)[0];
+    Teleport(ep, lookPos);
+    Wait(3);
+    StopCamera(ep);
+
+    define roomNo = 0;
+
+    while(true){
+        if(3 > DistanceBetween(
+            portalPosition, ClosestPlayerTo(portalPosition, TeamOf(ep)))
+        ){
+            portalPosition =
+                NearestWalkablePosition(
+                    RandomPosition(scale,scale/4,scale) +
+                    Midpoint(
+                        SpawnPoints(EnemyTeamOf(ep))[0],
+                        SpawnPoints(TeamOf(ep))[0]
+                    )
+                );
+        }
+
+                if(50 > DistanceBetween(ep, SpawnPoints(EnemyTeamOf(ep))[0])){
+            ForceSpawnRoom(EnemyTeamOf(ep), RandomInteger(0, 2));
+        }
+        if(50 > DistanceBetween(ep, SpawnPoints(TeamOf(ep))[0])){
+            ForceSpawnRoom(TeamOf(ep), RandomInteger(0, 2));
+        }
+
+
+        if(6 > DistanceBetween(
+            portalPosition, ClosestPlayerTo(portalPosition, TeamOf(ep)))
+        ){
+            ChaseVariableAtRate(
+                portalPosition,
+                PositionOf(ClosestPlayerTo(portalPosition, TeamOf(ep))),
+                5,
+                RateChaseReevaluation.DestinationAndRate
+            );
+        }
+        
+        Wait(1);
+    }
 }
 
 // TeamFormation -----------------------------------------------
