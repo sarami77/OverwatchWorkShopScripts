@@ -1381,7 +1381,7 @@ define CanSnapMapSurface()"CanSnapMapSurface"{
     );
 }
 
-define CanEncountPosition(define position)"CanEncountPosition"{
+define CanEncountPosition(define position) globalvar "CanEncountPosition"{
     define canEncount = false;
 
     if(
@@ -1806,8 +1806,8 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define checkTeleportConditionInterval: 1;
-define checkTeleportConditionMaxCount: 3;
+define checkTeleportConditionInterval: 2;
+define checkTeleportConditionMaxCount: 2;
 
 rule: "EnemyBot/Teleport/teleportOrHopForDefendObjectOnIdle"
 Event.OngoingPlayer
@@ -1820,53 +1820,38 @@ if(
     define checkConditionCount = 0;
 
     while(checkConditionCount < checkTeleportConditionMaxCount){
+        Wait(checkTeleportConditionInterval, WaitBehavior.AbortWhenFalse);
+        WaitReleaseServerLoad(ServerLoadType.GameMain);
+
         if(
             // player on object
             IsPlayerOnObject &&
             // far from object
             DistanceBetween(ep, CurrentObjectPosition()) > ActionRange.CanFind
-            // // has line of object
-            // !IsInLineOfSight(
-            //     EyePosition(ep),
-            //     CurrentObjectPosition())
         ){
             // do teleport instantly
             break;
         }
         else if(
-            // can encount player
-            CanEncountPosition(PositionOf(ep))
+            // Has line to near player
+            IsInLineOfSight(
+                EyePosition(ep),
+                EyePosition(ClosestPlayerTo(ep, humanTeam)),
+                BarrierLOS.NoBarriersBlock
+            )
         ){
-            // reset count
+            // keep position and reset count
             checkConditionCount = 0;
         }
         else{
             // keep position and count up
             checkConditionCount ++;
+
         }
-
-        Wait(checkTeleportConditionInterval, WaitBehavior.AbortWhenFalse);
-        WaitReleaseServerLoad(ServerLoadType.GameMain);
     }
 
-    define objectPosition! = CurrentObjectPosition();
-    define dist! = DistanceBetween(ep, objectPosition);
-    if(
-        IsNeedEscortObject(enemyTeam) &&
-        IsInLineOfSight(
-            EyePosition(ep),
-            objectPosition + PositionOffsetY1())
-    ){
-        // hop to object
-        ApplyImpulse(ep, 
-            VectorTowards(ep, objectPosition + Vector(0, dist * 0.25, 0)),
-            dist * 2.5,
-            Relative.ToWorld, ContraryMotion.Cancel);
-    }
-    else{
-        // teleport
-        DoTeleport(false, false);
-    }
+    // teleport
+    DoTeleport(false, false);
 
     LoopIfConditionIsTrue();
 }
