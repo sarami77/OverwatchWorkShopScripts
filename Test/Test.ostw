@@ -3,7 +3,7 @@ import "../Lib/Debug.del";
 import "../Lib/Utility.del";
 import "../Lib/ServerOverLoadMeasures.del";
 import "../Lib/Bot.del";
-import "../Lib/Vote.del";
+// import "../Lib/Vote.del";
 // import "../Lib/HeroMod.del";
 
 // Builtin -----------------------------------------------
@@ -54,68 +54,87 @@ define cautionColor: Color.Yellow;
 
 globalvar define portalPosition;
 
-rule: "TestCode"
+rule: "AvoidRespawnRoom"
 Event.OngoingPlayer
 if(
     ep == hp &&
-    HasSpawned()
+    IsButtonHeld(ep, Button.Interact)
 ){
-    define scale = 100;
-    CreateIcon(AllPlayers(), portalPosition, Icon.Spiral,
-        IconRev.VisibleToPositionAndColor, Color.Purple, true);
-    CreateEffect(AllPlayers(), Effect.Sphere, Color.Purple, portalPosition, 1, EffectRev.VisibleToPositionRadiusAndColor);
+}
 
-    Wait(3);
-    ForceSpawnRoom(Team.Team1, 2);
-    // Wait(0.1);
-    define lookPos = SpawnPoints(Team.Team1)[0];
-    Teleport(ep, lookPos);
-    Wait(3);
-    ForceSpawnRoom(Team.Team2, 0);
-    // Wait(0.1);
-    lookPos = SpawnPoints(Team.Team2)[0];
-    Teleport(ep, lookPos);
-    Wait(3);
-    StopCamera(ep);
+disabled rule: "AvoidRespawnRoom"
+Event.OngoingPlayer
+if(
+    ep == hp &&
+    IsButtonHeld(ep, Button.Interact)
+){
+    define checkRange = 50;
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Blue, SpawnPoints(TeamOf(ep))[0], checkRange, EffectRev.VisibleToPositionRadiusAndColor);
+    CreateEffect(AllPlayers(), Effect.Sphere, Color.Red, SpawnPoints(EnemyTeamOf(ep))[0], checkRange, EffectRev.VisibleToPositionRadiusAndColor);
 
     define roomNo = 0;
 
     while(true){
-        if(3 > DistanceBetween(
-            portalPosition, ClosestPlayerTo(portalPosition, TeamOf(ep)))
-        ){
-            portalPosition =
-                NearestWalkablePosition(
-                    RandomPosition(scale,scale/4,scale) +
-                    Midpoint(
-                        SpawnPoints(EnemyTeamOf(ep))[0],
-                        SpawnPoints(TeamOf(ep))[0]
-                    )
-                );
-        }
-
-                if(50 > DistanceBetween(ep, SpawnPoints(EnemyTeamOf(ep))[0])){
+        if(checkRange > DistanceBetween(ep, SpawnPoints(EnemyTeamOf(ep))[0])){
             ForceSpawnRoom(EnemyTeamOf(ep), RandomInteger(0, 2));
         }
-        if(50 > DistanceBetween(ep, SpawnPoints(TeamOf(ep))[0])){
+        if(checkRange > DistanceBetween(ep, SpawnPoints(TeamOf(ep))[0])){
             ForceSpawnRoom(TeamOf(ep), RandomInteger(0, 2));
         }
-
-
-        if(6 > DistanceBetween(
-            portalPosition, ClosestPlayerTo(portalPosition, TeamOf(ep)))
-        ){
-            ChaseVariableAtRate(
-                portalPosition,
-                PositionOf(ClosestPlayerTo(portalPosition, TeamOf(ep))),
-                5,
-                RateChaseReevaluation.DestinationAndRate
-            );
-        }
-        
+                
         Wait(1);
     }
 }
+disabled rule: "FindMapCenter"
+Event.OngoingPlayer
+if(
+    ep == hp &&
+    IsButtonHeld(ep, Button.Interact)
+){
+    DestroyAllEffects();
+
+    define dir! = 0;
+    define mapEdgeList! = [];
+    define basePos! = PositionOf(ep);
+
+    while(360 > dir){
+        define linePos! = basePos + (DirectionFromAngles(dir, 0) * MaxLength());
+        define mapEdge! = NearestWalkablePosition(linePos);
+        mapEdgeList[CountOf(mapEdgeList)] = mapEdge;
+        dir += 30;
+    }
+
+    define mapCenter! = Vector(0,0,0);
+    for(define index! = 0; index < CountOf(mapEdgeList); index++){
+        mapCenter += mapEdgeList[index];
+    }
+    mapCenter /= CountOf(mapEdgeList);
+
+    define mapCenterToEdgeDist! = 0;
+    for(define index! = 0; index < CountOf(mapEdgeList); index++){
+        mapCenterToEdgeDist += DistanceBetween(mapCenter, mapEdgeList[index]);
+    }
+    mapCenterToEdgeDist /= CountOf(mapEdgeList);
+    
+    CreateEffect(ep, Effect.LightShaft, Color.White, mapCenter, mapCenterToEdgeDist, EffectRev.PositionAndRadius);
+
+    for(define index! = 0; index < CountOf(mapEdgeList); index++){
+        CreateEffect(ep, Effect.LightShaft, Color.Yellow, mapEdgeList[index], 5, EffectRev.None);
+    }
+
+    // StartCamera(ep, mapCenter + Vector(0, mapCenterToEdgeDist* 2.0, 0), mapCenter);
+
+    CreateIcon(ep, ep, Icon.ArrowDown, IconRev.Position, Color.Blue, true);
+
+    define count = 0;
+    while(count < 100){
+        define randomPos = NearestWalkablePosition(mapCenter + RandomPosition(mapCenterToEdgeDist, mapCenterToEdgeDist / 4, mapCenterToEdgeDist));
+        CreateEffect(ep, Effect.LightShaft, Color.Red, randomPos, 2.5, EffectRev.None);
+        count ++;
+    }
+}
+
+
 
 // TeamFormation -----------------------------------------------
 // rule: "TeamFormation/restart"
