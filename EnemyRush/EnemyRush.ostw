@@ -34,7 +34,7 @@ Event.OngoingGlobal
     DisableInspectorRecording();
 
     // If run it right after loading the server, some scripts fail, so wait 6 seconds
-    Wait(6, WaitBehavior.AbortWhenFalse);
+    Wait(10, WaitBehavior.AbortWhenFalse);
 
     // Start watch over load
     slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
@@ -604,7 +604,7 @@ if(
 
 // TAG EnemyBot/Config ----------
 define basicSpawnTimeBase: 12;
-define basicSpawnTimeMin:
+define basicSpawnTime:
     confirmGameDifficulty == GameDifficulty.EASY ?      basicSpawnTimeBase * 1.0 :
     confirmGameDifficulty == GameDifficulty.NORMAL ?    basicSpawnTimeBase * 0.9 :
     confirmGameDifficulty == GameDifficulty.HARD ?      basicSpawnTimeBase * 0.8 :
@@ -612,7 +612,6 @@ define basicSpawnTimeMin:
     confirmGameDifficulty == GameDifficulty.LEGENDARY ? basicSpawnTimeBase * 0.5 :
     confirmGameDifficulty == GameDifficulty.INSANITY ?  basicSpawnTimeBase * 0.3 :
                                                         basicSpawnTimeBase * 1.0 ;
-define spawnTimeMinToMaxScale: 1.25;
 
 define autoTuneDmgDltMin :
     confirmGameDifficulty == GameDifficulty.EASY ?      10 :
@@ -661,8 +660,7 @@ define IsBossClass(in define player):
 define dealHealScale: IsSupportHero(HeroOf()) ? 2.0 : 1.0;
 
 playervar define eachDealtDamageScale!;
-playervar define eachMaxSpawnInterval!;
-playervar define eachMinSpawnInterval!;
+playervar define eachSpawnInterval!;
 playervar define eachChargeUltInterval!;
 playervar define eachDeathCost!;
 
@@ -783,28 +781,24 @@ if(
 }
 
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
-    // set spawn interval min max
+    // set spawn interval
     if(enemyType == EnemyType.Minion){
-        eachMinSpawnInterval =  basicSpawnTimeMin * 1;
-        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
+        eachSpawnInterval =  basicSpawnTime * 1;
     }
     else if(enemyType == EnemyType.Elite){
-        eachMinSpawnInterval =  basicSpawnTimeMin * 2;
-        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
+        eachSpawnInterval =  basicSpawnTime * 2;
     }
     else if(enemyType == EnemyType.SubBoss){
-        eachMinSpawnInterval =  basicSpawnTimeMin * 4;
-        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
+        eachSpawnInterval =  basicSpawnTime * 4;
     }
     else if(enemyType == EnemyType.Boss){
-        eachMinSpawnInterval =  basicSpawnTimeMin * 4;
-        eachMaxSpawnInterval =  eachMinSpawnInterval * spawnTimeMinToMaxScale;
+        eachSpawnInterval =  basicSpawnTime * 4;
     }
 
     // tune enemy spawen interval for make close match
     define diff! = GameProgressDiff(humanTeam);
 
-    // player team advantage, fast enemy respawn
+    // tune interval by game progress diff
     if(70 <= diff){
         spawnTimeScale = 0;
     }
@@ -830,7 +824,7 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     }
 
     // set default interval by object progress
-    confirmSpawnInterval = ObjectProgressScaledInterval(humanTeam, eachMinSpawnInterval, eachMaxSpawnInterval);
+    confirmSpawnInterval = eachSpawnInterval;
     // apply each enemy type scale
     confirmSpawnInterval *= spawnTimeScale;
     // apply workshop setting
