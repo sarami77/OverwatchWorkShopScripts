@@ -1366,6 +1366,87 @@ define teleportAreaForceUpdateSize: teleportAreaSize * 1.01;    // same as telep
 
 define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(humanTeam));
 define IsEnemyOnObject: (0 < NumberOfPlayersOnObjective(enemyTeam));
+
+// TAG EnemyBot/Teleport/GetTeleportBasePositionByClosestPlayer
+define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositionByClosestPlayer"{
+    define returnPosition;
+    define objectPosition = CurrentObjectOnPosition();
+    define basePosition = PositionOf(ClosestPlayerTo(objectPosition, humanTeam));
+
+    if(
+        objectPosition == null ||
+        basePosition == null
+    ){
+        return null;
+    }
+
+    // select teleportPosition
+    returnPosition = 
+        basePosition
+            +
+        RandomPosition(
+            placableAreaSize,
+            placableAreaSize,
+            placableAreaSize
+        )
+            + 
+        (
+            DirectionTowards(basePosition, objectPosition)
+                *
+            DistanceBetween(basePosition, objectPosition) * 0.5
+        );
+
+    return returnPosition;
+}
+
+// TAG EnemyBot/Teleport/GetTeleportBasePositionByObject
+define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObject"{
+    define returnPosition;
+    define basePosition = CurrentObjectOnPosition();
+
+    if(basePosition == null){
+        return null;
+    }
+
+    if(
+        // has object direction
+        HasObjectDirection()
+    ){
+        if(
+            // player on object
+            IsPlayerOnObject
+        ){
+            // get teleportAreaExtendSize by object position and blockedPos
+            define cutoutDistance! = placableAreaOffset - DistanceBetween(basePosition, blockedPos);
+            // get teleportAreaExtendSize by cutoutDistance with scale
+            placableAreaExtendSize = cutoutDistance * placableAreaExtendSizeScaleOnPayloadEscort;
+        }
+        else{
+            // clear extend size by non cut off distance of object direction
+            placableAreaExtendSize = 0;
+        }
+
+        // overwrite position by positionObjectAhead
+        basePosition = positionObjectAhead;
+    }
+    else{
+        // get teleportAreaExtendSize by fixed value of non object direction
+        placableAreaExtendSize = placableAreaSize * placableAreaExtendSizeScaleOnPointCapture;
+    }
+
+    // select teleportPosition
+    returnPosition = 
+        basePosition
+            +
+        RandomPosition(
+            placableAreaSize + placableAreaExtendSize,
+            placableAreaSize + placableAreaExtendSize,
+            placableAreaSize + placableAreaExtendSize
+    );
+    
+    return returnPosition;
+}
+
 define searchPositionInterval: 0.1;
 define searchPositionTryCountMax: 10;
 
@@ -1404,129 +1485,11 @@ define CanEncountPosition(define position) globalvar "CanEncountPosition"{
     return canEncount;
 }
 
-// TAG EnemyBot/Teleport/GetTeleportBasePositionByClosestPlayer
-define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositionByClosestPlayer"{
-    define returnPosition = null;
-
-    define objectPosition = CurrentObjectOnPosition();
-    define basePosition = PositionOf(ClosestPlayerTo(objectPosition, humanTeam));
-    if(
-        objectPosition == null ||
-        basePosition == null
-    ){
-        return null;
-    }
-
-    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
-        // select teleportPosition from middle of Object and teleportBasePosition
-        define candidatePosition = 
-            basePosition
-                + 
-            (
-                DirectionTowards(basePosition, objectPosition)
-                    *
-                DistanceBetween(basePosition, objectPosition) * 0.5
-            )
-                +
-            RandomPosition(
-                placableAreaSize,
-                placableAreaSize,
-                placableAreaSize
-            );
-
-        if(CanSnapMapSurface()){
-            candidatePosition = NearestWalkablePosition(candidatePosition);
-        }
-        else{
-            candidatePosition = BelowPosition(candidatePosition + Vector(0, placableAreaSize * 2, 0));
-        }
-
-        if(
-            // can encount player
-            // CanEncountPosition(candidatePosition)
-            true
-        ){
-            returnPosition = candidatePosition;
-            break;
-        }
-
-        WaitReleaseServerLoad(ServerLoadType.GameMain);
-        Wait(searchPositionInterval, WaitBehavior.AbortWhenFalse);
-    }
-
-    return returnPosition;
-}
-
-// TAG EnemyBot/Teleport/GetTeleportBasePositionByObject
-define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObject"{
-    define returnPosition = null;
-
-    define basePosition = CurrentObjectOnPosition();
-    if(basePosition == null){
-        return null;
-    }
-
-    if(
-        // has object direction
-        HasObjectDirection()
-    ){
-        if(
-            // player on object
-            IsPlayerOnObject
-        ){
-            // get teleportAreaExtendSize by object position and blockedPos
-            define cutoutDistance! = placableAreaOffset - DistanceBetween(basePosition, blockedPos);
-            // get teleportAreaExtendSize by cutoutDistance with scale
-            placableAreaExtendSize = cutoutDistance * placableAreaExtendSizeScaleOnPayloadEscort;
-        }
-        else{
-            // clear extend size by non cut off distance of object direction
-            placableAreaExtendSize = 0;
-        }
-
-        // overwrite position by positionObjectAhead
-        basePosition = positionObjectAhead;
-    }
-    else{
-        // get teleportAreaExtendSize by fixed value of non object direction
-        placableAreaExtendSize = placableAreaSize * placableAreaExtendSizeScaleOnPointCapture;
-    }
-
-    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
-        // select teleportPosition from teleportBasePosition around
-        define candidatePosition = 
-            basePosition
-                +
-            RandomPosition(
-                placableAreaSize + placableAreaExtendSize,
-                placableAreaSize + placableAreaExtendSize,
-                placableAreaSize + placableAreaExtendSize
-        );
-
-        if(CanSnapMapSurface()){
-            candidatePosition = NearestWalkablePosition(candidatePosition);
-        }
-
-        if(
-            // can encount player
-            CanEncountPosition(candidatePosition)
-        ){
-            returnPosition = candidatePosition;
-            break;
-        }
-
-        WaitReleaseServerLoad(ServerLoadType.GameMain);
-        Wait(searchPositionInterval, WaitBehavior.AbortWhenFalse);
-    }
-
-    return returnPosition;
-}
-
 // TAG EnemyBot/Teleport/GetTeleportPositionByTeleportBasePosition
 define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositionByTeleportBasePosition"{
     define returnPosition = null;
-
     define basePosition = teleportBasePosition;
+
     if(basePosition == null){
         return null;
     }
@@ -1544,6 +1507,9 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
 
         if(CanSnapMapSurface()){
             candidatePosition = NearestWalkablePosition(candidatePosition);
+        }
+        else{
+            candidatePosition = BelowPosition(candidatePosition + Vector(0, teleportAreaSize * 2, 0));
         }
 
         if(
@@ -1563,7 +1529,7 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
 
 playervar define telBeam;
 
-define maxDelayTime: 3.0;
+define maxDelayTime: 1.0;
 
 void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
     if(teleportPosition == null){return;}
