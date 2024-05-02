@@ -19,7 +19,7 @@ globalvar define portalPosition;
 globalvar define portalSize;
 globalvar define portalHealth;
 globalvar define portalDestoryCount;
-
+globalvar define isPortalSecuring;
 globalvar define prevInside;
 
 rule: "TestCode"
@@ -42,6 +42,7 @@ if(
     ];
 
     CreateBotsByHeroList(assetList, enemyTeam);
+    CreateBotsByHeroList(assetList, enemyTeam);
     CreateBotsByHeroList(assetList, humanTeam);
     Wait(1);
     AllPlayers().watchUpdateRate = 2;
@@ -51,70 +52,86 @@ if(
     HostPlayer().isBotActive = false;
     
 
-    CreateHudText(ap(ta), null, <"portal destoryed count : <0>", portalDestoryCount>, null, Location.Top, 12, Color.White, Color.Purple, Color.White);
-    CreateInWorldText(portalPosition != null ? ap(ta) : null, portalHealth, portalPosition + Vector(0,1,0), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor, Color.Purple, Spectators.VisibleAlways);
-    CreateIcon(portalPosition != null ? ap(ta) : null, portalPosition + Vector(0,0,0), Icon.Spiral, IconRev.VisibleToPositionAndColor, Color.Purple, true);
-    CreateEffect(portalPosition != null ? ap(ta) : null, Effect.Sphere, Color.Purple, portalPosition, portalSize, EffectRev.VisibleToPositionRadiusAndColor);
+    CreateHudText(ap(ta),
+        <"portal destoryed count : <0>", portalDestoryCount>, null, null, Location.Top, 1, Color.Purple, Color.White, Color.White);
+    CreateHudText(portalHealth > 0 ? ap(ta) : null,
+        <"portal health : <0>", RoundToInteger(portalHealth, Rounding.Up)>, null, null, Location.Top, 2, Color.Purple, Color.White, Color.White);
+    CreateIcon(portalPosition != null ? ap(ta) : null,
+        portalPosition + Vector(0,0,0), Icon.Spiral, IconRev.VisibleToPositionAndColor, Color.Purple, true);
+    CreateEffect(portalPosition != null ? ap(ta) : null,
+        Effect.Sphere, Color.Purple, portalPosition, portalSize, EffectRev.VisibleToPositionRadiusAndColor);
 
     while(true){
-        SetMoveSpeed(hp, 1000);
+        // SetMoveSpeed(hp, 1000);
 
         // not placed portal
         if(
             portalPosition == null
         ){
+            // set portal
             // place portal
             portalPosition = NearestWalkablePosition(mapCenter + RandomPosition(mapCenterToEdgeDist, mapCenterToEdgeDist / 4, mapCenterToEdgeDist));
         }
         else{
-            define playerPos = PositionOf(ClosestPlayerTo(portalPosition, humanTeam));
-            define isInside = DistanceBetween(portalPosition, playerPos) <= portalSize;
-            define idleEnemys = FilteredArray(AllLivingPlayers(enemyTeam), ae.actionState == ActionState.Non);
+            define playerPos =
+                FirstOf(SortedArray(
+                        FilteredArray(
+                            AllLivingPlayers(humanTeam),
+                            !IsInSpawnRoom(ae)
+                        ),
+                        DistanceBetween(portalPosition, ae)
+                    )
+                );
+            isPortalSecuring = DistanceBetween(portalPosition, playerPos) <= portalSize;
 
-            if(isInside){
-                
+            if(isPortalSecuring){
+                // set portal
                 if(portalHealth <= 0){
                     // destory portal
-                    PlayEffect(ap(ta), PlayEffect.BuffExplosionSound, null, portalPosition, DefaultPercentage());
+                    PlayContinuousBlast(Color.Yellow, portalPosition, portalSize, 5, 5);
+                    Kill(ap(enemyTeam));
+                    StopChasingVariable(portalSize);
                     portalPosition = null;
                     portalSize = null;
-                    Wait(1);
                     portalDestoryCount ++;
-                    Wait(3);
+                    Wait(5);
                 }
                 else{
                     // damage portal
                     portalHealth --;
+                    // count down sound
+                    PlayEffect(ap(ta), PlayEffect.DebuffImpactSound, null, playerPos, 25);
                 }
 
+                // set enemy bot
                 if(!prevInside){
-                    Teleport(AllLivingPlayers(enemyTeam), NearestWalkablePosition(BlockedPositon(playerPos, RandomDirection(), 40)));
+                    Teleport(AllLivingPlayers(enemyTeam), NearestWalkablePosition(BlockedPositon(playerPos, DirectionTowards(playerPos, portalPosition), portalSize / 2)));
                 }
                 else{
-                    Teleport(idleEnemys, NearestWalkablePosition(BlockedPositon(playerPos, RandomDirection(), 40)));
+                    define idleEnemys = FilteredArray(AllLivingPlayers(enemyTeam), ae.actionState == ActionState.Non);
+                    Teleport(idleEnemys, NearestWalkablePosition(BlockedPositon(playerPos, DirectionTowards(playerPos, portalPosition), portalSize / 2)));
                 }
-
                 prevInside = true;
             }
             else{
 
-
+                // set portal
                 if(portalHealth <= 0){
-                    portalHealth = 5 + (portalDestoryCount * 5);
+                    portalHealth = 10 + (portalDestoryCount * 5);
                 }
-                else if(10 + (portalDestoryCount * 10)> portalHealth){
+                else if(portalHealth < 10 + (portalDestoryCount * 10)){
                     // grow portal health
                     portalHealth += (1 + (portalDestoryCount * 0.5));
                 }
-
-                if(40 > portalSize){
-                    // grow portal health
-                    portalSize += 0.25;
+                if(portalSize < 100){
+                    // grow portal size
+                    ChaseVariableOverTime(portalSize, portalSize + 0.5, 1, TimeChaseReevaluation.None);
                 }
-                
-                SetDamageDealt(AllPlayers(enemyTeam), 50 + (portalDestoryCount * 10));
-                Teleport(idleEnemys, NearestWalkablePosition(Midpoint(portalPosition, PositionOf(ClosestPlayerTo(portalPosition, humanTeam)))));
 
+                // set enemy bot
+                SetDamageDealt(AllPlayers(enemyTeam), 30 + (portalDestoryCount * 10));
+                define idleEnemys = FilteredArray(AllLivingPlayers(enemyTeam), ae.actionState == ActionState.Non);
+                Teleport(idleEnemys, NearestWalkablePosition(BlockedPositon(playerPos, DirectionTowards(playerPos, portalPosition), DistanceBetween(playerPos, portalPosition) * 0.3)));
                 prevInside = false;
             }
 
