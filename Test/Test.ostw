@@ -3,17 +3,125 @@ import "../Lib/Debug.del";
 import "../Lib/Utility.del";
 import "../Lib/ServerOverLoadMeasures.del";
 import "../Lib/Bot.del";
+import "../Lib/Buddy.del";
 // import "../Lib/Vote.del";
-// import "../Lib/HeroMod.del";
+import "../Lib/HeroMod.del";
 
 // TestCode -----------------------------------------------
 define humanTeam: Team.Team1;
 define enemyTeam: Team.Team2;
 
+define cautionColor: Color.Yellow;
+
+define HasObjectDirection(): false;
+
+globalvar define portalPosition;
+globalvar define portalSize;
+globalvar define portalHealth;
+globalvar define portalDestoryCount;
+
+globalvar define prevInside;
+
 rule: "TestCode"
 Event.OngoingGlobal
-{
+if(
+    mapCenter != 0 &&
+    mapCenterToEdgeDist != 0
+){
+    DisableCompletion();
 
+    define assetList = [
+        Hero.Sombra,
+        Hero.Soldier76,
+        Hero.Reaper,
+        Hero.Reinhardt,
+        Hero.WreckingBall,
+        Hero.Mercy,
+        Hero.Baptiste,
+        Hero.Ana
+    ];
+
+    CreateBotsByHeroList(assetList, enemyTeam);
+    CreateBotsByHeroList(assetList, humanTeam);
+    Wait(1);
+    AllPlayers().watchUpdateRate = 2;
+    AllPlayers().enableFollowObject = false;
+    AllPlayers(enemyTeam).enableRetreat = false;
+    AllPlayers().isBotActive = true;
+    HostPlayer().isBotActive = false;
+    
+
+    CreateHudText(ap(ta), null, <"portal destoryed count : <0>", portalDestoryCount>, null, Location.Top, 12, Color.White, Color.Purple, Color.White);
+    CreateInWorldText(portalPosition != null ? ap(ta) : null, portalHealth, portalPosition + Vector(0,1,0), 1, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor, Color.Purple, Spectators.VisibleAlways);
+    CreateIcon(portalPosition != null ? ap(ta) : null, portalPosition + Vector(0,0,0), Icon.Spiral, IconRev.VisibleToPositionAndColor, Color.Purple, true);
+    CreateEffect(portalPosition != null ? ap(ta) : null, Effect.Sphere, Color.Purple, portalPosition, portalSize, EffectRev.VisibleToPositionRadiusAndColor);
+
+    while(true){
+        SetMoveSpeed(hp, 1000);
+
+        // not placed portal
+        if(
+            portalPosition == null
+        ){
+            // place portal
+            portalPosition = NearestWalkablePosition(mapCenter + RandomPosition(mapCenterToEdgeDist, mapCenterToEdgeDist / 4, mapCenterToEdgeDist));
+        }
+        else{
+            define playerPos = PositionOf(ClosestPlayerTo(portalPosition, humanTeam));
+            define isInside = DistanceBetween(portalPosition, playerPos) <= portalSize;
+            define idleEnemys = FilteredArray(AllLivingPlayers(enemyTeam), ae.actionState == ActionState.Non);
+
+            if(isInside){
+                
+                if(portalHealth <= 0){
+                    // destory portal
+                    PlayEffect(ap(ta), PlayEffect.BuffExplosionSound, null, portalPosition, DefaultPercentage());
+                    portalPosition = null;
+                    portalSize = null;
+                    Wait(1);
+                    portalDestoryCount ++;
+                    Wait(3);
+                }
+                else{
+                    // damage portal
+                    portalHealth --;
+                }
+
+                if(!prevInside){
+                    Teleport(AllLivingPlayers(enemyTeam), NearestWalkablePosition(BlockedPositon(playerPos, RandomDirection(), 40)));
+                }
+                else{
+                    Teleport(idleEnemys, NearestWalkablePosition(BlockedPositon(playerPos, RandomDirection(), 40)));
+                }
+
+                prevInside = true;
+            }
+            else{
+
+
+                if(portalHealth <= 0){
+                    portalHealth = 5 + (portalDestoryCount * 5);
+                }
+                else if(10 + (portalDestoryCount * 10)> portalHealth){
+                    // grow portal health
+                    portalHealth += (1 + (portalDestoryCount * 0.5));
+                }
+
+                if(40 > portalSize){
+                    // grow portal health
+                    portalSize += 0.25;
+                }
+                
+                SetDamageDealt(AllPlayers(enemyTeam), 50 + (portalDestoryCount * 10));
+                Teleport(idleEnemys, NearestWalkablePosition(Midpoint(portalPosition, PositionOf(ClosestPlayerTo(portalPosition, humanTeam)))));
+
+                prevInside = false;
+            }
+
+        }
+
+        Wait(1);
+    }
 }
 
 disabled rule: "BotTest"
@@ -55,18 +163,6 @@ Event.OngoingGlobal
     
 }
 
-define cautionColor: Color.Yellow;
-
-globalvar define portalPosition;
-
-rule: "AvoidRespawnRoom"
-Event.OngoingPlayer
-if(
-    ep == hp &&
-    IsButtonHeld(ep, Button.Interact)
-){
-}
-
 disabled rule: "AvoidRespawnRoom"
 Event.OngoingPlayer
 if(
@@ -94,15 +190,14 @@ if(
 globalvar define mapCenter!;
 globalvar define mapCenterToEdgeDist!;
 
-disabled rule: "FindMapCenter"
-Event.OngoingPlayer
+rule: "FindMapCenter"
+Event.OngoingGlobal
 if(
-    ep == hp &&
-    IsButtonHeld(ep, Button.Interact)
+    0 < NumberOfLivingPlayers(ta)
 ){
     define dir! = 0;
     define mapEdgeList! = [];
-    define basePos! = PositionOf(ep);
+    define basePos! = Vector(0,0,0);
 
     // search map edge form
     while(360 > dir){
@@ -126,41 +221,41 @@ if(
     }
     mapCenterToEdgeDist /= CountOf(mapEdgeList);
 
-    // set effect
-    DestroyAllEffects();
-    CreateEffect(ep, Effect.LightShaft, Color.White, mapCenter, mapCenterToEdgeDist, EffectRev.PositionAndRadius);
-    for(define index! = 0; index < CountOf(mapEdgeList); index++){
-        CreateEffect(ep, Effect.LightShaft, Color.Yellow, mapEdgeList[index], 5, EffectRev.None);
-    }
-    for(define index! = 0; index < 100; index++){
-        define randomPos = NearestWalkablePosition(mapCenter + RandomPosition(mapCenterToEdgeDist, mapCenterToEdgeDist / 4, mapCenterToEdgeDist));
-        CreateEffect(ep, Effect.LightShaft, Color.Red, randomPos, 2.5, EffectRev.None);
-    }
-    // CreateIcon(ep, ep, Icon.ArrowDown, IconRev.Position, Color.Blue, true);    
-    // StartCamera(ep, mapCenter + Vector(0, mapCenterToEdgeDist* 2.0, 0), mapCenter);
+    // // set effect
+    // DestroyAllEffects();
+    // CreateEffect(hp, Effect.LightShaft, Color.White, mapCenter, mapCenterToEdgeDist, EffectRev.PositionAndRadius);
+    // for(define index! = 0; index < CountOf(mapEdgeList); index++){
+    //     CreateEffect(hp, Effect.LightShaft, Color.Yellow, mapEdgeList[index], 5, EffectRev.None);
+    // }
+    // for(define index! = 0; index < 100; index++){
+    //     define randomPos = NearestWalkablePosition(mapCenter + RandomPosition(mapCenterToEdgeDist, mapCenterToEdgeDist / 4, mapCenterToEdgeDist));
+    //     CreateEffect(hp, Effect.LightShaft, Color.Red, randomPos, 2.5, EffectRev.None);
+    // }
+    // CreateIcon(hp, hp, Icon.ArrowDown, IconRev.Position, Color.Blue, true); 
+    // StartCamera(hp, mapCenter + Vector(0, mapCenterToEdgeDist * 2.0, 0), mapCenter);
 }
 
 
 
 // TeamFormation -----------------------------------------------
-// rule: "TeamFormation/restart"
-// Event.OngoingGlobal
-// if(
-//     initCompleted
-// ){
-//     while(true){
-//         WaitUntil(
-//             (
-//                 NumberOfLivingPlayers(humanTeam) <= 0 ||
-//                 NumberOfLivingPlayers(enemyTeam)  <= 0
-//             ),
-//             MaxValue()
-//         );
-//         Wait(3);
-//         Respawn(ap(Team.All));
-//         Wait(1);
-//     }
-// }
+disabled rule: "TeamFormation/restart"
+Event.OngoingGlobal
+if(
+    true
+){
+    while(true){
+        WaitUntil(
+            (
+                NumberOfLivingPlayers(humanTeam) <= 0 ||
+                NumberOfLivingPlayers(enemyTeam)  <= 0
+            ),
+            MaxValue()
+        );
+        Wait(3);
+        Respawn(ap(Team.All));
+        Wait(1);
+    }
+}
 
 // Round -----------------------------------------------
 rule: "Round/shortenAssemblePhase"
