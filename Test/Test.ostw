@@ -5,7 +5,6 @@ import "../Lib/ServerOverLoadMeasures.del";
 import "../Lib/Bot.del";
 // import "../Lib/Vote.del";
 // import "../Lib/HeroMod.del";
-import "../Translation/TranslationTable.del";
 
 // TestCode -----------------------------------------------
 define humanTeam: Team.Team1;
@@ -91,18 +90,21 @@ if(
         Wait(1);
     }
 }
+
+globalvar define mapCenter!;
+globalvar define mapCenterToEdgeDist!;
+
 disabled rule: "FindMapCenter"
 Event.OngoingPlayer
 if(
     ep == hp &&
     IsButtonHeld(ep, Button.Interact)
 ){
-    DestroyAllEffects();
-
     define dir! = 0;
     define mapEdgeList! = [];
     define basePos! = PositionOf(ep);
 
+    // search map edge form
     while(360 > dir){
         define linePos! = basePos + (DirectionFromAngles(dir, 0) * MaxLength());
         define mapEdge! = NearestWalkablePosition(linePos);
@@ -110,34 +112,32 @@ if(
         dir += 30;
     }
 
-    define mapCenter! = Vector(0,0,0);
+    // calc map center
+    mapCenter = Vector(0,0,0);
     for(define index! = 0; index < CountOf(mapEdgeList); index++){
         mapCenter += mapEdgeList[index];
     }
     mapCenter /= CountOf(mapEdgeList);
 
-    define mapCenterToEdgeDist! = 0;
+    // calc map center to edge dist
+    mapCenterToEdgeDist = 0;
     for(define index! = 0; index < CountOf(mapEdgeList); index++){
         mapCenterToEdgeDist += DistanceBetween(mapCenter, mapEdgeList[index]);
     }
     mapCenterToEdgeDist /= CountOf(mapEdgeList);
-    
-    CreateEffect(ep, Effect.LightShaft, Color.White, mapCenter, mapCenterToEdgeDist, EffectRev.PositionAndRadius);
 
+    // set effect
+    DestroyAllEffects();
+    CreateEffect(ep, Effect.LightShaft, Color.White, mapCenter, mapCenterToEdgeDist, EffectRev.PositionAndRadius);
     for(define index! = 0; index < CountOf(mapEdgeList); index++){
         CreateEffect(ep, Effect.LightShaft, Color.Yellow, mapEdgeList[index], 5, EffectRev.None);
     }
-
-    // StartCamera(ep, mapCenter + Vector(0, mapCenterToEdgeDist* 2.0, 0), mapCenter);
-
-    CreateIcon(ep, ep, Icon.ArrowDown, IconRev.Position, Color.Blue, true);
-
-    define count = 0;
-    while(count < 100){
+    for(define index! = 0; index < 100; index++){
         define randomPos = NearestWalkablePosition(mapCenter + RandomPosition(mapCenterToEdgeDist, mapCenterToEdgeDist / 4, mapCenterToEdgeDist));
         CreateEffect(ep, Effect.LightShaft, Color.Red, randomPos, 2.5, EffectRev.None);
-        count ++;
     }
+    // CreateIcon(ep, ep, Icon.ArrowDown, IconRev.Position, Color.Blue, true);    
+    // StartCamera(ep, mapCenter + Vector(0, mapCenterToEdgeDist* 2.0, 0), mapCenter);
 }
 
 
