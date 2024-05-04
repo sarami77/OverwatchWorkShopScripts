@@ -15,6 +15,8 @@ define cautionColor: Color.Yellow;
 
 define HasObjectDirection(): false;
 
+globalvar define mapCenter!;
+globalvar define mapCenterToEdgeDist!;
 globalvar define portalPosition;
 globalvar define portalSize;
 globalvar define portalHealth;
@@ -22,14 +24,40 @@ globalvar define portalDestoryCount;
 globalvar define isPortalSecuring;
 globalvar define prevInside;
 
-rule: "TestCode"
+disabled rule: "PortalHunt"
 Event.OngoingGlobal
-if(
-    mapCenter != 0 &&
-    mapCenterToEdgeDist != 0
-){
+{
+    Wait(5);
     DisableCompletion();
 
+    // find map center -------------------------------------
+    define dir! = 0;
+    define mapEdgeList! = [];
+    define basePos! = Vector(0,0,0);
+
+    // search map edge form
+    while(360 > dir){
+        define linePos! = basePos + (DirectionFromAngles(dir, 0) * MaxLength());
+        define mapEdge! = NearestWalkablePosition(linePos);
+        mapEdgeList[CountOf(mapEdgeList)] = mapEdge;
+        dir += 30;
+    }
+
+    // calc map center
+    mapCenter = Vector(0,0,0);
+    for(define index! = 0; index < CountOf(mapEdgeList); index++){
+        mapCenter += mapEdgeList[index];
+    }
+    mapCenter /= CountOf(mapEdgeList);
+
+    // calc map center to edge dist
+    mapCenterToEdgeDist = 0;
+    for(define index! = 0; index < CountOf(mapEdgeList); index++){
+        mapCenterToEdgeDist += DistanceBetween(mapCenter, mapEdgeList[index]);
+    }
+    mapCenterToEdgeDist /= CountOf(mapEdgeList);
+
+    // make bot asset -------------------------------------
     define assetList = [
         Hero.Sombra,
         Hero.Soldier76,
@@ -42,7 +70,7 @@ if(
     ];
 
     CreateBotsByHeroList(assetList, enemyTeam);
-    CreateBotsByHeroList(assetList, enemyTeam);
+    // CreateBotsByHeroList(assetList, enemyTeam);
     CreateBotsByHeroList(assetList, humanTeam);
     Wait(1);
     AllPlayers().watchUpdateRate = 2;
@@ -61,6 +89,7 @@ if(
     CreateEffect(portalPosition != null ? ap(ta) : null,
         Effect.Sphere, Color.Purple, portalPosition, portalSize, EffectRev.VisibleToPositionRadiusAndColor);
 
+    // game logic -------------------------------------
     while(true){
         // SetMoveSpeed(hp, 1000);
 
@@ -141,7 +170,7 @@ if(
     }
 }
 
-disabled rule: "BotTest"
+rule: "BotTest"
 Event.OngoingGlobal
 {
     // DisableInspectorRecording();
@@ -151,15 +180,18 @@ Event.OngoingGlobal
     define assetList = [
         // Hero.Sombra
         // Hero.Widowmaker
-        Hero.WreckingBall, Hero.WreckingBall, Hero.WreckingBall
+        // Hero.Reaper, 
+        Hero.Reaper,
+        Hero.Mei,
+        // Hero.Mei
+        Hero.Lucio
+        // Hero.Lucio
         // Hero.Ramattra,Hero.Ramattra
         // Hero.Baptiste,
         // Hero.Symmetra
     ];
     
-    // DestroyBots(enemyTeam);
-    // DestroyBots(humanTeam);
-    // CreateBotsByHeroList(assetList, enemyTeam);
+    CreateBotsByHeroList(assetList, enemyTeam);
     // CreateBotsByHeroList(assetList, humanTeam);
 
     SetRespawnMaxTime(ap(ta), 1);
@@ -170,11 +202,8 @@ Event.OngoingGlobal
     HostPlayer().isBotActive = false;
 
     while(true){
-        SetAbilityCooldown(ap(ta), Button.SecondaryFire, 0);
         SetAbilityCooldown(ap(ta), Button.Ability1, 0);
         SetAbilityCooldown(ap(ta), Button.Ability2, 0);
-        // SetUltimateCharge(ap(ta), 100);
-        // Teleport(ap(ta), Vector(0,0,0));
         Wait(1);
     }
     
@@ -203,55 +232,6 @@ if(
         Wait(1);
     }
 }
-
-globalvar define mapCenter!;
-globalvar define mapCenterToEdgeDist!;
-
-rule: "FindMapCenter"
-Event.OngoingGlobal
-if(
-    0 < NumberOfLivingPlayers(ta)
-){
-    define dir! = 0;
-    define mapEdgeList! = [];
-    define basePos! = Vector(0,0,0);
-
-    // search map edge form
-    while(360 > dir){
-        define linePos! = basePos + (DirectionFromAngles(dir, 0) * MaxLength());
-        define mapEdge! = NearestWalkablePosition(linePos);
-        mapEdgeList[CountOf(mapEdgeList)] = mapEdge;
-        dir += 30;
-    }
-
-    // calc map center
-    mapCenter = Vector(0,0,0);
-    for(define index! = 0; index < CountOf(mapEdgeList); index++){
-        mapCenter += mapEdgeList[index];
-    }
-    mapCenter /= CountOf(mapEdgeList);
-
-    // calc map center to edge dist
-    mapCenterToEdgeDist = 0;
-    for(define index! = 0; index < CountOf(mapEdgeList); index++){
-        mapCenterToEdgeDist += DistanceBetween(mapCenter, mapEdgeList[index]);
-    }
-    mapCenterToEdgeDist /= CountOf(mapEdgeList);
-
-    // // set effect
-    // DestroyAllEffects();
-    // CreateEffect(hp, Effect.LightShaft, Color.White, mapCenter, mapCenterToEdgeDist, EffectRev.PositionAndRadius);
-    // for(define index! = 0; index < CountOf(mapEdgeList); index++){
-    //     CreateEffect(hp, Effect.LightShaft, Color.Yellow, mapEdgeList[index], 5, EffectRev.None);
-    // }
-    // for(define index! = 0; index < 100; index++){
-    //     define randomPos = NearestWalkablePosition(mapCenter + RandomPosition(mapCenterToEdgeDist, mapCenterToEdgeDist / 4, mapCenterToEdgeDist));
-    //     CreateEffect(hp, Effect.LightShaft, Color.Red, randomPos, 2.5, EffectRev.None);
-    // }
-    // CreateIcon(hp, hp, Icon.ArrowDown, IconRev.Position, Color.Blue, true); 
-    // StartCamera(hp, mapCenter + Vector(0, mapCenterToEdgeDist * 2.0, 0), mapCenter);
-}
-
 
 
 // TeamFormation -----------------------------------------------
