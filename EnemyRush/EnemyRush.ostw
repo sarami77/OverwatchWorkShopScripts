@@ -659,10 +659,10 @@ define IsBossClass(in define player):
 
 define dealHealScale: IsSupportHero(HeroOf()) ? 2.0 : 1.0;
 
-playervar define eachDealtDamageScale!;
-playervar define eachSpawnInterval!;
-playervar define eachChargeUltInterval!;
-playervar define eachDeathCost!;
+playervar define damageDealt!;
+playervar define spawnInterval!;
+playervar define chargeUltInterval!;
+playervar define deathCost!;
 
 rule: "EnemyBot/Config/update"
 Event.OngoingPlayer
@@ -678,82 +678,101 @@ if(
     DisableRespawning();
     // disable retreat cuz enemy bot
     enableRetreat = false;
+
+    define name!;
+    define scale!;
+    define voiceLine!;
+    define maxHealth!;
+    define healReceived!;
+    define healDealt!;
     
     // init config by enemy type
     if(enemyType == EnemyType.Minion){
-        StartForcingDummyBotName(ep, "Minion");
-        watchUpdateRate =       8;
-        
-        eachDeathCost =         1;
-        SetMaxHealth(ep,        25);
-        SetHealingReceived(ep,  25);
-        SetHealingDealt(ep,     25 * dealHealScale);
-
-        eachDealtDamageScale =  0.5;
-        eachChargeUltInterval = 60;
-        StartScalingPlayer(ep, 0.7, false);
-        StartModifyingHeroVoiceLines(ep, 1.5, false);
+        // fixed config
+        name =              "Minion";
+        watchUpdateRate =   8;
+        deathCost =         1;
+        scale =             0.7;
+        voiceLine =         1.5;
+        chargeUltInterval = 60;
+        maxHealth =         25;
+        healReceived =      25;
+        healDealt =         25 * dealHealScale;
+        // scalable config by update function
+        spawnInterval =     basicSpawnTime * 1;
+        damageDealt =       50;
     }
     else if(enemyType == EnemyType.Elite){
-        StartForcingDummyBotName(ep, "Elite");
-        watchUpdateRate =       4;
-
-        eachDeathCost =         2;
-        SetMaxHealth(ep,        100);
-        SetHealingReceived(ep,  100);
-        SetHealingDealt(ep,     100 * dealHealScale);
-
-        eachDealtDamageScale =  1.0;
-        eachChargeUltInterval = 30;
-        StartScalingPlayer(ep, 1.0, false);
-        StartModifyingHeroVoiceLines(ep, 1.0, false);
+        // fixed config
+        name =              "Elite";
+        watchUpdateRate =   4;
+        deathCost =         2;
+        scale =             1.0;
+        voiceLine =         1.0;
+        chargeUltInterval = 30;
+        maxHealth =         100;
+        healReceived =      100;
+        healDealt =         100 * dealHealScale;
+        // scalable config by update function
+        spawnInterval =     basicSpawnTime * 2;
+        damageDealt =       100;
     }
     else if(enemyType == EnemyType.SubBoss){
-        StartForcingDummyBotName(ep, "Sub Boss");
-        watchUpdateRate =       1;
-
-        eachDeathCost =         8;
-        SetMaxHealth(ep,        600);
-        SetHealingReceived(ep,  200);
-        SetHealingDealt(ep,     200 * dealHealScale);
-
-        eachDealtDamageScale =  1.5;
-        eachChargeUltInterval = 15;
-        StartScalingPlayer(ep, 1.5, false);
-        StartModifyingHeroVoiceLines(ep, 0.5, false);
+        // fixed config
+        name =              "SubBoss";
+        watchUpdateRate =   1;
+        deathCost =         8;
+        scale =             1.5;
+        voiceLine =         0.5;
+        chargeUltInterval = 15;
+        maxHealth =         600;
+        healReceived =      200;
+        healDealt =         200 * dealHealScale;
+        // scalable config by update function
+        spawnInterval =     basicSpawnTime * 4;
+        damageDealt =       150;
     }
     else if(enemyType == EnemyType.Boss){
-        StartForcingDummyBotName(ep, "Boss");
-        watchUpdateRate =       1;
+        // fixed config
+        name =              "Boss";
+        watchUpdateRate =   1;
+        deathCost =         8;
+        scale =             2.5;
+        voiceLine =         0.1;
+        chargeUltInterval = 15;
+        maxHealth =         1000;
+        healReceived =      200;
+        healDealt =         200 * dealHealScale;
+        // scalable config by update function
+        spawnInterval =     basicSpawnTime * 4;
+        damageDealt =       200;
+    }
 
-        eachDeathCost =         8;
-        SetMaxHealth(ep,        1000);
-        SetHealingReceived(ep,  200);
-        SetHealingDealt(ep,     200 * dealHealScale);
+    StartForcingDummyBotName(ep, name);
+    StartScalingPlayer(ep, scale, false);
+    StartModifyingHeroVoiceLines(ep, voiceLine, false);
+    SetMaxHealth(ep, maxHealth);
+    SetHealingReceived(ep, healReceived);
+    SetHealingDealt(ep, healDealt);
 
-        eachDealtDamageScale =  2.0;
-        eachChargeUltInterval = 15;
-        StartScalingPlayer(ep, 2.5, false);
-        StartModifyingHeroVoiceLines(ep, 0.1, false);
-        
-        // set addtinal health and total health 2000%
+    if(enemyType == EnemyType.Boss){
+        // set addtinal health and total 2x health 
         // wait max health change finish
         Wait(0.2, WaitBehavior.IgnoreCondition);
         AddHealthPoolToPlayer(ep, HealthType.Armor, MaxHealth() * 0.5, true, false);
         AddHealthPoolToPlayer(ep, HealthType.Shields, MaxHealth() * 0.5, true, false);
-    }
 
-    Wait(0.2, WaitBehavior.IgnoreCondition);
-    while(NormalizedHealth() < 1.0){
-        Heal(ep, null, MaxValue());
         Wait(0.2, WaitBehavior.IgnoreCondition);
+        while(NormalizedHealth() < 1.0){
+            Heal(ep, null, MaxValue());
+            Wait(0.2, WaitBehavior.IgnoreCondition);
+        }
     }
 
     while(true){
-        // update config
+        // update scalable config
         UpdateEachSpawnInterval();
         UpdateEachDealtDamage();
-
         WaitUpdateLongCycle();
     }
 }
@@ -781,20 +800,6 @@ if(
 }
 
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
-    // set spawn interval
-    if(enemyType == EnemyType.Minion){
-        eachSpawnInterval =  basicSpawnTime * 1;
-    }
-    else if(enemyType == EnemyType.Elite){
-        eachSpawnInterval =  basicSpawnTime * 2;
-    }
-    else if(enemyType == EnemyType.SubBoss){
-        eachSpawnInterval =  basicSpawnTime * 4;
-    }
-    else if(enemyType == EnemyType.Boss){
-        eachSpawnInterval =  basicSpawnTime * 4;
-    }
-
     // tune enemy spawen interval for make close match
     define diff! = GameProgressDiff(humanTeam);
 
@@ -824,7 +829,7 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     }
 
     // set default interval by object progress
-    confirmSpawnInterval = eachSpawnInterval;
+    confirmSpawnInterval = spawnInterval;
     // apply each enemy type scale
     confirmSpawnInterval *= spawnTimeScale;
     // apply workshop setting
@@ -853,7 +858,7 @@ if(
     Attacker() != ep
 ){
     // up enemy deal damage by enemy dead, tune detailed difficulty
-    define upValue! = eachDeathCost;
+    define upValue! = deathCost;
     upValue *= upValueScale;
     // up deal damage
     autoTuneDmgDlt += upValue;
@@ -893,7 +898,7 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // apply setting scale
     confirmDealtDamage *= WorkshopSettingReal("Enemy Bot Settings", "Enemy Deal Damage Scale", 1.0, 0.0, 100, 0);
     // apply enemy type scale
-    confirmDealtDamage *= eachDealtDamageScale;
+    confirmDealtDamage *= (damageDealt / 100);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(1.5, humanTeam);
     SetDamageDealt(ep, confirmDealtDamage);
@@ -931,7 +936,7 @@ if(
     IsGameInProgress() &&
     !IsUsingUltimate()
 ){
-    SetUltimateCharge(ep, UltimateChargePercent() + (DefaultPercentage() / eachChargeUltInterval));
+    SetUltimateCharge(ep, UltimateChargePercent() + (DefaultPercentage() / chargeUltInterval));
     WaitUpdateASecond();
     LoopIfConditionIsTrue();
 }
