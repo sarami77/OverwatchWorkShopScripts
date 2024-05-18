@@ -782,18 +782,11 @@ if(
             EnemyModType.Explosion
         ]);
 
-        if(
-            enemyType == EnemyType.Boss &&
-            modType == EnemyModType.Fly &&
-            ObjectProgress(humanTeam) >= FinalWaveProgress()
-        ){
-            modType = EnemyModType.Non;
-        }
-
         // deal damage
         // max health
         // move speed
-        // gravity
+
+        // modType = EnemyModType.Fly;
 
         if(modType == EnemyModType.Damage){
             name = <"<0> -More Damage", name>;
@@ -809,21 +802,20 @@ if(
             name = <"<0> -More Speed", name>;
             moveSpeed *= 2.0;
             damageDealt *= 0.5;
-        }
-        
+        }        
         else if(modType == EnemyModType.Jump){
             name = <"<0> -More Jump", name>;
-            jumpSpeed = 300;
+            jumpSpeed = 400;
             moveSpeed *= 0.75;
+        }
+        else if(modType == EnemyModType.Explosion){
+            name = <"<0> -Explosion", name>;
+            maxHealth *= 0.75;
         }
         else if(modType == EnemyModType.Fly){
             name = <"<0> -Fly", name>;
             gravity = 1;
             damageDealt *= 0.75;
-        }
-        else if(modType == EnemyModType.Explosion){
-            name = <"<0> -Explosion", name>;
-            maxHealth *= 0.75;
         }
     }
 
@@ -880,12 +872,16 @@ if(
     TeamOf() == enemyTeam &&
     modType == EnemyModType.Explosion
 ){
-    define bombSize! =      deathCost * 0.25;
-    define blastRange! =    deathCost * 1.5;
-    blastRange = Min(blastRange, 12);
-    define blastDamage! =   deathCost * 100;
-    blastDamage = Max(blastDamage, 150);
-    define bombPos! = PositionOf() + PositionOffset();
+    define scale! = 
+        enemyType == EnemyType.Minion ?     1 :
+        enemyType == EnemyType.Elite ?      2 :
+        enemyType == EnemyType.SubBoss ?    4 :
+        enemyType == EnemyType.Boss ?       6 :
+        0;
+    define bombSize! =      scale * 0.25;
+    define blastRange! =    scale * 1.5;
+    define blastDamage! =   scale * 100;
+    define bombPos! = PositionOf() + Vector(0, 0.1, 0);
     DestroyEffect(bombEfct);
     DestroyIcon(cautionIcon);
     cautionIcon = CreateIcon(AllPlayers(humanTeam), bombPos, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
@@ -901,7 +897,7 @@ if(
     SetStatus(targets, ep, Status.Burning, 3);
     ApplyBlastImpulse(targets, bombPos, blastRange);
     Damage(targets, ep, blastDamage);
-    PlayContinuousBlast(Color.Red, bombPos, blastRange, deathCost / 2, deathCost / 2);
+    PlayContinuousBlast(Color.Red, bombPos, blastRange, scale, scale);
     DestroyEffect(bombEfct);
     DestroyIcon(cautionIcon);
 }
@@ -1734,6 +1730,8 @@ void DoTeleport(define isBeamFromBody!, define isEmgTeleport!)"DoTeleport"{
     ){
         // set teleportPosition by object position
         teleportPosition = BlockedPositon(CurrentObjectPosition(), objectDirection, 6);
+        ApplyImpulse(ep, Down(), 1, Relative.ToWorld, ContraryMotion.Cancel);
+
     }
     else{
         // set teleportPosition by common position
@@ -1904,7 +1902,7 @@ if(
     teleportBasePosition != null
 ){
     DoTeleport(false, false);
-    Wait(1, WaitBehavior.AbortWhenFalse);
+    Wait(3, WaitBehavior.AbortWhenFalse);
     WaitReleaseServerLoad(ServerLoadType.GameMain);
     LoopIfConditionIsTrue();
 }
