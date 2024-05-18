@@ -686,6 +686,7 @@ if(
     define healReceived!;
     define healDealt!;
     define moveSpeed!;
+    define jumpSpeed!;
     define gravity!;
     
     // init config by enemy type
@@ -701,7 +702,9 @@ if(
         maxHealth =         25;
         healReceived =      25;
         healDealt =         25 * dealHealScale;
+
         moveSpeed =         100;
+        jumpSpeed =         100;
         gravity =           100;
         // scalable config by update function
         spawnInterval =     basicSpawnTime * 1;
@@ -719,7 +722,9 @@ if(
         maxHealth =         100;
         healReceived =      100;
         healDealt =         100 * dealHealScale;
+
         moveSpeed =         100;
+        jumpSpeed =         100;
         gravity =           100;
         // scalable config by update function
         spawnInterval =     basicSpawnTime * 2;
@@ -737,7 +742,9 @@ if(
         maxHealth =         600;
         healReceived =      200;
         healDealt =         200 * dealHealScale;
+
         moveSpeed =         100;
+        jumpSpeed =         100;
         gravity =           100;
         // scalable config by update function
         spawnInterval =     basicSpawnTime * 4;
@@ -755,7 +762,9 @@ if(
         maxHealth =         1000;
         healReceived =      200;
         healDealt =         200 * dealHealScale;
+
         moveSpeed =         100;
+        jumpSpeed =         100;
         gravity =           100;
         // scalable config by update function
         spawnInterval =     basicSpawnTime * 4;
@@ -768,6 +777,7 @@ if(
             EnemyModType.Health,
             EnemyModType.Damage,
             EnemyModType.Speed,
+            EnemyModType.Jump,
             EnemyModType.Fly,
             EnemyModType.Explosion
         ]);
@@ -800,6 +810,12 @@ if(
             moveSpeed *= 2.0;
             damageDealt *= 0.5;
         }
+        
+        else if(modType == EnemyModType.Jump){
+            name = <"<0> -More Jump", name>;
+            jumpSpeed = 300;
+            moveSpeed *= 0.75;
+        }
         else if(modType == EnemyModType.Explosion){
             name = <"<0> -Explosion", name>;
             maxHealth *= 0.75;
@@ -807,7 +823,7 @@ if(
         else if(modType == EnemyModType.Fly){
             name = <"<0> -Fly", name>;
             gravity = 1;
-            moveSpeed *= 0.75;
+            damageDealt *= 0.75;
         }
     }
 
@@ -818,6 +834,7 @@ if(
     SetHealingReceived(ep, healReceived);
     SetHealingDealt(ep, healDealt);
     SetMoveSpeed(ep, moveSpeed);
+    SetJumpVerticalSpeed(ep, jumpSpeed);
     SetGravity(ep, gravity);
 
     if(enemyType == EnemyType.Boss){
@@ -850,6 +867,7 @@ enum EnemyModType{
     Health,
     Damage,
     Speed,
+    Jump,
     Fly,
     Explosion
 }
@@ -868,8 +886,8 @@ if(
     define bombPos! =       PositionOf();
     DestroyEffect(bombEfct);
     DestroyIcon(cautionIcon);
-    cautionIcon = CreateIcon(AllPlayers(humanTeam), bombPos, Icon.ExclamationMark, IconRev.PositionAndColor, cautionColor, true);
-    bombEfct = CreateEffect(ap(ta), Effect.Sphere, Color.Red, bombPos, bombSize, EffectRev.None);
+    cautionIcon = CreateIcon(AllPlayers(humanTeam), bombPos, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
+    bombEfct = CreateEffect(ap(ta), Effect.Sphere, cautionColor, bombPos, bombSize, EffectRev.Color);
 
     for(define index! = 0; index < 3; index++){
         PlayEffect(ap(ta), PlayEffect.RingExplosion, Color.Yellow, bombPos, blastRange * 2);
@@ -877,13 +895,13 @@ if(
         Wait(1, WaitBehavior.IgnoreCondition);
     }
 
-    DestroyEffect(bombEfct);
-    DestroyIcon(cautionIcon);
     define targets! = PlayersWithinRadius(bombPos, blastRange, Team.All, RadiusLOS.SurfacesAndAllBarriers);
     SetStatus(targets, ep, Status.Burning, 3);
     ApplyBlastImpulse(targets, bombPos, blastRange);
     Damage(targets, ep, blastDamage);
-    PlayContinuousBlast(Color.Red, bombPos, blastRange, 2, 2);
+    PlayContinuousBlast(Color.Red, bombPos, blastRange, deathCost / 2, deathCost / 2);
+    DestroyEffect(bombEfct);
+    DestroyIcon(cautionIcon);
 }
 
 // TAG EnemyBot/Config/SpawnInterval ----------
