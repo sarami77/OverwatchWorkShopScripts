@@ -772,6 +772,14 @@ if(
             EnemyModType.Explosion
         ]);
 
+        if(
+            enemyType == EnemyType.Boss &&
+            modType == EnemyModType.Fly &&
+            ObjectProgress(humanTeam) >= FinalWaveProgress()
+        ){
+            modType = EnemyModType.Non;
+        }
+
         // deal damage
         // max health
         // move speed
@@ -792,13 +800,14 @@ if(
             moveSpeed *= 2.0;
             damageDealt *= 0.5;
         }
+        else if(modType == EnemyModType.Explosion){
+            name = <"<0> -Explosion", name>;
+            maxHealth *= 0.75;
+        }
         else if(modType == EnemyModType.Fly){
             name = <"<0> -Fly", name>;
             gravity = 1;
-            maxHealth *= 0.75;
-        }
-        else if(modType == EnemyModType.Explosion){
-            name = <"<0> -Explosion", name>;
+            moveSpeed *= 0.75;
         }
     }
 
@@ -845,7 +854,7 @@ enum EnemyModType{
     Explosion
 }
 
-playervar define bomb!;
+playervar define bombEfct!;
 
 rule: "EnemyBot/Config/Explosion"
 Event.OnDeath
@@ -856,22 +865,25 @@ if(
     define bombSize! =      deathCost * 0.25;
     define blastRange! =    deathCost * 1.5;
     define blastDamage! =   deathCost * 100;
-    define deadPos! =       PositionOf();
-    DestroyEffect(bomb);
-    bomb = CreateEffect(ap(ta), Effect.Sphere, Color.Red, deadPos, bombSize, EffectRev.None);
+    define bombPos! =       PositionOf();
+    DestroyEffect(bombEfct);
+    DestroyIcon(cautionIcon);
+    cautionIcon = CreateIcon(AllPlayers(humanTeam), bombPos, Icon.ExclamationMark, IconRev.PositionAndColor, cautionColor, true);
+    bombEfct = CreateEffect(ap(ta), Effect.Sphere, Color.Red, bombPos, bombSize, EffectRev.None);
 
     for(define index! = 0; index < 3; index++){
-        PlayEffect(ap(ta), PlayEffect.RingExplosion, Color.Yellow, deadPos, blastRange * 2);
-        PlayEffect(ap(ta), PlayEffect.DebuffImpactSound, null, deadPos, 75);
+        PlayEffect(ap(ta), PlayEffect.RingExplosion, Color.Yellow, bombPos, blastRange * 2);
+        PlayEffect(ap(ta), PlayEffect.DebuffImpactSound, null, bombPos, 75);
         Wait(1, WaitBehavior.IgnoreCondition);
     }
 
-    define targets! = PlayersWithinRadius(deadPos, blastRange, Team.All, RadiusLOS.SurfacesAndAllBarriers);
+    DestroyEffect(bombEfct);
+    DestroyIcon(cautionIcon);
+    define targets! = PlayersWithinRadius(bombPos, blastRange, Team.All, RadiusLOS.SurfacesAndAllBarriers);
     SetStatus(targets, ep, Status.Burning, 3);
-    ApplyBlastImpulse(targets, deadPos, blastRange);
+    ApplyBlastImpulse(targets, bombPos, blastRange);
     Damage(targets, ep, blastDamage);
-    DestroyEffect(bomb);
-    PlayContinuousBlast(Color.Red, deadPos, blastRange, 2, 2);
+    PlayContinuousBlast(Color.Red, bombPos, blastRange, 2, 2);
 }
 
 // TAG EnemyBot/Config/SpawnInterval ----------
@@ -1308,7 +1320,7 @@ if(
             progressStage ++;
         }
         else if(
-            progressStage == 4 && progress >= (FinaleProgress() - 5)
+            progressStage == 4 && progress >= (FinalWaveProgress())
         ){
             progressAssetNo = RandomValueInArray([17, 18]);
             progressAssetInterval = MaxValue();
@@ -1366,30 +1378,30 @@ if(
 // TAG EnemyBot/CautionIcon ----------
 playervar define cautionIcon;
 
-define isCautionIconActive: 
-    IsPlayerOnObject &&
-    IsOnObjective(ep);
+// define isCautionIconActive: 
+//     IsPlayerOnObject &&
+//     IsOnObjective(ep);
 
-rule: "EnemyBot/CautionIcon/show"
-Event.OngoingPlayer
-if(
-    TeamOf() == enemyTeam &&
-    isCautionIconActive
-){
-    // show caution icon to enemys for easy to find interfering enemy from player
-    DestroyIcon(cautionIcon);
-    cautionIcon = CreateIcon(AllPlayers(humanTeam), ep, Icon.ExclamationMark,
-        IconRev.PositionAndColor, cautionColor, true);
-}
+// rule: "EnemyBot/CautionIcon/show"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == enemyTeam &&
+//     isCautionIconActive
+// ){
+//     // show caution icon to enemys for easy to find interfering enemy from player
+//     DestroyIcon(cautionIcon);
+//     cautionIcon = CreateIcon(AllPlayers(humanTeam), ep, Icon.ExclamationMark,
+//         IconRev.PositionAndColor, cautionColor, true);
+// }
 
-rule: "EnemyBot/CautionIcon/hide"
-Event.OngoingPlayer
-if(
-    TeamOf() == enemyTeam &&
-    !isCautionIconActive
-){
-    DestroyIcon(cautionIcon);
-}
+// rule: "EnemyBot/CautionIcon/hide"
+// Event.OngoingPlayer
+// if(
+//     TeamOf() == enemyTeam &&
+//     !isCautionIconActive
+// ){
+//     DestroyIcon(cautionIcon);
+// }
 
 // TAG EnemyBot/ThreatIcon ----------
 playervar define threatIcon;
