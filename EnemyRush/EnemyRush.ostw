@@ -1,7 +1,7 @@
 import "EnemyRush.setting.json";
 import "../Lib/Debug.del";
 import "../Lib/Utility.del";
-import "../Lib/ServerOverLoadMeasures.del";
+import "../Lib/ServerOverloadMeasures.del";
 import "../Lib/Bot.del";
 import "../Lib/Buddy.del";
 import "../Lib/Vote.del";
@@ -35,9 +35,6 @@ Event.OngoingGlobal
 
     // If run it right after loading the server, some scripts fail, so wait 3 seconds
     Wait(3, WaitBehavior.AbortWhenFalse);
-
-    // Start watch over load
-    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
 
     // show version and share code
     CreateHudText(AllPlayers(),
@@ -198,7 +195,6 @@ if(
     hasFinalStand
 ){
     BigMessage(AllPlayers(humanTeam), "Final Stand !");
-    slowControlHandler = SlowControlHandler.GameLogic;
     SetSlowMotion(10);
     Wait(0.25, WaitBehavior.IgnoreCondition);   // show slow
 
@@ -210,7 +206,6 @@ if(
     Wait(0.25, WaitBehavior.IgnoreCondition);   // show slow
 
     SetSlowMotion(DefaultPercentage());
-    slowControlHandler = SlowControlHandler.ServerOverLoadMeasures;
     Wait(1, WaitBehavior.IgnoreCondition);
     
     CreateHudText(
@@ -1650,7 +1645,7 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
             break;
         }
 
-        WaitReleaseServerLoad(ServerLoadType.GameMain);
+        WaitUntilServerOverloadRelease();
         Wait(searchPositionInterval, WaitBehavior.AbortWhenFalse);
     }
 
@@ -1659,21 +1654,11 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
 
 playervar define telBeam;
 
-define maxDelayTime: 1.0;
-
 void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
     if(teleportPosition == null){return;}
 
     if(IsInSpawnRoom()){
-        define waitTime! = RandomInteger(0.0, maxDelayTime);
-            // // each order
-            // SlotOf() *
-            // // delay time unit by max delay time
-            // (maxDelayTime / NumberOfPlayers(enemyTeam)) * 
-            // // scale by alive bot num (not include self)
-            // (NumberOfLivingPlayers(enemyTeam) - 1) / (NumberOfPlayers(enemyTeam) - 1);
-
-        // dbgHudTxt(<"<1>, waitTime = <0>", waitTime, SlotOf()>);
+        define waitTime! = RandomInteger(0.0, 1.0);
         Wait(waitTime, WaitBehavior.AbortWhenFalse);
     }
 
@@ -1876,7 +1861,7 @@ if(
     }
 
     WaitUpdateMediumCycle();
-    WaitReleaseServerLoad(ServerLoadType.GameMain);
+    WaitUntilServerOverloadRelease();
     LoopIfConditionIsTrue();
 }
 
@@ -1903,7 +1888,7 @@ if(
 ){
     DoTeleport(false, false);
     Wait(3, WaitBehavior.AbortWhenFalse);
-    WaitReleaseServerLoad(ServerLoadType.GameMain);
+    WaitUntilServerOverloadRelease();
     LoopIfConditionIsTrue();
 }
 
@@ -1922,7 +1907,7 @@ if(
 
     while(checkConditionCount < checkTeleportConditionMaxCount){
         Wait(checkTeleportConditionInterval, WaitBehavior.AbortWhenFalse);
-        WaitReleaseServerLoad(ServerLoadType.GameMain);
+        WaitUntilServerOverloadRelease();
 
         if(
             // player on object
@@ -1991,7 +1976,7 @@ if(
             )
         );
         Wait(deployRushInterval, WaitBehavior.IgnoreCondition);
-        WaitReleaseServerLoad(ServerLoadType.GameMain);
+        WaitUntilServerOverloadRelease();
     }
 
     LoopIfConditionIsTrue();
@@ -2027,7 +2012,7 @@ if(
             PressButton(activeEnemys[scLoopIndex], Button.Ultimate);
 
             Wait(shotCallDelay, WaitBehavior.IgnoreCondition);
-            WaitReleaseServerLoad(ServerLoadType.GameMain);
+            WaitUntilServerOverloadRelease();
         }
     }
 
@@ -2081,7 +2066,7 @@ if(
             break;
         }
 
-        WaitReleaseServerLoad(ServerLoadType.GameMain);
+        WaitUntilServerOverloadRelease();
     }
 
     if(IsAlive()){
@@ -2114,7 +2099,7 @@ if(
         IsProbabilityTrue(moreUltProb)
     ){
         SetUltimateCharge(ep, DefaultPercentage());
-        WaitReleaseServerLoad(ServerLoadType.GameMain);
+        WaitUntilServerOverloadRelease();
         Wait(moreAbilityInterval, WaitBehavior.IgnoreCondition);
 
         PressButton(ep, Button.Ultimate);
@@ -2312,18 +2297,10 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
     if(
         debugMode >= DebugMode.ServerLoad
     ){
-        debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(),
-            isServerLoadLevel(ServerLoadLevel.Overload) ? Color.Red :
-            isServerLoadLevel(ServerLoadLevel.Busy) ? Color.Yellow :
-            isServerLoadLevel(ServerLoadLevel.Hot) ? Color.Green :
-            isServerLoadLevel(ServerLoadLevel.Warm) ? Color.Blue :
-            Color.Gray);
-        // debugHuds[Last()] = CreateDebugHud("Server Load Average", ServerLoadAverage(), ServerLoadAverage() < 255 ? Color.Gray : Color.Yellow);
-        // debugHuds[Last()] = CreateDebugHud("Server Load Peak", ServerLoadPeak(), ServerLoadPeak() < 255 ? Color.Gray : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Gray : Color.Yellow);
-        debugHuds[Last()] = CreateDebugHud("count Game Logic Speed Decrease", countGameLogicSpeedDecrease, Color.Gray);
+        debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < serverLoadMax ? Color.Gray : Color.Red);
+        debugHuds[Last()] = CreateDebugHud("current Server Load Limit", currentServerLoadLimit, currentServerLoadLimit >= serverLoadMax ? Color.Gray : Color.Yellow);
         debugHuds[Last()] = CreateDebugHud("count Wait Action By Server Load", countWaitActionByServerLoad, Color.Gray);
-        debugHuds[Last()] = CreateDebugHud("count Wait Action By Server Load Per Second", countDetectTriggerServerLoadPerSecond, Color.Gray);
+        debugHuds[Last()] = CreateDebugHud("count Wait Action By Server Load Per Second", countDetectTriggerServerLoadPerSecond, countDetectTriggerServerLoadPerSecond < 10 ? Color.Gray : Color.Yellow);
     }
 
     if(

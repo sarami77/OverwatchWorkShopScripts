@@ -1,105 +1,52 @@
 import "Utility.del";
 
-// TAG ServerOverLoadMeasures ----------
-define maxGameLogicSpeed: DefaultPercentage();
+// TAG ServerOverloadMeasures ----------
+globalvar define currentServerLoadLimit = serverLoadMax;
+define serverLoadMax: 255;
+define watchTimeLimitDecrease: 1.0;
+define watchTimeLimitIncrease: 1.0;
+define limitChangeUnit: 10;
 
-globalvar define slowControlHandler;
-
-enum SlowControlHandler{
-    None,
-    ServerOverLoadMeasures,
-    GameLogic
-}
-
-globalvar define countGameLogicSpeedDecrease = 0;
-globalvar define gameLogicSpeed = maxGameLogicSpeed;
-define watchTimeSpeedDecrease: 1.5;
-define watchTimeSpeedIncrease: watchTimeSpeedDecrease * 0.5;
-define speedDecreaseUnit: 10;
-define speedIncreaseUnit: speedDecreaseUnit * 1.0;
-
-rule: "ServerOverLoadMeasures/increaseGameLogicSpeed"
+rule: "ServerOverloadMeasures/increaseServerLoadLimit"
 Event.OngoingGlobal
 if(
-    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
-    !isServerLoadLevel(ServerLoadLevel.Overload) &&
-    gameLogicSpeed < maxGameLogicSpeed
+    currentServerLoadLimit < serverLoadMax &&
+    !(ServerLoad() >= serverLoadMax)
 ){
-    Wait(
-        // watchTimeSpeedIncrease,
-        watchTimeSpeedIncrease * (gameLogicSpeed / DefaultPercentage()),
-        WaitBehavior.AbortWhenFalse);
-    
-    // increase slow level
-    gameLogicSpeed += speedDecreaseUnit;
-    gameLogicSpeed = Min(gameLogicSpeed, maxGameLogicSpeed);
-    // apply slow level
-    SetSlowMotion(gameLogicSpeed);
-
+    Wait(watchTimeLimitIncrease, WaitBehavior.AbortWhenFalse);
+    currentServerLoadLimit += limitChangeUnit;
+    if(currentServerLoadLimit > serverLoadMax){
+        currentServerLoadLimit = serverLoadMax;
+    }
     Loop();
 }
 
-rule: "ServerOverLoadMeasures/decreaseGameLogicSpeed"
+rule: "ServerOverloadMeasures/decreaseServerLoadLimit"
 Event.OngoingGlobal
 if(
-    slowControlHandler == SlowControlHandler.ServerOverLoadMeasures &&
-    isServerLoadLevel(ServerLoadLevel.Overload) &&
-    gameLogicSpeed > 0
+    currentServerLoadLimit > 0 &&
+    (ServerLoad() >= serverLoadMax)
 ){
-    Wait(
-        // watchTimeSpeedDecrease,
-        watchTimeSpeedDecrease * (gameLogicSpeed / DefaultPercentage()),
-        WaitBehavior.AbortWhenFalse);
-    
-    // decrease slow level
-    gameLogicSpeed -= speedIncreaseUnit;
-    gameLogicSpeed = Max(gameLogicSpeed, 0);
-    // apply slow level
-    SetSlowMotion(gameLogicSpeed);
-
-    countGameLogicSpeedDecrease ++;
+    Wait(watchTimeLimitDecrease, WaitBehavior.AbortWhenFalse);
+    currentServerLoadLimit -= limitChangeUnit;
+    if(currentServerLoadLimit < 0){
+        currentServerLoadLimit = 0;
+    }
     Loop();
 }
 
-// TAG ServerOverLoading ----------
-enum ServerLoadLevel{
-    Overload = 255,
-    Busy = 200,
-    Hot = 150,
-    Warm = 100,
-    Cold = 50
-}
-
-define isServerLoadLevel(in define loadLevel): loadLevel <= ServerLoad();
-
-enum ServerLoadType{
-    GameMain,
-    BotCreate,
-    BotAction,
-    BotMustAction
-}
+// TAG ServerOverloading ----------
+define isServerOverload(): ServerLoad() >= currentServerLoadLimit;
 
 globalvar define countWaitActionByServerLoad;
 
-void WaitReleaseServerLoad(in define loadType!){
-    define loadLevel! = 
-            loadType == ServerLoadType.GameMain ?       ServerLoadLevel.Hot :
-            loadType == ServerLoadType.BotCreate ?      ServerLoadLevel.Busy :
-            loadType == ServerLoadType.BotMustAction ?  ServerLoadLevel.Busy :
-            loadType == ServerLoadType.BotAction ?      ServerLoadLevel.Hot :
-                                                        ServerLoadLevel.Overload;
-    define waitTimeLoadDist! = 
-            loadType == ServerLoadType.GameMain ?       1.0 :
-            loadType == ServerLoadType.BotCreate ?      1.0 :
-            loadType == ServerLoadType.BotMustAction ?  1.0 :
-            loadType == ServerLoadType.BotAction ?      1.0 :
-                                                        0.0;
+void WaitUntilServerOverloadRelease(){
     if(
-        isServerLoadLevel(loadLevel)
+        isServerOverload()
     ){
         countWaitActionByServerLoad ++;
-        WaitUntil(!isServerLoadLevel(loadLevel), MaxValue());
-        Wait(RandomReal(0.1, waitTimeLoadDist),WaitBehavior.IgnoreCondition);
+        WaitUntil(!isServerOverload(), MaxValue());
+        Wait(RandomReal(0.0, 1.0),WaitBehavior.IgnoreCondition);
     }
 }
 
