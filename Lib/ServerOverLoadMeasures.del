@@ -1,13 +1,14 @@
 import "Utility.del";
 
-// TAG ServerOverloadMeasures ----------
+// TAG ServerOverloadMeasures/ServerLoadLimit ----------
 globalvar define currentServerLoadLimit = serverLoadMax;
 define serverLoadMax: 255;
-define watchTimeLimitDecrease: 1.0;
-define watchTimeLimitIncrease: 1.0;
-define limitChangeUnit: 20;
+define watchTimeLimitDecrease: 0.5;
+define watchTimeLimitIncrease: watchTimeLimitDecrease;
+define limitChangeStep: 5;
+define limitChangeUnit: serverLoadMax / limitChangeStep;
 
-rule: "ServerOverloadMeasures/increaseServerLoadLimit"
+rule: "ServerOverloadMeasures/ServerLoadLimit/increase"
 Event.OngoingGlobal
 if(
     currentServerLoadLimit < serverLoadMax &&
@@ -21,7 +22,7 @@ if(
     Loop();
 }
 
-rule: "ServerOverloadMeasures/decreaseServerLoadLimit"
+rule: "ServerOverloadMeasures/ServerLoadLimit/decrease"
 Event.OngoingGlobal
 if(
     currentServerLoadLimit > 0 &&
@@ -34,6 +35,45 @@ if(
     }
     Loop();
 }
+
+// TAG ServerOverloadMeasures/GameSpeed ----------
+globalvar define currentGameSpeed = gameSpeedMax;
+define gameSpeedMax: 100;
+define watchTimeSpeedDecrease: 1.5;
+define watchTimeSpeedIncrease: watchTimeSpeedDecrease;
+define speedChangeStep: 10;
+define speedChangeUnit: gameSpeedMax / speedChangeStep;
+
+rule: "ServerOverloadMeasures/GameSpeed/increase"
+Event.OngoingGlobal
+if(
+    currentGameSpeed < gameSpeedMax &&
+    !(ServerLoad() >= serverLoadMax)
+){
+    Wait(watchTimeSpeedIncrease, WaitBehavior.AbortWhenFalse);
+    currentGameSpeed += speedChangeUnit;
+    if(currentGameSpeed > gameSpeedMax){
+        currentGameSpeed = gameSpeedMax;
+    }
+    SetSlowMotion(currentGameSpeed);
+    Loop();
+}
+
+rule: "ServerOverloadMeasures/GameSpeed/decrease"
+Event.OngoingGlobal
+if(
+    currentGameSpeed > 0 &&
+    (ServerLoad() >= serverLoadMax)
+){
+    Wait(watchTimeSpeedDecrease, WaitBehavior.AbortWhenFalse);
+    currentGameSpeed -= speedChangeUnit;
+    if(currentGameSpeed < 0){
+        currentGameSpeed = 0;
+    }
+    SetSlowMotion(currentGameSpeed);
+    Loop();
+}
+
 
 // TAG ServerOverloading ----------
 define isServeLoadLimit(): ServerLoad() >= currentServerLoadLimit;
