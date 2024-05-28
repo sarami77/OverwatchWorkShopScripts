@@ -1508,18 +1508,20 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
 
     // select teleportPosition
     returnPosition = 
-        basePosition
-            +
-        RandomPosition(
-            placableAreaSize,
-            placableAreaSize,
-            placableAreaSize
-        )
-            + 
-        (
-            DirectionTowards(basePosition, objectPosition)
-                *
-            DistanceBetween(basePosition, objectPosition) * 0.5
+        NearestWalkablePosition(
+            basePosition
+                +
+            RandomPosition(
+                placableAreaSize,
+                placableAreaSize,
+                placableAreaSize
+            )
+                + 
+            (
+                DirectionTowards(basePosition, objectPosition)
+                    *
+                DistanceBetween(basePosition, objectPosition) * 0.5
+            )
         );
 
     return returnPosition;
@@ -1562,13 +1564,15 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
 
     // select teleportPosition
     returnPosition = 
-        basePosition
-            +
-        RandomPosition(
-            placableAreaSize + placableAreaExtendSize,
-            placableAreaSize + placableAreaExtendSize,
-            placableAreaSize + placableAreaExtendSize
-    );
+        NearestWalkablePosition(
+            basePosition
+                +
+            RandomPosition(
+                placableAreaSize + placableAreaExtendSize,
+                placableAreaSize + placableAreaExtendSize,
+                placableAreaSize + placableAreaExtendSize
+            )
+        );
     
     return returnPosition;
 }
@@ -1589,26 +1593,6 @@ define CanSnapMapSurface()"CanSnapMapSurface"{
             &&
         !IsPlayerOnObject
     );
-}
-
-define CanEncountPosition(define position) globalvar "CanEncountPosition"{
-    define canEncount = false;
-
-    if(
-        // position valid
-        position != null
-                &&
-        // Has line to near player
-        IsInLineOfSight(
-            position + PositionOffsetY1(),
-            PositionOf(ClosestPlayerTo(position, humanTeam)) + PositionOffsetY1(),
-            BarrierLOS.NoBarriersBlock
-        )    
-    ){
-        canEncount = true;
-    }
-
-    return canEncount;
 }
 
 // TAG EnemyBot/Teleport/GetTeleportPositionByTeleportBasePosition
@@ -1639,8 +1623,12 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
         }
 
         if(
-            // can encount player
-            CanEncountPosition(candidatePosition)
+            // Has line to near player
+            IsInLineOfSight(
+                candidatePosition + PositionOffsetY1(),
+                PositionOf(ClosestPlayerTo(candidatePosition, humanTeam)) + PositionOffsetY1(),
+                BarrierLOS.NoBarriersBlock
+            )    
         ){
             returnPosition = candidatePosition;
             break;
@@ -1790,10 +1778,10 @@ if(
                     // dbgHudTxt(<"UP POS BY FAR OBJ OR AHD">);
                 }
                 else if(
-                    // has not line from positionObjectAhead
+                    // Has not line to checkPos
                     !IsInLineOfSight(
                         teleportBasePosition + PositionOffsetY1(),
-                        checkPos,
+                        checkPos + PositionOffsetY1(),
                         BarrierLOS.NoBarriersBlock
                     )
                 ){
@@ -1806,7 +1794,7 @@ if(
             }
             else{
                 if(
-                    // position has not line to closest object player
+                    // Has not line to closest object player
                     !IsInLineOfSight(
                         teleportBasePosition + PositionOffsetY1(),
                         PositionOf(ClosestPlayerTo(CurrentObjectPosition(), humanTeam)) + PositionOffsetY1(),
@@ -1953,7 +1941,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    spawnRushInterval = ObjectProgressScaledInterval(humanTeam, 25, 50) + RandomInteger(0, 5);
+    spawnRushInterval = ObjectProgressScaledInterval(humanTeam, 20, 40) + RandomInteger(0, 5);
     // apply workshop setting
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.0, 100, 2);
     // round for counting
@@ -1963,7 +1951,7 @@ if(
     }
 
     // action
-    define spawnRushDuration! = RandomInteger(5, 25);
+    define spawnRushDuration! = RandomInteger(10, 20);
     spawnRushDuration *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Duration Scale", 1.0, 0.0, 100, 2);
     define deployRushInterval! = RandomInteger(1, 5);
     spawnRushCount = RoundToInteger(spawnRushDuration / deployRushInterval, Rounding.Down);
@@ -1993,7 +1981,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    shotCallInterval = ObjectProgressScaledInterval(humanTeam, 25, 50) + RandomInteger(0, 5);
+    shotCallInterval = ObjectProgressScaledInterval(humanTeam, 20, 40) + RandomInteger(0, 5);
     // apply workshop setting
     shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.0, 100, 3);
     // round for counting
@@ -2032,7 +2020,7 @@ if(
     IsBossClass(ep)
 ){
     // set default interval by object progress
-    combatTeleportInterval = ObjectProgressScaledInterval(humanTeam, 5, 10) + RandomInteger(0, 5);
+    combatTeleportInterval = RandomInteger(5, 10);
     // apply workshop setting
     combatTeleportInterval *= WorkshopSettingReal("Enemy Bot Settings", "(Sub Boss & Boss) Combat-Teleport Interval Scale", 1.0, 0.0, 100, 4);
     // apply scale by each enemy action range
@@ -2138,42 +2126,42 @@ if(
 ){
     // // commonTeleportBasePosition orb
     // CreateEffect(teleportBasePosition != null ? hp : null, Effect.Orb, Color.Red,
-        //     teleportBasePosition + PositionOffsetY1(), 1, EffectRev.VisibleToPositionAndRadius);
+    //         teleportBasePosition + PositionOffsetY1(), 1, EffectRev.VisibleToPositionAndRadius);
     // // positionObjectAhead orb
     // CreateEffect(positionObjectAhead != null ? hp : null, Effect.Orb, Color.White,
-        //     positionObjectAhead, 1, EffectRev.VisibleToPositionAndRadius);
+    //         positionObjectAhead, 1, EffectRev.VisibleToPositionAndRadius);
 
     // // teleportAreaSize ring
     // CreateEffect(teleportBasePosition != null ? hp : null, Effect.Ring, Color.Red,
-        //     teleportBasePosition, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
+    //         teleportBasePosition, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
     // // teleportAreaForceUpdateRange ring
     // CreateEffect(teleportBasePosition != null ? hp : null, Effect.Ring, Color.Yellow,
-        //     teleportBasePosition, teleportAreaForceUpdateSize, EffectRev.VisibleToPositionAndRadius);
+    //         teleportBasePosition, teleportAreaForceUpdateSize, EffectRev.VisibleToPositionAndRadius);
 
     // // placable teleportPosition area size sphere
     // CreateEffect(hp,
-        //     Effect.Sphere, Color.White,
-        //     HasObjectDirection() ?
-            //         positionObjectAhead :
-            //         CurrentObjectOnPosition(),
-        //     placableAreaSize + placableAreaExtendSize,
-        //     EffectRev.VisibleToPositionAndRadius);
+    //         Effect.Sphere, Color.White,
+    //         HasObjectDirection() ?
+    //                 positionObjectAhead :
+    //                 CurrentObjectOnPosition(),
+    //         placableAreaSize + placableAreaExtendSize,
+    //         EffectRev.VisibleToPositionAndRadius);
 
     // // object -> positionObjectAhead beam
     // CreateBeamEffect(HasObjectDirection() ? hp : null, BeamType.GoodBeam, 
-        //     CurrentObjectOnPosition(),
-        //     positionObjectAhead, 
-        //     Color.White, EffectRev.VisibleToPositionAndRadius);
+    //         CurrentObjectOnPosition(),
+    //         positionObjectAhead, 
+    //         Color.White, EffectRev.VisibleToPositionAndRadius);
     // // positionObjectAhead or object -> commonTeleportBasePosition beam
     // CreateBeamEffect(hp, BeamType.GoodBeam, 
-        //     HasObjectDirection() ? positionObjectAhead : CurrentObjectOnPosition(),
-        //     teleportBasePosition + PositionOffsetY1(), 
-        //     Color.Red, EffectRev.VisibleToPositionAndRadius);
+    //         HasObjectDirection() ? positionObjectAhead : CurrentObjectOnPosition(),
+    //         teleportBasePosition + PositionOffsetY1(), 
+    //         Color.Red, EffectRev.VisibleToPositionAndRadius);
     // // commonTeleportBasePosition -> host player or object beam
     // CreateBeamEffect(hp, BeamType.GoodBeam, 
-        //     HasSpawned(hp) ? hp : CurrentObjectOnPosition(),
-        //     teleportBasePosition + PositionOffsetY1(), 
-        //     Color.Blue, EffectRev.VisibleToPositionAndRadius);
+    //         HasSpawned(hp) ? hp : CurrentObjectOnPosition(),
+    //         teleportBasePosition + PositionOffsetY1(), 
+    //         Color.Blue, EffectRev.VisibleToPositionAndRadius);
 
     define pastSecond = 1;
 
