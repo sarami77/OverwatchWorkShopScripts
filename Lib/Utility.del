@@ -380,9 +380,23 @@ define minMoveImpulse: 20;
 define canRidingRange : 6.0;
 define meleeDamage: 25.0;
 define meleeRange: 3.0;
-define isOutOfAmmo:
-        (MaxAmmo(ep, 0) > 0 && Ammo(ep, 0) <= 0) ||
-        (MaxAmmo(ep, 1) > 0 && Ammo(ep, 1) <= 0);
+define IsOutOfAmmo():
+        (
+            MaxAmmo(ep, 0) > 0 &&
+            Ammo(ep, 0) <= 0
+        ) ||
+        (
+            MaxAmmo(ep, 1) > 0 &&
+            Ammo(ep, 1) <= 0
+        );
+
+define IsCanFillAmmo():
+        (
+            MaxAmmo(ep, 0) > Ammo(ep, 0)
+        ) ||
+        (
+            MaxAmmo(ep, 1) > Ammo(ep, 1)
+        );
 
 // TAG BlockDetect ----------
 define walkMeterPerSec: 5.5; // avarage hero speed
@@ -424,7 +438,7 @@ define BlockedPositonByLocalVector(define player!, define localVector!, define d
     return blockedPosition;
 }
 
-define GetHasWallDirection(define player!, define detectDist!)"GetHasWallDirection"{
+define GetWallDirection(define player!, define detectDist!)"GetWallDirection"{
     define checkDir! = RandomizedArray([Backward(), Right(), Left(), Forward()]);
     define hasWallDir!;
 
@@ -442,12 +456,11 @@ define GetHasWallDirection(define player!, define detectDist!)"GetHasWallDirecti
     return hasWallDir;
 }
 
-define StartFacingWallPosition(define hasWallDir!, define detectDist!) playervar "GetHasWallDirection"{
+define GetGrapplePosition(define hasWallDir!, define detectDist!) playervar "GetGrapplePosition"{
     define blockedPos! = BlockedPositon(ep, WorldVectorOf(hasWallDir, ep), detectDist);
     define blockedDist! = DistanceBetween(ep, blockedPos);
     define cutoutDist! = detectDist - blockedDist;
-    // aim to backward wall
-    StartFacingPosition(
+    define wallposition! =
         // blocked as base
         blockedPos +
         // add hight by cutout
@@ -458,17 +471,16 @@ define StartFacingWallPosition(define hasWallDir!, define detectDist!) playervar
             RandomPosition(0, 0, 0)
         :
             // aim with random
-            RandomPosition(5, 5, 5))
-    );
+            RandomPosition(5, 5, 5));
+    
 
-    return hasWallDir;
+    return wallposition;
 }
 
 void StartFacingPlayer(define player!, define facingRate!) playervar "StartFacingPlayer"{
     if(
         player != null &&
-        HasSpawned(player) &&
-        IsAlive(player)
+        HasSpawned(player)
     ){
         StartFacing(
             ep, DirectionTowards(EyePosition(), EyePosition(player)),
@@ -823,14 +835,6 @@ void AddAbilityStock(define button!, define addStock!)"AddAbilityStock"{
         }
     }
 }
-
-define CanResurrect(in define player!):
-    HeroOf(player) == Hero.Mercy &&
-    AbilityCooldown(ep, Button.Ability2) <= 3;
-
-define CanSwiftStep(in define player!):
-    HeroOf(player) == Hero.Kiriko &&
-    AbilityCooldown(ep, Button.Ability1) <= 3;
 
 define IsNemesisForm(in define player!):
     HeroOf(player) == Hero.Ramattra &&
