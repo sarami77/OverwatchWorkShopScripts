@@ -7,13 +7,141 @@ import "../Lib/Bot.del";
 // import "../Lib/Vote.del";
 // import "../Lib/HeroMod.del";
 
-// TestCode -----------------------------------------------
 define humanTeam: Team.Team1;
 define enemyTeam: Team.Team2;
 
-define cautionColor: Color.Yellow;
+// TAG TestCode -----------------------------------------------
 
-define HasObjectDirection(): false;
+
+rule: "Round/TestCode"
+Event.OngoingPlayer
+if(
+    ep == hp &&
+    IsButtonHeld(ep, Button.Interact)
+){
+    ForcePlayerHero(ep, Hero.Lifeweaver);
+    Wait(1);
+
+                StopMove(ep);
+                Wait(0.5, WaitBehavior.IgnoreCondition);
+                PressButton(ep, Button.Jump);
+                // aim to own step
+                define aimPosition! = BelowPosition(ep + VectorWithOutY(FacingDirectionOf()) * 0.1);
+                StartFacingTemporaryWithButton(aimPosition, Button.Ability1, 0.1);
+                Wait(1, WaitBehavior.IgnoreCondition);
+                PressButton(ep, Button.Jump);
+                SetStatus(ep, null, Status.Rooted, RandomReal(3, 9));
+
+
+
+
+}
+
+// TAG BotTest -----------------------------------------------
+rule: "BotTest"
+Event.OngoingGlobal
+{
+    DisableInspectorRecording();
+    Wait(5);
+        
+    define assetList = [
+        // Hero.Sombra
+        // Hero.Widowmaker
+        Hero.Sigma,
+        Hero.Sombra,
+        // Hero.Reaper,
+        Hero.Widowmaker,
+        Hero.Reaper,
+        // Hero.Mercy,
+        // Hero.Zarya,
+        // Hero.Kiriko,
+        Hero.Lifeweaver,
+        Hero.Mercy
+        // Hero.Lucio
+        // Hero.Lucio
+        // Hero.Ramattra,Hero.Ramattra
+        // Hero.Baptiste,
+        // Hero.Symmetra
+    ];
+
+    CreateBotsByHeroList(assetList, humanTeam);
+    CreateBotsByHeroList(assetList, enemyTeam);
+
+    SetRespawnMaxTime(ap(ta), 10);
+    SetMaxHealth(ap(ta), 100); Wait(0.5); Heal(ap(ta), null, MaxValue());
+    // SetStatus(ap(ta), null, Status.Unkillable, MaxValue()); 
+    AllPlayers().watchUpdateRate = 1;
+    AllPlayers().isBotActive = true;
+    HostPlayer().isBotActive = false;
+
+    while(true){
+        Teleport(PlayersAsHero(Hero.Reaper), RandomPosition(20, 0, 20));
+
+        for(define index! = 0; index < 5; index++){
+            SetAbilityCooldown(ap(ta), Button.Ability1, 0);
+            SetAbilityCooldown(ap(ta), Button.Ability2, 0);
+            SetAbilityCooldown(ap(ta), Button.SecondaryFire, 0);
+            SetUltimateCharge(ap(ta), 100);
+            
+            SetStatus(PlayersAsHero(Hero.Mercy), null, Status.PhasedOut, 3);
+            Damage(PlayersAsHero(Hero.Reaper), null, MaxValue());
+
+
+            Wait(1);
+        }
+    }
+}
+
+
+// TAG Round -----------------------------------------------
+rule: "Round/shortenAssemblePhase"
+Event.OngoingGlobal
+if(
+    IsAssemblingHeroes()
+){
+    SetMatchTime(3);
+}
+
+rule: "Round/shortenSetupPhase"
+Event.OngoingGlobal
+if(
+    IsInSetup()
+){
+    SetMatchTime(3);
+}
+
+// TAG KillCount -----------------------------------------------
+globalvar define killCountTeam1;
+globalvar define killCountTeam2;
+
+rule: "killCount/countUp"
+Event.OnFinalBlow
+{
+    if(TeamOf() == Team.Team1)
+        killCountTeam1 ++;
+    else if(TeamOf() == Team.Team2)        
+        killCountTeam2 ++;
+}
+
+// TAG TeamFormation -----------------------------------------------
+disabled rule: "TeamFormation/restart"
+Event.OngoingGlobal
+{
+    while(true){
+        WaitUntil(
+            (
+                NumberOfLivingPlayers(humanTeam) <= 0 ||
+                NumberOfLivingPlayers(enemyTeam)  <= 0
+            ),
+            MaxValue()
+        );
+        Wait(3);
+        Respawn(ap(Team.All));
+        Wait(1);
+    }
+}
+
+// TAG PortalHunt -----------------------------------------------
 
 globalvar define mapCenter!;
 globalvar define mapCenterToEdgeDist!;
@@ -170,63 +298,7 @@ Event.OngoingGlobal
     }
 }
 
-rule: "BotTest"
-Event.OngoingGlobal
-{
-    // DisableInspectorRecording();
-    Wait(5);
-        
-    define assetList = [
-        // Hero.Sombra
-        // Hero.Widowmaker
-        Hero.Zarya,
-        Hero.Sombra,
-        // Hero.Reaper,
-        Hero.Widowmaker,
-        Hero.Reaper,
-        Hero.Widowmaker,
-        Hero.Widowmaker,
-        // Hero.Mercy,
-        // Hero.Zarya,
-        // Hero.Kiriko,
-        Hero.Mercy,
-        Hero.Mercy
-        // Hero.Lucio
-        // Hero.Lucio
-        // Hero.Ramattra,Hero.Ramattra
-        // Hero.Baptiste,
-        // Hero.Symmetra
-    ];
-
-    CreateBotsByHeroList(assetList, humanTeam);
-    CreateBotsByHeroList(assetList, enemyTeam);
-
-    SetRespawnMaxTime(ap(ta), 5);
-    SetMaxHealth(ap(ta), 100); Wait(0.5); Heal(ap(ta), null, MaxValue());
-    // SetStatus(ap(ta), null, Status.Unkillable, MaxValue()); 
-    AllPlayers().watchUpdateRate = 1;
-    AllPlayers().isBotActive = true;
-    HostPlayer().isBotActive = false;
-
-    while(true){
-
-        // SetUltimateCharge(ap(ta), 100);
-
-        define target = FirstOf(FilteredArray(AllPlayers(humanTeam), HeroOf(ae) == Hero.Reaper));
-        Teleport(target, RandomPosition(20, 0, 20));
-
-
-        for(define index! = 0; index < 5; index++){
-            SetAbilityCooldown(ap(ta), Button.Ability1, 0);
-            SetAbilityCooldown(ap(ta), Button.Ability2, 0);
-            SetAbilityCooldown(ap(ta), Button.SecondaryFire, 0);
-            Damage(target, null, Health(target) - 1);
-            Wait(1);
-        }
-    }
-    
-}
-
+// TAG AvoidRespawnRoom -----------------------------------------------
 disabled rule: "AvoidRespawnRoom"
 Event.OngoingPlayer
 if(
@@ -252,58 +324,7 @@ if(
 }
 
 
-// TeamFormation -----------------------------------------------
-disabled rule: "TeamFormation/restart"
-Event.OngoingGlobal
-if(
-    true
-){
-    while(true){
-        WaitUntil(
-            (
-                NumberOfLivingPlayers(humanTeam) <= 0 ||
-                NumberOfLivingPlayers(enemyTeam)  <= 0
-            ),
-            MaxValue()
-        );
-        Wait(3);
-        Respawn(ap(Team.All));
-        Wait(1);
-    }
-}
-
-// Round -----------------------------------------------
-rule: "Round/shortenAssemblePhase"
-Event.OngoingGlobal
-if(
-    IsAssemblingHeroes()
-){
-    SetMatchTime(5);
-}
-
-rule: "Round/shortenSetupPhase"
-Event.OngoingGlobal
-if(
-    IsInSetup()
-){
-    SetMatchTime(5);
-}
-
-// killCount -----------------------------------------------
-globalvar define killCountTeam1;
-globalvar define killCountTeam2;
-
-rule: "killCount/countUp"
-Event.OnFinalBlow
-{
-    if(TeamOf() == Team.Team1)
-        killCountTeam1 ++;
-    else if(TeamOf() == Team.Team2)        
-        killCountTeam2 ++;
-    
-}
-
-// Debug/Slow -----------------------------------------------
+// TAG Debug/Slow -----------------------------------------------
 globalvar define slow = DefaultPercentage();
 
 rule: "Debug/Slow/setSlow"
@@ -328,7 +349,7 @@ if(
     SetSlowMotion(slow);
 }
 
-// Debug/TuneVal -----------------------------------------------
+// TAG Debug/TuneVal -----------------------------------------------
 define changeTimeInterval: 0.1;
 define initialTuneUnit : 0.01;
 globalvar define tuneVal = 0.1;
@@ -365,6 +386,7 @@ Event.OngoingGlobal
     debugHuds[Last()] = CreateDebugHud("tune Val", tuneVal, Color.Orange);
 }
 
+// TAG Debug/TuneVal ----------
 rule: "Debug/TuneVal/startIncreaseParam"
 Event.OngoingPlayer
 if(
@@ -424,14 +446,18 @@ void resetTuneUnit(){
     consecutiveChangeCount = 0;
 }
 
+define segCount: 10;
+
 void changeTuneUnit(){
     consecutiveChangeCount ++;
-    if(consecutiveChangeCount < 10)
+    if(         consecutiveChangeCount < segCount * 1)
         tuneUnit =  initialTuneUnit * 1;
-    else if(consecutiveChangeCount < 20 )
-        tuneUnit = initialTuneUnit * 10;
-    else if(consecutiveChangeCount < 30 )
-        tuneUnit = initialTuneUnit * 100;
+    else if(    consecutiveChangeCount < segCount * 2)
+        tuneUnit =  initialTuneUnit * 10;
+    else if(    consecutiveChangeCount < segCount * 3)
+        tuneUnit =  initialTuneUnit * 100;
+    else if(    consecutiveChangeCount < segCount * 4)
+        tuneUnit =  initialTuneUnit * 1000;
     else
-        tuneUnit = initialTuneUnit * 1000;
+        tuneUnit =  initialTuneUnit * 10000;
 }

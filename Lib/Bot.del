@@ -318,7 +318,7 @@ void SetMoveDir() playervar "SetMoveDir"{
         // right/left
         if(
             IsProbabilityTrue(
-                100 *
+                DefaultPercentage() *
                 (
                     actionState == ActionState.Attack ? 
                         (
@@ -440,7 +440,7 @@ define facingRate:
     actionRangeMax == ActionRange.Close ?   250 :
     actionRangeMax == ActionRange.Middle ?  200 :
     actionRangeMax == ActionRange.Far ?     150 :
-    100;
+    DefaultPercentage();
 
 void StartFacingAimTarget() playervar "StartFacingAimTarget"{
     if(
@@ -567,7 +567,7 @@ void FindTarget()"FindTarget"{
     // but, not set as direct to aimTarget for avoid interrupt invalid facing
 
     // by supportPrioloty
-    if(IsProbabilityTrue(100 * supportPrioloty))
+    if(IsProbabilityTrue(DefaultPercentage() * supportPrioloty))
     {
         // find support target
         candidateTarget = FindSupportTarget();
@@ -987,8 +987,8 @@ void StartFacingTemporaryWithButton(define target!, define button!, define keepT
             facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
     }
 
-    for(define tryCount! = 0; tryCount < 4; tryCount++){
-        Wait(0.5, WaitBehavior.IgnoreCondition);
+    for(define tryCount! = 0; tryCount < 8; tryCount++){
+        Wait(0.25, WaitBehavior.IgnoreCondition);
         if(IsInViewAngle(ep, target, 30)){
             break;
         }
@@ -1055,18 +1055,18 @@ void PolingAction() playervar "PolingAction"{
     if(hero == Hero.Ana){
         if(
             IsInCombat() &&
-            UltimateChargePercent() >= 100
+            UltimateChargePercent() >= DefaultPercentage()
         ){
             // get ultimate ready or ultimate using or low helath player
             define boostTarget! = 
-                RandomValueInArray(
+                FirstOf(
                     FilteredArray(
                         AllLivingPlayers(TeamOf()),
                         (
                             ae != ep &&
                             (
                                 // ult ready
-                                UltimateChargePercent(ae) >= 100 ||
+                                UltimateChargePercent(ae) >= DefaultPercentage() ||
                                 // using ult
                                 IsUsingUltimate(ae) ||
                                 // low health
@@ -1078,7 +1078,7 @@ void PolingAction() playervar "PolingAction"{
                 );
 
             if(boostTarget != null){
-                StartFacingTemporaryWithButton(boostTarget, Button.Ultimate, 0.5);
+                StartFacingTemporaryWithButton(boostTarget, Button.Ultimate, 0.1);
             }
         }
     }
@@ -1089,7 +1089,7 @@ void PolingAction() playervar "PolingAction"{
             AbilityCooldown(ep, Button.Ability2) <= 0
         ){
             define resurrectTarget! = 
-                RandomValueInArray(
+                FirstOf(
                     FilteredArray(
                         AllDeadPlayers(TeamOf()),
                         (
@@ -1100,24 +1100,37 @@ void PolingAction() playervar "PolingAction"{
                 );
 
             if(resurrectTarget != null){
-                StartFacingTemporaryWithButton(resurrectTarget, Button.Ability1, 2.0);
-                StartHoldingButton(ep, Button.Ability2);
+                while(
+                    IsDead(resurrectTarget) &&
+                    AbilityCooldown(ep, Button.Ability2) <= 0
+                ){
+                    StartFacingTemporaryWithButton(resurrectTarget, Button.Ability1, 1.0);
+                    if(DistanceBetween(ep, resurrectTarget) >= 3){
+                        moveDirFB = Forward();
+                        moveDirLR = NoDirection();
+                        StartMove(ep);
+                    }
+                    else{
+                        StopMove(ep);
+                    }
+                    StartHoldingButton(ep, Button.Ability2);
+                }
             }
         }
 
         //  boost to ult player
         if(
-            IsProbabilityTrue(50)
+            IsProbabilityTrue(DefaultPercentage() * NormalizedHealth(aimTarget))
         ){
             define boostTarget! = 
-                RandomValueInArray(
+                FirstOf(
                     FilteredArray(
                         AllLivingPlayers(TeamOf()),
                         (
                             ae != ep &&
                             (
                                 // ready ult
-                                100 <= UltimateChargePercent(ae) ||
+                                DefaultPercentage() <= UltimateChargePercent(ae) ||
                                 // using ult
                                 IsUsingUltimate(ae)
                             ) &&
@@ -1127,27 +1140,27 @@ void PolingAction() playervar "PolingAction"{
                 );
 
             if(boostTarget != null){
-                // change to heal arm
-                SetWeapon(ep, 1);
+                if(Weapon() == 2){
+                    // change to heal arm
+                    SetWeapon(ep, 1);
+                }
                 StopHoldingButton(ep, Button.PrimaryFire);
-                StartFacingTemporaryWithButton(boostTarget, Button.SecondaryFire, RandomReal(5, 10));
+                StartFacingTemporaryWithButton(boostTarget, Button.SecondaryFire, RandomReal(3, 6));
             }
         }
 
         // change weapon
-        if(
-            actionState == ActionState.Support &&
-            Weapon() == 2
-        ){
-            // change to heal arm
-            SetWeapon(ep, 1);
+        if(actionState == ActionState.Support){
+            if(Weapon() == 2){
+                // change to heal arm
+                SetWeapon(ep, 1);
+            }
         }
-        else if(
-            actionState == ActionState.Attack &&
-            Weapon() == 1
-        ){
-            // change to gun
-            SetWeapon(ep, 2);
+        else if(actionState == ActionState.Attack){
+            if(Weapon() == 1){
+                // change to gun
+                SetWeapon(ep, 2);
+            }
         }
 
         // change beam
@@ -1175,7 +1188,7 @@ void PolingAction() playervar "PolingAction"{
         ){
             // get ultimate ready or ultimate using or low helath player
             define protectTarget! = 
-                RandomValueInArray(
+                FirstOf(
                     FilteredArray(
                         AllLivingPlayers(TeamOf()),
                         (
@@ -1188,7 +1201,7 @@ void PolingAction() playervar "PolingAction"{
 
             if(protectTarget != null){
                 protectTarget = BelowPosition(protectTarget);
-                StartFacingTemporaryWithButton(protectTarget, Button.Ability2, 0.5);
+                StartFacingTemporaryWithButton(protectTarget, Button.Ability2, 0.1);
             }
         }
     }
@@ -1200,7 +1213,7 @@ void PolingAction() playervar "PolingAction"{
         ){
             // get ultimate ready or ultimate using or low helath player
             define protectTarget! = 
-                RandomValueInArray(
+                FirstOf(
                     FilteredArray(
                         AllLivingPlayers(TeamOf()),
                         (
@@ -1212,7 +1225,7 @@ void PolingAction() playervar "PolingAction"{
                 );
 
             if(protectTarget != null){
-                StartFacingTemporaryWithButton(protectTarget, Button.Ability2, 0.5);
+                StartFacingTemporaryWithButton(protectTarget, Button.Ability2, 0.1);
             }
         }
     }
@@ -1222,7 +1235,7 @@ void PolingAction() playervar "PolingAction"{
             AbilityCooldown(ep, Button.Ability1) <= 0
         ){
             define protectTarget! = 
-                RandomValueInArray(
+                FirstOf(
                     FilteredArray(
                         AllLivingPlayers(TeamOf()),
                         (
@@ -1249,21 +1262,22 @@ void PolingAction() playervar "PolingAction"{
         ){
             // for self
             if(
-                IsProbabilityTrue(50 + (100 * (1 - NormalizedHealth())))
+                IsProbabilityTrue(50 + (DefaultPercentage() * (1 - NormalizedHealth())))
             ){
                 StopMove(ep);
                 Wait(0.5, WaitBehavior.IgnoreCondition);
                 PressButton(ep, Button.Jump);
                 // aim to own step
                 define aimPosition! = BelowPosition(ep + VectorWithOutY(FacingDirectionOf()) * 0.1);
-                StartFacingTemporaryWithButton(aimPosition, Button.Ability1, 0.5);
+                StartFacingTemporaryWithButton(aimPosition, Button.Ability1, 0.1);
                 Wait(1, WaitBehavior.IgnoreCondition);
                 PressButton(ep, Button.Jump);
+                SetStatus(ep, null, Status.Rooted, 3);
             }
             // for friend
             else if(IsProbabilityTrue(50)){
                 define assistTarget! = 
-                    RandomValueInArray(
+                    FirstOf(
                         FilteredArray(
                             AllLivingPlayers(TeamOf()),
                             (
@@ -1276,7 +1290,7 @@ void PolingAction() playervar "PolingAction"{
 
                 if(assistTarget != null){
                     define aimPosition!  = BelowPosition(assistTarget);
-                    StartFacingTemporaryWithButton(aimPosition, Button.Ability1, 0.5);
+                    StartFacingTemporaryWithButton(aimPosition, Button.Ability1, 0.1);
                 }
             }
         }
@@ -1287,7 +1301,7 @@ void PolingAction() playervar "PolingAction"{
         ){
             // get ultimate ready or ultimate using or low helath player
             define protectTarget! = 
-                RandomValueInArray(
+                FirstOf(
                     FilteredArray(
                         AllLivingPlayers(TeamOf()),
                         (
@@ -1300,7 +1314,7 @@ void PolingAction() playervar "PolingAction"{
                 );
 
             if(protectTarget != null){
-                StartFacingTemporaryWithButton(protectTarget, Button.Ability2, 0.5);
+                StartFacingTemporaryWithButton(protectTarget, Button.Ability2, 0.1);
             }
         }
     }
@@ -1479,7 +1493,7 @@ void PolingAction() playervar "PolingAction"{
                 Vector(0, 5, 0) +
                 RandomPosition(2.5, 2.5, 2.5);
             
-            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.5);
+            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.1);
         }
         else if(
             AbilityCooldown(ep, Button.Ability2) <= 0 &&
@@ -1555,7 +1569,7 @@ void PolingAction() playervar "PolingAction"{
         // use ice wall for defend self
         if(
             IsInCombat() &&
-            IsProbabilityTrue(100 * (1 - NormalizedHealth()))  &&
+            IsProbabilityTrue(DefaultPercentage() * (1 - NormalizedHealth()))  &&
             AbilityCooldown(ep, Button.Ability2) <= 0
         ){
             define aimPosition! = 
@@ -1566,7 +1580,7 @@ void PolingAction() playervar "PolingAction"{
                         3
                     )
                 );
-            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.5);
+            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.1);
             PressButton(ep, Button.PrimaryFire);
         }
 
@@ -1585,13 +1599,13 @@ void PolingAction() playervar "PolingAction"{
                         3
                     )
                 );
-            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.5);
+            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.1);
             PressButton(ep, Button.PrimaryFire);
         }
 
         // use cyro freez
         if(
-            IsProbabilityTrue(100 * (1 - NormalizedHealth()))  &&
+            IsProbabilityTrue(DefaultPercentage() * (1 - NormalizedHealth()))  &&
             AbilityCooldown(ep, Button.Ability1) <= 0
         ){
             PressButton(ep, Button.Ability1);
@@ -1616,7 +1630,7 @@ void PolingAction() playervar "PolingAction"{
                     ) +
                     RandomPosition(5, 0, 5)
                 );
-            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.5);
+            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.1);
             PressButton(ep, Button.PrimaryFire);
         }
     }
@@ -1723,7 +1737,7 @@ void PolingAction() playervar "PolingAction"{
                     StopMove(ep);
                     StopHoldingButton(ep, Button.SecondaryFire);
                     define aimPosition! = GetGrapplePosition(hasWallDir, detectDist);
-                    StartFacingTemporaryWithButton(aimPosition, Button.Ability1, 0.5);
+                    StartFacingTemporaryWithButton(aimPosition, Button.Ability1, 0.1);
                     StartHoldingButton(ep, Button.SecondaryFire);
                 }
             }
@@ -1860,6 +1874,11 @@ if(
         isCanAction = true;
         rotateProb = 50;
     }
+    else if(
+        hero == Hero.Lifeweaver
+    ){
+        isCanAction = true;
+    }
 
     // place ultmate
     if(isCanAction){
@@ -1879,7 +1898,7 @@ if(
                     DistanceBetween(ep, aimTarget) * 0.5
                 )
             );
-        StartFacingTemporaryWithButton(aimPosition, Button.PrimaryFire, 0.5);
+        StartFacingTemporaryWithButton(aimPosition, Button.PrimaryFire, 0.1);
         PressButton(ep, Button.PrimaryFire);
         // restore buton control
         enableButtonControl = true;
@@ -1927,7 +1946,7 @@ if(
                     DistanceBetween(ep, aimTarget) * 0.25
                 )
             );
-        StartFacingTemporaryWithButton(aimPosition, Button.SecondaryFire, 0.5);
+        StartFacingTemporaryWithButton(aimPosition, Button.SecondaryFire, 0.1);
         // restore buton control
         enableButtonControl = true;
     }
