@@ -1010,7 +1010,7 @@ void HeroMod_Action_ARTILLERY_SUPPORT(define trigger!) playervar "HeroMod_Action
     else if(
         trigger == HeroModTrigger.LOST_HEALTH
     ){
-        HeroMod_Action_ARTILLERY_FIRE(ARTILLERY_FIRE_TARGHET_MODE.NEAR_PLAYER);
+        HeroMod_Action_ARTILLERY(ARTILLERY_FIRE_TARGHET_MODE.NEAR_PLAYER);
         Wait(10, WaitBehavior.IgnoreCondition);
     }
 }
@@ -1375,7 +1375,7 @@ void HeroMod_Action_GRUDGE_FIRE_BALL(define trigger!, define inputPayload!) play
     ){
         define power! = grudgePower;
         grudgePower = 0;
-        HeroMod_Action_FIRE_BALL_FIRE(power);
+        HeroMod_Action_FIRE_BALL(power);
     }
 }
 // TAG ARTILLERY_REQUEST
@@ -1400,7 +1400,7 @@ void HeroMod_Action_ARTILLERY_REQUEST(define trigger!) playervar "HeroMod_Action
     else if(
         trigger == HeroModTrigger.USING_ULT
     ){
-        HeroMod_Action_ARTILLERY_FIRE(ARTILLERY_FIRE_TARGHET_MODE.NEAR_AIM_POS);
+        HeroMod_Action_ARTILLERY(ARTILLERY_FIRE_TARGHET_MODE.NEAR_AIM_POS);
     }
 }
 // TAG STRAFING_REQUEST
@@ -1872,7 +1872,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
                 Wait(1.0, WaitBehavior.IgnoreCondition);
                 StopFacing(ep);
                 SetUltimateCharge(ep, DefaultPercentage());
-                HeroMod_Action_FIRE_NUKE_CANON();
+                HeroMod_Action_NUKE_CANON();
             }
 
             // change to assult mode
@@ -2016,7 +2016,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         IsAlive() &&
         UltimateChargePercent(ep) > 0
     ){
-        HeroMod_Action_FIRE_NUKE_CANON();
+        HeroMod_Action_NUKE_CANON();
     }
 }
 // TAG ZOMBIE
@@ -2172,8 +2172,8 @@ enum ARTILLERY_FIRE_TARGHET_MODE{
     NEAR_AIM_POS
 }
 
-// TAG HeroMod_Action_ARTILLERY_FIRE
-void HeroMod_Action_ARTILLERY_FIRE(define targetMode!) playervar "HeroMod_Action_ARTILLERY_REQUEST_SUPPORT" {
+// TAG HeroMod_Action_ARTILLERY
+void HeroMod_Action_ARTILLERY(define targetMode!) playervar "HeroMod_Action_ARTILLERY" {
     Wait(0.5, WaitBehavior.IgnoreCondition);
 
     // config value
@@ -2342,9 +2342,10 @@ void HeroMod_Action_ARTILLERY_FIRE(define targetMode!) playervar "HeroMod_Action
     DestroyEffect(shellEffect2);
 }
 
-// TAG HeroMod_Action_FIRE_BALL_FIRE
-void HeroMod_Action_FIRE_BALL_FIRE(define power!) playervar "HeroMod_Action_FIRE_BALL_FIRE"{
+// TAG HeroMod_Action_FIRE_BALL
+void HeroMod_Action_FIRE_BALL(define power!) playervar "HeroMod_Action_FIRE_BALL"{
     define ballSpeed! = 30;
+    define ballDistance! = 60;
     define ballSize! = power * 0.025;
     define ballDamage! = power * 5;
     define ballBlastRange! = power * 0.15;
@@ -2355,26 +2356,32 @@ void HeroMod_Action_FIRE_BALL_FIRE(define power!) playervar "HeroMod_Action_FIRE
     collisionSize = collisionSize < minCollisionSize ? minCollisionSize : collisionSize;
 
     define ballPos = EyePosition() + Vector(0, -0.1, 0);
-    define aimPos! = AimingPosition(60, null);
-    define effects! = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
+    define aimPos! = AimingPosition(ballDistance, null);
+    define effects!;
+    DestroyEffect(effects);
+    effects = CreateEffect(AllPlayers(), Effect.Sphere, Color.Orange,
         ballPos, ballSize, EffectRev.PositionAndRadius);
 
     ChaseVariableAtRate(
         ballPos, aimPos, ballSpeed,
         RateChaseReevaluation.DestinationAndRate);
-    while(
-        // not
-        !(
+
+    define maxCount! = (ballDistance / ballSpeed) * 10;
+    for(define count! = 0; count < maxCount; count++){
+        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
+        define closeEnemy! = ClosestPlayerTo(ballPos, EnemyTeamOf(ep));
+
+        if(
             // hit aimed position
             DistanceBetween(ballPos, aimPos) <= 0 ||
             // hit enemy
             (
-                DistanceBetween(ballPos, ClosestPlayerTo(ballPos, EnemyTeamOf(ep))) <= collisionSize &&
-                IsAlive(ClosestPlayerTo(ballPos, EnemyTeamOf(ep)))
+                IsAlive(closeEnemy) &&
+                DistanceBetween(ballPos, closeEnemy) <= collisionSize
             )
-        )
-    ){
-        PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.Orange, ballPos, ballSize * 1.5);
+        ){
+            break;
+        }
         Wait(0.1, WaitBehavior.IgnoreCondition);
     }
     StopChasingVariable(ballPos);
@@ -2384,15 +2391,11 @@ void HeroMod_Action_FIRE_BALL_FIRE(define power!) playervar "HeroMod_Action_FIRE
     SetStatus(targets, ep, Status.Burning, 3);
     ApplyBlastImpulse(targets, ballPos, ballBlastRange, 4);
     Damage(targets, ep, ballDamage);
-
-    // targets = PlayersWithinRadius(ballPos, collisionSize < minCollisionSize ? minCollisionSize : ballBlastRange, TeamOf(ep), RadiusLOS.Off);
-    // ApplyBlastImpulse(targets, ballPos, ballBlastRange / 2);
-
     PlayContinuousBlast(Color.Orange, ballPos, ballBlastRange, ballBlastCount, ballBlastCount);
 }
 
-// TAG HeroMod_Action_FIRE_NUKE_CANON
-void HeroMod_Action_FIRE_NUKE_CANON() playervar "HeroMod_Action_FIRE_NUKE_CANON"{
+// TAG HeroMod_Action_NUKE_CANON
+void HeroMod_Action_NUKE_CANON() playervar "HeroMod_Action_NUKE_CANON"{
     define chargeRate! = UltimateChargePercent() / DefaultPercentage();
 
     // play blast sound
@@ -2425,7 +2428,7 @@ void HeroMod_Action_FIRE_NUKE_CANON() playervar "HeroMod_Action_FIRE_NUKE_CANON"
 
     define power! = UltimateChargePercent();
     SetUltimateCharge(ep, 0);
-    HeroMod_Action_FIRE_BALL_FIRE(power);
+    HeroMod_Action_FIRE_BALL(power);
 }
 
 // TAG HeroMod/Trigger ----------
