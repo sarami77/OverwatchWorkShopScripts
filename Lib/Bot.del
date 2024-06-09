@@ -975,7 +975,7 @@ if(
 }
 
 // TAG Bot/HeroUniqueAction ----------
-void StartFacingTemporaryWithButton(define target!, define button!, define keepTime!) playervar "StartFacingTemporaryWithButton"{
+void StartFacingTemporaryWithButton(define target!, define button!, define keepTime! = 0.1, define angle! = 30) playervar "StartFacingTemporaryWithButton"{
     // target is player
     if(HasSpawned(target)){
         StartFacingPlayer(target, facingRate);
@@ -987,9 +987,12 @@ void StartFacingTemporaryWithButton(define target!, define button!, define keepT
             facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
     }
 
-    for(define tryCount! = 0; tryCount < 8; tryCount++){
-        Wait(0.25, WaitBehavior.IgnoreCondition);
-        if(IsInViewAngle(ep, target, 30)){
+    define tryTime! = 2.0;
+    define tryInterval! = 0.25;
+    define maxTryCount! = tryTime * tryInterval;
+    for(define tryCount! = 0; tryCount < maxTryCount; tryCount++){
+        Wait(tryInterval, WaitBehavior.IgnoreCondition);
+        if(IsInViewAngle(ep, target, angle)){
             break;
         }
     }
@@ -1262,17 +1265,16 @@ void PolingAction() playervar "PolingAction"{
         ){
             // for self
             if(
-                IsTrueProbability(50 + (DefaultPercentage() * (1 - NormalizedHealth())))
+                IsTrueProbability(50 + (DefaultPercentage() * (1 - NormalizedHealth()))) &&
+                !IsAboveCeiling(ep)
             ){
                 StopMove(ep);
                 Wait(0.5, WaitBehavior.IgnoreCondition);
-                PressButton(ep, Button.Jump);
                 // aim to own step
-                define aimPosition! = BelowPosition(ep + VectorWithOutY(FacingDirectionOf()) * 0.1);
-                StartFacingTemporaryWithButton(aimPosition, Button.Ability1, 0.1);
+                StartFacingTemporaryWithButton(BelowPosition(ep), Button.Ability1, 0.1);
                 Wait(1, WaitBehavior.IgnoreCondition);
                 PressButton(ep, Button.Jump);
-                SetStatus(ep, null, Status.Rooted, 3);
+                SetStatus(ep, null, Status.Rooted, RandomReal(3.0, 6.0));
             }
             // for friend
             else if(IsTrueProbability(50)){
@@ -1283,14 +1285,18 @@ void PolingAction() playervar "PolingAction"{
                             (
                                 ae != ep &&
                                 ae.actionRangeMax == ActionRange.Far &&
+                                IsStanding(ae) &&
+                                DistanceBetween(ep, ae) <= ActionRange.Middle &&
                                 CanFindLine(ae)
                             )
                         )
                     );
 
-                if(assistTarget != null){
-                    define aimPosition!  = BelowPosition(assistTarget);
-                    StartFacingTemporaryWithButton(aimPosition, Button.Ability1, 0.1);
+                if(
+                    assistTarget != null &&
+                    !IsAboveCeiling(assistTarget)
+                ){
+                    StartFacingTemporaryWithButton(BelowPosition(assistTarget) + Vector(0, 0.1, 0), Button.Ability1, 0.1);
                 }
             }
         }
@@ -2321,7 +2327,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         hasDoubleJumpButtonAbility = true;
         supportPrioloty = 1.0;
         jumpButtonReleaseMax = 5;               // to more use life step
-        ability1ButtonReleaseMax = ControlDisabled();          // to suppress over use petalform (Prefer PolingHeroUniqueAction)
+        ability1ButtonReleaseMax = ControlDisabled();          // to suppress over use petal platform (Prefer PolingHeroUniqueAction)
         ability2ButtonReleaseMax = ControlDisabled();          // to suppress over use life grip (Prefer PolingHeroUniqueAction)
         supportButtons = [
             Button.PrimaryFire,
