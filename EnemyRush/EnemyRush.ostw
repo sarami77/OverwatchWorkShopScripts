@@ -922,7 +922,13 @@ if(
     autoTuneDmgDlt += upValue;
     autoTuneDmgDlt = autoTuneDmgDlt > autoTuneDmgDltMax ? autoTuneDmgDltMax : autoTuneDmgDlt;
     // death count for debug
-    enemyDeathCount[ep.enemyType - 1] ++;
+    enemyDeathCount[
+        enemyType == EnemyType.Minion ?     0 :
+        enemyType == EnemyType.Elite ?      1 :
+        enemyType == EnemyType.SubBoss ?    2 :
+        enemyType == EnemyType.Boss ?       3 :
+                                            0
+    ] ++;
 }
 
 rule: "EnemyBot/Config/DealtDamage/downTune"
@@ -1389,10 +1395,13 @@ if(
     define blastRange! =    scale * 1.6;
     define blastDamage! =   scale * 100;
     define bombPos! = PositionOf() + Vector(0, 0.2, 0);
-    DestroyEffect(bombEfct);
-    DestroyIcon(cautionIcon);
-    cautionIcon = CreateIcon(AllPlayers(humanTeam), bombPos, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
-    bombEfct = CreateEffect(ap(ta), Effect.Sphere, cautionColor, bombPos, bombSize, EffectRev.Color);
+    DestroyIcon(bombEfct[0]);
+    DestroyEffect(bombEfct[1]);
+    DestroyInWorldText(bombEfct[2]);
+    bombEfct[0] = CreateIcon(AllPlayers(humanTeam), bombPos, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
+    bombEfct[1] = CreateEffect(ap(ta), Effect.Sphere, cautionColor, bombPos, bombSize, EffectRev.Color);
+    // bombEfct[2] = CreateInWorldText(ap(ta), "Danger zone", bombPos, basicInWorldTextSize, Clipping.ClipAgainstSurfaces,
+    //     InworldTextRev.VisibleToAndColor, cautionColor, Spectators.VisibleAlways);
 
     for(define index! = 0; index < 3; index++){
         PlayEffect(ap(ta), PlayEffect.RingExplosion, Color.Yellow, bombPos, blastRange * 2);
@@ -1406,8 +1415,9 @@ if(
     Damage(targets, ep, blastDamage);
     StartDamageOverTime(targets, ep, 3, blastDamage / 3);
     PlayContinuousBlast(Color.Red, bombPos, blastRange, scale, scale);
-    DestroyEffect(bombEfct);
-    DestroyIcon(cautionIcon);
+    DestroyIcon(bombEfct[0]);
+    DestroyEffect(bombEfct[1]);
+    // DestroyInWorldText(bombEfct[2]);
 }
 
 // TAG EnemyBot/CautionColor ----------
@@ -1425,34 +1435,6 @@ if(
         Wait(0.2, WaitBehavior.AbortWhenFalse);
     }
 }
-
-// TAG EnemyBot/CautionIcon ----------
-playervar define cautionIcon;
-
-// define isCautionIconActive: 
-//     IsPlayerOnObject &&
-//     IsOnObjective(ep);
-
-// rule: "EnemyBot/CautionIcon/show"
-// Event.OngoingPlayer
-// if(
-//     TeamOf() == enemyTeam &&
-//     isCautionIconActive
-// ){
-//     // show caution icon to enemys for easy to find interfering enemy from player
-//     DestroyIcon(cautionIcon);
-//     cautionIcon = CreateIcon(AllPlayers(humanTeam), ep, Icon.ExclamationMark,
-//         IconRev.PositionAndColor, cautionColor, true);
-// }
-
-// rule: "EnemyBot/CautionIcon/hide"
-// Event.OngoingPlayer
-// if(
-//     TeamOf() == enemyTeam &&
-//     !isCautionIconActive
-// ){
-//     DestroyIcon(cautionIcon);
-// }
 
 // TAG EnemyBot/ThreatIcon ----------
 playervar define threatIcon;
@@ -2095,6 +2077,7 @@ if(
     }
 
     if(IsAlive()){
+        Wait(00000, WaitBehavior.IgnoreCondition);
         // teleport with teleport beam from body
         // teleport with emergency by close lose
         DoTeleport(true, isEmgTeleport);
@@ -2382,7 +2365,8 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         wm(); debugHuds[Last()] = CreateDebugHud("reload Asset Interval", reloadEnemyAssetInterval, reloadEnemyAssetInterval > 5 ? enemyTeamColor : Color.Yellow);
         wm(); debugHuds[Last()] = CreateDebugHud("Asset Number", enemyAssetNo, enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("Mod Number", enemyModNo, enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("death Count", <"<0>, <1>, <2>, <3>", enemyDeathCount[0], enemyDeathCount[1], enemyDeathCount[2], enemyDeathCount[3]>, enemyTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("death Count", <"<0>, <1>, <2>, <3>",
+            enemyDeathCount[0], enemyDeathCount[1], enemyDeathCount[2], enemyDeathCount[3]>, enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("Game Progress Diff", GameProgressDiff(humanTeam), enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("spawn Time scale", spawnTimeScale, enemyTeamColor);
