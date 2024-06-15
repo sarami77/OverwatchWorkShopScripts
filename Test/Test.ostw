@@ -1,6 +1,8 @@
 import "Test.setting.json";
 import "../Lib/Debug.del";
 import "../Lib/Utility.del";
+import "../Lib/SlowMotion.del";
+import "../Lib/TuneVal.del";
 import "../Lib/ServerOverloadMeasures.del";
 import "../Lib/Bot.del";
 // import "../Lib/Buddy.del";
@@ -314,39 +316,6 @@ if(
     }
 }
 
-
-// TAG Debug/Slow -----------------------------------------------
-globalvar define slow = DefaultPercentage();
-
-rule: "Debug/Slow/setSlow"
-Event.OngoingPlayer
-Team.Team1
-if(
-    HostPlayer() == ep &&
-    IsButtonHeld(ep, Button.Interact) &&
-    IsButtonHeld(ep, Button.Jump)
-){
-    // 100 -> 50 -> 25 -> 10
-    if(slow == DefaultPercentage())
-        slow = 50;
-    else if(slow == 50)
-        slow = 25;
-    else if(slow == 25)
-        slow = 10;
-    else if(slow == 10)
-        slow = DefaultPercentage();
-    else
-        slow = DefaultPercentage();
-    SetSlowMotion(slow);
-}
-
-// TAG Debug/TuneVal -----------------------------------------------
-define changeTimeInterval: 0.1;
-define initialTuneUnit : 0.01;
-globalvar define tuneVal = 0.1;
-globalvar define consecutiveChangeCount = 0;
-globalvar define tuneUnit = initialTuneUnit;
-
 // TAG Debug ----------
 globalvar define debugHuds!;
 
@@ -374,81 +343,6 @@ Event.OngoingGlobal
     debugHuds[Last()] = CreateDebugHud("enemy team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team2);
     debugHuds[Last()] = CreateDebugHud("killCountTeam1", killCountTeam1, Color.Team1);
     debugHuds[Last()] = CreateDebugHud("killCountTeam2", killCountTeam2, Color.Team2);
-    debugHuds[Last()] = CreateDebugHud("tune Val", tuneVal, Color.Orange);
+    // debugHuds[Last()] = CreateDebugHud("tune Val", tuneVal, Color.Orange);
 }
 
-// TAG Debug/TuneVal ----------
-rule: "Debug/TuneVal/startIncreaseParam"
-Event.OngoingPlayer
-if(
-    HostPlayer() &&
-    (
-        IsButtonHeld(ep, Button.Interact) &&
-        IsButtonHeld(ep, Button.Ability2)
-    )
-){
-    tuneVal += tuneUnit;
-    Wait(changeTimeInterval, WaitBehavior.AbortWhenFalse);
-    changeTuneUnit();
-    LoopIfConditionIsTrue();
-}
-
-rule: "Debug/TuneVal/stopIncreaseParam"
-Event.OngoingPlayer
-if(
-    HostPlayer() &&
-    !(
-        IsButtonHeld(ep, Button.Interact) &&
-        IsButtonHeld(ep, Button.Ability2)
-    )
-){
-    resetTuneUnit();
-}
-
-rule: "Debug/TuneVal/startDecreaseParam"
-Event.OngoingPlayer
-if(
-    HostPlayer() &&
-    (
-        IsButtonHeld(ep, Button.Interact) &&
-        IsButtonHeld(ep, Button.Ability1)
-    )
-){
-    tuneVal -= tuneUnit;
-    Wait(changeTimeInterval, WaitBehavior.AbortWhenFalse);
-    changeTuneUnit();
-    LoopIfConditionIsTrue();
-}
-
-rule: "Debug/TuneVal/stopDecreaseParam"
-Event.OngoingPlayer
-if(
-    HostPlayer() &&
-    !(
-        IsButtonHeld(ep, Button.Interact) &&
-        IsButtonHeld(ep, Button.Ability1)
-    )
-){
-    resetTuneUnit();
-}
-
-void resetTuneUnit(){
-    tuneUnit = initialTuneUnit;
-    consecutiveChangeCount = 0;
-}
-
-define segCount: 10;
-
-void changeTuneUnit(){
-    consecutiveChangeCount ++;
-    if(         consecutiveChangeCount < segCount * 1)
-        tuneUnit =  initialTuneUnit * 1;
-    else if(    consecutiveChangeCount < segCount * 2)
-        tuneUnit =  initialTuneUnit * 10;
-    else if(    consecutiveChangeCount < segCount * 3)
-        tuneUnit =  initialTuneUnit * 100;
-    else if(    consecutiveChangeCount < segCount * 4)
-        tuneUnit =  initialTuneUnit * 1000;
-    else
-        tuneUnit =  initialTuneUnit * 10000;
-}
