@@ -1516,6 +1516,21 @@ define teleportAreaForceUpdateSize: teleportAreaSize * 1.01;    // same as telep
 define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(humanTeam));
 define IsEnemyOnObject: (0 < NumberOfPlayersOnObjective(enemyTeam));
 
+define CanSnapMapSurface()"CanSnapMapSurface"{
+    // walkable position is far
+    return 
+    !(
+        (
+            CurrentMap() == Map.Kings_Row ||
+            CurrentMap() == Map.Kings_Row_Winter
+        )
+            &&
+        ObjectiveIndex() == 0
+            &&
+        !IsPlayerOnObject
+    );
+}
+
 // TAG EnemyBot/Teleport/GetTeleportBasePositionByClosestPlayer
 define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositionByClosestPlayer"{
     define returnPosition;
@@ -1530,22 +1545,27 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
     }
 
     // select teleportPosition
-    returnPosition = 
-        NearestWalkablePosition(
-            basePosition
-                +
-            RandomPosition(
-                placableAreaSize,
-                placableAreaSize,
-                placableAreaSize
-            )
-                + 
-            (
-                DirectionTowards(basePosition, objectPosition)
-                    *
-                DistanceBetween(basePosition, objectPosition) * 0.5
-            )
+    basePosition = 
+        basePosition
+            +
+        RandomPosition(
+            placableAreaSize,
+            placableAreaSize,
+            placableAreaSize
+        )
+            + 
+        (
+            DirectionTowards(basePosition, objectPosition)
+                *
+            DistanceBetween(basePosition, objectPosition) * 0.5
         );
+
+    if(CanSnapMapSurface()){
+        returnPosition = NearestWalkablePosition(basePosition);
+    }
+    else{
+        returnPosition = BelowPosition(basePosition + Vector(0, placableAreaSize, 0));
+    }
 
     return returnPosition;
 }
@@ -1603,21 +1623,6 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
 define searchPositionInterval: 0.1;
 define searchPositionTryCountMax: 10;
 
-define CanSnapMapSurface()"CanSnapMapSurface"{
-    // walkable position is far
-    return 
-    !(
-        (
-            CurrentMap() == Map.Kings_Row ||
-            CurrentMap() == Map.Kings_Row_Winter
-        )
-            &&
-        ObjectiveIndex() == 0
-            &&
-        !IsPlayerOnObject
-    );
-}
-
 // TAG EnemyBot/Teleport/GetTeleportPositionByTeleportBasePosition
 define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositionByTeleportBasePosition"{
     define returnPosition = null;
@@ -1642,7 +1647,7 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
             candidatePosition = NearestWalkablePosition(candidatePosition);
         }
         else{
-            candidatePosition = BelowPosition(candidatePosition + Vector(0, teleportAreaSize * 2, 0));
+            candidatePosition = BelowPosition(candidatePosition + Vector(0, teleportAreaSize, 0));
         }
 
         if(
