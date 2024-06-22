@@ -88,7 +88,6 @@ Number GameProgressDiff(define team!) globalvar "GameProgressDiff"{
         define mode! = CurrentGameMode();
 
         if(
-            mode == GameMode.Assault ||
             mode == GameMode.Escort ||
             mode == GameMode.Hybrid
         ){
@@ -96,20 +95,6 @@ Number GameProgressDiff(define team!) globalvar "GameProgressDiff"{
             // get match time progress
             define timePrg! = (1 - (MatchTime() / MaxMatchTime())) * 100;
             prgDiff = objPrg - timePrg;
-        }
-        else if(
-            mode == GameMode.Push
-        ){
-            define objPrg! = ObjectProgress(team);
-            // get match time progress
-            define timePrg! = (1 - (MatchTime() / MaxMatchTime())) * 100;
-            prgDiff = objPrg - timePrg;
-        }
-        else if(
-            mode == GameMode.Flashpoint ||
-            mode == GameMode.Control
-        ){
-            prgDiff = ObjectProgress(team) - ObjectProgress(EnemyTeamOf(team));
         }
 
         prgDiff = RoundToInteger(prgDiff, Rounding.Down);
@@ -134,7 +119,6 @@ define ObjectProgress(define team!) globalvar "ObjectProgress"{
     }
     else{
         define mode! = CurrentGameMode();
-        define objIdx! = ObjectiveIndex();
 
         if(
             mode == GameMode.Escort
@@ -142,46 +126,16 @@ define ObjectProgress(define team!) globalvar "ObjectProgress"{
             progress = PayloadProgressPercentage();
         }
         else if(
-            mode == GameMode.Assault
-        ){
-            if(objIdx == 0){
-                progress = (PointCapturePercentage() * 0.5);
-            }
-            else{
-                progress = 50 + (PointCapturePercentage() * 0.5);
-            }
-        }
-        else if(
             mode == GameMode.Hybrid
         ){
+            define objIdx! = ObjectiveIndex();
+
             if(objIdx == 0){
                 progress = (PointCapturePercentage() * 0.3);
             }
             else{
                 progress = 30 + (PayloadProgressPercentage() * 0.7);
             }
-        }
-        else if(
-            mode == GameMode.Control
-        ){
-            progress = ControlModeScoringPercentage(team) / 2;
-            progress += TeamScore(team) * 50;
-        }
-        else if(
-            mode == GameMode.Flashpoint
-        ){
-            progress = ControlModeScoringPercentage(team) / 3;
-            progress += TeamScore(team) * 33;
-        }
-        else if(
-            mode == GameMode.Push
-        ){
-            define objPos! = ObjectivePosition(ObjectiveIndex());
-            progress =
-                (
-                    DistanceBetween(objPos, PayloadPosition()) /
-                    DistanceBetween(objPos, -1 * objPos)
-                ) * 100;
         }
     }
     return progress;
@@ -220,7 +174,6 @@ define IsNeedEscortObject(define team!)"IsNeedEscortObject"{
     define mode! = CurrentGameMode();
 
     if(
-        mode == GameMode.Assault ||
         mode == GameMode.Escort ||
         mode == GameMode.Hybrid
     ){
@@ -228,45 +181,9 @@ define IsNeedEscortObject(define team!)"IsNeedEscortObject"{
             isNeedEscort = true;
         }
     }
-    else if(
-        mode == GameMode.Flashpoint ||
-        mode == GameMode.Control
-    ){
-        if(!isScoring){
-            isNeedEscort = true;
-        }
-    }
-    else if(
-        mode == GameMode.Push
-    ){
-        isNeedEscort = true;
-    }
 
     return isNeedEscort;
 }
-
-// Number HasMatchTime() globalvar "HasMatchTime"{
-//     define hasMatchTime!;
-
-//     define mode! = CurrentGameMode();
-
-//     if(
-//         mode == GameMode.Assault ||
-//         mode == GameMode.Escort ||
-//         mode == GameMode.Hybrid ||
-//         mode == GameMode.Push
-//     ){
-//         hasMatchTime = true;
-//     }
-//     else if(
-//         mode == GameMode.Flashpoint ||
-//         mode == GameMode.Control
-//     ){
-//         hasMatchTime = false;
-//     }
-
-//     return hasMatchTime;
-// }
 
 define IsOverTime():
     IsGameInProgress() &&
@@ -277,27 +194,24 @@ define CurrentObjectOnPosition(): CurrentObjectPosition() + Vector(0, 4, 0);
 
 define CurrentObjectPosition() globalvar "CurrentObjectPosition"{
     define objPos!;
-
     define mode! = CurrentGameMode();
-    define objIdx! = ObjectiveIndex();
 
     if(
-        mode == GameMode.Escort ||
-        mode == GameMode.Push ||
-        (
-            mode == GameMode.Hybrid &&
-            objIdx > 0
-        )
+        mode == GameMode.Escort
     ){
         objPos = PayloadPosition();
     }
     else if(
-        mode == GameMode.Hybrid ||
-        mode == GameMode.Assault ||
-        mode == GameMode.Control ||
-        mode == GameMode.Flashpoint
+        mode == GameMode.Hybrid
     ){
-        objPos = ObjectivePosition(objIdx);
+        define objIdx! = ObjectiveIndex();
+
+        if(objIdx == 0){
+            objPos = ObjectivePosition(objIdx);
+        }
+        else{
+            objPos = PayloadPosition();
+        }
     }
 
     return objPos;
