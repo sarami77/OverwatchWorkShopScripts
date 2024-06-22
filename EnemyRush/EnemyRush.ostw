@@ -214,6 +214,37 @@ if(
     hasFinalStand = false;
 }
 
+// TAG Object ----------
+globalvar define prevObjectPosition;
+globalvar define objectDirection;
+globalvar define blockedPos;
+globalvar define positionObjectAhead;
+define HasObjectDirection(): objectDirection != null;
+
+rule: "Object/updateObjectDirection"
+Event.OngoingGlobal
+if(
+    IsGameInProgress()
+){
+    Wait(0.1);  // wait object position change to enable
+    prevObjectPosition = CurrentObjectPosition();
+
+    while(true){
+        define nowObjectPosition! = CurrentObjectPosition();
+        if(
+            IsPlayerOnObject &&
+            nowObjectPosition != prevObjectPosition
+        ){
+            // update objectDirection
+            objectDirection = DirectionTowards(prevObjectPosition, nowObjectPosition);
+            // set prev position for next judge
+            prevObjectPosition = nowObjectPosition;
+        }
+
+        WaitUpdateShortCycle();
+    }
+}
+
 // TAG Player/Config ----------
 rule: "Player/Config/init"
 Event.OngoingPlayer
@@ -473,6 +504,7 @@ if(
             friendBotAssetNo = RandomValueInArray(FriendBotAssetNoLotteryList);
             // set default interval
             reloadFriendBotAssetInterval = AssetChangeInterval();
+            // reload random hero
             allSameHero = RandomHero();
             favSameHero = RandomValueInArray([
                 FavoriteDamageHero(),
@@ -603,55 +635,26 @@ if(
 }
 
 // TAG EnemyBot/Config ----------
-define basicSpawnTimeBase: 10;
-define basicSpawnTime:
-    confirmGameDifficulty == GameDifficulty.EASY ?      basicSpawnTimeBase * 1.0 :
-    confirmGameDifficulty == GameDifficulty.NORMAL ?    basicSpawnTimeBase * 0.9 :  //-0.1
-    confirmGameDifficulty == GameDifficulty.HARD ?      basicSpawnTimeBase * 0.8 :  //-0.1
-    confirmGameDifficulty == GameDifficulty.EXPERT ?    basicSpawnTimeBase * 0.7 :  //-0.1
-    confirmGameDifficulty == GameDifficulty.LEGENDARY ? basicSpawnTimeBase * 0.5 :  //-0.2
-    confirmGameDifficulty == GameDifficulty.INSANITY ?  basicSpawnTimeBase * 0.3 :  //-0.2
-                                                        basicSpawnTimeBase * 1.0 ;
+define spawnTimeBase: 10;
+define spawnTimeEachLevel:
+    confirmGameDifficulty == GameDifficulty.EASY ?      spawnTimeBase * 1.0 :
+    confirmGameDifficulty == GameDifficulty.NORMAL ?    spawnTimeBase * 0.9 :  //-0.1
+    confirmGameDifficulty == GameDifficulty.HARD ?      spawnTimeBase * 0.8 :  //-0.1
+    confirmGameDifficulty == GameDifficulty.EXPERT ?    spawnTimeBase * 0.7 :  //-0.1
+    confirmGameDifficulty == GameDifficulty.LEGENDARY ? spawnTimeBase * 0.5 :  //-0.2
+    confirmGameDifficulty == GameDifficulty.INSANITY ?  spawnTimeBase * 0.3 :  //-0.2
+                                                        spawnTimeBase * 1.0 ;
 
-define dmgDltMinBase: 25;
-define autoTuneDmgDltMin :
-    confirmGameDifficulty == GameDifficulty.EASY ?      dmgDltMinBase * 1.0 :
-    confirmGameDifficulty == GameDifficulty.NORMAL ?    dmgDltMinBase * 1.2 :  //+0.2
-    confirmGameDifficulty == GameDifficulty.HARD ?      dmgDltMinBase * 1.4 :  //+0.2
-    confirmGameDifficulty == GameDifficulty.EXPERT ?    dmgDltMinBase * 1.6 :  //+0.2
-    confirmGameDifficulty == GameDifficulty.LEGENDARY ? dmgDltMinBase * 2.0 :  //+0.4
-    confirmGameDifficulty == GameDifficulty.INSANITY ?  dmgDltMinBase * 2.4 :  //+0.4
-                                                        dmgDltMinBase ; 
+define damageDealtBase: 0.5;
+define damageDealtEachLevel:
+    confirmGameDifficulty == GameDifficulty.EASY ?      damageDealtBase * 1.0 :
+    confirmGameDifficulty == GameDifficulty.NORMAL ?    damageDealtBase * 1.2 :  //+0.2
+    confirmGameDifficulty == GameDifficulty.HARD ?      damageDealtBase * 1.4 :  //+0.2
+    confirmGameDifficulty == GameDifficulty.EXPERT ?    damageDealtBase * 1.6 :  //+0.2
+    confirmGameDifficulty == GameDifficulty.LEGENDARY ? damageDealtBase * 2.0 :  //+0.4
+    confirmGameDifficulty == GameDifficulty.INSANITY ?  damageDealtBase * 2.4 :  //+0.4
+                                                        damageDealtBase ; 
 
-define dmgDltMaxBase: 50;
-define autoTuneDmgDltMax:
-    confirmGameDifficulty == GameDifficulty.EASY ?      dmgDltMaxBase * 1.0 :
-    confirmGameDifficulty == GameDifficulty.NORMAL ?    dmgDltMaxBase * 1.2 :  //+0.2
-    confirmGameDifficulty == GameDifficulty.HARD ?      dmgDltMaxBase * 1.4 :  //+0.2
-    confirmGameDifficulty == GameDifficulty.EXPERT ?    dmgDltMaxBase * 1.6 :  //+0.2
-    confirmGameDifficulty == GameDifficulty.LEGENDARY ? dmgDltMaxBase * 2.0 :  //+0.4
-    confirmGameDifficulty == GameDifficulty.INSANITY ?  dmgDltMaxBase * 2.4 :  //+0.4
-                                                        dmgDltMaxBase ; 
-
-define upValueScaleBase: 0.4;
-define upValueScale:
-    confirmGameDifficulty == GameDifficulty.EASY ?      upValueScaleBase * 1 : 
-    confirmGameDifficulty == GameDifficulty.NORMAL ?    upValueScaleBase * 1 : 
-    confirmGameDifficulty == GameDifficulty.HARD ?      upValueScaleBase * 1 : 
-    confirmGameDifficulty == GameDifficulty.EXPERT ?    upValueScaleBase * 1 : 
-    confirmGameDifficulty == GameDifficulty.LEGENDARY ? upValueScaleBase * 1 : 
-    confirmGameDifficulty == GameDifficulty.INSANITY ?  upValueScaleBase * 1 :
-                                                        upValueScaleBase * 1 ;
-
-define downValueScaleBase: upValueScaleBase * 3;
-define downValueScale:
-    confirmGameDifficulty == GameDifficulty.EASY ?      downValueScaleBase * 1.0 :
-    confirmGameDifficulty == GameDifficulty.NORMAL ?    downValueScaleBase * 0.9 :  //-0.1
-    confirmGameDifficulty == GameDifficulty.HARD ?      downValueScaleBase * 0.8 :  //-0.1
-    confirmGameDifficulty == GameDifficulty.EXPERT ?    downValueScaleBase * 0.7 :  //-0.1
-    confirmGameDifficulty == GameDifficulty.LEGENDARY ? downValueScaleBase * 0.5 :  //-0.2
-    confirmGameDifficulty == GameDifficulty.INSANITY ?  downValueScaleBase * 0.3 :  //-0.2
-                                                        downValueScaleBase * 1.0 ;
 
 define enemyTeamColor: Color.Team1;
 
@@ -662,9 +665,8 @@ define IsBossClass(in define player):
 define dealHealScale: IsSupportHero(HeroOf()) ? 2.0 : 1.0;
 
 playervar define damageDealt!;
-playervar define spawnInterval!;
+playervar define spawnTime!;
 playervar define chargeUltInterval!;
-playervar define deathCost!;
 
 rule: "EnemyBot/Config/update"
 Event.OngoingPlayer
@@ -696,81 +698,77 @@ if(
         // fixed config
         name =              "Minion";
         watchUpdateRate =   8;
-        deathCost =         1;
         chargeUltInterval = 60;
 
         scale =             0.7;
         voiceLine =         1.5;
-        maxHealth =         25;
-        healReceived =      25;
-        healDealt =         25 * dealHealScale;
+        maxHealth =         0.25;
+        healReceived =      0.25;
+        healDealt =         0.25 * dealHealScale;
 
-        moveSpeed =         100;
-        jumpSpeed =         100;
-        gravity =           100;
+        moveSpeed =         1;
+        jumpSpeed =         1;
+        gravity =           1;
         // scalable config by update function
-        spawnInterval =     basicSpawnTime * 1;
-        damageDealt =       50;
+        spawnTime =         1;
+        damageDealt =       0.5;
     }
     else if(enemyType == EnemyType.Elite){
         // fixed config
         name =              "Elite";
         watchUpdateRate =   4;
-        deathCost =         2;
         chargeUltInterval = 30;
 
         scale =             1.0;
         voiceLine =         1.0;
-        maxHealth =         100;
-        healReceived =      100;
-        healDealt =         100 * dealHealScale;
+        maxHealth =         1.0;
+        healReceived =      1.0;
+        healDealt =         1.0 * dealHealScale;
 
-        moveSpeed =         100;
-        jumpSpeed =         100;
-        gravity =           100;
+        moveSpeed =         1.0;
+        jumpSpeed =         1.0;
+        gravity =           1.0;
         // scalable config by update function
-        spawnInterval =     basicSpawnTime * 2;
-        damageDealt =       100;
+        spawnTime =         2.0;
+        damageDealt =       1.0;
     }
     else if(enemyType == EnemyType.SubBoss){
         // fixed config
         name =              "SubBoss";
         watchUpdateRate =   1;
-        deathCost =         8;
         chargeUltInterval = 15;
 
         scale =             1.5;
         voiceLine =         0.5;
-        maxHealth =         600;
-        healReceived =      200;
-        healDealt =         200 * dealHealScale;
+        maxHealth =         6.0;
+        healReceived =      2.0;
+        healDealt =         2.0 * dealHealScale;
 
-        moveSpeed =         100;
-        jumpSpeed =         100;
-        gravity =           100;
+        moveSpeed =         1.0;
+        jumpSpeed =         1.0;
+        gravity =           1.0;
         // scalable config by update function
-        spawnInterval =     basicSpawnTime * 4;
-        damageDealt =       150;
+        spawnTime =         4.0;
+        damageDealt =       1.5;
     }
     else if(enemyType == EnemyType.Boss){
         // fixed config
         name =              "Boss";
         watchUpdateRate =   1;
-        deathCost =         8;
         chargeUltInterval = 15;
 
         scale =             2.5;
         voiceLine =         0.1;
-        maxHealth =         1000;
-        healReceived =      200;
-        healDealt =         200 * dealHealScale;
+        maxHealth =         10.0;
+        healReceived =      2.0;
+        healDealt =         2.0 * dealHealScale;
 
-        moveSpeed =         100;
-        jumpSpeed =         100;
-        gravity =           100;
+        moveSpeed =         1.0;
+        jumpSpeed =         1.0;
+        gravity =           1.0;
         // scalable config by update function
-        spawnInterval =     basicSpawnTime * 4;
-        damageDealt =       200;
+        spawnTime =         4.0;
+        damageDealt =       2.0;
     }
 
     // set mod
@@ -811,12 +809,12 @@ if(
     StartForcingDummyBotName(ep, name);
     StartScalingPlayer(ep, scale, false);
     StartModifyingHeroVoiceLines(ep, voiceLine, false);
-    SetMaxHealth(ep, maxHealth);
-    SetHealingReceived(ep, healReceived);
-    SetHealingDealt(ep, healDealt);
-    SetMoveSpeed(ep, moveSpeed);
-    SetJumpVerticalSpeed(ep, jumpSpeed);
-    SetGravity(ep, gravity);
+    SetMaxHealth(ep, maxHealth * DefaultPercentage());
+    SetHealingReceived(ep, healReceived * DefaultPercentage());
+    SetHealingDealt(ep, healDealt * DefaultPercentage());
+    SetMoveSpeed(ep, moveSpeed * DefaultPercentage());
+    SetJumpVerticalSpeed(ep, jumpSpeed * DefaultPercentage());
+    SetGravity(ep, gravity * DefaultPercentage());
 
     // add health pool
     if(enemyType == EnemyType.Boss){
@@ -844,8 +842,7 @@ if(
 
 // TAG EnemyBot/Config/SpawnInterval ----------
 define showDeadEffectTime: 1.0;
-globalvar define spawnTimeScale;
-playervar define confirmSpawnInterval;
+playervar define confirmSpawnTime;
 
 rule: "EnemyBot/Config/SpawnInterval/waitingRespawn"
 Event.OnDeath
@@ -857,12 +854,15 @@ if(
     // if sucide, skip wait timer
     if(Attacker() != ep){
         // wait for respawn by each timer
-        Wait(confirmSpawnInterval, WaitBehavior.AbortWhenFalse);
+        Wait(confirmSpawnTime, WaitBehavior.AbortWhenFalse);
     }
+    // respawn
     if(IsDead()){
         Respawn();
     }
 }
+
+globalvar define spawnTimeScale;
 
 void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     // tune enemy spawen interval for make close match
@@ -893,86 +893,29 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
         spawnTimeScale = 3.0;
     }
 
-    // set default interval by object progress
-    confirmSpawnInterval = spawnInterval;
-    // apply each enemy type scale
-    confirmSpawnInterval *= spawnTimeScale;
-    // apply workshop setting
-    confirmSpawnInterval *= WorkshopSettingReal("Enemy Bot Settings", "Basic Spawn Intarval Scale", 1.0, 0.0, 100, 1);
+    // set spawn time
+    confirmSpawnTime = spawnTimeEachLevel;
+    // apply enemy type scale
+    confirmSpawnTime *= spawnTime;
+    // apply setting scale
+    confirmSpawnTime *= WorkshopSettingReal("Enemy Bot Settings", "Basic Spawn Intarval Scale", 1.0, 0.0, 100, 1);
+    // apply tune scale
+    confirmSpawnTime *= spawnTimeScale;
 }
 
 // TAG EnemyBot/Config/DealtDamage ----------
 playervar define confirmDealtDamage;
-globalvar define autoTuneDmgDlt;
-globalvar define enemyDeathCount = [0,0,0,0];  // for debug
-globalvar define playerDeathCount = 0;  // for debug
-
-rule: "EnemyBot/Config/DealtDamage/init"
-Event.OngoingGlobal
-if(
-    confirmGameDifficulty != GameDifficulty.NO_VOTE &&
-    IsGameInProgress()
-){
-    autoTuneDmgDlt = autoTuneDmgDltMin;
-}
-
-rule: "EnemyBot/Config/DealtDamage/upTune"
-Event.OnDeath
-if(
-    TeamOf() == enemyTeam &&
-    Attacker() != ep
-){
-    // up enemy deal damage by enemy dead, tune detailed difficulty
-    define upValue! = deathCost;
-    upValue *= upValueScale;
-    // up deal damage
-    autoTuneDmgDlt += upValue;
-    autoTuneDmgDlt = autoTuneDmgDlt > autoTuneDmgDltMax ? autoTuneDmgDltMax : autoTuneDmgDlt;
-    // death count for debug
-    enemyDeathCount[
-        enemyType == EnemyType.Minion ?     0 :
-        enemyType == EnemyType.Elite ?      1 :
-        enemyType == EnemyType.SubBoss ?    2 :
-        enemyType == EnemyType.Boss ?       3 :
-                                            0
-    ] ++;
-}
-
-rule: "EnemyBot/Config/DealtDamage/downTune"
-Event.OnDeath
-if(
-    TeamOf() == humanTeam &&
-    Attacker() != ep
-){
-    // down enemy deal damage by player dead, tune detailed difficulty
-    define downValue! = NumberOfSlots(humanTeam) / NumberOfPlayers(humanTeam);
-
-    if(!IsDummyBot(ep)){
-        // human player has influence 3times 
-        downValue *= 3;
-    }
-    else{
-        // bot player has single influence
-        downValue *= 1;
-    }
-    downValue *= downValueScale;
-    // down deal damage
-    autoTuneDmgDlt -= downValue;
-    autoTuneDmgDlt = autoTuneDmgDlt < autoTuneDmgDltMin ? autoTuneDmgDltMin : autoTuneDmgDlt;
-    // death count for debug
-    playerDeathCount ++;
-}
 
 void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
-    // set auto tune damage
-    confirmDealtDamage = autoTuneDmgDlt;
+    // set deal damage
+    confirmDealtDamage = damageDealtEachLevel;
+    // apply enemy type scale
+    confirmDealtDamage *= damageDealt;
     // apply setting scale
     confirmDealtDamage *= WorkshopSettingReal("Enemy Bot Settings", "Enemy Deal Damage Scale", 1.0, 0.0, 100, 0);
-    // apply enemy type scale
-    confirmDealtDamage *= (damageDealt / 100);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(1.5, humanTeam);
-    SetDamageDealt(ep, confirmDealtDamage);
+    SetDamageDealt(ep, confirmDealtDamage * DefaultPercentage());
 }
 
 // TAG EnemyBot/Config/ReceivedDamage ----------
@@ -985,17 +928,16 @@ if(
 ){
     while(true){
         UpdateGlobalReceivedDamage();
-
         WaitUpdateLongCycle();
     }
 }
 
 void UpdateGlobalReceivedDamage()"UpdateGlobalReceivedDamage"{
     // set base damage
-    confirmReceiveDamage = DefaultPercentage();
+    confirmReceiveDamage = 1;
     // apply team balance
     confirmReceiveDamage *= ConvertToBalancedValue(1.5, humanTeam);
-    SetDamageReceived(AllPlayers(enemyTeam), confirmReceiveDamage);
+    SetDamageReceived(AllPlayers(enemyTeam), confirmReceiveDamage * DefaultPercentage());
 }
 
 // TAG EnemyBot/Config/ChargeUltimate ----------
@@ -1008,7 +950,7 @@ if(
     !IsUsingUltimate()
 ){
     SetUltimateCharge(ep, UltimateChargePercent() + (DefaultPercentage() / chargeUltInterval));
-    WaitUpdateASecond();
+    WaitUpdateShortCycle();
     LoopIfConditionIsTrue();
 }
 
@@ -1416,7 +1358,7 @@ if(
         Wait(1, WaitBehavior.IgnoreCondition);
     }
 
-    define targets! = PlayersWithinRadius(bombPos, blastRange, Team.All, RadiusLOS.SurfacesAndAllBarriers);
+    define targets! = PlayersWithinRadius(bombPos, blastRange, humanTeam, RadiusLOS.SurfacesAndAllBarriers);
     ApplyBlastImpulse(targets, bombPos, blastRange, 4);
     SetStatus(targets, ep, Status.Burning, 3);
     Damage(targets, ep, blastDamage);
@@ -1471,39 +1413,6 @@ if(
     !isThreatIconActive
 ){
     DestroyIcon(threatIcon);
-}
-
-// TAG Object ----------
-globalvar define prevObjectPosition;
-globalvar define objectDirection;
-globalvar define blockedPos;
-globalvar define positionObjectAhead;
-
-define HasObjectDirection(): objectDirection != null;
-
-rule: "Object/updateObjectDirectionAndPositionObjectAhead"
-Event.OngoingGlobal
-if(
-    IsGameInProgress()
-){
-    Wait(0.1);  // wait object position change to enable
-    prevObjectPosition = CurrentObjectPosition();
-
-    while(true){
-        define nowObjectPosition! = CurrentObjectPosition();
-        if(
-            IsPlayerOnObject &&
-            nowObjectPosition != prevObjectPosition
-        ){
-            // update objectDirection
-            objectDirection = DirectionTowards(prevObjectPosition, nowObjectPosition);
-            // set prev position for next judge
-            prevObjectPosition = nowObjectPosition;
-
-        }
-
-        WaitUpdateMediumCycle();
-    }
 }
 
 // TAG EnemyBot/Teleport ----------
@@ -1886,7 +1795,7 @@ if(
         }
     }
 
-    WaitUpdateMediumCycle();
+    WaitUpdateShortCycle();
     WaitUntilServerLoadLimitRelease();
     LoopIfConditionIsTrue();
 }
@@ -2290,6 +2199,29 @@ if(
     }
 }
 
+globalvar define playerDeathCount! = 0;  // for debug
+globalvar define enemyDeathCount! = [0,0,0,0];  // for debug
+
+rule: "Debug/countDeath"
+Event.OnDeath
+if(
+    Attacker() != ep
+){
+    // death count for debug
+    if(TeamOf() == humanTeam){
+        playerDeathCount ++;
+    }
+    else{
+        enemyDeathCount[
+            enemyType == EnemyType.Minion ?     0 :
+            enemyType == EnemyType.Elite ?      1 :
+            enemyType == EnemyType.SubBoss ?    2 :
+            enemyType == EnemyType.Boss ?       3 :
+                                                0
+        ] ++;
+    }
+}
+
 rule: "Debug/initDebugMode"
 Event.OngoingGlobal
 Team.All
@@ -2382,6 +2314,8 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         wm(); debugHuds[Last()] = CreateDebugHud("reload Asset Interval", reloadFriendBotAssetInterval, reloadFriendBotAssetInterval > 5 ? Color.Team2 : Color.Yellow);
         wm(); debugHuds[Last()] = CreateDebugHud("asset Number", friendBotAssetNo, Color.Team2);
         wm(); debugHuds[Last()] = CreateDebugHud("death Count", playerDeathCount, Color.Team2);
+        wm(); debugHuds[Last()] = CreateDebugHud("Object Progress", ObjectProgress(humanTeam), Color.Team2);
+        wm(); debugHuds[Last()] = CreateDebugHud("Game Progress Diff", GameProgressDiff(humanTeam), Color.Team2);
 
         // enemy team
         wm(); debugHuds[Last()] = CreateDebugHud("team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, NumberOfLivingPlayers(enemyTeam) >= NumberOfPlayers(enemyTeam) ? enemyTeamColor : Color.Yellow);
@@ -2390,14 +2324,17 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         wm(); debugHuds[Last()] = CreateDebugHud("Mod Number", enemyModNo, enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("death Count", <"<0>, <1>, <2>, <3>",
             enemyDeathCount[0], enemyDeathCount[1], enemyDeathCount[2], enemyDeathCount[3]>, enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("auto Tune Dmg Dlt", autoTuneDmgDlt, enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("Game Progress Diff", GameProgressDiff(humanTeam), enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("spawn Time scale", spawnTimeScale, enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("spawn Interval", <"<0>, <1>, <2>, <3>",
-            FirstEnemyOf(EnemyType.Minion).confirmSpawnInterval,
-            FirstEnemyOf(EnemyType.Elite).confirmSpawnInterval,
-            FirstEnemyOf(EnemyType.SubBoss).confirmSpawnInterval,
-            FirstEnemyOf(EnemyType.Boss).confirmSpawnInterval>, enemyTeamColor);
+            FirstEnemyOf(EnemyType.Minion).confirmSpawnTime,
+            FirstEnemyOf(EnemyType.Elite).confirmSpawnTime,
+            FirstEnemyOf(EnemyType.SubBoss).confirmSpawnTime,
+            FirstEnemyOf(EnemyType.Boss).confirmSpawnTime>, enemyTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("dealt Damage ", <"<0>, <1>, <2>, <3>",
+            FirstEnemyOf(EnemyType.Minion).confirmDealtDamage,
+            FirstEnemyOf(EnemyType.Elite).confirmDealtDamage,
+            FirstEnemyOf(EnemyType.SubBoss).confirmDealtDamage,
+            FirstEnemyOf(EnemyType.Boss).confirmDealtDamage>, enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("spawn Rush Interval", spawnRushInterval, spawnRushInterval > 5 ? enemyTeamColor : Color.Yellow);
         wm(); debugHuds[Last()] = CreateDebugHud("spawn Rush Count", spawnRushCount, spawnRushCount <= 0 ? enemyTeamColor : Color.Yellow);
         wm(); debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? enemyTeamColor : Color.Yellow);
