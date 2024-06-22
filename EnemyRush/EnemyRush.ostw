@@ -645,7 +645,7 @@ define spawnTimeEachLevel:
     confirmGameDifficulty == GameDifficulty.INSANITY ?  spawnTimeBase * 0.3 :  //-0.2
                                                         spawnTimeBase * 1.0 ;
 
-define damageDealtBase: 0.5;
+define damageDealtBase: 50;
 define damageDealtEachLevel:
     confirmGameDifficulty == GameDifficulty.EASY ?      damageDealtBase * 1.0 :
     confirmGameDifficulty == GameDifficulty.NORMAL ?    damageDealtBase * 1.2 :  //+0.2
@@ -702,16 +702,16 @@ if(
 
         scale =             0.7;
         voiceLine =         1.5;
-        maxHealth =         0.25;
-        healReceived =      0.25;
-        healDealt =         0.25 * dealHealScale;
+        maxHealth =         25;
+        healReceived =      25;
+        healDealt =         25 * dealHealScale;
 
-        moveSpeed =         1;
-        jumpSpeed =         1;
-        gravity =           1;
+        moveSpeed =         100;
+        jumpSpeed =         100;
+        gravity =           100;
         // scalable config by update function
         spawnTime =         1;
-        damageDealt =       0.5;
+        damageDealt =       50;
     }
     else if(enemyType == EnemyType.Elite){
         // fixed config
@@ -721,16 +721,16 @@ if(
 
         scale =             1.0;
         voiceLine =         1.0;
-        maxHealth =         1.0;
-        healReceived =      1.0;
-        healDealt =         1.0 * dealHealScale;
+        maxHealth =         100;
+        healReceived =      100;
+        healDealt =         100 * dealHealScale;
 
-        moveSpeed =         1.0;
-        jumpSpeed =         1.0;
-        gravity =           1.0;
+        moveSpeed =         100;
+        jumpSpeed =         100;
+        gravity =           100;
         // scalable config by update function
         spawnTime =         2.0;
-        damageDealt =       1.0;
+        damageDealt =       100;
     }
     else if(enemyType == EnemyType.SubBoss){
         // fixed config
@@ -740,16 +740,16 @@ if(
 
         scale =             1.5;
         voiceLine =         0.5;
-        maxHealth =         6.0;
-        healReceived =      2.0;
-        healDealt =         2.0 * dealHealScale;
+        maxHealth =         600;
+        healReceived =      200;
+        healDealt =         200 * dealHealScale;
 
-        moveSpeed =         1.0;
-        jumpSpeed =         1.0;
-        gravity =           1.0;
+        moveSpeed =         100;
+        jumpSpeed =         100;
+        gravity =           100;
         // scalable config by update function
         spawnTime =         4.0;
-        damageDealt =       1.5;
+        damageDealt =       150;
     }
     else if(enemyType == EnemyType.Boss){
         // fixed config
@@ -759,16 +759,16 @@ if(
 
         scale =             2.5;
         voiceLine =         0.1;
-        maxHealth =         10.0;
-        healReceived =      2.0;
-        healDealt =         2.0 * dealHealScale;
+        maxHealth =         1000;
+        healReceived =      200;
+        healDealt =         200 * dealHealScale;
 
-        moveSpeed =         1.0;
-        jumpSpeed =         1.0;
-        gravity =           1.0;
+        moveSpeed =         100;
+        jumpSpeed =         100;
+        gravity =           100;
         // scalable config by update function
         spawnTime =         4.0;
-        damageDealt =       2.0;
+        damageDealt =       200;
     }
 
     // set mod
@@ -809,12 +809,12 @@ if(
     StartForcingDummyBotName(ep, name);
     StartScalingPlayer(ep, scale, false);
     StartModifyingHeroVoiceLines(ep, voiceLine, false);
-    SetMaxHealth(ep, maxHealth * DefaultPercentage());
-    SetHealingReceived(ep, healReceived * DefaultPercentage());
-    SetHealingDealt(ep, healDealt * DefaultPercentage());
-    SetMoveSpeed(ep, moveSpeed * DefaultPercentage());
-    SetJumpVerticalSpeed(ep, jumpSpeed * DefaultPercentage());
-    SetGravity(ep, gravity * DefaultPercentage());
+    SetMaxHealth(ep, maxHealth);
+    SetHealingReceived(ep, healReceived);
+    SetHealingDealt(ep, healDealt);
+    SetMoveSpeed(ep, moveSpeed);
+    SetJumpVerticalSpeed(ep, jumpSpeed);
+    SetGravity(ep, gravity);
 
     // add health pool
     if(enemyType == EnemyType.Boss){
@@ -910,12 +910,12 @@ void UpdateEachDealtDamage()"UpdateEachDealtDamage"{
     // set deal damage
     confirmDealtDamage = damageDealtEachLevel;
     // apply enemy type scale
-    confirmDealtDamage *= damageDealt;
+    confirmDealtDamage *= (damageDealt / DefaultPercentage());
     // apply setting scale
     confirmDealtDamage *= WorkshopSettingReal("Enemy Bot Settings", "Enemy Deal Damage Scale", 1.0, 0.0, 100, 0);
     // apply team balance
     confirmDealtDamage /= ConvertToBalancedValue(1.5, humanTeam);
-    SetDamageDealt(ep, confirmDealtDamage * DefaultPercentage());
+    SetDamageDealt(ep, confirmDealtDamage);
 }
 
 // TAG EnemyBot/Config/ReceivedDamage ----------
@@ -933,11 +933,11 @@ if(
 }
 
 void UpdateGlobalReceivedDamage()"UpdateGlobalReceivedDamage"{
-    // set base damage
-    confirmReceiveDamage = 1;
+    // set receive damage
+    confirmReceiveDamage = DefaultPercentage();
     // apply team balance
     confirmReceiveDamage *= ConvertToBalancedValue(1.5, humanTeam);
-    SetDamageReceived(AllPlayers(enemyTeam), confirmReceiveDamage * DefaultPercentage());
+    SetDamageReceived(AllPlayers(enemyTeam), confirmReceiveDamage);
 }
 
 // TAG EnemyBot/Config/ChargeUltimate ----------
@@ -1229,7 +1229,7 @@ if(
             progressStage == 4 && progress >= (FinalWaveProgress())
         ){
             progressAssetNo = RandomValueInArray([17, 18]);
-            progressAssetInterval = (AssetChangeInterval() + 60);
+            progressAssetInterval = MaxValue();
             progressStage ++;
         }
 
@@ -2325,7 +2325,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         wm(); debugHuds[Last()] = CreateDebugHud("death Count", <"<0>, <1>, <2>, <3>",
             enemyDeathCount[0], enemyDeathCount[1], enemyDeathCount[2], enemyDeathCount[3]>, enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("spawn Time scale", spawnTimeScale, enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("spawn Interval", <"<0>, <1>, <2>, <3>",
+        wm(); debugHuds[Last()] = CreateDebugHud("spawn Time", <"<0>, <1>, <2>, <3>",
             FirstEnemyOf(EnemyType.Minion).confirmSpawnTime,
             FirstEnemyOf(EnemyType.Elite).confirmSpawnTime,
             FirstEnemyOf(EnemyType.SubBoss).confirmSpawnTime,
