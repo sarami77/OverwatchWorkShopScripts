@@ -184,6 +184,36 @@ if(
 //     }
 // }
 
+// TAG Object ----------
+globalvar define prevObjectPosition;
+globalvar define objectDirection;
+
+define HasObjectDirection(): objectDirection != null;
+
+rule: "Object/updateObjectDirection"
+Event.OngoingGlobal
+if(
+    IsGameInProgress()
+){
+    Wait(0.1);  // wait object position change to enable
+    prevObjectPosition = CurrentObjectPosition();
+
+    while(true){
+        define nowObjectPosition! = CurrentObjectPosition();
+        if(
+            IsTeamOnObject(humanTeam) &&
+            nowObjectPosition != prevObjectPosition
+        ){
+            // update objectDirection
+            objectDirection = DirectionTowards(prevObjectPosition, nowObjectPosition);
+            // set prev position for next judge
+            prevObjectPosition = nowObjectPosition;
+        }
+
+        WaitUpdateShortCycle();
+    }
+}
+
 // TAG FinalStand ----------
 globalvar define hasFinalStand! = true;
 
@@ -212,37 +242,6 @@ if(
         AllPlayers(humanTeam),
         null, null, "No next \"final stand\"", Location.Left, 999, null, null, cautionColor, HudTextRev.Color, Spectators.VisibleNever);
     hasFinalStand = false;
-}
-
-// TAG Object ----------
-globalvar define prevObjectPosition;
-globalvar define objectDirection;
-globalvar define blockedPos;
-globalvar define positionObjectAhead;
-define HasObjectDirection(): objectDirection != null;
-
-rule: "Object/updateObjectDirection"
-Event.OngoingGlobal
-if(
-    IsGameInProgress()
-){
-    Wait(0.1);  // wait object position change to enable
-    prevObjectPosition = CurrentObjectPosition();
-
-    while(true){
-        define nowObjectPosition! = CurrentObjectPosition();
-        if(
-            IsPlayerOnObject &&
-            nowObjectPosition != prevObjectPosition
-        ){
-            // update objectDirection
-            objectDirection = DirectionTowards(prevObjectPosition, nowObjectPosition);
-            // set prev position for next judge
-            prevObjectPosition = nowObjectPosition;
-        }
-
-        WaitUpdateShortCycle();
-    }
 }
 
 // TAG Player/Config ----------
@@ -1422,9 +1421,6 @@ playervar define teleportPosition;
 define teleportAreaSize: 6;
 define teleportAreaForceUpdateSize: teleportAreaSize * 1.01;    // same as teleportAreaSize
 
-define IsPlayerOnObject: (0 < NumberOfPlayersOnObjective(humanTeam));
-define IsEnemyOnObject: (0 < NumberOfPlayersOnObjective(enemyTeam));
-
 define CanSnapMapSurface()"CanSnapMapSurface"{
     // walkable position is far
     return 
@@ -1436,7 +1432,7 @@ define CanSnapMapSurface()"CanSnapMapSurface"{
             &&
         ObjectiveIndex() == 0
             &&
-        !IsPlayerOnObject
+        !IsTeamOnObject(humanTeam)
     );
 }
 
@@ -1480,6 +1476,9 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
 }
 
 // TAG EnemyBot/Teleport/GetTeleportBasePositionByObject
+globalvar define blockedPos;
+globalvar define positionObjectAhead;
+
 define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObject"{
     define returnPosition;
     define basePosition = CurrentObjectOnPosition();
@@ -1494,7 +1493,7 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
     ){
         if(
             // player on object
-            IsPlayerOnObject
+            IsTeamOnObject(humanTeam)
         ){
             // get teleportAreaExtendSize by object position and blockedPos
             define cutoutDistance! = placableAreaOffset - DistanceBetween(basePosition, blockedPos);
@@ -1705,7 +1704,7 @@ if(
         else{
             if(
                 // player on object
-                IsPlayerOnObject
+                IsTeamOnObject(humanTeam)
             ){
                 define checkPos! = HasObjectDirection() ? positionObjectAhead : objectPos;
                 if(
@@ -1760,7 +1759,7 @@ if(
         // calc new position
         if(
             // player on object
-            IsPlayerOnObject
+            IsTeamOnObject(humanTeam)
         ){
             // calc by object
             newPosition = GetTeleportBasePositionByObject();
@@ -1834,7 +1833,7 @@ if(
 
         if(
             // player on object
-            IsPlayerOnObject &&
+            IsTeamOnObject(humanTeam) &&
             // far from object
             DistanceBetween(ep, CurrentObjectPosition()) > ActionRange.CanFind
         ){
@@ -1982,9 +1981,9 @@ if(
             // player team close win
             IsCloseWin(humanTeam) &&
             // enemy not on object
-            !IsEnemyOnObject &&
+            !IsTeamOnObject(enemyTeam) &&
             // player on object
-            IsPlayerOnObject
+            IsTeamOnObject(humanTeam)
         ){
             // interrupt teleport for defend object in finale phase
             isEmgTeleport = true;
