@@ -364,8 +364,6 @@ void SetMoveDir() playervar "SetMoveDir"{
 playervar define enableCheckAbyss! = true;
 
 void StartMove(define player!) playervar "StartMove"{
-    if(noMoving) return;
-
     define confirmMoveDir = NoDirection();
     define hasMoveTarget;
 
@@ -467,510 +465,7 @@ define aimmingPosition(in define player!):
         +
     Vector(0, -(aimScatter / 2), 0);    // vertical offset
 
-// TAG Bot/ActionState/StateControl ----------
-playervar define watchUpdateRate = 2.0;
-playervar define isBotActive;
-playervar define actionState;
-playervar define aimTarget;
 
-enum ActionState{
-    Non,
-    Attack,
-    Support
-}
-
-define IsSighted(in define player!):
-    TeamOf(ep) == TeamOf(player) ?          IsSightedAsFriend(player) :
-    TeamOf(ep) == EnemyTeamOf(player) ?     IsSightedAsEnemy(player) :
-                                            false;
-
-define IsSightedAsEnemy(in define player!):
-    // is enemy team
-    (TeamOf(ep) == EnemyTeamOf(player)) &&
-    // valid param
-    player != null &&
-    // has spawn
-    HasSpawned(player) &&
-    // alive
-    IsAlive(player) &&
-    // not in spawn room
-    !IsInSpawnRoom(player) &&
-    // can find range
-    CanFindRange(player) &&
-    // can find line
-    CanFindLine(player);
-
-define IsSightedAsFriend(in define player!):
-    // is friend team
-    (TeamOf(ep) == TeamOf(player)) &&
-    // valid param
-    player != null &&
-    // has spawn
-    HasSpawned(player) &&
-    // alive
-    (IsAlive(player)) &&
-    // not in spawn room
-    !IsInSpawnRoom(player) &&
-    // can find line
-    CanFindRange(player) &&
-    // can find line
-    CanFindLine(player);
-
-define CanFindRange(in define player!) :
-    player != null &&
-    DistanceBetween(ep, player) <= ActionRange.CanFind;
-
-define CanFindLine(in define player!) :
-    player != null &&
-    IsInLineOfSight(EyePosition(ep), EyePosition(player), BarrierLOS.NoBarriersBlock);
-
-define FindAttackTarget()"FindAttackTarget"{
-    return FirstOf(
-        SortedArray(
-            FilteredArray(
-                AllPlayers(EnemyTeamOf(ep)),
-                (
-                    ae != ep &&
-                    IsSightedAsEnemy(ae)
-                )
-                
-            ),
-            DistanceBetween(ep, ae)
-        )
-    );
-}
-
-define neadHealHealthScale: 0.9;
-
-define FindSupportTarget()"FindSupportTarget"{
-    return FirstOf(
-        SortedArray(
-            FilteredArray(
-                AllPlayers(TeamOf()),
-                (
-                    ae != ep &&
-                    IsSightedAsFriend(ae) &&
-                    NormalizedHealth(ae) <= neadHealHealthScale
-                )
-            ),
-            NormalizedHealth(ae)
-        )
-    );
-}
-
-void FindTarget()"FindTarget"{
-    define candidateTarget;
-
-    // find aim target
-    // but, not set as direct to aimTarget for avoid interrupt invalid facing
-
-    // by supportPrioloty
-    if(IsTrueProbability(DefaultPercentage() * supportPrioloty))
-    {
-        // find support target
-        candidateTarget = FindSupportTarget();
-        // not found support target
-        if(candidateTarget == null){
-            // find attack target
-            candidateTarget = FindAttackTarget();
-        }
-    }
-    else{
-        // find attack target
-        candidateTarget = FindAttackTarget();
-    }
-
-    if(candidateTarget == null){
-        // stop facing before set aimTarget for avoid invalid facing
-        StopFacing(ep);
-    }
-
-    // confirm as target
-    aimTarget = candidateTarget;
-
-}
-
-define GetNextActionState()"GetNextActionState"{
-    define nextActionState;
-    
-    if(
-        // self alive
-        IsAlive() &&
-        // has target
-        aimTarget != null
-    ){
-        if(
-            // target is friend
-            TeamOf() == TeamOf(aimTarget)
-        ){
-            // Support state
-            nextActionState = ActionState.Support;
-        }
-        else{
-            // Attack state
-            nextActionState = ActionState.Attack; 
-        }
-    }
-    else{
-        // non state
-        nextActionState = ActionState.Non;  
-    }
-    
-    return nextActionState;
-}
-
-void SetActionState(define player, define nextActionState) "SetActionState"{
-    // if state changed
-    if(nextActionState != player.actionState){
-        // set next state
-        player.actionState = nextActionState;
-    }
-}
-
-rule: "Bot/ActionState/deactivateState"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    !isBotActive
-){
-    // reset target
-    aimTarget = null;
-    // apply next state
-    SetActionState(ep, ActionState.Non);
-}
-
-rule: "Bot/ActionState/StateControl"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    isBotActive
-){
-    while(true){
-        define tryFindTarget = false;
-
-        if(IsAlive()){
-            // new target
-            if(
-                // target not Sighted
-                !IsSighted(aimTarget)
-            ){
-                // get new target
-                tryFindTarget = true;
-            }
-            // check target as support action
-            else if(
-                // is support role and now supporting
-                0 < supportPrioloty &&
-                actionState == ActionState.Support
-            ){
-                if(
-                    // target heal completed
-                    NormalizedHealth(aimTarget) >= neadHealHealthScale ||
-                    // target dead
-                    !IsAlive(aimTarget)
-                ){
-                    // change target
-                    tryFindTarget = true;
-                }
-                else if(
-                    IsTrueProbability(
-                        // by no support prioloty
-                        (50 * (1 - supportPrioloty)) +          
-                        // by support target health
-                        (50 * NormalizedHealth(aimTarget))      
-                    )
-                ){
-                    // change target 
-                    tryFindTarget = true;
-                }
-                // else{} keep target
-            }
-            // check target as attack action
-            else{
-                if(
-                    // target dead
-                    !IsAlive(aimTarget)
-                ){
-                    // change target 
-                    tryFindTarget = true;
-                }
-                else if(
-                    IsTrueProbability(
-                        // by attack target health
-                        50 * NormalizedHealth(aimTarget) 
-                    )
-                ){
-                    // change target 
-                    tryFindTarget = true;
-                }
-                // else{} keep target
-            }
-
-            // get new target
-            if(tryFindTarget){
-                // find target
-                FindTarget();
-            }
-
-            // apply next state
-            SetActionState(ep, GetNextActionState());
-            // action call to near bots
-            CallToNearBot();
-        }
-        else{
-            // reset target
-            aimTarget = null;
-            // apply next state
-            SetActionState(ep, GetNextActionState());
-        }
-
-        WaitUntilServerLoadLimitRelease();
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    }
-}
-
-rule: "Bot/ActionState/SetNonStateByDead"
-Event.OnDeath
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    Victim() == ep
-){
-    AbortIf(!isBotActive);
-
-    // reset target
-    aimTarget = null;
-    // apply next state
-    SetActionState(ep, GetNextActionState());
-}
-
-rule: "Bot/ActionState/ChangeTargetByTargetDead"
-Event.OnElimination
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    IsAlive() &&
-    (
-        actionState != ActionState.Non &&
-        Victim() == aimTarget
-    )
-){
-    AbortIf(!isBotActive);
-    WaitUntilServerLoadLimitRelease();
-
-    // find next target
-    FindTarget();
-    // apply next state
-    SetActionState(ep, GetNextActionState());
-}
-
-rule: "Bot/ActionState/ChangeSupportTargetByTargetHealCompleted"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    IsAlive() &&
-    (
-        actionState == ActionState.Support &&
-        NormalizedHealth(aimTarget) >= neadHealHealthScale
-    )
-){
-    AbortIf(!isBotActive);
-    WaitUntilServerLoadLimitRelease();
-
-    // find next target
-    FindTarget();
-    // apply next state
-    SetActionState(ep, GetNextActionState());
-}
-
-rule: "Bot/ActionState/ChangeTargetByDamageTaken"
-Event.OnDamageTaken
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    IsAlive() &&
-    (
-        Attacker() != ep
-    )
-){
-    AbortIf(!isBotActive);
-    WaitUntilServerLoadLimitRelease();
-
-    if(
-        // set target in Non
-        actionState == ActionState.Non ||
-        // change target by target helth
-        IsTrueProbability(50 * NormalizedHealth(aimTarget)) ||
-        // can not find aimTarget
-        !CanFindLine(aimTarget)
-    ){
-        // set target by attacker
-        aimTarget = Attacker();
-        // apply next state
-        SetActionState(ep, GetNextActionState());
-    }
-
-    // action call to near bots
-    CallToNearBot();
-
-    // reduce overrun change target
-    Wait(3.0, WaitBehavior.IgnoreCondition);
-}
-
-globalvar define isCallAttackCoolingDown1 = false;
-globalvar define isCallAttackCoolingDown2 = false;
-
-void CallToNearBot()"CallToNearBot"{
-    // check cooldown for reduce overrun
-    // if already CoolingDown flag true, ignore action
-    if(TeamOf() == Team.Team1){
-        if(isCallAttackCoolingDown1){
-            return;
-        }
-        isCallAttackCoolingDown1 = true;
-    }
-    else if(TeamOf() == Team.Team2){
-        if(isCallAttackCoolingDown2){
-            return;
-        }
-        isCallAttackCoolingDown2 = true;
-    }
-
-    if(
-        // has aim target
-        aimTarget != null
-    ){
-        // get near idle bot
-        define nearFriends = FilteredArray(
-            PlayersWithinRadius(ep, 0 + ActionRange.CanFind, TeamOf(), RadiusLOS.Off),
-            (
-                ae != ep &&
-                IsDummyBot(ae) &&
-                ae.isBotActive &&
-                IsAlive(ae) &&
-                (
-                    // if support state
-                    actionState == ActionState.Support ?
-                        // call to near supportable bot for support
-                        ae.supportPrioloty > 0 :
-                        // call to near idle bot for attack
-                        ae.actionState == ActionState.Non
-                )
-            )
-        );
-
-        for(define index = 0; index < CountOf(nearFriends); index ++){
-            // set same target
-            nearFriends[index].aimTarget = ep.aimTarget;
-            // set same state 
-            SetActionState(nearFriends[index], ep.actionState);
-        }
-    }
-}
-
-rule: "Bot/ActionState/releaseIsCallAttackCoolingDown"
-Event.OngoingGlobal
-if(
-    isCallAttackCoolingDown1 ||
-    isCallAttackCoolingDown2
-){
-    Wait(3.0, WaitBehavior.IgnoreCondition);
-    isCallAttackCoolingDown1 = false;
-    isCallAttackCoolingDown2 = false;
-    Loop();
-    // LoopIfConditionIsTrue();
-}
-
-// TAG Bot/ActionState/Non ----------
-rule: "Bot/ActionState/Non"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    actionState == ActionState.Non
-){
-    // reset button control
-    enableButtonControl = false;
-    Wait(0.1, WaitBehavior.IgnoreCondition);
-
-    // stop facing
-    StopFacing(ep);
-    // stop move
-    StopMove(ep);
-
-    while(true){
-        // poling action
-        PolingAction();
-        
-        WaitUntilServerLoadLimitRelease();
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    }
-}
-
-// TAG Bot/ActionState/Attack ----------
-rule: "Bot/ActionState/Attack"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    actionState == ActionState.Attack
-){
-    AbortIf(!isBotActive);
-
-    // reset button control for change depending state button set
-    enableButtonControl = false;
-    Wait(0.1, WaitBehavior.IgnoreCondition);
-
-    while(true){
-        // start button control
-        enableButtonControl = true;
-        // start facing
-        StartFacingAimTarget();
-        // set moveDir for combat
-        SetMoveDir();
-        // start move by moveDir
-        StartMove(ep);
-        // poling action
-        PolingAction();
-
-        WaitUntilServerLoadLimitRelease();
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    }
-}
-
-// TAG Bot/ActionState/Support ----------
-rule: "Bot/ActionState/Support"
-Event.OngoingPlayer
-if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    actionState == ActionState.Support
-){
-    AbortIf(!isBotActive);
-
-    // reset button control for change depending state button set
-    enableButtonControl = false;
-    Wait(0.1, WaitBehavior.IgnoreCondition);
-
-    while(true){
-        // start button control
-        enableButtonControl = true;
-        // start facing
-        StartFacingAimTarget();
-        // set moveDir for combat
-        SetMoveDir();
-        // start move by moveDir
-        StartMove(ep);
-        // poling action
-        PolingAction();
-
-        WaitUntilServerLoadLimitRelease();
-        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
-    }
-}
 
 // TAG Bot/PolingAction ----------
 void StartFacingTemporaryWithButton(define target!, define button!, define keepTime! = 0.1, define angle! = 30) playervar "StartFacingTemporaryWithButton"{
@@ -1842,6 +1337,8 @@ define HeroOfWithDuplicate() "HeroOfWithDuplicate"{
 
 
 // TAG Bot/TriggerAction ----------
+playervar define isUltPositioning;
+
 rule: "Bot/TriggerAction/moveUltmate"
 Event.OngoingPlayer
 if(
@@ -1855,7 +1352,7 @@ if(
     define isCanAction!;
     define waitForStartMove!;
     define moveSpeed!;
-    define pressButtonInterval!;
+    define countPressButton!;
     define isMultiPosAttack!;
 
     define hero! = HeroOfWithDuplicate();
@@ -1863,35 +1360,37 @@ if(
         hero == Hero.Doomfist
     ){
         isCanAction = true;
-        waitForStartMove = 0.5;
-        moveSpeed = 0.06;
-        pressButtonInterval = 0.5;
+        waitForStartMove = 0.25;
+        moveSpeed = 0.08;
+        countPressButton = 1;
         isMultiPosAttack = false;
     }
     else if(
         hero == Hero.Bastion
     ){
         isCanAction = true;
-        waitForStartMove = 1.1;
-        moveSpeed = 0.04;
-        pressButtonInterval = RandomReal(0.25, 0.5);
-        isMultiPosAttack = IsTrueProbability(0);
+        waitForStartMove = 0.5;
+        moveSpeed = 0.07;
+        countPressButton = 4;
+        isMultiPosAttack = IsTrueProbability(50);
     }
     else if(
         hero == Hero.Junkrat
     ){
         isCanAction = true;
-        waitForStartMove = 1.5;
-        moveSpeed = 0.075;
-        pressButtonInterval = 0.5;
+        waitForStartMove = 1.0;
+        moveSpeed = 0.08;
+        countPressButton = 1;
         isMultiPosAttack = false;
     }
 
     // move ultmate
     if(isCanAction){
+        // start ult positioning
+        isUltPositioning = true;
         // stop buton control
         enableButtonControl = false;
-        // stop current moving input
+        // stop current input
         StopMove(ep);
         StopHoldingButton(ep, Button.PrimaryFire);
         // wait for start mode
@@ -1906,21 +1405,23 @@ if(
         // wait for arrival target
         define dist! = DistanceBetween(ep, aimTarget);
         dist = dist <= 5 ? 5 : dist;
-        Wait(dist * (moveSpeed), WaitBehavior.IgnoreCondition);
+        Wait((dist * moveSpeed), WaitBehavior.IgnoreCondition);
 
         // stop move if not multi position attack mode
         if(!isMultiPosAttack){
             StopMove(ep);
         }
         // repeat press button by pressButtonInterval
-        while(IsUsingUltimate()){
+        for(define tryCount! = 0; tryCount < countPressButton; tryCount++){
             PressButton(ep, Button.PrimaryFire);
-            Wait(pressButtonInterval, WaitBehavior.IgnoreCondition);
+            Wait(RandomReal(0.25, 0.5), WaitBehavior.IgnoreCondition);
         }
         // reduce walking after ult
         StopMove(ep);
         // restore buton control and poling action
         enableButtonControl = true;
+        // stop ult positioning
+        isUltPositioning = false;
     }
 }
 
@@ -2082,6 +1583,526 @@ void BallTackle() playervar "BallTackle"{
     ApplyImpulse(ep, 
         dir * DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))),
         25, Relative.ToWorld, ContraryMotion.Incorporate);
+}
+
+// TAG Bot/ActionState/StateControl ----------
+playervar define watchUpdateRate = 2.0;
+playervar define isBotActive;
+playervar define actionState;
+playervar define aimTarget;
+
+enum ActionState{
+    Non,
+    Attack,
+    Support
+}
+
+define IsSighted(in define player!):
+    TeamOf(ep) == TeamOf(player) ?          IsSightedAsFriend(player) :
+    TeamOf(ep) == EnemyTeamOf(player) ?     IsSightedAsEnemy(player) :
+                                            false;
+
+define IsSightedAsEnemy(in define player!):
+    // is enemy team
+    (TeamOf(ep) == EnemyTeamOf(player)) &&
+    // valid param
+    player != null &&
+    // has spawn
+    HasSpawned(player) &&
+    // alive
+    IsAlive(player) &&
+    // not in spawn room
+    !IsInSpawnRoom(player) &&
+    // can find range
+    CanFindRange(player) &&
+    // can find line
+    CanFindLine(player);
+
+define IsSightedAsFriend(in define player!):
+    // is friend team
+    (TeamOf(ep) == TeamOf(player)) &&
+    // valid param
+    player != null &&
+    // has spawn
+    HasSpawned(player) &&
+    // alive
+    (IsAlive(player)) &&
+    // not in spawn room
+    !IsInSpawnRoom(player) &&
+    // can find line
+    CanFindRange(player) &&
+    // can find line
+    CanFindLine(player);
+
+define CanFindRange(in define player!) :
+    player != null &&
+    DistanceBetween(ep, player) <= ActionRange.CanFind;
+
+define CanFindLine(in define player!) :
+    player != null &&
+    IsInLineOfSight(EyePosition(ep), EyePosition(player), BarrierLOS.NoBarriersBlock);
+
+define FindAttackTarget()"FindAttackTarget"{
+    return FirstOf(
+        SortedArray(
+            FilteredArray(
+                AllPlayers(EnemyTeamOf(ep)),
+                (
+                    ae != ep &&
+                    IsSightedAsEnemy(ae)
+                )
+                
+            ),
+            DistanceBetween(ep, ae)
+        )
+    );
+}
+
+define neadHealHealthScale: 0.9;
+
+define FindSupportTarget()"FindSupportTarget"{
+    return FirstOf(
+        SortedArray(
+            FilteredArray(
+                AllPlayers(TeamOf()),
+                (
+                    ae != ep &&
+                    IsSightedAsFriend(ae) &&
+                    NormalizedHealth(ae) <= neadHealHealthScale
+                )
+            ),
+            NormalizedHealth(ae)
+        )
+    );
+}
+
+void FindTarget()"FindTarget"{
+    define candidateTarget;
+
+    // find aim target
+    // but, not set as direct to aimTarget for avoid interrupt invalid facing
+
+    // by supportPrioloty
+    if(IsTrueProbability(DefaultPercentage() * supportPrioloty))
+    {
+        // find support target
+        candidateTarget = FindSupportTarget();
+        // not found support target
+        if(candidateTarget == null){
+            // find attack target
+            candidateTarget = FindAttackTarget();
+        }
+    }
+    else{
+        // find attack target
+        candidateTarget = FindAttackTarget();
+    }
+
+    if(candidateTarget == null){
+        // stop facing before set aimTarget for avoid invalid facing
+        StopFacing(ep);
+    }
+
+    // confirm as target
+    aimTarget = candidateTarget;
+
+}
+
+define GetNextActionState()"GetNextActionState"{
+    define nextActionState;
+    
+    if(
+        // self alive
+        IsAlive() &&
+        // has target
+        aimTarget != null
+    ){
+        if(
+            // target is friend
+            TeamOf() == TeamOf(aimTarget)
+        ){
+            // Support state
+            nextActionState = ActionState.Support;
+        }
+        else{
+            // Attack state
+            nextActionState = ActionState.Attack; 
+        }
+    }
+    else{
+        // non state
+        nextActionState = ActionState.Non;  
+    }
+    
+    return nextActionState;
+}
+
+void SetActionState(define player, define nextActionState) "SetActionState"{
+    // if state changed
+    if(nextActionState != player.actionState){
+        // set next state
+        player.actionState = nextActionState;
+    }
+}
+
+rule: "Bot/ActionState/deactivateState"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    !isBotActive
+){
+    // reset target
+    aimTarget = null;
+    // apply next state
+    SetActionState(ep, ActionState.Non);
+}
+
+rule: "Bot/ActionState/StateControl"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    isBotActive
+){
+    while(true){
+        define tryFindTarget = false;
+
+        if(IsAlive()){
+            // new target
+            if(
+                // target not Sighted
+                !IsSighted(aimTarget)
+            ){
+                // get new target
+                tryFindTarget = true;
+            }
+            // check target as support action
+            else if(
+                // is support role and now supporting
+                0 < supportPrioloty &&
+                actionState == ActionState.Support
+            ){
+                if(
+                    // target heal completed
+                    NormalizedHealth(aimTarget) >= neadHealHealthScale ||
+                    // target dead
+                    !IsAlive(aimTarget)
+                ){
+                    // change target
+                    tryFindTarget = true;
+                }
+                else if(
+                    IsTrueProbability(
+                        // by no support prioloty
+                        (50 * (1 - supportPrioloty)) +          
+                        // by support target health
+                        (50 * NormalizedHealth(aimTarget))      
+                    )
+                ){
+                    // change target 
+                    tryFindTarget = true;
+                }
+                // else{} keep target
+            }
+            // check target as attack action
+            else{
+                if(
+                    // target dead
+                    !IsAlive(aimTarget)
+                ){
+                    // change target 
+                    tryFindTarget = true;
+                }
+                else if(
+                    IsTrueProbability(
+                        // by attack target health
+                        50 * NormalizedHealth(aimTarget) 
+                    )
+                ){
+                    // change target 
+                    tryFindTarget = true;
+                }
+                // else{} keep target
+            }
+
+            // get new target
+            if(tryFindTarget){
+                // find target
+                FindTarget();
+            }
+
+            // apply next state
+            SetActionState(ep, GetNextActionState());
+            // action call to near bots
+            CallToNearBot();
+        }
+        else{
+            // reset target
+            aimTarget = null;
+            // apply next state
+            SetActionState(ep, GetNextActionState());
+        }
+
+        WaitUntilServerLoadLimitRelease();
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+rule: "Bot/ActionState/SetNonStateByDead"
+Event.OnDeath
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    Victim() == ep
+){
+    AbortIf(!isBotActive);
+
+    // reset target
+    aimTarget = null;
+    // apply next state
+    SetActionState(ep, GetNextActionState());
+}
+
+rule: "Bot/ActionState/ChangeTargetByTargetDead"
+Event.OnElimination
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    IsAlive() &&
+    (
+        actionState != ActionState.Non &&
+        Victim() == aimTarget
+    )
+){
+    AbortIf(!isBotActive);
+    WaitUntilServerLoadLimitRelease();
+
+    // find next target
+    FindTarget();
+    // apply next state
+    SetActionState(ep, GetNextActionState());
+}
+
+rule: "Bot/ActionState/ChangeSupportTargetByTargetHealCompleted"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    IsAlive() &&
+    (
+        actionState == ActionState.Support &&
+        NormalizedHealth(aimTarget) >= neadHealHealthScale
+    )
+){
+    AbortIf(!isBotActive);
+    WaitUntilServerLoadLimitRelease();
+
+    // find next target
+    FindTarget();
+    // apply next state
+    SetActionState(ep, GetNextActionState());
+}
+
+rule: "Bot/ActionState/ChangeTargetByDamageTaken"
+Event.OnDamageTaken
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    IsAlive() &&
+    (
+        Attacker() != ep
+    )
+){
+    AbortIf(!isBotActive);
+    WaitUntilServerLoadLimitRelease();
+
+    if(
+        // set target in Non
+        actionState == ActionState.Non ||
+        // change target by target helth
+        IsTrueProbability(50 * NormalizedHealth(aimTarget)) ||
+        // can not find aimTarget
+        !CanFindLine(aimTarget)
+    ){
+        // set target by attacker
+        aimTarget = Attacker();
+        // apply next state
+        SetActionState(ep, GetNextActionState());
+    }
+
+    // action call to near bots
+    CallToNearBot();
+
+    // reduce overrun change target
+    Wait(3.0, WaitBehavior.IgnoreCondition);
+}
+
+globalvar define isCallAttackCoolingDown1 = false;
+globalvar define isCallAttackCoolingDown2 = false;
+
+void CallToNearBot()"CallToNearBot"{
+    // check cooldown for reduce overrun
+    // if already CoolingDown flag true, ignore action
+    if(TeamOf() == Team.Team1){
+        if(isCallAttackCoolingDown1){
+            return;
+        }
+        isCallAttackCoolingDown1 = true;
+    }
+    else if(TeamOf() == Team.Team2){
+        if(isCallAttackCoolingDown2){
+            return;
+        }
+        isCallAttackCoolingDown2 = true;
+    }
+
+    if(
+        // has aim target
+        aimTarget != null
+    ){
+        // get near idle bot
+        define nearFriends = FilteredArray(
+            PlayersWithinRadius(ep, 0 + ActionRange.CanFind, TeamOf(), RadiusLOS.Off),
+            (
+                ae != ep &&
+                IsDummyBot(ae) &&
+                ae.isBotActive &&
+                IsAlive(ae) &&
+                (
+                    // if support state
+                    actionState == ActionState.Support ?
+                        // call to near supportable bot for support
+                        ae.supportPrioloty > 0 :
+                        // call to near idle bot for attack
+                        ae.actionState == ActionState.Non
+                )
+            )
+        );
+
+        for(define index = 0; index < CountOf(nearFriends); index ++){
+            // set same target
+            nearFriends[index].aimTarget = ep.aimTarget;
+            // set same state 
+            SetActionState(nearFriends[index], ep.actionState);
+        }
+    }
+}
+
+rule: "Bot/ActionState/releaseIsCallAttackCoolingDown"
+Event.OngoingGlobal
+if(
+    isCallAttackCoolingDown1 ||
+    isCallAttackCoolingDown2
+){
+    Wait(3.0, WaitBehavior.IgnoreCondition);
+    isCallAttackCoolingDown1 = false;
+    isCallAttackCoolingDown2 = false;
+    Loop();
+    // LoopIfConditionIsTrue();
+}
+
+// TAG Bot/ActionState/Non ----------
+rule: "Bot/ActionState/Non"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    actionState == ActionState.Non
+){
+    // reset button control
+    enableButtonControl = false;
+    Wait(0.1, WaitBehavior.IgnoreCondition);
+
+    // stop facing
+    StopFacing(ep);
+    // stop move
+    StopMove(ep);
+
+    while(true){
+        // not in ult positioning
+        if(!isUltPositioning){
+            // poling action
+            PolingAction(); 
+        }
+        
+        WaitUntilServerLoadLimitRelease();
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+// TAG Bot/ActionState/Attack ----------
+rule: "Bot/ActionState/Attack"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    actionState == ActionState.Attack
+){
+    AbortIf(!isBotActive);
+
+    // reset button control for change depending state button set
+    enableButtonControl = false;
+    Wait(0.1, WaitBehavior.IgnoreCondition);
+
+    while(true){
+        // not in ult positioning
+        if(!isUltPositioning){
+            // start button control
+            enableButtonControl = true;
+            // start facing
+            StartFacingAimTarget();
+
+            if(!noMoving){
+                // set moveDir
+                SetMoveDir();
+                // start move by moveDir
+                StartMove(ep);
+            }
+            // poling action
+            PolingAction(); 
+        }
+
+        WaitUntilServerLoadLimitRelease();
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    }
+}
+
+// TAG Bot/ActionState/Support ----------
+rule: "Bot/ActionState/Support"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    actionState == ActionState.Support
+){
+    AbortIf(!isBotActive);
+
+    // reset button control for change depending state button set
+    enableButtonControl = false;
+    Wait(0.1, WaitBehavior.IgnoreCondition);
+
+    while(true){
+        // not in ult positioning
+        if(!isUltPositioning){
+            // start button control
+            enableButtonControl = true;
+            // start facing
+            StartFacingAimTarget();
+
+            if(!noMoving){
+                // set moveDir
+                SetMoveDir();
+                // start move by moveDir
+                StartMove(ep);
+            }
+            // poling action
+            PolingAction(); 
+        }
+
+        WaitUntilServerLoadLimitRelease();
+        Wait(watchUpdateRate, WaitBehavior.AbortWhenFalse);
+    }
 }
 
 // TAG Bot/ButtonControl/Propety ----------
@@ -2660,7 +2681,7 @@ enum ButtonBehaivor{
 }
 
 // TAG Bot/ButtonControl/StartButtonControl ----------
-define noShooting: false;   // for debug
+define noButtonControl: false;   // for debug
 
 playervar define enableButtonControl;
 
@@ -2803,7 +2824,7 @@ Boolean isMatchButton(in define matchButton, in define butttons){
 
 // can's implment as function, cuz need control instance each button
 void StartButtonControl(in define button, in define buttonBehaivor, in define releaseMin, in define releaseMax, in define pressMin, in define pressMax, in define isDependingState){
-    if(noShooting) return;
+    if(noButtonControl) return;
     if(buttonBehaivor == ButtonBehaivor.Non) return;
 
     define startButton = false;
