@@ -126,7 +126,9 @@ void DestroyBots(define team!)"DestroyBots"{
     }
 }
 
-// TAG Bot/Moving ----------
+// TAG Bot/Move ----------
+define noMoving: false;   // for debug
+
 playervar define moveDirFB;
 playervar define moveDirLR;
 playervar define moveTarget;
@@ -379,10 +381,11 @@ void StartMove(define player!) playervar "StartMove"{
         hasMoveTarget = true;
     }
     
-    // move to position is abyss
     if(
-        confirmMoveDir != NoDirection() &&
-        (
+        confirmMoveDir != NoDirection()
+    ){
+        // move to position is abyss
+        if(
             player.enableCheckAbyss &&
             IsBelowAbyss(
                 BlockedPositonByLocalVector(
@@ -391,15 +394,14 @@ void StartMove(define player!) playervar "StartMove"{
                     walkMeterPerSec * player.watchUpdateRate
                 )
             )
-        )
-    ){
-        StopMove(player);
-    }
-    else{
-        if(
-            confirmMoveDir != NoDirection()
         ){
-            if(!hasMoveTarget){
+            StopMove(player);
+        }
+        else{
+            if(
+                !hasMoveTarget
+            ){
+                // move by fix vector
                 StartThrottleInDirection(
                     player,
                     confirmMoveDir,
@@ -410,6 +412,7 @@ void StartMove(define player!) playervar "StartMove"{
                 );
             }
             else{
+                // move by dynamic target
                 StartThrottleInDirection(
                     player,
                     DirectionTowards(player, moveTarget),
@@ -420,21 +423,16 @@ void StartMove(define player!) playervar "StartMove"{
                 );
             }
         }
-        else{
-            StopMove(player);
-        }
     }
 }
 
 void StopMove(define player!) playervar "StopMove"{
-    if(noMoving) return;
-    
     player.moveDirFB = NoDirection();
     player.moveDirLR = NoDirection();
     StopThrottleInDirection(player);
 } 
 
-// TAG Bot/Aimming ----------
+// TAG Bot/Aim ----------
 define facingRate:
     actionRangeMax == ActionRange.Melee ?   300 :
     actionRangeMax == ActionRange.Close ?   250 :
@@ -974,7 +972,7 @@ if(
     }
 }
 
-// TAG Bot/HeroUniqueAction ----------
+// TAG Bot/PolingAction ----------
 void StartFacingTemporaryWithButton(define target!, define button!, define keepTime! = 0.1, define angle! = 30) playervar "StartFacingTemporaryWithButton"{
     // target is player
     if(HasSpawned(target)){
@@ -1842,7 +1840,9 @@ define HeroOfWithDuplicate() "HeroOfWithDuplicate"{
     return hero;
 }
 
-rule: "Bot/HeroUniqueAction/moveUltmate"
+
+// TAG Bot/TriggerAction ----------
+rule: "Bot/TriggerAction/moveUltmate"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
@@ -1855,7 +1855,7 @@ if(
     define isCanAction!;
     define waitForStartMove!;
     define moveSpeed!;
-    define pressButtonCount!;
+    define pressButtonInterval!;
     define isMultiPosAttack!;
 
     define hero! = HeroOfWithDuplicate();
@@ -1865,16 +1865,16 @@ if(
         isCanAction = true;
         waitForStartMove = 0.5;
         moveSpeed = 0.06;
-        pressButtonCount = 1;
+        pressButtonInterval = 0.5;
         isMultiPosAttack = false;
     }
     else if(
         hero == Hero.Bastion
     ){
         isCanAction = true;
-        waitForStartMove = 1.0;
+        waitForStartMove = 1.1;
         moveSpeed = 0.04;
-        pressButtonCount = 3;
+        pressButtonInterval = RandomReal(0.25, 0.5);
         isMultiPosAttack = IsTrueProbability(0);
     }
     else if(
@@ -1883,18 +1883,20 @@ if(
         isCanAction = true;
         waitForStartMove = 1.5;
         moveSpeed = 0.075;
-        pressButtonCount = 1;
+        pressButtonInterval = 0.5;
         isMultiPosAttack = false;
     }
 
     // move ultmate
     if(isCanAction){
-        // stop buton control for reduce cancel
+        // stop buton control
         enableButtonControl = false;
         // stop current moving input
         StopMove(ep);
+        StopHoldingButton(ep, Button.PrimaryFire);
         // wait for start mode
         Wait(waitForStartMove, WaitBehavior.IgnoreCondition);
+
         // start move postion selecter to foward
         moveDirFB = Forward();
         moveDirLR = NoDirection();
@@ -1905,25 +1907,24 @@ if(
         define dist! = DistanceBetween(ep, aimTarget);
         dist = dist <= 5 ? 5 : dist;
         Wait(dist * (moveSpeed), WaitBehavior.IgnoreCondition);
+
         // stop move if not multi position attack mode
         if(!isMultiPosAttack){
             StopMove(ep);
         }
-
-        // try button press by attackCount
-        for(define tryCount! = 0; tryCount < pressButtonCount; tryCount++){
+        // repeat press button by pressButtonInterval
+        while(IsUsingUltimate()){
             PressButton(ep, Button.PrimaryFire);
-            Wait(RandomReal(0.25, 0.5), WaitBehavior.IgnoreCondition);
+            Wait(pressButtonInterval, WaitBehavior.IgnoreCondition);
         }
-
         // reduce walking after ult
         StopMove(ep);
-        // restore buton control
+        // restore buton control and poling action
         enableButtonControl = true;
     }
 }
 
-rule: "Bot/HeroUniqueAction/placeUltmate"
+rule: "Bot/TriggerAction/placeUltmate"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
@@ -1981,7 +1982,7 @@ if(
     }
 }
 
-rule: "Bot/HeroUniqueAction/placeSecondary"
+rule: "Bot/TriggerAction/placeSecondary"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
@@ -2028,7 +2029,7 @@ if(
     }
 }
 
-rule: "Bot/HeroUniqueAction/positionFixSecondary"
+rule: "Bot/TriggerAction/positionFixSecondary"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
@@ -2660,7 +2661,7 @@ enum ButtonBehaivor{
 
 // TAG Bot/ButtonControl/StartButtonControl ----------
 define noShooting: false;   // for debug
-define noMoving: false;   // for debug
+
 playervar define enableButtonControl;
 
 rule: "Bot/ButtonControl/StartButtonControl"
