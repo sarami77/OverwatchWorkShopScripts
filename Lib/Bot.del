@@ -140,7 +140,6 @@ void SetMoveDir() playervar "SetMoveDir"{
     define objPos! = CurrentObjectOnPosition();
     define nearEnemy! = ClosestPlayerTo(ep, EnemyTeamOf(ep));
 
-    // move to healer or guard
     if(
         enableRetreat
         ?
@@ -153,6 +152,8 @@ void SetMoveDir() playervar "SetMoveDir"{
         :
             false
     ){
+        // dbgHudTxt(<"move for heal = <0>", SlotOf()>);
+
         define supportPlayers = [];
         define notSupportPlayers = [];
         define livingFriends = AllLivingPlayers(TeamOf());
@@ -221,7 +222,6 @@ void SetMoveDir() playervar "SetMoveDir"{
             }
         } 
     }
-
     // move to object for secure
     else if(
         enableFollowObject &&
@@ -239,51 +239,37 @@ void SetMoveDir() playervar "SetMoveDir"{
                     // 1/2 players num of team
                     NumberOfPlayers(TeamOf()) / 2
                 :
-                    (
-                        // offense team
-                        IsTeamOnOffense(TeamOf())
-                        ?
-                            // 3 is max num of payload escort speed
-                            3
-                        :
-                            (
-                                // enemy on object
-                                NumberOfPlayersOnObjective(EnemyTeamOf(ep)) > 0
-                                ?
-                                    // 1 is min num of payload stop
-                                    1
-                                :
-                                    // not escorted payload
-                                    0
-                            )
-                    )
+                    // offense team
+                    IsTeamOnOffense(TeamOf())
+                    ?
+                        // 3 is max num of payload escort speed
+                        3
+                    :
+                        (
+                            // enemy on object
+                            NumberOfPlayersOnObjective(EnemyTeamOf(ep)) > 0
+                            ?
+                                // 1 is min num of payload stop
+                                1
+                            :
+                                // not escorted payload
+                                0
+                        )
             )
         )
     ){
+        // dbgHudTxt(<"move for object = <0>", SlotOf()>);
+
         // move to object
         define dirToObject! = LocalVectorOf(DirectionTowards(ep, objPos), ep, Transformation.Rotation);
         moveTarget = null;
         moveDirFB = Vector(0, 0, ZOf(dirToObject));
         moveDirLR = Vector(XOf(dirToObject), 0, 0);
     }
-
-    // // move away from enemy for support
-    // else if(
-    //     actionState == ActionState.Support &&
-    //     nearEnemy != null &&
-    //     // enemy is close
-    //     DistanceBetween(ep, nearEnemy) <= ActionRange.Close
-    // ){
-    //     // set move away from enemy
-    //     define dirFromEnemy! = LocalVectorOf(DirectionTowards(nearEnemy, ep), ep, Transformation.Rotation);
-    //     moveTarget = null;
-    //     moveDirFB = Vector(0, 0, ZOf(dirFromEnemy));
-    //     moveDirLR = Vector(XOf(dirFromEnemy), 0, 0);
-    //     dbgPlyEft(ep);
-    // }
-
     // move to target for attack or support
     else if(actionState != ActionState.Non){
+        // dbgHudTxt(<"move for combat = <0>", SlotOf()>);
+
         moveTarget = null;
         // get distRate by actionState
         define distRate! = (actionState == ActionState.Attack) ? 1 : 0.5;
@@ -303,7 +289,7 @@ void SetMoveDir() playervar "SetMoveDir"{
         ){
             if(
                 // by enemy density high
-                IsTrueProbability(150 * enemyDensity)
+                IsTrueProbability(100 * enemyDensity)
             ){
                 // stop move forward for avoid surrounded by enemy
                 moveDirFB = NoDirection();
@@ -1155,25 +1141,31 @@ void PolingAction() playervar "PolingAction"{
         // teleport enemy behind with shadow step 
         if(
             IsInCombat() &&
-            IsTrueProbability(75 * NormalizedHealth()) &&
+            IsTrueProbability(100 * NormalizedHealth()) &&
             AbilityCooldown(ep, Button.Ability2) <= 0 &&
             DistanceBetween(ep, aimTarget) > ActionRange.Close
         ){
-            // aim target behind
-            define aimPosition! = 
-                BelowPosition(
-                    ShiftedPosition(
-                        aimTarget,
-                        VectorTowards(ep, aimTarget),
-                        5
-                    ) +
-                    RandomPosition(5, 0, 5)
-                );
-            
-            if(DistanceBetween(ep, aimPosition) > ActionRange.Close){
-                StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.1);
-                PressButton(ep, Button.PrimaryFire);
+            define aimPosition!;
+
+            while(
+                aimPosition == null ||
+                DistanceBetween(ep, aimPosition) > ActionRange.CanFind
+            ){
+                // aim target behind
+                aimPosition = 
+                    BelowPosition(
+                        ShiftedPosition(
+                            aimTarget,
+                            VectorTowards(ep, aimTarget),
+                            5
+                        ) +
+                        RandomPosition(5, 0, 5)
+                    );
+                Wait(0.2, WaitBehavior.IgnoreCondition);
             }
+
+            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.5);
+            PressButton(ep, Button.PrimaryFire);
         }
     }
     // Sojourn
