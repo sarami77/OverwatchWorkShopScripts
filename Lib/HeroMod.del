@@ -24,7 +24,7 @@ enum HeroModType{
     HEALING_SYRINGE,    // [SUPPORT ABILITY]
     SAVIOR,             // [SUPPORT ABILITY]
     POWERFUL_GIFT,      // [SUPPORT ABILITY]
-    INSTANT_BUNKER,     // [SUPPORT ABILITY]
+    SANCTUARY,          // [SUPPORT ABILITY]
     TECHNICIAN,         // [ATTACK ABILITY]
     GRUDGE_LIGHTNING,   // [ATTACK ABILITY]
     GRUDGE_FIRE_BALL,   // [ATTACK ABILITY]
@@ -255,7 +255,7 @@ void DoHeroModAction(define heromod!, define trigger!, define inputPayload!) pla
         case HeroModType.HEALING_SYRINGE:   HeroMod_Action_HEALING_SYRINGE(trigger);                    break;
         case HeroModType.SAVIOR:            HeroMod_Action_SAVIOR(trigger);                             break;
         case HeroModType.POWERFUL_GIFT:     HeroMod_Action_POWERFUL_GIFT(trigger);                      break;
-        case HeroModType.INSTANT_BUNKER:    HeroMod_Action_INSTANT_BUNKER(trigger);                     break;
+        case HeroModType.SANCTUARY:         HeroMod_Action_SANCTUARY(trigger);                          break;
         case HeroModType.TECHNICIAN:        HeroMod_Action_TECHNICIAN(trigger);                         break;
         case HeroModType.SURVIVALIST:       HeroMod_Action_SURVIVALIST(trigger);                        break;
         case HeroModType.ARTILLERY_SUPPORT: HeroMod_Action_ARTILLERY_SUPPORT(trigger);                  break;
@@ -787,30 +787,26 @@ void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POW
         }
     }
 }
-// TAG INSTANT_BUNKER
-void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_INSTANT_BUNKER"{
-    define consumeUltCharge! = 10;
+// TAG SANCTUARY
+void HeroMod_Action_SANCTUARY(define trigger!) playervar "HeroMod_Action_SANCTUARY"{
+    define consumeHealth! = 100;
 
     if(
         trigger == HeroModTrigger.ACTIVATE
     ){
-        heroModName = "INSTANT BUNKER";
+        heroModName = "SANCTUARY";
         heroModDetail = "[SUPPORT ABILITY]" + NL +
-            "long press melee key..." + NL +
-            "  + deploy safe zone to your positon and protect teammate around" + NL +
-            "    * disable any damage and knockback in safezone players" + NL +
-            "  - lose ult charge 10% by every 1 second passed"+ NL +
-            "    * continue deploying until ULT charge empty";
+            "hold melee key..." + NL +
+            "  + deploy safe zone and protect you and arround teammate" + NL +
+            "    * in safezone players disable any receive damage and knockback" + NL +
+            "  - consume your 100 health by every 1 second passed" + NL +
+            "    * consumption health doubles by every 5 seconds passed"+ NL +
+            "    * not die even if consume all health";
     }
     else if(
         trigger == HeroModTrigger.LONG_PRESS_MELEE_KEY &&
-        IsAlive() &&
-        UltimateChargePercent() >= consumeUltCharge
+        Health() >= consumeHealth
     ){
-        if(IsDummyBot()){
-            SetUltimateCharge(ep, UltimateChargePercent() + 50);
-        }
-
         define bunkerPos! = BelowPosition(PositionOf());
         define bunkerRange! = 6;
         define bunkerEntity! = [];
@@ -825,7 +821,7 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
             Color.Orange,
             bunkerPos, bunkerRange, EffectRev.PositionAndRadius);
         bunkerEntity[1] = CreateInWorldText(AllPlayers(),
-            <"Safe zone until <0> seconds", RoundToInteger(UltimateChargePercent() / consumeUltCharge, Rounding.Up)>,
+            <"Safe zone until <0> seconds", RoundToInteger(Health() / consumeHealth, Rounding.Up)>,
             bunkerPos + Vector(0, 1.5, 0), basicInWorldTextSize * 2, Clipping.ClipAgainstSurfaces,
             InworldTextRev.VisibleToPositionAndString, Color.Orange, Spectators.DefaultVisibility);
         bunkerEntity[2] = CreateIcon(AllPlayers(), bunkerPos,
@@ -833,7 +829,8 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
 
         define duaringCount!;
         while(
-            UltimateChargePercent() > 0
+            IsButtonHeld(ep, Button.Melee) ||
+            IsDummyBot()
         ){
             define target! = 
                 FilteredArray(
@@ -849,19 +846,22 @@ void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_IN
             PlayEffect(target, PlayEffect.BuffImpactSound, Color.Orange, bunkerPos, DefaultPercentage());
             SetStatus(target, ep, Status.PhasedOut, 1.5);
             
-            if(duaringCount == 10){
+            if(duaringCount >= 5){
                 duaringCount = 0;
-                consumeUltCharge += 5;
+                consumeHealth *= 2;
             }
             else{
                 duaringCount ++;
             }
-            SetUltimateCharge(ep, UltimateChargePercent() - consumeUltCharge);
 
-            if(UltimateChargePercent() <= 0)
-            {
-                // Ends when charge is empty
+            if(
+                Health() <= consumeHealth
+            ){
+                SetPlayerHealth(ep, 1);
                 break;
+            }
+            else{
+                SetPlayerHealth(ep, Health() - consumeHealth);
             }
 
             Wait(1, WaitBehavior.IgnoreCondition);
@@ -2488,7 +2488,7 @@ if(
         heroModType == HeroModType.BIRD_MAN ||
         heroModType == HeroModType.HEALING_SYRINGE ||
         heroModType == HeroModType.SAVIOR ||
-        heroModType == HeroModType.INSTANT_BUNKER ||
+        heroModType == HeroModType.SANCTUARY ||
         heroModType == HeroModType.POWERFUL_GIFT ||
         heroModType == HeroModType.GRUDGE_FIRE_BALL ||
         heroModType == HeroModType.GRUDGE_LIGHTNING ||
@@ -2513,7 +2513,7 @@ if(
         // Bots are determined based on cycles instead of button presses
         define prob!;
         if(
-            heroModType == HeroModType.INSTANT_BUNKER ||
+            heroModType == HeroModType.SANCTUARY ||
             heroModType == HeroModType.GRUDGE_FIRE_BALL
         ){
             prob = 25 * (EnemyDensityRateOfTargetNear(aimTarget, ActionRange.Close));
