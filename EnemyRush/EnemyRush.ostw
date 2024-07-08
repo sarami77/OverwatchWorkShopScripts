@@ -1108,14 +1108,19 @@ globalvar define reloadEnemyAssetInterval! = -1;
 globalvar define enemyAssetNo! = -1;
 globalvar define forceReloadEnemyAsset! = false;
 
+define IsInPreLoadAssetTime():
+    (
+        (
+            IsInSetup() &&
+            MatchTime() <= 5
+        ) ||
+        IsGameInProgress()
+    );
+
 rule: "EnemyBot/Asset/Interval/reloadReloadEnemyAsset"
 Event.OngoingGlobal
 if(
-    IsGameInProgress() ||
-    (
-        IsInSetup() &&
-        MatchTime() <= 5
-    )
+    IsInPreLoadAssetTime()
 ){
     while(true){
         // if force reload, skip change assetNo and set interval
@@ -1146,8 +1151,6 @@ if(
             // reload bots by asset
             DestroyBots(enemyTeam);
             CreateBotsByAssetWithMutexLock(asset, enemyTeam, maxCreateEnemyBotNum);
-            // wait start intarval until game start.
-            WaitUntil(IsGameInProgress(), MaxValue());
             // release force reload flag
             forceReloadEnemyAsset = false;
 
@@ -1465,9 +1468,9 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
         (
             DirectionTowards(basePosition, objectPosition)
                 *
-            DistanceBetween(basePosition, objectPosition) * 0.5
+            DistanceBetween(basePosition, objectPosition) * 0.4
         );
-
+    
     if(CanSnapMapSurface()){
         returnPosition = NearestWalkablePosition(basePosition);
     }
@@ -1585,10 +1588,13 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
     return returnPosition;
 }
 
-playervar define telBeam;
+playervar define telBeam!;
 
 void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
-    if(teleportPosition == null){return;}
+    if(teleportPosition == null) return;
+
+    // wait teleport until game start.
+    WaitUntil(IsGameInProgress(), MaxValue());
 
     if(IsInSpawnRoom()){
         define waitTime! = 
@@ -1673,7 +1679,7 @@ globalvar define needUpdateCommonTeleportBasePosition!;
 rule: "EnemyBot/Teleport/UpdateCommonTeleportBasePosition"
 Event.OngoingGlobal
 if(
-    IsGameInProgress()
+    IsInPreLoadAssetTime()
 ){
     define objectPos! = CurrentObjectOnPosition();
 
@@ -1811,7 +1817,7 @@ rule: "EnemyBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    IsGameInProgress() &&
+    IsInPreLoadAssetTime() &&
     IsInSpawnRoom()
 ){
     DoTeleport(false, false);
