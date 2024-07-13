@@ -696,7 +696,7 @@ if(
     if(enemyType == EnemyType.Minion){
         // fixed config
         name =              "Minion";
-        watchUpdateRate =   8;
+        watchUpdateRate =   6;
         chargeUltInterval = 60;
 
         scale =             0.7;
@@ -715,7 +715,7 @@ if(
     else if(enemyType == EnemyType.Elite){
         // fixed config
         name =              "Elite";
-        watchUpdateRate =   4;
+        watchUpdateRate =   3;
         chargeUltInterval = 30;
 
         scale =             1.0;
@@ -1589,30 +1589,6 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
 }
 
 playervar define telBeam!;
-
-void TeleportWithEffect(define isBeamFromBody!) playervar "TeleportWithEffect"{
-    if(teleportPosition == null) return;
-
-    // wait teleport until game start.
-    WaitUntil(IsGameInProgress(), MaxValue());
-
-    if(IsInSpawnRoom()){
-        define waitTime! = 
-            // set delay time proportional to slot number for load distributing
-            ((maxCreateEnemyBotNum - 1 - SlotOf()) * 0.25) *
-            // scale by alive enemy num
-            (NumberOfLivingPlayers() / NumberOfPlayers());
-        Wait(waitTime, WaitBehavior.AbortWhenFalse);
-    }
-
-    // show pre teleport effect
-    PlayTeleportEffect(true, isBeamFromBody);
-    // Teleport
-    Teleport(ep, teleportPosition);
-    // show teleport effect
-    PlayTeleportEffect(false, isBeamFromBody);
-}
-
 define showTeleportBeamTime: 0.5;
 
 void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "PlayTeleportEffect"{
@@ -1669,7 +1645,26 @@ void DoTeleport(define isBeamFromBody!, define isEmgTeleport!)"DoTeleport"{
         teleportPosition != null
     ){
         // teleport to teleportPosition
-        TeleportWithEffect(isBeamFromBody);
+        if(teleportPosition == null) return;
+
+        // wait teleport until game start.
+        WaitUntil(IsGameInProgress(), MaxValue());
+
+        if(IsInSpawnRoom()){
+            define waitTime! = 
+                // set delay time proportional to slot number for load distributing
+                ((maxCreateEnemyBotNum - 1 - SlotOf()) * 0.125) *
+                // scale by alive enemy num
+                (NumberOfLivingPlayers() / NumberOfPlayers());
+            Wait(waitTime, WaitBehavior.AbortWhenFalse);
+        }
+
+        // show pre teleport effect
+        PlayTeleportEffect(true, isBeamFromBody);
+        // Teleport
+        Teleport(ep, teleportPosition);
+        // show teleport effect
+        PlayTeleportEffect(false, isBeamFromBody);
     }
 }
 
@@ -1821,14 +1816,14 @@ if(
     IsInSpawnRoom()
 ){
     DoTeleport(false, false);
-    Wait(1.0, WaitBehavior.AbortWhenFalse);
+    Wait(0.1, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
-define checkTeleportConditionInterval: 3;
-define checkTeleportConditionMaxCount: 2;
+define checkIdleConditionInterval: 3;
+define checkIdleConditionMaxCount: 1;
 
-rule: "EnemyBot/Teleport/teleportOrHopForDefendObjectOnIdle"
+rule: "EnemyBot/Teleport/teleportByIdle"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
@@ -1836,10 +1831,10 @@ if(
     !IsInSpawnRoom() &&
     IsAlive()
 ){
-    define checkConditionCount = 0;
+    define checkIdleConditionCount = 0;
 
-    while(checkConditionCount < checkTeleportConditionMaxCount){
-        Wait(checkTeleportConditionInterval, WaitBehavior.AbortWhenFalse);
+    while(checkIdleConditionCount < checkIdleConditionMaxCount){
+        Wait(checkIdleConditionInterval, WaitBehavior.AbortWhenFalse);
         WaitUntilServerLoadLimitRelease();
 
         if(
@@ -1859,16 +1854,16 @@ if(
                 BarrierLOS.NoBarriersBlock
             )
         ){
-            // keep position and reset count
-            checkConditionCount = 0;
+            // not teleport and reset count
+            checkIdleConditionCount = 0;
         }
         else{
-            // keep position and count up
-            checkConditionCount ++;
+            // not teleport but count up
+            checkIdleConditionCount ++;
         }
     }
 
-    // teleport
+    // teleport by idle
     DoTeleport(false, false);
 
     LoopIfConditionIsTrue();
