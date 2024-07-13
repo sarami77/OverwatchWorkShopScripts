@@ -1,37 +1,34 @@
 import "Utility.del";
-// import "../Lib/TuneVal.del";
 
-define serverLoadMax: 255;
-define isServerOverload(): serverLoadMax <= ServerLoad();
-
-// TAG ServerOverloading ----------
+// TAG SerServerLoadMeasures/ServerLoadLimit ----------
 define waitTime: 1.0;
 globalvar define countWaitActionByServerLoad;
 
 void WaitUntilServerLoadLimitRelease(){
     if(
-        isServeLoadLimit()
+        isServerLoadLimit()
     ){
         countWaitActionByServerLoad ++;
         
-        while(isServeLoadLimit()){
+        while(isServerLoadLimit()){
             Wait(waitTime, WaitBehavior.IgnoreCondition);
         }
     }
 }
 
-// TAG ServerOverloadMeasures/ServerLoadLimit ----------
-define isServeLoadLimit(): serverLoadLimit <= ServerLoad();
+define serverLoadLimitMax: 255;
+define isServerLoadLimit(): serverLoadLimitMax <= ServerLoad();
+
 define limitChangeUnit: 50;
 define watchTimeLimitDecrease: 0.1;
 define watchTimeLimitIncrease: 0.1;
-globalvar define serverLoadLimit = serverLoadMax;
+globalvar define serverLoadLimit = serverLoadLimitMax;
 
 rule: "ServerOverloadMeasures/ServerLoadLimit/decrease"
 Event.OngoingGlobal
 if(
     serverLoadLimit > 0 &&
-    isServerOverload()
+    isServerLoadLimit()
 ){
     Wait(watchTimeLimitDecrease, WaitBehavior.AbortWhenFalse);
     serverLoadLimit -= limitChangeUnit;
@@ -44,18 +41,21 @@ if(
 rule: "ServerOverloadMeasures/ServerLoadLimit/increase"
 Event.OngoingGlobal
 if(
-    serverLoadLimit < serverLoadMax &&
-    !isServerOverload()
+    serverLoadLimit < serverLoadLimitMax &&
+    !isServerLoadLimit()
 ){
     Wait(watchTimeLimitIncrease, WaitBehavior.AbortWhenFalse);
     serverLoadLimit += limitChangeUnit;
-    if(serverLoadLimit > serverLoadMax){
-        serverLoadLimit = serverLoadMax;
+    if(serverLoadLimit > serverLoadLimitMax){
+        serverLoadLimit = serverLoadLimitMax;
     }
     Loop();
 }
 
-// TAG ServerOverloadMeasures/GameSpeed ----------
+// TAG ServerLoadMeasures/ServerOverLoad ----------
+define serverLoadMax: 255;
+define isServerOverload(): serverLoadMax <= ServerLoad();
+
 define gameSpeedMax: 100;
 define watchTimeSpeedDecrease: 1.5;
 define watchTimeSpeedIncrease: 1.5;
