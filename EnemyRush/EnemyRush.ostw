@@ -447,21 +447,14 @@ define FriendBotAssetNoLotteryList: [
 
 globalvar define isLockedCreateBotsByAsset! = false;
 
-void CreateBotsByAssetWithMutexLock(in define asset!, in define team!, in define addLimitNum!){ 
+void WaitReleaseLockCreateBotsByAsset(){ 
     // can't implement as subroutin for mutex  
-    define forceReleaseCount! = 0;
-    while(isLockedCreateBotsByAsset){
-        if(forceReleaseCount < 5){
-            forceReleaseCount ++;
-        }
-        else{
+    for(define tryCount! = 0; tryCount < 10; tryCount ++){
+        if(!isLockedCreateBotsByAsset){
             break;
         }
         Wait(1, WaitBehavior.IgnoreCondition);
     }
-    isLockedCreateBotsByAsset = true;
-    CreateBotsByAsset(asset, team, addLimitNum);
-    isLockedCreateBotsByAsset = false;
 }
 
 // TAG FriendBot/Asset/Interval ----------
@@ -521,8 +514,11 @@ if(
             // save avg ult charge of bots before reload asset
             define ultCharge! = GetAvgUltChgOfDummyBot(humanTeam);
             // reload bots by asset
+            WaitReleaseLockCreateBotsByAsset();
+            isLockedCreateBotsByAsset = true;
             DestroyBots(humanTeam);
-            CreateBotsByAssetWithMutexLock(asset, humanTeam, needFriendBotNum);
+            CreateBotsByAsset(asset, humanTeam, needFriendBotNum);
+            isLockedCreateBotsByAsset = false;
             // restore avg ult charge of bots
             SetAvgUltChgOfDummyBot(humanTeam, ultCharge);
             // wait start intarval until game start.
@@ -1152,8 +1148,11 @@ if(
             // play effect at all enemy
             PlayEffectsToTeam(enemyTeam);
             // reload bots by asset
+            WaitReleaseLockCreateBotsByAsset();
+            isLockedCreateBotsByAsset = true;
             DestroyBots(enemyTeam);
-            CreateBotsByAssetWithMutexLock(asset, enemyTeam, maxCreateEnemyBotNum);
+            CreateBotsByAsset(asset, enemyTeam, maxCreateEnemyBotNum);
+            isLockedCreateBotsByAsset = false;
             // release force reload flag
             forceReloadEnemyAsset = false;
 
@@ -2370,7 +2369,7 @@ if(
     WaitLongPressConfirm();
     reloadEnemyAssetInterval = 0;
     WaitLongPressConfirm();
-    WaitUntil(reloadEnemyAssetInterval > 0, 10);
+    // WaitUntil(reloadEnemyAssetInterval > 0, 10);
     reloadFriendBotAssetInterval = 0;
 }
 
