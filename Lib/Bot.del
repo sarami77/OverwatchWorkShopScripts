@@ -425,6 +425,8 @@ define facingRate:
     actionRangeMax == ActionRange.Far ?     150 :
     DefaultPercentage();
 
+playervar define aimmingPosition;
+
 void StartFacingAimTarget() playervar "StartFacingAimTarget"{
     if(
         aimTarget != null &&
@@ -432,7 +434,7 @@ void StartFacingAimTarget() playervar "StartFacingAimTarget"{
         IsAlive(aimTarget)
     ){
         StartFacing(
-            ep, DirectionTowards(EyePosition(), aimmingPosition(aimTarget)),
+            ep, DirectionTowards(EyePosition(), aimmingPosition),
             facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
     }
     else{
@@ -440,18 +442,29 @@ void StartFacingAimTarget() playervar "StartFacingAimTarget"{
     }
 }
 
-define aimmingPosition(in define player!): 
-    (
-        IsInAlternateForm(player) ?
-        EyePosition(player) - Vector(0, 0.6, 0)     // body position
-            :
-        EyePosition(player) + Vector(0, 0.2, 0)     // head position
-    )
-        +
-    RandomPosition(aimScatter, aimScatter, aimScatter)  // aim scatter
-        +
-    Vector(0, -(aimScatter / 2), 0);    // vertical offset
+rule: "EnemyBot/Aim/updateAimmingPosition"
+Event.OngoingPlayer
+if(
+    isBotActive &&
+    isBotEnableTeam &&
+    IsDummyBot() &&
+    aimTarget != null
+){
+    aimmingPosition =
+        (
+            IsInAlternateForm() ?
+            EyePosition(aimTarget) - Vector(0, 0.6, 0)     // body position
+                :
+            EyePosition(aimTarget) + Vector(0, 0.2, 0)     // head position
+        )
+            +
+        RandomPosition(aimScatter, aimScatter, aimScatter)  // aim scatter
+            +
+        Vector(0, -(aimScatter / 2), 0);
 
+    Wait(0.25, WaitBehavior.IgnoreCondition);
+    LoopIfConditionIsTrue();
+}
 
 
 // TAG Bot/PolingAction ----------
@@ -1662,11 +1675,6 @@ void FindTarget()"FindTarget"{
     else{
         // find attack target
         candidateTarget = FindAttackTarget();
-    }
-
-    if(candidateTarget == null){
-        // stop facing before set aimTarget for avoid invalid facing
-        StopFacing(ep);
     }
 
     // confirm as target
