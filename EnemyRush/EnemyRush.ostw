@@ -1212,6 +1212,7 @@ if(
         else if(
             progressStage == 2 && progress >= 30
         ){
+            spawnRushInterval = 0;
             progressAssetNo = 15;
             progressAssetInterval = (AssetChangeInterval() - 60);
             progressStage ++;
@@ -1219,6 +1220,7 @@ if(
         else if(
             progressStage == 3 && progress >= 60
         ){
+            spawnRushInterval = 0;
             progressAssetNo = 16;
             progressAssetInterval = (AssetChangeInterval() - 60);
             progressStage ++;
@@ -1226,6 +1228,7 @@ if(
         else if(
             progressStage == 4 && progress >= (FinalWaveProgress())
         ){
+            spawnRushInterval = 0;
             progressAssetNo = RandomValueInArray([17, 18]);
             progressAssetInterval = MaxValue();
             progressStage ++;
@@ -1568,7 +1571,10 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
                 teleportAreaSize
             );
 
-        if(CanSnapMapSurface()){
+        if(
+            CanSnapMapSurface() &&
+            !isServerLoadLimit()
+        ){
             candidatePosition = NearestWalkablePosition(candidatePosition);
         }
         else{
@@ -1587,7 +1593,6 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
             break;
         }
 
-        Wait(searchPositionInterval, WaitBehavior.AbortWhenFalse);
         WaitUntilServerLoadLimitRelease();
     }
 
@@ -1837,17 +1842,19 @@ if(
     !IsInSpawnRoom() &&
     IsAlive()
 ){
-    define checkIdleConditionCount = 0;
+    define checkConditionCount = 0;
 
-    while(checkIdleConditionCount < checkIdleConditionMaxCount){
+    while(checkConditionCount < checkIdleConditionMaxCount){
         Wait(checkIdleConditionInterval, WaitBehavior.AbortWhenFalse);
         WaitUntilServerLoadLimitRelease();
 
         if(
+            // enemy not on object
+            !IsTeamOnObject(enemyTeam) &&
             // player on object
-            IsTeamOnObject(humanTeam) &&
+            IsTeamOnObject(humanTeam)
             // far from object
-            DistanceBetween(ep, CurrentObjectPosition()) > ActionRange.CanFind
+            // DistanceBetween(ep, CurrentObjectPosition()) > ActionRange.CanFind
         ){
             // do teleport instantly
             break;
@@ -1861,11 +1868,11 @@ if(
             )
         ){
             // not teleport and reset count
-            checkIdleConditionCount = 0;
+            checkConditionCount = 0;
         }
         else{
             // not teleport but count up
-            checkIdleConditionCount ++;
+            checkConditionCount ++;
         }
     }
 
@@ -1885,7 +1892,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    spawnRushInterval = ObjectProgressScaledInterval(humanTeam, 20, 40) + RandomInteger(0, 5);
+    spawnRushInterval = ObjectProgressScaledInterval(humanTeam, 15, 30) + RandomInteger(0, 5);
     // apply workshop setting
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.0, 100, 4);
     // round for counting
@@ -1926,7 +1933,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    shotCallInterval = ObjectProgressScaledInterval(humanTeam, 20, 40) + RandomInteger(0, 5);
+    shotCallInterval = ObjectProgressScaledInterval(humanTeam, 15, 30) + RandomInteger(0, 5);
     // apply workshop setting
     shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.0, 100, 6);
     // round for counting
