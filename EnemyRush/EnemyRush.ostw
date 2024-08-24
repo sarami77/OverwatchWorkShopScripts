@@ -1635,12 +1635,12 @@ void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "Pla
     }
 }
 
-void DoTeleport(define isBeamFromBody!, define isEmgTeleport!)"DoTeleport"{
+void DoTeleport(define isBeamFromBody!, define isTeleportToOnObject!)"DoTeleport"{
     define needGetNewPosition!;
 
     // do emergency teleport as threat enemy 
     if(
-        isEmgTeleport
+        isTeleportToOnObject
     ){
         // set teleportPosition by object position
         teleportPosition = BlockedPositon(CurrentObjectPosition(), objectDirection, 6);
@@ -1830,10 +1830,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-define checkIdleConditionInterval: 3;
-define checkIdleConditionMaxCount: 1;
-
-rule: "EnemyBot/Teleport/teleportByIdle"
+rule: "EnemyBot/Teleport/teleportByIdleForDefendObject"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
@@ -1841,10 +1838,17 @@ if(
     !IsInSpawnRoom() &&
     IsAlive()
 ){
-    define checkConditionCount = 0;
-
-    while(checkConditionCount < checkIdleConditionMaxCount){
-        Wait(checkIdleConditionInterval, WaitBehavior.AbortWhenFalse);
+    while(true){
+        Wait(
+            // is boss
+            IsBossClass(ep) &&
+            // player team close win
+            IsCloseWin(humanTeam)
+            ?
+                1
+            :
+                3,
+            WaitBehavior.AbortWhenFalse);
         WaitUntilServerLoadLimitRelease();
 
         if(
@@ -1859,24 +1863,32 @@ if(
             break;
         }
         else if(
-            // Has line to near player
-            IsInLineOfSight(
+            // Has not line to near player
+            !IsInLineOfSight(
                 EyePosition(ep),
                 EyePosition(ClosestPlayerTo(ep, humanTeam)),
                 BarrierLOS.NoBarriersBlock
             )
         ){
-            // not teleport and reset count
-            checkConditionCount = 0;
+            // do teleport instantly
+            break;
         }
-        else{
-            // not teleport but count up
-            checkConditionCount ++;
-        }
+        // else
     }
 
-    // teleport by idle
-    DoTeleport(false, false);
+    // teleport
+    if(
+        // is boss
+        IsBossClass(ep) &&
+        // player team close win
+        IsCloseWin(humanTeam)
+    ){
+        DoTeleport(false, true);
+    }
+    else{
+        DoTeleport(false, false);
+    }
+    
     Wait(1, WaitBehavior.IgnoreCondition);
     LoopIfConditionIsTrue();
 }
@@ -1901,7 +1913,7 @@ if(
     }
 
     // action
-    define spawnRushDuration! = RandomInteger(15, 30);
+    define spawnRushDuration! = RandomInteger(10, 30);
     spawnRushDuration *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Duration Scale", 1.0, 0.0, 100, 5);
     define deployRushInterval! = RandomInteger(1, 5);
     spawnRushCount = RoundToInteger(spawnRushDuration / deployRushInterval, Rounding.Down);
@@ -1932,7 +1944,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    shotCallInterval = ObjectProgressScaledInterval(humanTeam, 15, 30) + RandomInteger(0, 5);
+    shotCallInterval = ObjectProgressScaledInterval(humanTeam, 20, 40) + RandomInteger(0, 5);
     // apply workshop setting
     shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.0, 100, 6);
     // round for counting
@@ -1955,70 +1967,6 @@ if(
             Wait(shotCallDelay, WaitBehavior.IgnoreCondition);
             WaitUntilServerLoadLimitRelease();
         }
-    }
-
-    Wait(1, WaitBehavior.IgnoreCondition);
-    LoopIfConditionIsTrue();
-}
-
-// TAG EnemyBot/EnemyAbility/CombatTeleport ----------
-playervar define combatTeleportInterval;
-
-globalvar define combatTeleportDelay!;
-
-rule: "EnemyBot/EnemyAbility/CombatTeleport"
-Event.OngoingPlayer
-if(
-    IsGameInProgress() &&
-    TeamOf() == enemyTeam &&
-    IsBossClass(ep)
-){
-    // set default interval by object progress
-    combatTeleportInterval = ObjectProgressScaledInterval(humanTeam, 10, 20) + RandomInteger(0, 5);
-    // apply workshop setting
-    combatTeleportInterval *= WorkshopSettingReal("Enemy Bot Settings", "(Sub Boss & Boss) Combat-Teleport Interval Scale", 1.0, 0.0, 100, 7);
-    // apply scale by each enemy action range
-    if(actionRangeMax == ActionRange.Melee){
-        combatTeleportInterval *= 1.0;
-    }
-    else if(actionRangeMax == ActionRange.Close){
-        combatTeleportInterval *= 2.0;
-    } 
-    else if(actionRangeMax == ActionRange.Middle){
-        combatTeleportInterval *= 3.0;
-    } 
-    else if(actionRangeMax == ActionRange.Far){
-        combatTeleportInterval *= 4.0;
-    }
-    combatTeleportInterval = RoundToInteger(combatTeleportInterval, Rounding.Up);
-
-    define isEmgTeleport! = false;
-
-    for(;combatTeleportInterval > 0; combatTeleportInterval --){
-        if(
-            // player team close win
-            IsCloseWin(humanTeam) &&
-            // enemy not on object
-            !IsTeamOnObject(enemyTeam) &&
-            // player on object
-            IsTeamOnObject(humanTeam)
-        ){
-            // interrupt teleport for defend object in finale phase
-            isEmgTeleport = true;
-            Wait(combatTeleportDelay, WaitBehavior.IgnoreCondition);
-            if(IsOverTime()){
-                combatTeleportDelay += 1.0;
-            }
-            break;
-        }
-
-        Wait(1, WaitBehavior.IgnoreCondition);
-    }
-
-    if(IsAlive()){
-        // teleport with teleport beam from body
-        // teleport with emergency by close lose
-        DoTeleport(true, isEmgTeleport);
     }
 
     Wait(1, WaitBehavior.IgnoreCondition);
@@ -2347,10 +2295,6 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         wm(); debugHuds[Last()] = CreateDebugHud("spawn Rush Interval", spawnRushInterval, spawnRushInterval > 5 ? enemyTeamColor : Color.Yellow);
         wm(); debugHuds[Last()] = CreateDebugHud("spawn Rush Count", spawnRushCount, spawnRushCount <= 0 ? enemyTeamColor : Color.Yellow);
         wm(); debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? enemyTeamColor : Color.Yellow);
-        wm(); debugHuds[Last()] = CreateDebugHud("combat Teleport Interval",
-            FirstBossClassEnemy().combatTeleportInterval,
-            FirstBossClassEnemy().combatTeleportInterval > 5 ? enemyTeamColor : Color.Yellow);
-        wm(); debugHuds[Last()] = CreateDebugHud("combat Teleport Delay", combatTeleportDelay, combatTeleportDelay <= 0 ? enemyTeamColor : Color.Yellow);  
         wm(); debugHuds[Last()] = CreateDebugHud("more Ult Prob", moreUltProb, moreUltProb <= 0 ? enemyTeamColor : Color.Yellow);     
         // wm(); debugHuds[Last()] = CreateDebugHud("tune Val", tuneVal, Color.Green);
     }
@@ -2387,8 +2331,6 @@ if(
     IsButtonHeld(ep, Button.Interact) &&
     IsButtonHeld(ep, Button.Reload)
 ){
-    WaitLongPressConfirm();
-    AllPlayers(enemyTeam).combatTeleportInterval = 0;
     WaitLongPressConfirm();
     spawnRushInterval = 0;
     WaitLongPressConfirm();
