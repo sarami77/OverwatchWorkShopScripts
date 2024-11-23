@@ -1455,7 +1455,6 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
     define objectPosition = CurrentObjectOnPosition();
     define basePosition = PositionOf(ClosestPlayerTo(objectPosition, humanTeam));
     if(
-        objectPosition == null ||
         basePosition == null
     ){
         return null;
@@ -1560,7 +1559,9 @@ define searchPositionTryCountMax: 10;
 // TAG EnemyBot/Teleport/GetTeleportPositionByTeleportBasePosition
 define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositionByTeleportBasePosition"{
     define basePosition = teleportBasePosition;
-    if(basePosition == null){
+    if(
+        basePosition == null
+    ){
         return null;
     }
     
@@ -1590,10 +1591,10 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
         }
 
         if(
-            // Has line to near player
+            // Has line to closePlayer
             IsInLineOfSight(
                 candidatePosition + PositionOffsetY1(),
-                PositionOf(closePlayer) + PositionOffsetY1(),
+                EyePosition(closePlayer),
                 BarrierLOS.NoBarriersBlock
             )    
         ){
@@ -1850,32 +1851,54 @@ if(
     !IsInSpawnRoom() &&
     IsAlive()
 ){
+    define isFinaleDefence;
+
     while(true){
-        Wait(
+        isFinaleDefence = 
             // is boss
             IsBossClass(ep) &&
             // player team close win
-            IsCloseWin(humanTeam)
+            IsCloseWin(humanTeam);
+
+        Wait(
+            isFinaleDefence
             ?
-                1
+                0.5
             :
                 3,
             WaitBehavior.AbortWhenFalse);
-        WaitUntilServerLoadLimitRelease(watchUpdateRate);
+        
+        if(!isFinaleDefence){
+            WaitUntilServerLoadLimitRelease(watchUpdateRate);
+        }
 
+        // not finale defence
         if(
-            // by health high
-            IsTrueProbability(NormalizedHealth() * 100) &&
-            // enemy not on object
-            !IsTeamOnObject(enemyTeam) &&
+            !isFinaleDefence &&
             // player on object
             IsTeamOnObject(humanTeam) &&
+            // enemy not on object
+            !IsTeamOnObject(enemyTeam) &&
             // has not line to teleportBasePosition
-            !IsInLineOfSight(EyePosition(ep), teleportBasePosition + PositionOffsetY1())
+            !IsInLineOfSight(EyePosition(ep), teleportBasePosition + PositionOffsetY1()) &&
+            // by health high
+            IsTrueProbability(NormalizedHealth() * 100)
         ){
             // do teleport instantly
             break;
         }
+        // finale defence
+        else if(
+            isFinaleDefence &&
+            // player on object
+            IsTeamOnObject(humanTeam) &&
+            // self not on object
+            !IsOnObjective(ep)
+        ){
+            // do teleport instantly
+            break;
+        }
+        // not in combat
         else if(
             aimTarget == null ||
             // Has not line to aimTarget
@@ -1893,10 +1916,7 @@ if(
 
     // teleport
     if(
-        // is boss
-        IsBossClass(ep) &&
-        // player team close win
-        IsCloseWin(humanTeam)
+        isFinaleDefence
     ){
         DoTeleport(false, true);
     }
