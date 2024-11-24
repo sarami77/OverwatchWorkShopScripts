@@ -418,12 +418,15 @@ void StopMove(define player!) playervar "StopMove"{
 } 
 
 // TAG Bot/Aim ----------
-define facingRate:
+define facingSpeedRate:
     actionRangeMax == ActionRange.Melee ?   350 :
     actionRangeMax == ActionRange.Close ?   300 :
     actionRangeMax == ActionRange.Middle ?  250 :
     actionRangeMax == ActionRange.Far ?     200 :
     DefaultPercentage();
+
+define facingUpdateInterval:
+    watchUpdateRate * 0.1;
 
 playervar define aimmingPosition;
 
@@ -435,12 +438,13 @@ void StartFacingAimTarget() playervar "StartFacingAimTarget"{
     ){
         StartFacing(
             ep, DirectionTowards(EyePosition(), aimmingPosition),
-            facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+            facingSpeedRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
     }
     else{
         StopFacing();
     }
 }
+
 
 rule: "EnemyBot/Aim/updateAimmingPosition"
 Event.OngoingPlayer
@@ -463,7 +467,7 @@ if(
             Vector(0, -(aimScatter / 2), 0);
     }
 
-    Wait(watchUpdateRate * 0.1, WaitBehavior.IgnoreCondition);
+    Wait(facingUpdateInterval, WaitBehavior.IgnoreCondition);
     LoopIfConditionIsTrue();
 }
 
@@ -471,13 +475,13 @@ if(
 void StartFacingTemporaryWithButton(define target!, define button!, define keepTime! = 0.1, define angle! = 30) playervar "StartFacingTemporaryWithButton"{
     // target is player
     if(HasSpawned(target)){
-        StartFacingPlayer(target, facingRate);
+        StartFacingPlayer(target, facingSpeedRate);
     }
     // target is position
     else{
         StartFacing(
             ep, DirectionTowards(EyePosition(), target),
-            facingRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
+            facingSpeedRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
     }
 
     define tryTime! = 2.0;
