@@ -1451,36 +1451,48 @@ define CanSnapMapSurface()"CanSnapMapSurface"{
 }
 
 // TAG EnemyBot/Teleport/GetTeleportBasePositionByClosestPlayer
+define searchPositionTryCountMax: 10;
+
 define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositionByClosestPlayer"{
     define returnPosition! = null;
     define canSnapMap! = CanSnapMapSurface();
     define objectPosition! = CurrentObjectOnPosition();
     define basePosition! = PositionOf(ClosestPlayerTo(objectPosition, humanTeam));
 
-    // select teleportPosition
-    basePosition = 
-        basePosition
-            +
-        RandomPosition(
-            placableAreaSize,
-            placableAreaSize,
-            placableAreaSize
-        )
-            + 
-        (
-            DirectionTowards(basePosition, objectPosition)
-                *
-            DistanceBetween(basePosition, objectPosition) * 0.4
-        );
-    
-    if(
-        canSnapMap &&
-        !isServerLoadLimit()
-    ){
-        returnPosition = NearestWalkablePosition(basePosition);
-    }
-    else{
-        returnPosition = BelowPosition(basePosition + Vector(0, placableAreaSize * 2.0, 0));
+    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
+        // select candidatePosition at almost middle position of close player and object
+        define candidatePosition =
+            basePosition
+                +
+            RandomPosition(
+                placableAreaSize,
+                placableAreaSize,
+                placableAreaSize
+            )
+                + 
+            (
+                DirectionTowards(basePosition, objectPosition)
+                    *
+                DistanceBetween(basePosition, objectPosition) * 0.4
+            );
+        
+        if(
+            canSnapMap &&
+            !isServerLoadLimit()
+        ){
+            candidatePosition = NearestWalkablePosition(basePosition);
+        }
+        else{
+            candidatePosition = BelowPosition(basePosition + Vector(0, placableAreaSize * 2.0, 0));
+        }
+
+        if(
+            // not too far from basePosition
+            DistanceBetween(basePosition, candidatePosition) <= ActionRange.CanFind
+        ){
+            returnPosition = candidatePosition;
+            break;
+        }
     }
 
     return returnPosition;
@@ -1521,30 +1533,38 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
         placableAreaExtendSize = placableAreaSize * placableAreaExtendSizeScaleOnPointCapture;
     }
 
-    // select teleportPosition
-    basePosition = 
-        basePosition
-            +
-        RandomPosition(
-            placableAreaSize + placableAreaExtendSize,
-            placableAreaSize + placableAreaExtendSize,
-            placableAreaSize + placableAreaExtendSize
-        );
+    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
+        // select candidatePosition at object ahead
+        define candidatePosition =
+            basePosition
+                +
+            RandomPosition(
+                placableAreaSize + placableAreaExtendSize,
+                placableAreaSize + placableAreaExtendSize,
+                placableAreaSize + placableAreaExtendSize
+            );
 
-    if(
-        canSnapMap &&
-        !isServerLoadLimit()
-    ){
-        returnPosition = NearestWalkablePosition(basePosition);
-    }
-    else{
-        returnPosition = BelowPosition(basePosition + Vector(0, placableAreaSize * 2.0, 0));
+        if(
+            canSnapMap &&
+            !isServerLoadLimit()
+        ){
+            candidatePosition = NearestWalkablePosition(basePosition);
+        }
+        else{
+            candidatePosition = BelowPosition(basePosition + Vector(0, placableAreaSize * 2.0, 0));
+        }
+
+        if(
+            // not too far from basePosition
+            DistanceBetween(basePosition, candidatePosition) <= ActionRange.CanFind
+        ){
+            returnPosition = candidatePosition;
+            break;
+        }
     }
     
     return returnPosition;
 }
-
-define searchPositionTryCountMax: 10;
 
 // TAG EnemyBot/Teleport/GetTeleportPositionByTeleportBasePosition
 define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositionByTeleportBasePosition"{
@@ -1780,7 +1800,9 @@ if(
         }
 
         // found position
-        if(newPosition != null){
+        if(
+            newPosition != null
+        ){
             // update commonTeleportBasePosition by new position
             teleportBasePosition = newPosition;
             // release update flag
