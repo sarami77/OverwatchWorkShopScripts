@@ -1457,7 +1457,12 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
     define returnPosition! = null;
     define canSnapMap! = CanSnapMapSurface();
     define objectPosition! = CurrentObjectOnPosition();
-    define basePosition! = PositionOf(ClosestPlayerTo(objectPosition, humanTeam));
+    define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
+    define basePosition! = PositionOf(closePlayer);
+
+    if(IsInSpawnRoom(closePlayer)){
+        return returnPosition;
+    }
 
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select candidatePosition at almost middle position of close player and object
@@ -1573,6 +1578,10 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
     define basePosition = teleportBasePosition;
     define closePlayer = ClosestPlayerTo(basePosition, humanTeam);
 
+    if(IsInSpawnRoom(closePlayer)){
+        return returnPosition;
+    }
+
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from teleportBasePosition around
         define candidatePosition = 
@@ -1648,27 +1657,26 @@ void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "Pla
 }
 
 void DoTeleport(define isBeamFromBody!, define isTeleportToOnObject!)"DoTeleport"{
-    define needGetNewPosition!;
+    define newPosition! = null;
 
     // do emergency teleport as threat enemy 
     if(
         isTeleportToOnObject
     ){
         // set teleportPosition by object position
-        teleportPosition = BlockedPositon(CurrentObjectPosition(), objectDirection, 6);
+        newPosition = BlockedPositon(CurrentObjectPosition(), objectDirection, 6);
         ApplyImpulse(ep, Down(), 1, Relative.ToWorld, ContraryMotion.Cancel);
     }
     else{
         // set teleportPosition by common position
-        teleportPosition = GetTeleportPositionByTeleportBasePosition();
+        newPosition = GetTeleportPositionByTeleportBasePosition();
     }
 
     if(
-        teleportPosition != null
+        newPosition != null
     ){
-        // teleport to teleportPosition
-        if(teleportPosition == null) return;
-
+        // update teleportPosition by new position
+        teleportPosition = newPosition;
         // wait teleport until game start.
         WaitUntil(IsGameInProgress(), MaxValue());
 
