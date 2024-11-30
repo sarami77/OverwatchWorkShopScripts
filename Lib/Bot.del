@@ -1348,13 +1348,13 @@ define HeroOfWithDuplicate() "HeroOfWithDuplicate"{
 
 
 // TAG Bot/TriggerAction ----------
-playervar define isUltPositioning;
+playervar define enableMoveUltimate!;
+playervar define isInMoveUltimateState!;
 
 rule: "Bot/TriggerAction/moveUltmate"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
+    enableMoveUltimate &&
     IsAlive() &&
     IsUsingUltimate()
 ){
@@ -1397,8 +1397,8 @@ if(
 
     // move ultmate
     if(isCanAction){
-        // start ult positioning
-        isUltPositioning = true;
+        // start move ult state for stop interrupt poling action
+        isInMoveUltimateState = true;
         // stop buton control
         enableButtonControl = false;
         // stop current input
@@ -1432,15 +1432,16 @@ if(
         // restore buton control and poling action
         enableButtonControl = true;
         // stop ult positioning
-        isUltPositioning = false;
+        isInMoveUltimateState = false;
     }
 }
+
+playervar define enablePlaceUltimate!;
 
 rule: "Bot/TriggerAction/placeUltmate"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
+    enablePlaceUltimate &&
     IsAlive() &&
     UltimateChargePercent() >= DefaultPercentage() &&
     IsButtonHeld(ep, Button.Ultimate)
@@ -1494,11 +1495,12 @@ if(
     }
 }
 
+playervar define enablePlaceSecondary!;
+
 rule: "Bot/TriggerAction/placeSecondary"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
+    enablePlaceSecondary &&
     IsAlive() &&
     AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
     IsButtonHeld(ep, Button.SecondaryFire)
@@ -1541,17 +1543,18 @@ if(
     }
 }
 
-rule: "Bot/TriggerAction/positionFixSecondary"
+playervar define enableHoldSecondary!;
+
+rule: "Bot/TriggerAction/holdSecondary"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
+    enableHoldSecondary &&
     IsAlive() &&
     IsFiringSecondary()
 ){
     AbortIf(!isBotActive);
 
-    define isPositionFixSecondary!;
+    define isHoldSecondary!;
 
     define hero! = HeroOfWithDuplicate();
     // postion fix hero
@@ -1559,11 +1562,11 @@ if(
         hero == Hero.WreckingBall
     ){
         if(IsFiringSecondary()){
-            isPositionFixSecondary = true;       
+            isHoldSecondary = true;       
         }
     }
 
-    if(isPositionFixSecondary){
+    if(isHoldSecondary){
         // stop buton control for reduce ball form cancel by fire
         enableButtonControl = false;
 
@@ -2004,7 +2007,7 @@ if(
 
     while(true){
         // not in ult positioning
-        if(!isUltPositioning){
+        if(!isInMoveUltimateState){
             // poling action
             PolingAction(); 
         }
@@ -2030,7 +2033,7 @@ if(
 
     while(true){
         // not in ult positioning
-        if(!isUltPositioning){
+        if(!isInMoveUltimateState){
             // start button control
             enableButtonControl = true;
             // start facing
@@ -2067,7 +2070,7 @@ if(
 
     while(true){
         // not in ult positioning
-        if(!isUltPositioning){
+        if(!isInMoveUltimateState){
             // start button control
             enableButtonControl = true;
             // start facing
@@ -2134,7 +2137,7 @@ playervar define aimScatter;
 playervar define supportPrioloty!;
 playervar define supportButtons;
 playervar define attackButtons;
-playervar define hasDoubleJumpButtonAbility!;
+playervar define enableDoubleJump!;
 
 playervar define primaryFireButtonBehaivor!;
 playervar define primaryFireButtonReleaseMin!;
@@ -2183,7 +2186,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
     actionRangeMin = ActionRange.Melee;
     actionRangeMax = ActionRange.Melee;
 
-    hasDoubleJumpButtonAbility = false;
+    enableDoubleJump = false;
     supportPrioloty = 0.0;
     supportButtons = [
         Button.PrimaryFire,
@@ -2238,6 +2241,11 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
     crouchButtonPressMin = 0;
     crouchButtonPressMax = 1;
 
+    enableMoveUltimate = false;
+    enablePlaceUltimate = false;
+    enablePlaceSecondary = false;
+    enableHoldSecondary = false;
+
     define hero! = HeroOfWithDuplicate();
     
     switch(hero){
@@ -2284,6 +2292,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
             Button.PrimaryFire,
             Button.Ability1
         ];
+        enablePlaceUltimate = true;
         break;
 
         case Hero.Bastion:
@@ -2294,6 +2303,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         secondaryFireButtonReleaseMax = 5;        // to more use primary fire when assault mode
         ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress cancel assault mode (Prefer PolingAction)
         ultimateButtonReleaseMax = 30;          // to suppress over use artillery
+        enableMoveUltimate = true;
         break;
 
         case Hero.Brigitte:
@@ -2323,6 +2333,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         secondaryFireButtonPressMin = 1.3;      // to charge enough rocket punch
         secondaryFireButtonPressMax = 1.5;      // to suppress charge over rocket punch
         jumpButtonReleaseMax = 10;              // to to suppress cancel rocket punch
+        enableMoveUltimate = true;
         break;
 
         case Hero.Dva:
@@ -2342,24 +2353,44 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         case Hero.Genji:
         actionRangeMin = ActionRange.Melee;
         actionRangeMax = ActionRange.Close;
-        hasDoubleJumpButtonAbility = true;
         jumpButtonReleaseMax = 2.5;             // to more use double jump
         jumpButtonPressMax = 5;                 // to more use wall crime
         ability1ButtonReleaseMax = 1;           // to more use swift strike when reset cooldown by kill
         ability1ButtonPressMax = 1;             // to more use swift strike when reset cooldown by kill
+        enableDoubleJump = true;
         break;
 
         case Hero.Hanzo:
         aimScatter = 0.3;
         actionRangeMin = ActionRange.Middle;
         actionRangeMax = ActionRange.Far;
-        hasDoubleJumpButtonAbility = true;
         primaryFireButtonReleaseMin = 0;
         primaryFireButtonReleaseMax = 1.0;
         primaryFireButtonPressMin = 0.6;       // to charge enough storm bow  0.7s
         primaryFireButtonPressMax = 0.8;       // to suppress charge over storm bow
         jumpButtonPressMax = 5;                 // to more use wall crime
         secondaryFireButtonBehaivor = ButtonBehaivor.Non;
+        enableDoubleJump = true;
+        break;
+
+        case Hero.Illari:
+        aimScatter = 0.3;
+        actionRangeMin = ActionRange.Close;
+        actionRangeMax = ActionRange.Middle;
+        supportPrioloty = 1.0;
+        supportButtons = [
+            Button.SecondaryFire,
+            Button.Ability1,
+            Button.Ability2
+        ];
+        attackButtons = [
+            Button.PrimaryFire,
+            Button.Ability1
+        ];
+        primaryFireButtonReleaseMin = 0.2;      // to charge enough sorar rifle
+        primaryFireButtonReleaseMax = 0.8;      // to suppress charge over sorar rifle
+        primaryFireButtonPressMin = 0;          // to more use sorar rifle
+        primaryFireButtonPressMax = 1.0;          // to more use sorar rifle
         break;
 
         case Hero.JunkerQueen:
@@ -2370,6 +2401,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         case Hero.Junkrat:
         actionRangeMin = ActionRange.Middle;
         actionRangeMax = ActionRange.Far;
+        enableMoveUltimate = true;
         break;
 
         case Hero.Kiriko:
@@ -2401,7 +2433,6 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         case Hero.Lifeweaver:
         actionRangeMin = ActionRange.Middle;
         actionRangeMax = ActionRange.Far;
-        hasDoubleJumpButtonAbility = true;
         supportPrioloty = 1.0;
         jumpButtonReleaseMax = 5;               // to more use life step
         ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use petal platform (Prefer PolingAction)
@@ -2414,6 +2445,13 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         ];
         primaryFireButtonPressMin = 0.8;        // to charge enough healing blossom
         primaryFireButtonPressMax = 1.4;        // to suppress charge over healing blossom
+        enableDoubleJump = true;
+        enablePlaceUltimate = true;
+        break;
+
+        case Hero.Mauga:
+        actionRangeMin = ActionRange.Melee;
+        actionRangeMax = ActionRange.Middle;
         break;
 
         case Hero.Mei:
@@ -2477,6 +2515,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         secondaryFireButtonPressMax = 4;        // to more keep guard (on nemesis form)
         ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress cancel nemesis form (Prefer PolingAction)
         ultimateButtonReleaseMax = 40;          // to suppress over use inhillation
+        enablePlaceSecondary = true;
         break;
 
         case Hero.Reaper:
@@ -2535,6 +2574,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         ability1ButtonReleaseMin = 1;           // to more use turret
         ability1ButtonReleaseMax = 3;           // to more use turret
         ability2ButtonReleaseMax = 15;          // to suppress over use teleporter
+        enablePlaceUltimate = true;
         break;
 
         case Hero.Torbjorn:
@@ -2552,7 +2592,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         actionRangeMin = ActionRange.Middle;
         actionRangeMax = ActionRange.Far;
         supportPrioloty = 1.0;
-        hasDoubleJumpButtonAbility = true;
+        enableDoubleJump = true;
         break;
 
         case Hero.Venture:
@@ -2591,6 +2631,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         secondaryFireButtonBehaivor = ButtonBehaivor.Non;     // to suppress over use grappling crow (Prefer PolingAction)
         ability1ButtonReleaseMax = 30;          // to suppress cancel ball form
         crouchButtonPressMax = 4;               // to more use pile driver
+        enableHoldSecondary = true;
         break;
 
         case Hero.Zarya:
@@ -2624,31 +2665,6 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         ability2ButtonReleaseMin = 0.5;         // to more use orb of harmony
         ability2ButtonReleaseMax = 0.5;         // to more use orb of harmony
         ultimateButtonReleaseMax = 30;          // to suppress over use transcendence
-        break;
-
-        case Hero.Illari:
-        aimScatter = 0.3;
-        actionRangeMin = ActionRange.Close;
-        actionRangeMax = ActionRange.Middle;
-        supportPrioloty = 1.0;
-        supportButtons = [
-            Button.SecondaryFire,
-            Button.Ability1,
-            Button.Ability2
-        ];
-        attackButtons = [
-            Button.PrimaryFire,
-            Button.Ability1
-        ];
-        primaryFireButtonReleaseMin = 0.2;      // to charge enough sorar rifle
-        primaryFireButtonReleaseMax = 0.8;      // to suppress charge over sorar rifle
-        primaryFireButtonPressMin = 0;          // to more use sorar rifle
-        primaryFireButtonPressMax = 1.0;          // to more use sorar rifle
-        break;
-
-        case Hero.Mauga:
-        actionRangeMin = ActionRange.Melee;
-        actionRangeMax = ActionRange.Middle;
         break;
 
         default:
@@ -2872,7 +2888,7 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                 }
                 else if(
                     button == Button.Jump &&
-                    hasDoubleJumpButtonAbility &&
+                    enableDoubleJump &&
                     IsTrueProbability(50)
                 ){
                     // use double jump ability
