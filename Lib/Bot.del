@@ -487,8 +487,8 @@ void StartFacingTemporaryWithButton(define target!, define button!, define keepT
             facingSpeedRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
     }
 
-    define tryTime! = 2.0;
-    define tryInterval! = 0.25;
+    define tryTime! = 3.0;
+    define tryInterval! = 0.2;
     define maxTryCount! = tryTime * tryInterval;
     for(define tryCount! = 0; tryCount < maxTryCount; tryCount++){
         Wait(tryInterval, WaitBehavior.IgnoreCondition);
@@ -497,6 +497,7 @@ void StartFacingTemporaryWithButton(define target!, define button!, define keepT
         }
     }
     
+    Wait(0.1, WaitBehavior.IgnoreCondition);
     StartHoldingButton(ep, button);
     Wait(keepTime, WaitBehavior.IgnoreCondition);
     StopHoldingButton(ep, button);
@@ -857,23 +858,62 @@ void PolingAction() playervar "PolingAction"{
     }
     // Zenyatta
     else if(hero == Hero.Zenyatta){
+        if(!IsFiringSecondary()){
+            if(
+                IsTrueProbability(IsUsingAbility1() ? 50 : 100)
+            ){
+                define protectTarget! = 
+                    RandomValueInArray(
+                        FilteredArray(
+                            AllLivingPlayers(TeamOf()),
+                            (
+                                ae != ep &&
+                                NormalizedHealth(ae) <= neadHealHealthScale &&
+                                CanFindLine(ae)
+                            )
+                        )
+                    );
+
+                if(protectTarget != null){
+                    StartFacingTemporaryWithButton(protectTarget, Button.Ability1, 0.1);
+                }
+            }
+
+            if(
+                IsTrueProbability(IsUsingAbility2() ? 50 : 100)
+            ){
+                define attackTarget! = 
+                    RandomValueInArray(
+                        FilteredArray(
+                            AllLivingPlayers(EnemyTeamOf(ep)),
+                            (
+                                ae != ep &&
+                                NormalizedHealth(ae) >= 0.5 &&
+                                CanFindLine(ae)
+                            )
+                        )
+                    );
+
+                if(attackTarget != null){
+                    StartFacingTemporaryWithButton(attackTarget, Button.Ability2, 0.1);
+                }
+            }
+        }
+
         // close to friend for heal
         while(
             IsUsingUltimate()
         ){
             define healTarget! = 
                 FirstOf(
-                    SortedArray(
-                        FilteredArray(
-                            AllLivingPlayers(TeamOf()),
-                            (
-                                ae != ep &&
-                                NormalizedHealth(ae) <= 0.5 &&
-                                CanFindLine(ae)
-                            )
-                        ),
-                        Health(ae)
-                    )
+                    FilteredArray(
+                        AllLivingPlayers(TeamOf()),
+                        (
+                            ae != ep &&
+                            NormalizedHealth(ae) <= neadHealHealthScale &&
+                            CanFindLine(ae)
+                        )
+                    ),
                 );
 
             if(healTarget != null){
@@ -1067,17 +1107,14 @@ void PolingAction() playervar "PolingAction"{
             IsTrueProbability(50)
         ){
             define healTarget! = 
-                FirstOf(
-                    SortedArray(
-                        FilteredArray(
-                            AllLivingPlayers(TeamOf()),
-                            (
-                                ae != ep &&
-                                NormalizedHealth(ae) <= 0.5 &&
-                                CanFindLine(ae)
-                            )
-                        ),
-                        Health(ae)
+                RandomValueInArray(
+                    FilteredArray(
+                        AllLivingPlayers(TeamOf()),
+                        (
+                            ae != ep &&
+                            NormalizedHealth(ae) <= neadHealHealthScale &&
+                            CanFindLine(ae)
+                        )
                     )
                 );
 
@@ -1763,24 +1800,16 @@ if(
                 actionState == ActionState.Support
             ){
                 if(
-                    // target heal completed
-                    NormalizedHealth(aimTarget) >= neadHealHealthScale ||
                     // target dead
-                    !IsAlive(aimTarget)
+                    !IsAlive(aimTarget) ||
+                    // target heal almost completed
+                    NormalizedHealth(aimTarget) >= neadHealHealthScale ||
+                    // by support Prioloty
+                    IsTrueProbability(50 * (1 - supportPrioloty))
                 ){
                     // change target
                     tryFindTarget = true;
                 }
-                else if(
-                    IsTrueProbability(
-                        // by support Prioloty
-                        50 * (1 - supportPrioloty)
-                    )
-                ){
-                    // change target 
-                    tryFindTarget = true;
-                }
-                // else{} keep target
             }
             // check target as attack action
             else{
@@ -1791,16 +1820,6 @@ if(
                     // change target 
                     tryFindTarget = true;
                 }
-                // else if(
-                //     IsTrueProbability(
-                //         // by attack target health
-                //         50 * NormalizedHealth(aimTarget) 
-                //     )
-                // ){
-                //     // change target 
-                //     tryFindTarget = true;
-                // }
-                // else{} keep target
             }
 
             // get new target
@@ -2251,7 +2270,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         secondaryFireButtonPressMin = 30;       // to more use scorp
         secondaryFireButtonPressMax = 40;       // to more use scorp
         jumpButtonReleaseMax = 40;              // to suppress cancel scorp
-        ultimateButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use nano boost (Prefer PolingAction)
+        ultimateButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use nano boost (Prefer PolingAction
         supportButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
@@ -2267,14 +2286,14 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         secondaryFireButtonPressMin = 30;       // to more use scorp
         secondaryFireButtonPressMax = 40;       // to more use scorp
         jumpButtonReleaseMax = 40;              // to suppress cancel scorp
-        ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use corch gun (Prefer PolingAction)
+        ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use corch gun (Prefer PolingAction
         break;
 
         case Hero.Baptiste:
         actionRangeMin = ActionRange.Middle;
         actionRangeMax = ActionRange.Far;
         supportPrioloty = 1.0;
-        ability2ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use inmortal field (Prefer PolingAction)
+        ability2ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use inmortal field (Prefer PolingAction
         jumpButtonReleaseMax = 5;               // to more use exo boots
         crouchButtonReleaseMax = 1;             // to more use exo boots
         crouchButtonPressMax = 20;              // to more use exo boots
@@ -2295,7 +2314,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         primaryFireButtonReleaseMax = 1;        // to more use primary fire when assault mode
         primaryFireButtonPressMax = 20;        // to more use primary fire when assault mode
         secondaryFireButtonReleaseMax = 5;        // to more use primary fire when assault mode
-        ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress cancel assault mode (Prefer PolingAction)
+        ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress cancel assault mode (Prefer PolingAction
         ultimateButtonReleaseMax = 30;          // to suppress over use artillery
         enableMoveUltimate = true;
         break;
@@ -2417,7 +2436,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         actionRangeMin = ActionRange.Close;
         actionRangeMax = ActionRange.Middle;
         jumpButtonPressMax = 10;
-        ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use cross fade (Prefer PolingAction)
+        ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use cross fade (Prefer PolingAction
         supportPrioloty = 0.75;
         supportButtons = [
             Button.Ability2
@@ -2429,8 +2448,8 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         actionRangeMax = ActionRange.Far;
         supportPrioloty = 1.0;
         jumpButtonReleaseMax = 5;               // to more use life step
-        ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use petal platform (Prefer PolingAction)
-        ability2ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use life grip (Prefer PolingAction)
+        ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use petal platform (Prefer PolingAction
+        ability2ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use life grip (Prefer PolingAction
         supportButtons = [
             Button.PrimaryFire
         ];
@@ -2451,8 +2470,8 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         case Hero.Mei:
         actionRangeMin = ActionRange.Melee;
         actionRangeMax = ActionRange.Close;
-        ability1ButtonBehaivor = ButtonBehaivor.Non;         // to suppress over use cyro freeze (Prefer PolingAction)
-        ability2ButtonBehaivor = ButtonBehaivor.Non;         // to suppress over use ice wall (Prefer PolingAction)
+        ability1ButtonBehaivor = ButtonBehaivor.Non;         // to suppress over use cyro freeze (Prefer PolingAction
+        ability2ButtonBehaivor = ButtonBehaivor.Non;         // to suppress over use ice wall (Prefer PolingAction
         break;
 
         case Hero.Mercy:
@@ -2507,7 +2526,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         secondaryFireButtonReleaseMax = rva([5, 30]);      // to suppress over use guard (on nemesis form)
         secondaryFireButtonPressMin = 2;        // to more keep guard (on nemesis form)
         secondaryFireButtonPressMax = 4;        // to more keep guard (on nemesis form)
-        ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress cancel nemesis form (Prefer PolingAction)
+        ability1ButtonBehaivor = ButtonBehaivor.Non;          // control Prefer PolingAction
         ultimateButtonReleaseMax = 40;          // to suppress over use inhillation
         enablePlaceSecondary = true;
         break;
@@ -2515,7 +2534,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         case Hero.Reaper:
         actionRangeMin = ActionRange.Melee;
         actionRangeMax = ActionRange.Close;
-        ability2ButtonBehaivor = ButtonBehaivor.Non;         // to suppress over use shadow step (Prefer PolingAction)
+        ability2ButtonBehaivor = ButtonBehaivor.Non;         // to suppress over use shadow step (Prefer PolingAction
         break;
 
         case Hero.Reinhardt:
@@ -2579,7 +2598,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         case Hero.Tracer:
         actionRangeMin = ActionRange.Melee;
         actionRangeMax = ActionRange.Close;
-        ability2ButtonBehaivor = ButtonBehaivor.Non;         // to suppress over use recall (Prefer PolingAction)
+        ability2ButtonBehaivor = ButtonBehaivor.Non;         // control Prefer PolingAction
         break;
 
         case Hero.Juno:
@@ -2605,7 +2624,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         secondaryFireButtonPressMin = 30;       // to more use scorp
         secondaryFireButtonPressMax = 40;       // to more use scorp
         jumpButtonReleaseMax = 40;              // to suppress cancel scorp
-        ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use grappling hook (Prefer PolingAction)
+        ability1ButtonBehaivor = ButtonBehaivor.Non;          // control Prefer PolingAction
         ability2ButtonReleaseMax = 30;          // to suppress over use venom mine
         break;
 
@@ -2622,7 +2641,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         actionRangeMax = ActionRange.Middle;
         primaryFireButtonPressMax = 15;         // to more use quad machine gun
         primaryFireButtonReleaseMax = 10;       // to suppress over use quad machine gun
-        secondaryFireButtonBehaivor = ButtonBehaivor.Non;     // to suppress over use grappling crow (Prefer PolingAction)
+        secondaryFireButtonBehaivor = ButtonBehaivor.Non;     // control Prefer PolingAction
         ability1ButtonReleaseMax = 30;          // to suppress cancel ball form
         crouchButtonPressMax = 4;               // to more use pile driver
         enableHoldSecondary = true;
@@ -2637,7 +2656,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
             Button.Ability1
         ];
         ability1ButtonReleaseMax = 10;
-        ability2ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use inmortal field (Prefer PolingAction)
+        ability2ButtonBehaivor = ButtonBehaivor.Non;          // control Prefer PolingAction
         break;
 
         case Hero.Zenyatta:
@@ -2650,14 +2669,8 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         ];
         primaryFireButtonReleaseMin = 1;
         secondaryFireButtonReleaseMin = 1;
-        ability1ButtonPressMin = 0.5;           // to more use orb of discord
-        ability1ButtonPressMax = 0.5;           // to more use orb of discord
-        ability1ButtonReleaseMin = 0.5;         // to more use orb of discord
-        ability1ButtonReleaseMax = 0.5;         // to more use orb of discord
-        ability2ButtonPressMin = 0.5;           // to more use orb of harmony
-        ability2ButtonPressMax = 0.5;           // to more use orb of harmony
-        ability2ButtonReleaseMin = 0.5;         // to more use orb of harmony
-        ability2ButtonReleaseMax = 0.5;         // to more use orb of harmony
+        ability1ButtonBehaivor = ButtonBehaivor.Non;        // control by Prefer PolingAction
+        ability2ButtonBehaivor = ButtonBehaivor.Non;        // control by Prefer PolingAction
         ultimateButtonReleaseMax = 30;          // to suppress over use transcendence
         break;
 
