@@ -1025,7 +1025,7 @@ void HeroMod_Action_ARTILLERY_SUPPORT(define trigger!) playervar "HeroMod_Action
     else if(
         trigger == HeroModTrigger.LOST_HEALTH
     ){
-        HeroMod_Action_ARTILLERY(ARTILLERY_FIRE_TARGHET_MODE.NEAR_PLAYER);
+        HeroMod_Action_ARTILLERY(ARTILLERY_MODE.SUPPORT);
         Wait(10, WaitBehavior.IgnoreCondition);
     }
 }
@@ -1414,7 +1414,7 @@ void HeroMod_Action_ARTILLERY_REQUEST(define trigger!) playervar "HeroMod_Action
     else if(
         trigger == HeroModTrigger.USING_ULT
     ){
-        HeroMod_Action_ARTILLERY(ARTILLERY_FIRE_TARGHET_MODE.NEAR_AIM_POS);
+        HeroMod_Action_ARTILLERY(ARTILLERY_MODE.REQUEST);
     }
 }
 // TAG STRAFING_REQUEST
@@ -1502,6 +1502,8 @@ void HeroMod_Action_STRAFING_REQUEST(define trigger!) playervar "HeroMod_Action_
         }
         StopChasingVariable(landAreaPosition);
         DestroyEffect(ballisticEffect);
+
+        SetUltimateCharge(ep, 0);
     }
 }
 // TAG TITAN_FORM
@@ -2181,9 +2183,9 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
 }
 
 // TAG HeroMod/SubFunction ----------
-enum ARTILLERY_FIRE_TARGHET_MODE{
-    NEAR_PLAYER,
-    NEAR_AIM_POS
+enum ARTILLERY_MODE{
+    SUPPORT,
+    REQUEST
 }
 
 // TAG HeroMod_Action_ARTILLERY
@@ -2192,8 +2194,8 @@ void HeroMod_Action_ARTILLERY(define targetMode!) playervar "HeroMod_Action_ARTI
 
     // config value
     define artilleryAttackInterval! = 0.33;
-    define attackCount = targetMode == ARTILLERY_FIRE_TARGHET_MODE.NEAR_PLAYER ? 30 : 40;
-    define artilleryScatterRange! = targetMode == ARTILLERY_FIRE_TARGHET_MODE.NEAR_PLAYER ? 8.0 : 4.0;
+    define attackCount = targetMode == ARTILLERY_MODE.SUPPORT ? 30 : 40;
+    define artilleryScatterRange! = targetMode == ARTILLERY_MODE.SUPPORT ? 8.0 : 4.0;
     define artilleryDamageRange! = 6.0;
     define artilleryDamage! = 120;
 
@@ -2219,7 +2221,7 @@ void HeroMod_Action_ARTILLERY(define targetMode!) playervar "HeroMod_Action_ARTI
     for(define count = attackCount / 2; count > 0; count --){
         // get target by base position
         define basePosition! =
-            targetMode == ARTILLERY_FIRE_TARGHET_MODE.NEAR_PLAYER ? PositionOf(ep) : AimingPosition(40, EnemyTeamOf(ep));
+            targetMode == ARTILLERY_MODE.SUPPORT ? PositionOf(ep) : AimingPosition(40, EnemyTeamOf(ep));
         define target! = basePosition;
         
         define attackPosition!;
@@ -2348,12 +2350,16 @@ void HeroMod_Action_ARTILLERY(define targetMode!) playervar "HeroMod_Action_ARTI
             EnemyTeamOf(ep), RadiusLOS.Off
         ),
         ep, artilleryDamage
-    );
+    ); 
 
     StopChasingVariable(shellPosition1);
     StopChasingVariable(shellPosition2);
     DestroyEffect(shellEffect1);
     DestroyEffect(shellEffect2);
+
+    if(targetMode == ARTILLERY_MODE.REQUEST){
+        SetUltimateCharge(ep, 0);
+    }
 }
 
 // TAG HeroMod_Action_FIRE_BALL
