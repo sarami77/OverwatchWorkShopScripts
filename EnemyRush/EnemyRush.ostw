@@ -644,6 +644,7 @@ define damageDealtEachLevel:
                                                         damageDealtBase ; 
 
 define enemyTeamColor: Color.Team1;
+define humanTeamColor: Color.Team2;
 
 define IsBossClass(in define player):
     player.enemyType == EnemyType.SubBoss ||
@@ -2407,11 +2408,58 @@ if(
 ){
     WaitLongPressConfirm();
     spawnRushInterval = 0;
+    
     WaitLongPressConfirm();
     shotCallInterval = 0;
 }
 
-playervar define tempName!;
+rule: "Debug/setTargetOfHumanTeam"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    hp == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.PrimaryFire)
+){
+    ForcusTarget(humanTeam);
+}
+
+rule: "Debug/setTargetOfEnemyTeam"
+Event.OngoingPlayer
+Team.All
+Player.All
+if(
+    hp == ep &&
+    IsButtonHeld(ep, Button.Interact) &&
+    IsButtonHeld(ep, Button.SecondaryFire)
+){
+    ForcusTarget(enemyTeam);
+}
+
+void ForcusTarget(define team!)"SetForcusTarget"{
+    define target!;
+
+    if(
+        VerticalFacingAngleOf(ep) >= 45
+    ){
+        target = ep;
+    }
+    else{ 
+        target = PlayerClosestToReticle(ep, OppositeTeamOf(team));
+    }
+    
+    WaitUntilServerLoadLimitRelease();
+    if(target != null){
+        PlayEffect(ep, PlayEffect.BadPickupEffect,
+            team == humanTeam ? humanTeamColor : enemyTeamColor, 
+            target == ep ? PositionOf(ep) : target, 1.0);
+        AllLivingPlayers(team).actionState = ActionState.Non;
+        Wait(0.01, WaitBehavior.IgnoreCondition);
+        AllLivingPlayers(team).actionState = ActionState.Attack;
+        AllLivingPlayers(team).aimTarget = target;
+    }
+}
 
 rule: "Debug/forceHeroMod"
 Event.OngoingPlayer
