@@ -2422,42 +2422,43 @@ if(
     IsButtonHeld(ep, Button.Interact) &&
     IsButtonHeld(ep, Button.PrimaryFire)
 ){
-    ForcusTarget(humanTeam);
+    ForcusTarget();
 }
 
-rule: "Debug/setTargetOfEnemyTeam"
-Event.OngoingPlayer
-Team.All
-Player.All
-if(
-    hp == ep &&
-    IsButtonHeld(ep, Button.Interact) &&
-    IsButtonHeld(ep, Button.SecondaryFire)
-){
-    ForcusTarget(enemyTeam);
-}
-
-void ForcusTarget(define team!)"SetForcusTarget"{
+void ForcusTarget()"SetForcusTarget"{
     define target!;
 
     if(
-        VerticalFacingAngleOf(ep) >= 45
+        VerticalFacingAngleOf(ep) >= 60
     ){
         target = ep;
     }
     else{ 
-        target = PlayerClosestToReticle(ep, OppositeTeamOf(team));
+        target = PlayerClosestToReticle(ep, OppositeTeamOf(ta));
     }
     
     WaitUntilServerLoadLimitRelease();
     if(target != null){
-        PlayEffect(ep, PlayEffect.BadPickupEffect,
-            team == humanTeam ? humanTeamColor : enemyTeamColor, 
-            target == ep ? PositionOf(ep) : target, 1.0);
-        AllLivingPlayers(team).actionState = ActionState.Non;
-        Wait(0.01, WaitBehavior.IgnoreCondition);
-        AllLivingPlayers(team).actionState = ActionState.Attack;
-        AllLivingPlayers(team).aimTarget = target;
+        define icon! = CreateIcon(ep, target, Icon.Eye, IconRev.Position,
+            EnemyTeamOf(target) == humanTeam ? humanTeamColor : enemyTeamColor, true);
+
+        while(true){
+            if(IsAlive(target)){
+                define bots! = FilteredArray(
+                    AllLivingPlayers(EnemyTeamOf(target)),
+                    (
+                        IsDummyBot(ae) &&
+                        ae.actionState != ActionState.Non
+                    )
+                );
+                bots.actionState = ActionState.Attack;
+                bots.aimTarget = target;
+            }
+            Wait(1.0, WaitBehavior.IgnoreCondition);
+            if(IsCrouching()) break;
+        }
+
+        DestroyIcon(icon);
     }
 }
 
