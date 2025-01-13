@@ -2377,6 +2377,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         wm(); debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval > 5 ? enemyTeamColor : Color.Yellow);
         wm(); debugHuds[Last()] = CreateDebugHud("more Ult Prob SubBoss", FirstEnemyOf(EnemyType.SubBoss).moreUltProb, FirstEnemyOf(EnemyType.SubBoss).moreUltProb <= 0 ? enemyTeamColor : Color.Yellow);
         wm(); debugHuds[Last()] = CreateDebugHud("more Ult Prob Boss", FirstEnemyOf(EnemyType.Boss).moreUltProb, FirstEnemyOf(EnemyType.Boss).moreUltProb <= 0 ? enemyTeamColor : Color.Yellow);
+        wm(); debugHuds[Last()] = CreateDebugHud("focusTarget", focusTarget, Color.Yellow);
         // wm(); debugHuds[Last()] = CreateDebugHud("tune Val", tuneVal, Color.Green);
     }
 }
@@ -2419,7 +2420,9 @@ if(
     shotCallInterval = 0;
 }
 
-rule: "Debug/setTargetOfBot"
+globalvar define focusTarget!;
+
+rule: "Debug/setFocusTarget"
 Event.OngoingPlayer
 Team.All
 Player.All
@@ -2428,58 +2431,50 @@ if(
     IsButtonHeld(ep, Button.Interact) &&
     IsButtonHeld(ep, Button.PrimaryFire)
 ){
-    ForcusTarget();
-}
-
-rule: "Debug/updateTarget"
-Event.OngoingPlayer
-Team.All
-Player.All
-if(
-    hp == ep &&
-    IsButtonHeld(ep, Button.Interact) &&
-    IsButtonHeld(ep, Button.PrimaryFire)
-){
-    ForcusTarget();
-}
-
-void ForcusTarget()"SetForcusTarget"{
-    define target!;
-
     if(
-        VerticalFacingAngleOf(ep) >= 60
+        VerticalFacingAngleOf(ep) >= 45
     ){
-        target = ep;
+        if(focusTarget == null){
+            focusTarget = ep;
+            PlayEffect(ep, PlayEffect.BuffImpactSound, ep, null, MaxValue());
+        }
+        else{
+            focusTarget = null;
+            PlayEffect(ep, PlayEffect.DebuffImpactSound, ep, null, MaxValue());
+        }
     }
     else{ 
-        target = PlayerClosestToReticle(ep, OppositeTeamOf(ta));
-    }
-    
-    if(target != null){
-        define icon! = CreateIcon(ep, target, Icon.Eye, IconRev.Position,
-            EnemyTeamOf(target) == humanTeam ? humanTeamColor : enemyTeamColor, true);
-
-        while(HasSpawned(target)){
-            if(IsAlive(target)){
-                define bots! = FilteredArray(
-                    AllLivingPlayers(EnemyTeamOf(target)),
-                    (
-                        IsDummyBot(ae) &&
-                        ae.actionState != ActionState.Non
-                    )
-                );
-                bots.actionState = ActionState.Attack;
-                bots.aimTarget = target;
-            }
-            
-            WaitUntilServerLoadLimitRelease();
-            Wait(1.0, WaitBehavior.IgnoreCondition);
-            if(IsCrouching()) break;
-        }
-
-        DestroyIcon(icon);
+        focusTarget = PlayerClosestToReticle(ep, OppositeTeamOf(ta));
+        PlayEffect(ep, PlayEffect.BuffImpactSound, ep, null, MaxValue());
     }
 }
+
+rule: "Debug/focusTarget"
+Event.OngoingGlobal
+if(
+    focusTarget != null
+){
+    if(
+        IsAlive(focusTarget)
+    ){
+        define bots! = FilteredArray(
+            AllLivingPlayers(EnemyTeamOf(focusTarget)),
+            (
+                IsDummyBot(ae) &&
+                ae.actionState != ActionState.Non
+            )
+        );
+        bots.actionState = ActionState.Attack;
+        bots.aimTarget = focusTarget;
+    }
+
+    dbgPlyEft(focusTarget);
+
+    Wait(1, WaitBehavior.IgnoreCondition);
+    WaitUntilServerLoadLimitRelease();
+    LoopIfConditionIsTrue();
+}
+
 
 rule: "Debug/forceHeroMod"
 Event.OngoingPlayer
