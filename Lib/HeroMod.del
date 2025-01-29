@@ -1986,19 +1986,28 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         trigger == HeroModTrigger.USING_PRIMARY &&
         isTransformed
     ){
-        define splashDamageRangeMinigun!: 1.5;
+        define splashDamageRangeMinigun: 1.5;
+        define case = 0;
+        define aimPosition;
+        define scat;
+        define landPosition;
+        define targets;
 
         while(IsFiringPrimary()){
             // get aimPosition
-            define aimPosition! = AimingPosition(40, EnemyTeamOf(ep));
-            define scat! = DistanceBetween(EyePosition(), aimPosition) * 0.03;
-            define landPosition! = aimPosition + RandomPosition(scat, scat, scat);
-            // splash damage
-            Damage(
-                PlayersWithinRadius(
+            aimPosition = AimingPosition(40, EnemyTeamOf(ep));
+            scat = DistanceBetween(EyePosition(), aimPosition) * 0.04;
+            landPosition = aimPosition + RandomPosition(scat, scat, scat);
+
+            if(case == 0){
+                // get target
+                targets = PlayersWithinRadius(
                     landPosition, splashDamageRangeMinigun,
-                    EnemyTeamOf(ep), RadiusLOS.Off),
-                ep, 30);
+                    EnemyTeamOf(ep), RadiusLOS.Off);
+            }
+
+            // splash damage
+            Damage(targets, ep, 30);
             // play blast
             PlayEffect(
                 AllPlayers(), PlayEffect.BadExplosion,
@@ -2009,6 +2018,8 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
             Wait(
                 !IsInAlternateForm() ? 0.2 : 0.1,
                 WaitBehavior.IgnoreCondition);
+            
+            case = case < 2 ? case + 1 : 0;
         }
     }
     else if(
