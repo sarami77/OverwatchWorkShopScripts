@@ -226,35 +226,11 @@ void SetMoveDir() playervar "SetMoveDir"{
         enableFollowObject &&
         // object pos valid
         objPos != null &&
-        // payload escort player num is not enough
         (
-            // current on object players num
-            NumberOfPlayersOnObjective(TeamOf())
-                <
-            (
-                // enemy close win
-                IsCloseWin(EnemyTeamOf(ep))
-                ?
-                    // 1/2 players num of team
-                    NumberOfPlayers(TeamOf()) / 2
-                :
-                    // offense team
-                    IsTeamOnOffense(TeamOf())
-                    ?
-                        // 3 is max num of payload escort speed
-                        3
-                    :
-                        (
-                            // enemy on object
-                            NumberOfPlayersOnObjective(EnemyTeamOf(ep)) > 0
-                            ?
-                                // 1 is min num of payload stop
-                                1
-                            :
-                                // not escorted payload
-                                0
-                        )
-            )
+            // not on object
+            !IsTeamOnObject(TeamOf(ep)) ||
+            // enemy close win
+            IsCloseWin(EnemyTeamOf(ep))
         )
     ){
         // dbgHudTxt(<"move for object = <0>", SlotOf()>);
@@ -287,9 +263,8 @@ void SetMoveDir() playervar "SetMoveDir"{
             distToTarget > (actionRangeMax * distRate)
         ){
             if(
-                enableRetreat &&
                 // by enemy density high
-                IsTrueProbability(100 * enemyDensity)
+                IsTrueProbability(DefaultPercentage() * enemyDensity)
             ){
                 // stop move forward for avoid surrounded by enemy
                 moveDirFB = NoDirection();
@@ -308,22 +283,16 @@ void SetMoveDir() playervar "SetMoveDir"{
             IsTrueProbability(
                 DefaultPercentage() *
                 (
-                    actionState == ActionState.Attack ? 
-                        (
-                            // by health low
-                            (1 - NormalizedHealth()) +
-                            (
-                                // by distance close
-                                (1 - (distToTarget / ActionRange.Far)) *
-                                // by enemy density low
-                                (1 - enemyDensity)
-                            )
-                        )
+                    // by health low
+                    (1 - NormalizedHealth()) +
+
+                    actionState == ActionState.Attack
+                    ? 
+                        // by enemy density low
+                        (1 - enemyDensity)
+
                     :
-                        (
-                            // by health low
-                            (1 - NormalizedHealth())
-                        )
+                        0
                 )
             )
         ){
