@@ -1676,39 +1676,8 @@ define CanFindLine(in define player!) :
     HasSpawned(player) &&
     IsInLineOfSight(EyePosition(ep), EyePosition(player), BarrierLOS.NoBarriersBlock);
 
-define FindAttackTarget()"FindAttackTarget"{
-    return RandomValueInArray(
-            FilteredArray(
-                AllPlayers(EnemyTeamOf(ep)),
-                (
-                    ae != ep &&
-                    IsSighted(ae)
-                )
-            )
-    );
-}
-
-define canHealHealthScale: 0.9;
-define criticalDamageHealthScale: 0.5;
-
-define FindSupportTarget()"FindSupportTarget"{
-    return RandomValueInArray(
-            FilteredArray(
-                AllPlayers(TeamOf()),
-                (
-                    ae != ep &&
-                    NormalizedHealth(ae) <= canHealHealthScale &&
-                    IsSighted(ae)
-                )
-            )
-    );
-}
-
 void FindTarget()"FindTarget"{
     define candidateTarget;
-
-    // find aim target
-    // but, not set as direct to aimTarget for avoid interrupt invalid facing
 
     // by supportPrioloty
     if(IsTrueProbability(DefaultPercentage() * supportPrioloty))
@@ -1728,7 +1697,53 @@ void FindTarget()"FindTarget"{
 
     // confirm as target
     aimTarget = candidateTarget;
+}
 
+define FindAttackTarget()"FindAttackTarget"{
+    define target;
+    define targets = 
+        FilteredArray(
+            AllPlayers(EnemyTeamOf(ep)),
+            (
+                ae != ep &&
+                IsSighted(ae)
+            )
+        );
+
+    if(!isServerOverload()){
+        target = SortedArray(targets, NormalizedHealth(ae));
+        // target = SortedArray(targets, DistanceBetween(ep, ae));
+    }
+    else{
+        target = RandomValueInArray(targets);
+    }
+
+    return target;
+}
+
+define canHealHealthScale: 0.9;
+define criticalDamageHealthScale: 0.5;
+
+define FindSupportTarget()"FindSupportTarget"{
+    define target;
+    define targets = 
+        FilteredArray(
+            AllPlayers(TeamOf()),
+            (
+                ae != ep &&
+                NormalizedHealth(ae) <= canHealHealthScale &&
+                IsSighted(ae)
+            )
+        );
+
+    if(!isServerOverload()){
+        target = SortedArray(targets, NormalizedHealth(ae));
+    }
+    else{
+        target = RandomValueInArray(targets);
+    }
+
+    return target;
 }
 
 define GetNextActionState()"GetNextActionState"{
