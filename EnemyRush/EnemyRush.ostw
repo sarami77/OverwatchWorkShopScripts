@@ -1370,32 +1370,36 @@ if(
     IsAlive() &&
     IsInAir() 
 ){
-    Wait(RandomReal(1, 3), WaitBehavior.AbortWhenFalse);
+    if(aimTarget != null){
+        define distToTarget! = DistanceBetween(ep, aimTarget);
+        define flyDir!;
+        define force!;
 
-    define distToTarget! = DistanceBetween(ep, aimTarget);
-    define flyDir!;
+        // front/back
+        if(
+            // target is close
+            distToTarget < actionRangeMin
+        ){
+            flyDir = DirectionTowards(ep, aimTarget) * -1;
+            force = actionRangeMin - distToTarget;
+        }
+        else if(
+            // target is far
+            distToTarget > actionRangeMax
+        ){
+            flyDir = DirectionTowards(ep, aimTarget);
+            force = distToTarget - actionRangeMin;
+        }
 
-    // front/back
-    if(
-        // target is close
-        distToTarget < actionRangeMin
-    ){
-        flyDir = DirectionTowards(ep, aimTarget) * -1;
+        if(
+            flyDir != 0
+        ){
+            ApplyImpulse(ep, flyDir, force * 0.7,
+                Relative.ToWorld, ContraryMotion.Cancel);
+        }
     }
-    else if(
-        // target is far
-        distToTarget > actionRangeMax
-    ){
-        flyDir = DirectionTowards(ep, aimTarget);
-    }
 
-    if(
-        flyDir != 0
-    ){
-        ApplyImpulse(ep, flyDir, 15,
-            Relative.ToWorld, ContraryMotion.Cancel);
-    }
-
+    Wait(3, WaitBehavior.AbortWhenFalse);
     WaitUntilServerLoadLimitRelease();
     LoopIfConditionIsTrue();
 }
@@ -1640,6 +1644,7 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
     define returnPosition! = null;
     define canSnapMap = CanSnapMapSurface();
     define objectPosition = CurrentObjectOnPosition();
+    define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
     define basePosition = teleportBasePosition;
 
     if(IsInSpawnRoom(ClosestPlayerTo(basePosition, humanTeam))){
@@ -1671,7 +1676,7 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
             // Has line to object
             IsInLineOfSight(
                 candidatePosition + PositionOffsetY1(),
-                objectPosition,
+                EyePosition(closePlayer),
                 BarrierLOS.NoBarriersBlock
             )    
         ){
