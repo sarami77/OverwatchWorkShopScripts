@@ -1528,12 +1528,12 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
     define returnPosition! = null;
     define canSnapMap = CanSnapMapSurface();
     define objectPosition = CurrentObjectOnPosition();
-    define basePosition = PositionOf(ClosestPlayerTo(objectPosition, humanTeam));
+    define closePlayerPosition = PositionOf(ClosestPlayerTo(objectPosition, humanTeam));
 
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select candidatePosition at almost middle position of close player and object
         define candidatePosition =
-            basePosition
+            closePlayerPosition
                 +
             RandomPosition(
                 placableAreaSize,
@@ -1542,9 +1542,9 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
             )
                 + 
             (
-                DirectionTowards(basePosition, objectPosition)
+                DirectionTowards(closePlayerPosition, objectPosition)
                     *
-                DistanceBetween(basePosition, objectPosition) * 0.4
+                DistanceBetween(closePlayerPosition, objectPosition) * 0.4
             );
         
         if(
@@ -1558,10 +1558,10 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
         }
 
         if(
-            // has line to basePosition
+            // has line to close player
             IsInLineOfSight(
                 PositionOffsetY1() + candidatePosition,
-                PositionOffsetY1() + basePosition,
+                PositionOffsetY1() + closePlayerPosition,
                 BarrierLOS.NoBarriersBlock
             )
         ){
@@ -1581,7 +1581,7 @@ globalvar define positionObjectAhead;
 define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObject"{
     define returnPosition! = null;
     define canSnapMap = CanSnapMapSurface();
-    define basePosition = CurrentObjectOnPosition();
+    define objectPosition = CurrentObjectOnPosition();
 
     if(
         // has object direction
@@ -1592,7 +1592,7 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
             IsTeamOnObject(humanTeam)
         ){
             // get teleportAreaExtendSize by object position and blockedPos
-            define cutoutDistance! = placableAreaOffset - DistanceBetween(basePosition, blockedPos);
+            define cutoutDistance! = placableAreaOffset - DistanceBetween(objectPosition, blockedPos);
             // get teleportAreaExtendSize by cutoutDistance with scale
             placableAreaExtendSize = cutoutDistance * placableAreaExtendSizeScaleOnPayloadEscort;
         }
@@ -1602,7 +1602,7 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
         }
 
         // overwrite position by positionObjectAhead
-        basePosition = positionObjectAhead;
+        objectPosition = positionObjectAhead;
     }
     else{
         // get teleportAreaExtendSize by fixed value of non object direction
@@ -1612,7 +1612,7 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select candidatePosition at object ahead
         define candidatePosition =
-            basePosition
+            objectPosition
                 +
             RandomPosition(
                 placableAreaSize + placableAreaExtendSize,
@@ -1631,10 +1631,10 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
         }
 
         if(
-            // has line to basePosition
+            // has line to object
             IsInLineOfSight(
                 PositionOffsetY1() + candidatePosition,
-                PositionOffsetY1() + basePosition,
+                PositionOffsetY1() + objectPosition,
                 BarrierLOS.NoBarriersBlock
             )
         ){
@@ -1653,16 +1653,11 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
     define canSnapMap = CanSnapMapSurface();
     define objectPosition = CurrentObjectOnPosition();
     define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
-    define basePosition = teleportBasePosition;
-
-    if(IsInSpawnRoom(ClosestPlayerTo(basePosition, humanTeam))){
-        return returnPosition;
-    }
 
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from teleportBasePosition around
         define candidatePosition = 
-            basePosition
+            teleportBasePosition
                 +
             RandomPosition(
                 teleportAreaSize,
@@ -1681,7 +1676,7 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
         }
 
         if(
-            // Has line to object
+            // Has line to close player
             IsInLineOfSight(
                 PositionOffsetY1() + candidatePosition,
                 EyePosition(closePlayer),
@@ -1836,8 +1831,8 @@ if(
                 if(
                     // not line from checkPos
                     !IsInLineOfSight(
-                        teleportBasePosition + PositionOffsetY1(),
-                        checkPos + PositionOffsetY1(),
+                        PositionOffsetY1() + teleportBasePosition,
+                        PositionOffsetY1() + checkPos,
                         BarrierLOS.NoBarriersBlock
                     )
                 ){
@@ -1852,8 +1847,8 @@ if(
                 if(
                     // not line from closest object player
                     !IsInLineOfSight(
-                        teleportBasePosition + PositionOffsetY1(),
-                        PositionOf(ClosestPlayerTo(objectPos, humanTeam)) + PositionOffsetY1(),
+                        PositionOffsetY1() + teleportBasePosition,
+                        PositionOffsetY1() + PositionOf(ClosestPlayerTo(objectPos, humanTeam)),
                         BarrierLOS.NoBarriersBlock
                     )
                 ){
@@ -1971,7 +1966,7 @@ if(
                 // by health high
                 IsTrueProbability(NormalizedHealth() * 100) &&
                 // has not line to teleportBasePosition
-                !IsInLineOfSight(EyePosition(ep), teleportBasePosition + PositionOffsetY1()) 
+                !IsInLineOfSight(EyePosition(ep), PositionOffsetY1() + teleportBasePosition) 
             ){
                 // do teleport instantly
                 break;
@@ -2136,7 +2131,7 @@ if(
     //     IconRev.VisibleToAndPosition, Color.Team1, true);
     // // teleportBasePosition orb
     // CreateEffect(debugMode != DebugMode.Non ? hp : null, Effect.Orb, Color.Red,
-    //     teleportBasePosition + PositionOffsetY1(), 1, EffectRev.VisibleToPositionAndRadius);
+    //     PositionOffsetY1() + teleportBasePosition, 1, EffectRev.VisibleToPositionAndRadius);
     // // positionObjectAhead orb
     // CreateEffect(debugMode != DebugMode.Non ? hp : null, Effect.Orb, Color.White,
     //         positionObjectAhead, 1, EffectRev.VisibleToPositionAndRadius);
@@ -2165,7 +2160,7 @@ if(
     // // positionObjectAhead or object -> commonTeleportBasePosition beam
     // CreateBeamEffect(debugMode != DebugMode.Non ? hp : null, BeamType.GoodBeam, 
     //         HasObjectDirection() ? positionObjectAhead : CurrentObjectOnPosition(),
-    //         teleportBasePosition + PositionOffsetY1(), 
+    //         PositionOffsetY1() + teleportBasePosition, 
     //         Color.Red, EffectRev.VisibleToPositionAndRadius);
 
 
