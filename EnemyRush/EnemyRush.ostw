@@ -1653,6 +1653,7 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
     define canSnapMap = CanSnapMapSurface();
     define objectPosition = CurrentObjectOnPosition();
     define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
+    
 
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from teleportBasePosition around
@@ -1772,9 +1773,9 @@ void DoTeleport(define isBeamFromBody!, define isTeleportToOnObject!)"DoTeleport
 }
 
 // TAG EnemyBot/Teleport/UpdateCommonTeleportBasePosition ----------
-globalvar define needUpdateCommonTeleportBasePosition!;
+globalvar define needUpdateTeleportBasePosition!;
 
-rule: "EnemyBot/Teleport/UpdateCommonTeleportBasePosition"
+rule: "EnemyBot/Teleport/UpdateTeleportBasePosition"
 Event.OngoingGlobal
 if(
     IsInPreLoadAssetTime()
@@ -1793,20 +1794,20 @@ if(
     }
 
     // if has not update flag of commonTeleportBasePosition
-    if(!needUpdateCommonTeleportBasePosition){
+    if(!needUpdateTeleportBasePosition){
         // set update flag
         if(
             // by probability
             IsTrueProbability(10)
         ){
-            needUpdateCommonTeleportBasePosition = true;
+            needUpdateTeleportBasePosition = true;
             // dbgHudTxt(<"UP POS BY PRB">);
         }
         else if(
             // position invalid
             teleportBasePosition == null
         ){
-            needUpdateCommonTeleportBasePosition = true;
+            needUpdateTeleportBasePosition = true;
             // dbgHudTxt(<"UP POS BY POS INV">);
         }
         else if(
@@ -1816,7 +1817,7 @@ if(
                 ClosestPlayerTo(teleportBasePosition, humanTeam)
             ) <= teleportAreaForceUpdateSize        
         ){
-            needUpdateCommonTeleportBasePosition = true;
+            needUpdateTeleportBasePosition = true;
             // dbgHudTxt(<"UP POS BY CRS PLR">);
         }
         else if(
@@ -1826,7 +1827,7 @@ if(
                 SpawnPoints(humanTeam)[0]
             ) <= ActionRange.Middle
         ){
-            needUpdateCommonTeleportBasePosition = true;
+            needUpdateTeleportBasePosition = true;
             // dbgHudTxt(<"UP POS BY CRS SPN PNT">);
         }
         else{
@@ -1843,7 +1844,7 @@ if(
                         BarrierLOS.NoBarriersBlock
                     )
                 ){
-                    needUpdateCommonTeleportBasePosition = true;
+                    needUpdateTeleportBasePosition = true;
                     // dbgHudTxt(<"UP POS BY NON LINE OBJ OR AHD">);
                 }
                 else{
@@ -1859,7 +1860,7 @@ if(
                         BarrierLOS.NoBarriersBlock
                     )
                 ){
-                    needUpdateCommonTeleportBasePosition = true;
+                    needUpdateTeleportBasePosition = true;
                     // dbgHudTxt(<"UP POS BY NON LINE PLR">);
                 }
                 else{
@@ -1871,7 +1872,7 @@ if(
     
     // if has update flag of commonTeleportBasePosition
     if(
-        needUpdateCommonTeleportBasePosition
+        needUpdateTeleportBasePosition
     ){
         define newPosition! = null;
         // calc new position
@@ -1894,7 +1895,7 @@ if(
             // update commonTeleportBasePosition by new position
             teleportBasePosition = newPosition;
             // release update flag
-            needUpdateCommonTeleportBasePosition = false;
+            needUpdateTeleportBasePosition = false;
 
             // dbgHudTxt(<"UP POS OK">);
         }
@@ -1906,6 +1907,16 @@ if(
     Wait(3, WaitBehavior.IgnoreCondition);
     WaitUntilServerLoadLimitRelease();
     LoopIfConditionIsTrue();
+}
+
+rule: "EnemyBot/Teleport/ResetTeleportBasePosition"
+Event.OnDeath
+if(
+    TeamOf() == enemyTeam &&
+    Attacker() == ep
+){
+    // reset teleportBasePosition by invalid position
+    needUpdateTeleportBasePosition = true;
 }
 
 rule: "EnemyBot/Teleport/teleportByRespawn"
