@@ -419,7 +419,6 @@ void StartFacingAimTarget() playervar "StartFacingAimTarget"{
     }
 }
 
-
 rule: "EnemyBot/Aim/updateAimmingPosition"
 Event.OngoingPlayer
 if(
@@ -1804,9 +1803,9 @@ if(
     isBotActive
 ){
     while(true){
-        define tryFindTarget = false;
-
         if(IsAlive()){
+            define tryFindTarget = false;
+
             // has not target
             if(
                 // target not Sighted
@@ -1817,27 +1816,25 @@ if(
             }
             // has target
             else{
-                // check as support action
+                // check change tagrget condition as attack state
                 if(
-                    actionState == ActionState.Support
+                    actionState == ActionState.Attack
                 ){
                     if(
-                        // target dead
-                        !IsAlive(aimTarget) ||
-                        // target heal almost completed
-                        NormalizedHealth(aimTarget) >= canHealHealthScale ||
-                        // by not support Prioloty
-                        IsTrueProbability(50 * (1 - supportPrioloty))
+                        // change target by target helth amd support prioloty 
+                        IsTrueProbability(50 * NormalizedHealth(aimTarget) * supportPrioloty)
                     ){
                         // change target
                         tryFindTarget = true;
                     }
                 }
-                // check as attack action
+                // check change tagrget condition as support state
                 else{
                     if(
-                        // target dead
-                        !IsAlive(aimTarget)
+                        // by not support Prioloty
+                        IsTrueProbability(50 * NormalizedHealth(aimTarget) * (1 - supportPrioloty)) ||
+                        // target heal almost completed
+                        NormalizedHealth(aimTarget) >= canHealHealthScale
                     ){
                         // change target 
                         tryFindTarget = true;
@@ -1854,7 +1851,7 @@ if(
             // apply next state
             SetActionState(ep, GetNextActionState());
             // action call to near bots
-            // CallToNearBot();
+            CallToNearBot();
         }
         else{
             // reset target
@@ -1923,7 +1920,7 @@ if(
     SetActionState(ep, GetNextActionState());
 
     // action call to near bots
-    // CallToNearBot();
+    CallToNearBot();
 }
 
 rule: "Bot/ActionState/ChangeTargetFromAttackerByDamageTaken"
@@ -1939,17 +1936,44 @@ if(
     AbortIf(!isBotActive);
     WaitUntilServerLoadLimitRelease(watchUpdateRate);
 
+    define tryFindTarget = false;
+
+    // has not target
     if(
-        // in non state
-        actionState == ActionState.Non ||
-        (
-            // in attack state
-            actionState == ActionState.Attack &&
-            // change target by target helth
-            IsTrueProbability(75 * NormalizedHealth(aimTarget))
-        ) ||
-        // can not find aimTarget
-        !CanFindLine(aimTarget)
+        // target not Sighted
+        !IsSighted(aimTarget)
+    ){
+        // change target
+        tryFindTarget = true;
+    }
+    // check change tagrget condition as attack state
+    else if(
+        actionState == ActionState.Attack
+    ){
+        if(
+            // change target by target helth amd support prioloty 
+            IsTrueProbability(50 * NormalizedHealth(aimTarget) * supportPrioloty)
+        ){
+            // change target
+            tryFindTarget = true;
+        }
+    }
+    // check change tagrget condition as support state
+    else if(
+        actionState == ActionState.Support
+    ){
+        if(
+            // by not support Prioloty
+            IsTrueProbability(50 * NormalizedHealth(aimTarget) * (1 - supportPrioloty))
+        ){
+            // change target 
+            tryFindTarget = true;
+        }
+    }
+
+    if(
+        // find target
+        tryFindTarget
     ){
         // set target by attacker
         aimTarget = Attacker();
@@ -1958,7 +1982,7 @@ if(
     }
 
     // action call to near bots
-    // CallToNearBot();
+    CallToNearBot();
 
     // reduce overrun
     Wait(3.0, WaitBehavior.IgnoreCondition);
