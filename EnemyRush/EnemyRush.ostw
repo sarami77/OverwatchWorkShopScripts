@@ -216,17 +216,16 @@ if(
     IsOverTime() &&
     hasFinalStand
 ){
-    BigMessage(AllPlayers(humanTeam), "Final Stand !");
     SetSlowMotion(10);
-    Wait(0.25, WaitBehavior.IgnoreCondition);   // show slow
+    Wait(0.2, WaitBehavior.IgnoreCondition);   // show slow
 
     // buff humanTeam player
     PlayEffectsToTeam(humanTeam);
-    Resurrect(AllDeadPlayers(humanTeam));
     Heal(AllLivingPlayers(humanTeam), null, MaxValue());
-    Wait(0.01, WaitBehavior.IgnoreCondition);   // show slow
+    Resurrect(AllDeadPlayers(humanTeam));
     SetUltimateCharge(AllLivingPlayers(humanTeam), 100);
-    Wait(0.4, WaitBehavior.IgnoreCondition);   // show slow
+    BigMessage(AllPlayers(humanTeam), "Final Stand !");
+    Wait(0.5, WaitBehavior.IgnoreCondition);   // show slow
     
     SetSlowMotion(DefaultPercentage());
     Wait(1, WaitBehavior.IgnoreCondition);
@@ -1917,6 +1916,8 @@ if(
     LoopIfConditionIsTrue();
 }
 
+globalvar define sucideCount!;
+
 rule: "EnemyBot/Teleport/ResetTeleportBasePosition"
 Event.OnDeath
 if(
@@ -1924,10 +1925,23 @@ if(
     TeamOf() == enemyTeam &&
     Attacker() == ep
 ){
-    if(IsTrueProbability(20)){
+    sucideCount ++;
+
+    if(sucideCount >= 3){
         // reset teleportBasePosition by invalid position
         needUpdateTeleportBasePosition = true;
+        sucideCount = 0;
     }
+}
+
+rule: "EnemyBot/Teleport/cooldownSucideCount"
+Event.OngoingGlobal
+if(
+    sucideCount > 0
+){
+    Wait(1.0, WaitBehavior.IgnoreCondition);
+    sucideCount --;
+    LoopIfConditionIsTrue();
 }
 
 rule: "EnemyBot/Teleport/teleportByRespawn"
@@ -2144,7 +2158,7 @@ if(
 }
 
 // TAG Debug ----------
-globalvar define countDetectTriggerServerLoadPerSecond;
+globalvar define serverLoadTotal;
 
 rule: "DebugGlobalAction"
 Event.OngoingGlobal
@@ -2190,11 +2204,13 @@ if(
     //         Color.Red, EffectRev.VisibleToPositionAndRadius);
 
 
-    define pastSecond = 1;
+    define pastSecond = 0;
+    define serverLoadSum = 0;
 
     while(true){
-        countDetectTriggerServerLoadPerSecond = countWaitActionByServerLoad / pastSecond;
+        serverLoadSum += ServerLoad();
         pastSecond ++;
+        serverLoadTotal = serverLoadSum / pastSecond;
 
         // auto use friend bot hero mod
         if(
@@ -2384,49 +2400,49 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
     if(
         debugMode >= DebugMode.ServerLoad
     ){
+        wm(); debugHuds[Last()] = CreateDebugHud("Server Load Total", serverLoadTotal, serverLoadLimitMax < serverLoadTotal ? Color.Yellow : Color.Gray);
         wm(); debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() >= serverLoadMax ? Color.Red : ServerLoad() >= serverLoadLimit ? Color.Yellow : Color.Gray);
-        wm(); debugHuds[Last()] = CreateDebugHud("server Load Limit", serverLoadLimit, serverLoadLimit < serverLoadLimitMax ? Color.Yellow : Color.Gray);
-        wm(); debugHuds[Last()] = CreateDebugHud("count Wait Action By Server Load", countWaitActionByServerLoad, Color.Gray);
-        wm(); debugHuds[Last()] = CreateDebugHud("count Wait Action By Server Load Per Second", countDetectTriggerServerLoadPerSecond, countDetectTriggerServerLoadPerSecond >= 10 ? Color.Yellow : Color.Gray);
-        wm(); debugHuds[Last()] = CreateDebugHud("game Speed", gameSpeed, gameSpeed < gameSpeedMax ? Color.Yellow : Color.Gray);
-        wm(); debugHuds[Last()] = CreateDebugHud("count Game Speed Decrease", countGameSpeedDecrease, countGameSpeedDecrease > 0 ? Color.Yellow : Color.Gray);
+        wm(); debugHuds[Last()] = CreateDebugHud("Server Load Limit", serverLoadLimit, serverLoadLimit < serverLoadLimitMax ? Color.Yellow : Color.Gray);
+        wm(); debugHuds[Last()] = CreateDebugHud("Game Speed", gameSpeed, gameSpeed < gameSpeedMax ? Color.Yellow : Color.Gray);
+        wm(); debugHuds[Last()] = CreateDebugHud("Count Game Speed Decrease", countGameSpeedDecrease, countGameSpeedDecrease > 0 ? Color.Yellow : Color.Gray);
     }
 
     if(
         debugMode >= DebugMode.ShowParam
     ){  
         // player team
-        wm(); debugHuds[Last()] = CreateDebugHud("team player Num", <"<0> / <1>", NumberOfLivingPlayers(humanTeam), NumberOfPlayers(humanTeam)>, NumberOfLivingPlayers(humanTeam) < NumberOfPlayers(humanTeam) ? Color.Yellow : humanTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("reload Asset Interval", reloadFriendBotAssetInterval, reloadFriendBotAssetInterval <= 5 ? Color.Yellow : Color.Team2);
-        wm(); debugHuds[Last()] = CreateDebugHud("asset Number", friendBotAssetNo, Color.Team2);
-        wm(); debugHuds[Last()] = CreateDebugHud("death Count", playerDeathCount, Color.Team2);
+        wm(); debugHuds[Last()] = CreateDebugHud("Team player Num", <"<0> / <1>", NumberOfLivingPlayers(humanTeam), NumberOfPlayers(humanTeam)>, NumberOfLivingPlayers(humanTeam) < NumberOfPlayers(humanTeam) ? Color.Yellow : humanTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("Reload Asset Interval", reloadFriendBotAssetInterval, reloadFriendBotAssetInterval <= 5 ? Color.Yellow : Color.Team2);
+        wm(); debugHuds[Last()] = CreateDebugHud("Asset Number", friendBotAssetNo, Color.Team2);
+        wm(); debugHuds[Last()] = CreateDebugHud("Death Count", playerDeathCount, Color.Team2);
         wm(); debugHuds[Last()] = CreateDebugHud("Object Progress", ObjectProgress(humanTeam), Color.Team2);
         wm(); debugHuds[Last()] = CreateDebugHud("Game Progress Diff", GameProgressDiff(humanTeam), Color.Team2);
 
         // enemy team
-        wm(); debugHuds[Last()] = CreateDebugHud("team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, NumberOfLivingPlayers(enemyTeam) >= NumberOfPlayers(enemyTeam) ? Color.Yellow : enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("reload Asset Interval", reloadEnemyAssetInterval, reloadEnemyAssetInterval <= 5 ? Color.Yellow : enemyTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("Team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, NumberOfLivingPlayers(enemyTeam) >= NumberOfPlayers(enemyTeam) ? Color.Yellow : enemyTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("Reload Asset Interval", reloadEnemyAssetInterval, reloadEnemyAssetInterval <= 5 ? Color.Yellow : enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("Asset Number", enemyAssetNo, enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("Mod Number", enemyModNo, enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("death Count", <"<0>, <1>, <2>, <3>",
+        wm(); debugHuds[Last()] = CreateDebugHud("Death Count", <"<0>, <1>, <2>, <3>",
             enemyDeathCount[0], enemyDeathCount[1], enemyDeathCount[2], enemyDeathCount[3]>, enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("spawn Time scale", spawnTimeScale, enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("spawn Time", <"<0>, <1>, <2>, <3>",
+        wm(); debugHuds[Last()] = CreateDebugHud("Spawn Time scale", spawnTimeScale, enemyTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("Spawn Time", <"<0>, <1>, <2>, <3>",
             FirstEnemyOf(EnemyType.Minion).confirmSpawnTime,
             FirstEnemyOf(EnemyType.Elite).confirmSpawnTime,
             FirstEnemyOf(EnemyType.SubBoss).confirmSpawnTime,
             FirstEnemyOf(EnemyType.Boss).confirmSpawnTime>, enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("dealt Damage ", <"<0>, <1>, <2>, <3>",
+        wm(); debugHuds[Last()] = CreateDebugHud("Dealt Damage ", <"<0>, <1>, <2>, <3>",
             FirstEnemyOf(EnemyType.Minion).confirmDealtDamage,
             FirstEnemyOf(EnemyType.Elite).confirmDealtDamage,
             FirstEnemyOf(EnemyType.SubBoss).confirmDealtDamage,
             FirstEnemyOf(EnemyType.Boss).confirmDealtDamage>, enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("spawn Rush Interval", spawnRushInterval, spawnRushInterval <= 5 ? Color.Yellow : enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("spawn Rush Count", spawnRushCount, spawnRushCount > 0 ? Color.Yellow : enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("shot Call Interval", shotCallInterval, shotCallInterval <= 5 ? Color.Yellow : enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("more Ult Prob SubBoss", FirstEnemyOf(EnemyType.SubBoss).moreUltProb, FirstEnemyOf(EnemyType.SubBoss).moreUltProb > 0 ? Color.Yellow : enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("more Ult Prob Boss", FirstEnemyOf(EnemyType.Boss).moreUltProb, FirstEnemyOf(EnemyType.Boss).moreUltProb > 0 ? Color.Yellow : enemyTeamColor);
-        wm(); debugHuds[Last()] = CreateDebugHud("focus Target", focusTarget, Color.Yellow);
+        wm(); debugHuds[Last()] = CreateDebugHud("Spawn Rush Interval", spawnRushInterval, spawnRushInterval <= 5 ? Color.Yellow : enemyTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("Spawn Rush Count", spawnRushCount, spawnRushCount > 0 ? Color.Yellow : enemyTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("Shot Call Interval", shotCallInterval, shotCallInterval <= 5 ? Color.Yellow : enemyTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("More Ult Prob SubBoss", FirstEnemyOf(EnemyType.SubBoss).moreUltProb, FirstEnemyOf(EnemyType.SubBoss).moreUltProb > 0 ? Color.Yellow : enemyTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("More Ult Prob Boss", FirstEnemyOf(EnemyType.Boss).moreUltProb, FirstEnemyOf(EnemyType.Boss).moreUltProb > 0 ? Color.Yellow : enemyTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("Focus Target", focusTarget, Color.Yellow);
+        wm(); debugHuds[Last()] = CreateDebugHud("Sucide Count", sucideCount, Color.Yellow);
     }
 }
 
