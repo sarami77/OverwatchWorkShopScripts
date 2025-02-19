@@ -45,6 +45,7 @@ define asset:
         ]
     ];
 
+globalvar define serverLoadTotal;
 
 rule: "BotTest"
 Event.OngoingGlobal
@@ -65,13 +66,38 @@ Event.OngoingGlobal
     AllPlayers().isBotActive = true;
     HostPlayer().isBotActive = false;
 
-    while(true){
 
-        // SetAbilityCooldown(ap(humanTeam), Button.Ability1, 0);
-        // for(define index! = 0; index < 6; index++){
-        //     Wait(1);
-        // }
-        Wait(2);
+    define serverLoadHistory = [];
+    define serverLoadHistoryIndex = 0;
+    define serverLoadHistoryNum = 10;
+
+
+    while(true){
+        // set load history
+        serverLoadHistory[serverLoadHistoryIndex] = ServerLoad();
+        // calc average
+        define sum = 0;
+        for(define index = 0; index < CountOf(serverLoadHistory); index++){
+            sum += serverLoadHistory[index];
+        }
+        serverLoadTotal = sum / CountOf(serverLoadHistory);
+        // step index
+        if(serverLoadHistoryIndex < serverLoadHistoryNum - 1){
+            serverLoadHistoryIndex ++;
+        }
+        else{
+            serverLoadHistoryIndex = 0;
+        }
+
+        dbgHudTxt("index: "+ serverLoadHistoryIndex);
+
+        for(define index = 0; index < CountOf(serverLoadHistory); index++){
+            dbgHudTxt("list["+ index +"]: "+ serverLoadHistory[index]);
+        }
+
+        dbgHudTxt("serverLoadTotal: "+ serverLoadTotal);
+
+        Wait(8);
     }
 }
 
@@ -327,7 +353,7 @@ Event.OngoingGlobal
 {
     debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Red);
     debugHuds[Last()] = CreateDebugHud("game Speed", gameSpeed, gameSpeed >= 100 ? Color.Orange : Color.Red);
-    debugHuds[Last()] = CreateDebugHud("count Wait Action By Server Load", countWaitActionByServerLoad, Color.Orange);
+    debugHuds[Last()] = CreateDebugHud("server Load Total", serverLoadTotal, Color.Orange);
     debugHuds[Last()] = CreateDebugHud("Distance to aim pos", DistanceBetween(HostPlayer(), AimingPositonOf(HostPlayer())), Color.Orange);
     debugHuds[Last()] = CreateDebugHud("player team player num", <"<0> / <1>", NumberOfLivingPlayers(humanTeam), NumberOfPlayers(humanTeam)>, Color.Team1);
     debugHuds[Last()] = CreateDebugHud("enemy team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, Color.Team2);
