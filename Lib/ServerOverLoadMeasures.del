@@ -1,72 +1,32 @@
 import "Utility.del";
 
 // TAG SerServerLoadMeasures ----------
-define serverLoadMax: 255;
-define isServerOverload(): serverLoadMax <= ServerLoad();
-define serverLoadLimitMax: serverLoadMax;
-define isServerLoadLimit(): serverLoadLimit <= ServerLoad();
+define isServerHighload(): 200 <= ServerLoad();
 
 // TAG SerServerLoadMeasures/WaitUntilServerLoadLimitRelease ----------
 globalvar define countWaitActionByServerLoad;
 
 void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
     if(
-        isServerLoadLimit()
+        isServerHighload()
     ){
         countWaitActionByServerLoad ++;
         // WaitUntil(!isServerLoadLimit(), 10);
 
-        while(isServerLoadLimit()){
+        while(isServerHighload()){
             Wait(
                 // baseTime * 0.1,
                 0.1,
                 WaitBehavior.IgnoreCondition);
         }
         
-        Wait(RandomReal(0.0, 3.0), WaitBehavior.IgnoreCondition);
-    }
-}
-
-// TAG SerServerLoadMeasures/ServerLoadLimit ----------
-define watchTimeLoadLimitDecrease: 0.1;
-define watchTimeLoadLimitIncrease: 0.1;
-define limitChangeUnit: 50;
-
-globalvar define serverLoadLimit = serverLoadLimitMax;
-
-rule: "ServerOverloadMeasures/ServerLoadLimit/decrease"
-Event.OngoingGlobal
-if(
-    serverLoadLimit > 0 &&
-    isServerOverload()
-){
-    Wait(watchTimeLoadLimitDecrease, WaitBehavior.AbortWhenFalse);
-    TuneServerLoadLimit(-limitChangeUnit);
-    Loop();
-}
-
-rule: "ServerOverloadMeasures/ServerLoadLimit/increase"
-Event.OngoingGlobal
-if(
-    serverLoadLimit < serverLoadLimitMax &&
-    !isServerOverload()
-){
-    Wait(watchTimeLoadLimitIncrease, WaitBehavior.AbortWhenFalse);
-    TuneServerLoadLimit(limitChangeUnit);
-    Loop();
-}
-
-void TuneServerLoadLimit(define changeVal)"TuneServerLoadLimit"{
-    serverLoadLimit += changeVal;
-    if(serverLoadLimit > serverLoadLimitMax){
-        serverLoadLimit = serverLoadLimitMax;
-    }
-    else if(serverLoadLimit < 0){
-        serverLoadLimit = 0;
+        Wait(RandomReal(0.0, 1.0), WaitBehavior.IgnoreCondition);
     }
 }
 
 // TAG ServerLoadMeasures/GameSpeed ----------
+define isServerOverload(): 255 <= ServerLoad();
+
 define watchTimGameSpeedDecrease: 1.5;
 define watchTimeGameSpeedIncrease: 1.5;
 define watchTimeGameSpeedForceIncrease: 5.0;
@@ -75,6 +35,7 @@ define gameSpeedMax: 100;
 
 globalvar define gameSpeed = gameSpeedMax;
 globalvar define countGameSpeedDecrease;
+
 
 rule: "ServerOverloadMeasures/GameSpeed/decrease"
 Event.OngoingGlobal
