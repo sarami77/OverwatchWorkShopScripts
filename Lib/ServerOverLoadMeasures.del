@@ -1,19 +1,24 @@
 import "Utility.del";
 
 // TAG SerServerLoadMeasures ----------
-define isServerHighload(): 200 <= ServerLoad();
+enum ServerLoad{
+    LOW = 100,
+    MID = 150,
+    HIGH = 200,
+    FULL = 255
+}
 
 // TAG SerServerLoadMeasures/WaitUntilServerLoadLimitRelease ----------
 globalvar define countWaitActionByServerLoad;
 
 void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
     if(
-        isServerHighload()
+        ServerLoadAverage() >= ServerLoad.FULL
     ){
         countWaitActionByServerLoad ++;
         // WaitUntil(!isServerLoadLimit(), 10);
 
-        while(isServerHighload()){
+        while(ServerLoadAverage() >= ServerLoad.FULL){
             Wait(
                 // baseTime * 0.1,
                 0.1,
@@ -25,8 +30,6 @@ void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
 }
 
 // TAG ServerLoadMeasures/GameSpeed ----------
-define isServerOverload(): 255 <= ServerLoad();
-
 define watchTimGameSpeedDecrease: 1.5;
 define watchTimeGameSpeedIncrease: 1.5;
 define watchTimeGameSpeedForceIncrease: 5.0;
@@ -41,7 +44,7 @@ rule: "ServerOverloadMeasures/GameSpeed/decrease"
 Event.OngoingGlobal
 if(
     gameSpeed > 0 &&
-    isServerOverload()
+    (ServerLoad() >= ServerLoad.FULL)
 ){
     Wait(watchTimGameSpeedDecrease, WaitBehavior.AbortWhenFalse);
     countGameSpeedDecrease ++;
@@ -53,7 +56,7 @@ rule: "ServerOverloadMeasures/GameSpeed/increase"
 Event.OngoingGlobal
 if(
     gameSpeed < gameSpeedMax &&
-    !isServerOverload()
+    !(ServerLoad() >= ServerLoad.FULL)
 ){
     Wait(watchTimeGameSpeedIncrease, WaitBehavior.AbortWhenFalse);
     TuneGameSpeed(speedChangeUnit);

@@ -1672,8 +1672,7 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
             );
 
         if(
-            canSnapMap &&
-            !isServerLoadLimit()
+            canSnapMap
         ){
             candidatePosition = NearestWalkablePosition(candidatePosition);
         }
@@ -2150,8 +2149,6 @@ if(
 }
 
 // TAG Debug ----------
-globalvar define serverLoadTotal;
-
 rule: "DebugGlobalAction"
 Event.OngoingGlobal
 Team.All
@@ -2201,22 +2198,6 @@ if(
     define serverLoadHistoryNum = 30;
 
     while(true){
-        // set load history
-        serverLoadHistory[serverLoadHistoryIndex] = ServerLoad();
-        // set average to serverLoadTotal
-        define sum = 0;
-        for(define index = 0; index < CountOf(serverLoadHistory); index++){
-            sum += serverLoadHistory[index];
-        }
-        serverLoadTotal = sum / CountOf(serverLoadHistory);
-        // step index
-        if(serverLoadHistoryIndex < serverLoadHistoryNum - 1){
-            serverLoadHistoryIndex ++;
-        }
-        else{
-            serverLoadHistoryIndex = 0;
-        }
-
         // auto use friend bot hero mod
         if(
             IsTrueProbability(
@@ -2405,9 +2386,9 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
     if(
         debugMode >= DebugMode.ServerLoad
     ){
-        wm(); debugHuds[Last()] = CreateDebugHud("Server Load Total", serverLoadTotal, serverLoadLimitMax < serverLoadTotal ? Color.Yellow : Color.Gray);
-        wm(); debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() >= serverLoadMax ? Color.Red : ServerLoad() >= serverLoadLimit ? Color.Yellow : Color.Gray);
-        wm(); debugHuds[Last()] = CreateDebugHud("Server Load Limit", serverLoadLimit, serverLoadLimit < serverLoadLimitMax ? Color.Yellow : Color.Gray);
+        wm(); debugHuds[Last()] = CreateDebugHud("Server Load Peak", ServerLoadPeak(), ServerLoadPeak() >= ServerLoad.FULL ? Color.Red : ServerLoadPeak() >= ServerLoad.HIGH ? Color.Yellow : Color.Gray);
+        wm(); debugHuds[Last()] = CreateDebugHud("Server Load Avrg", ServerLoadAverage(), ServerLoadAverage() >= ServerLoad.FULL ? Color.Red : ServerLoadAverage() >= ServerLoad.HIGH ? Color.Yellow : Color.Gray);
+        wm(); debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), ServerLoad() >= ServerLoad.FULL ? Color.Red : ServerLoad() >= ServerLoad.HIGH ? Color.Yellow : Color.Gray);
         wm(); debugHuds[Last()] = CreateDebugHud("Count Wait Action By Server Load", countWaitActionByServerLoad, Color.Gray);
         wm(); debugHuds[Last()] = CreateDebugHud("Game Speed", gameSpeed, gameSpeed < gameSpeedMax ? Color.Yellow : Color.Gray);
         wm(); debugHuds[Last()] = CreateDebugHud("Count Game Speed Decrease", countGameSpeedDecrease, countGameSpeedDecrease > 0 ? Color.Yellow : Color.Gray);
@@ -2425,7 +2406,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         wm(); debugHuds[Last()] = CreateDebugHud("Game Progress Diff", GameProgressDiff(humanTeam), Color.Team2);
 
         // enemy team
-        wm(); debugHuds[Last()] = CreateDebugHud("Team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, NumberOfLivingPlayers(enemyTeam) >= NumberOfPlayers(enemyTeam) ? Color.Yellow : enemyTeamColor);
+        wm(); debugHuds[Last()] = CreateDebugHud("Team player num", <"<0> / <1>", NumberOfLivingPlayers(enemyTeam), NumberOfPlayers(enemyTeam)>, NumberOfLivingPlayers(enemyTeam) < NumberOfPlayers(enemyTeam) ? Color.Yellow : enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("Reload Asset Interval", reloadEnemyAssetInterval, reloadEnemyAssetInterval <= 5 ? Color.Yellow : enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("Asset Number", enemyAssetNo, enemyTeamColor);
         wm(); debugHuds[Last()] = CreateDebugHud("Mod Number", enemyModNo, enemyTeamColor);
