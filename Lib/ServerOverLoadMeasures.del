@@ -7,10 +7,13 @@ define serverLoadLimitMax: serverLoadMax;
 define isServerLoadLimit(): serverLoadLimit <= ServerLoad();
 
 // TAG SerServerLoadMeasures/WaitUntilServerLoadLimitRelease ----------
+globalvar define countWaitActionByServerLoad;
+
 void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
     if(
         isServerLoadLimit()
     ){
+        countWaitActionByServerLoad ++;
         // WaitUntil(!isServerLoadLimit(), 10);
 
         while(isServerLoadLimit()){
@@ -26,19 +29,10 @@ void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
 
 // TAG SerServerLoadMeasures/ServerLoadLimit ----------
 define watchTimeLoadLimitDecrease: 0.1;
-define watchTimeLoadLimitIncrease: watchTimeLoadLimitDecrease * 1.0;
+define watchTimeLoadLimitIncrease: 0.1;
 define limitChangeUnit: 50;
-globalvar define serverLoadLimit = serverLoadLimitMax;
 
-void TuneServerLoadLimit(define changeVal)"TuneServerLoadLimit"{
-    serverLoadLimit += changeVal;
-    if(serverLoadLimit > serverLoadLimitMax){
-        serverLoadLimit = serverLoadLimitMax;
-    }
-    else if(serverLoadLimit < 0){
-        serverLoadLimit = 0;
-    }
-}
+globalvar define serverLoadLimit = serverLoadLimitMax;
 
 rule: "ServerOverloadMeasures/ServerLoadLimit/decrease"
 Event.OngoingGlobal
@@ -62,25 +56,25 @@ if(
     Loop();
 }
 
+void TuneServerLoadLimit(define changeVal)"TuneServerLoadLimit"{
+    serverLoadLimit += changeVal;
+    if(serverLoadLimit > serverLoadLimitMax){
+        serverLoadLimit = serverLoadLimitMax;
+    }
+    else if(serverLoadLimit < 0){
+        serverLoadLimit = 0;
+    }
+}
+
 // TAG ServerLoadMeasures/GameSpeed ----------
 define watchTimGameSpeedDecrease: 1.5;
-define watchTimeGameSpeedIncrease: watchTimGameSpeedDecrease * 1.0;
-define watchTimeGameSpeedForceIncrease: watchTimGameSpeedDecrease * 3.0;
+define watchTimeGameSpeedIncrease: 1.5;
+define watchTimeGameSpeedForceIncrease: 5.0;
 define speedChangeUnit: 10;
 define gameSpeedMax: 100;
+
 globalvar define gameSpeed = gameSpeedMax;
 globalvar define countGameSpeedDecrease;
-
-void TuneGameSpeed(define changeVal)"TuneGameSpeed"{
-    gameSpeed += changeVal;
-    if(gameSpeed > gameSpeedMax){
-        gameSpeed = gameSpeedMax;
-    }
-    else if(gameSpeed < 0){
-        gameSpeed = 0;
-    }
-    SetSlowMotion(gameSpeed);
-}
 
 rule: "ServerOverloadMeasures/GameSpeed/decrease"
 Event.OngoingGlobal
@@ -113,4 +107,15 @@ if(
     Wait(watchTimeGameSpeedForceIncrease, WaitBehavior.AbortWhenFalse);
     TuneGameSpeed(speedChangeUnit);
     Loop();
+}
+
+void TuneGameSpeed(define changeVal)"TuneGameSpeed"{
+    gameSpeed += changeVal;
+    if(gameSpeed > gameSpeedMax){
+        gameSpeed = gameSpeedMax;
+    }
+    else if(gameSpeed < 0){
+        gameSpeed = 0;
+    }
+    SetSlowMotion(gameSpeed);
 }
