@@ -8,17 +8,20 @@ enum ServerLoad{
     FULL = 255
 }
 
+define ActionWaitServerLoad : ServerLoad.HIGH;
+define GameSpeedSlowServerLoad : ServerLoad.FULL;
+
 // TAG SerServerLoadMeasures/WaitUntilServerLoadLimitRelease ----------
-globalvar define countWaitActionByServerLoad;
+globalvar define countWaitByServerLoad;
 
 void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
     if(
-        ServerLoadAverage() >= ServerLoad.FULL
+        ServerLoad() >= ActionWaitServerLoad
     ){
-        countWaitActionByServerLoad ++;
+        countWaitByServerLoad ++;
         // WaitUntil(!isServerLoadLimit(), 10);
 
-        while(ServerLoadAverage() >= ServerLoad.FULL){
+        while(ServerLoad() >= ActionWaitServerLoad){
             Wait(
                 // baseTime * 0.1,
                 0.1,
@@ -44,7 +47,7 @@ rule: "ServerOverloadMeasures/GameSpeed/decrease"
 Event.OngoingGlobal
 if(
     gameSpeed > 0 &&
-    (ServerLoad() >= ServerLoad.FULL)
+    (ServerLoad() >= GameSpeedSlowServerLoad)
 ){
     Wait(watchTimGameSpeedDecrease, WaitBehavior.AbortWhenFalse);
     countGameSpeedDecrease ++;
@@ -56,7 +59,7 @@ rule: "ServerOverloadMeasures/GameSpeed/increase"
 Event.OngoingGlobal
 if(
     gameSpeed < gameSpeedMax &&
-    !(ServerLoad() >= ServerLoad.FULL)
+    !(ServerLoad() >= GameSpeedSlowServerLoad)
 ){
     Wait(watchTimeGameSpeedIncrease, WaitBehavior.AbortWhenFalse);
     TuneGameSpeed(speedChangeUnit);
