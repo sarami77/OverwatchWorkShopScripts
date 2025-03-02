@@ -9,8 +9,8 @@ enum ServerLoad{
 }
 
 // TAG SerServerLoadMeasures/WaitUntilServerLoadLimitRelease ----------
+define NormalizedServerLoad() : (ServerLoad.FULL / ServerLoad());
 define ActionWaitServerLoad : ServerLoad.HIGH;
-define CheckServerLoadInterval : 1.0;
 globalvar define countWaitByServerLoad;
 
 void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
@@ -19,13 +19,14 @@ void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
     ){
         countWaitByServerLoad ++;
 
-        WaitUntil(!(ServerLoad() >= ActionWaitServerLoad), 10);
+        // WaitUntil(!(ServerLoad() >= ActionWaitServerLoad), 3.0);
 
-        // while(ServerLoad() >= ActionWaitServerLoad){
-        //     Wait(CheckServerLoadInterval, WaitBehavior.IgnoreCondition);
-        // }
-        
-        Wait(RandomReal(0.0, 1.0), WaitBehavior.IgnoreCondition);
+        while(ServerLoad() >= ActionWaitServerLoad){
+            Wait(NormalizedServerLoad() * 1.0, WaitBehavior.IgnoreCondition);
+        }
+
+        // distribute load
+        Wait(RandomReal(0.0, NormalizedServerLoad() * 1.0), WaitBehavior.IgnoreCondition);
     }
 }
 
