@@ -389,43 +389,42 @@ define facingSpeedRate:
     actionRangeMax == ActionRange.Far ?     250 :
     DefaultPercentage();
 
-define facingUpdateInterval:
-    watchUpdateRate * 0.1;
-
-playervar define aimmingPosition;
+playervar define aimOffset;
 
 void StartFacingAimTarget() playervar "StartFacingAimTarget"{
     StartFacing(
-        ep, 
-        IsAlive(aimTarget) ?
-            DirectionTowards(EyePosition(), aimmingPosition) :
-            FacingDirectionOf()
-        ,
+        ep,
+        DirectionTowards(
+            EyePosition(),
+            EyePosition(aimTarget) + aimOffset
+        ),
         facingSpeedRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
 }
 
-rule: "EnemyBot/Aim/updateAimmingPosition"
+rule: "EnemyBot/Aim/updateAimOffset"
 Event.OngoingPlayer
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
     actionState != ActionState.Non
 ){
-    if(HasSpawned(aimTarget)){
-        aimmingPosition =
-            (
-                IsInAlternateForm() ?
-                EyePosition(aimTarget) - Vector(0, 0.6, 0)     // body position
-                    :
-                EyePosition(aimTarget) + Vector(0, 0.2, 0)     // head position
-            )
-                +
-            RandomPosition(aimScatter, aimScatter, aimScatter)  // aim scatter
-                +
-            Vector(0, -(aimScatter / 2), 0);
-    }
+    aimOffset =
+        (
+            IsInAlternateForm() ?
+            // eye to body vector
+            Vector(0, -0.6, 0)
+                :
+            // eye to head vector
+            Vector(0, 0.2, 0)
+        )
+            +
+        // aim scatter
+        RandomPosition(aimScatter, aimScatter, aimScatter)
+            +
+        // slide aim to body by aim scatter high
+        Vector(0, -(aimScatter / 2), 0);
 
-    Wait(facingUpdateInterval, WaitBehavior.IgnoreCondition);
+    Wait(0.25, WaitBehavior.IgnoreCondition);
     LoopIfConditionIsTrue();
 }
 
