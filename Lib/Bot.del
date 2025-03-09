@@ -138,7 +138,9 @@ void SetMoveDir() playervar "SetMoveDir"{
     define distToTarget! = DistanceBetween(ep, aimTarget);
     define objPos! = CurrentObjectOnPosition();
     define nearEnemy! = ClosestPlayerTo(ep, EnemyTeamOf(ep));
+    define enemyDensity! = EnemyDensity(aimTarget, ActionRange.Close);
 
+    // move for heal
     if(
         enableRetreat
         ?
@@ -151,77 +153,40 @@ void SetMoveDir() playervar "SetMoveDir"{
         :
             false
     ){
-        // dbgHudTxt(<"move for heal = <0>", SlotOf()>);
-
-        define supportPlayers = [];
-        define notSupportPlayers = [];
-        define livingFriends = AllLivingPlayers(TeamOf());
-
-        // make support player list and not support player
-        for(define index! = 0; index < CountOf(livingFriends); index ++){
-            if(
-                // not self
-                ep != livingFriends[index]
-            ){
-                if(livingFriends[index].supportPrioloty > 0){
-                    // add to support player list
-                    supportPlayers[CountOf(supportPlayers)] = livingFriends[index];
-                }
-                else{
-                    // add to not support player list
-                    notSupportPlayers[CountOf(notSupportPlayers)] = livingFriends[index];
-                }
-            }
-        }
-
-        // find near healer from support player list
+        // find near healer
         define nearHealer = 
             FirstOf(
                 SortedArray(
-                    supportPlayers,
+                    FilteredArray(
+                        AllLivingPlayers(TeamOf()),
+                        (
+                            ae != ep &&
+                            IsAlive(ae) &&
+                            ae.supportPrioloty > 0
+                        )
+                    ),
                     DistanceBetween(ep, ae)
                 )
             );
 
-        // found healer and not near
+        // found healer
         if(
-            nearHealer != null &&
-            DistanceBetween(ep, nearHealer) > (ActionRange.Close / 2)
+            nearHealer != null
         ){
             // move to healer
-            moveTarget = PositionOf(nearHealer) + (FacingDirectionOf(nearHealer) * 3);
+            moveTarget = PositionOf(nearHealer);
             moveDirFB = NoDirection();
             moveDirLR = NoDirection();
         }
         else{
-            // find near guard from not support player list
-            define nearGuard = 
-                FirstOf(
-                    SortedArray(
-                        notSupportPlayers,
-                        DistanceBetween(ep, ae)
-                    )
-                );
-
-            // found guard and not near
-            if(
-                nearGuard != null &&
-                DistanceBetween(ep, nearGuard) > (ActionRange.Close / 2)
-            ){
-                // move to guard
-                moveTarget = PositionOf(nearGuard) + (FacingDirectionOf(nearGuard) * 3);
-                moveDirFB = NoDirection();
-                moveDirLR = NoDirection();
-            }
-            else{
-                // move to back
-                moveTarget = null;
-                moveDirFB = Backward();
-                moveDirLR = RandomValueInArray([NoDirection(), Right(), Left()]);
-            }
+            // move to spawn room side
+            define dirTo! = LocalVectorOf(DirectionTowards(ep, SpawnPoints(TeamOf())[0]), ep, Transformation.Rotation);
+            moveTarget = null;
+            moveDirFB = Vector(0, 0, ZOf(dirTo));
+            moveDirLR = Vector(XOf(dirTo), 0, 0);
         } 
     }
-    // move to object for secure
+    // move for secure object
     else if(
         enableFollowObject &&
         // object pos valid
@@ -233,23 +198,17 @@ void SetMoveDir() playervar "SetMoveDir"{
             IsCloseWin(EnemyTeamOf(ep))
         )
     ){
-        // dbgHudTxt(<"move for object = <0>", SlotOf()>);
-
         // move to object
         define dirToObject! = LocalVectorOf(DirectionTowards(ep, objPos), ep, Transformation.Rotation);
         moveTarget = null;
         moveDirFB = Vector(0, 0, ZOf(dirToObject));
         moveDirLR = Vector(XOf(dirToObject), 0, 0);
     }
-    // move to target for attack or support
+    // move for combat
     else if(actionState != ActionState.Non){
-        // dbgHudTxt(<"move for combat = <0>", SlotOf()>);
-
         moveTarget = null;
         // get distRate by actionState
         define distRate! = (actionState == ActionState.Attack) ? 1 : 0.5;
-        // get enemy density
-        define enemyDensity! = EnemyDensity(aimTarget, ActionRange.Close);
 
         // front/back
         if(
@@ -260,9 +219,7 @@ void SetMoveDir() playervar "SetMoveDir"{
         }
         else if(
             // target is far
-            distToTarget > (actionRangeMax * distRate) &&
-            // by enemy density low
-            IsTrueProbability(DefaultPercentage() * (1 - enemyDensity))
+            distToTarget > (actionRangeMax * distRate)
         ){
             moveDirFB = Forward();
         }
