@@ -790,6 +790,11 @@ if(
         // Explode when dead
         maxHealth   *= 0.5;
     }
+    else if(enemyModType == EnemyModType.Restrain){
+        name = <"<0> restrainer", name>;
+        // Explode when dead
+        damageDealt *= 0.5;
+    }
 
     // set param
     StartForcingDummyBotName(ep, name);
@@ -1308,7 +1313,8 @@ enum EnemyModType{
     Speed,
     Jump,
     Flying,
-    Explosion
+    Explosion,
+    Restrain
 }
 
 globalvar define enemyModNo!;
@@ -1328,7 +1334,8 @@ define enemyModList:
             EnemyModType.Speed,
             EnemyModType.Jump,
             EnemyModType.Flying,
-            EnemyModType.Explosion
+            EnemyModType.Explosion,
+            EnemyModType.Restrain
         ],
         [
             // modNo 1
@@ -1338,7 +1345,9 @@ define enemyModList:
             EnemyModType.Speed,
             EnemyModType.Jump,
             EnemyModType.Flying,
-            EnemyModType.Explosion
+            EnemyModType.Explosion,
+            EnemyModType.Restrain,
+            EnemyModType.Restrain
         ],
         [
             // modNo 2
@@ -1359,17 +1368,22 @@ define enemyModList:
         [
             // modNo 6
             EnemyModType.Explosion
+        ],
+        [
+            // modNo 7
+            EnemyModType.Restrain
         ]
     ];
 
 define enemyModNoLotteryList: [
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
     1, 1, 1, 1, 
     2,
     3,
     4,
     5,
-    6
+    6,
+    7
 ];
 
 // TAG EnemyBot/Mod/FlyDive ----------
@@ -1416,8 +1430,6 @@ if(
 }
 
 // TAG EnemyBot/Mod/Explosion ----------
-playervar define bombEfct!;
-
 rule: "EnemyBot/Mod/Explosion"
 Event.OnDeath
 if(
@@ -1434,13 +1446,8 @@ if(
     define blastRange! =    scale * 1.4;
     define blastDamage! =   scale * 100;
     define bombPos! = PositionOf() + Vector(0, 0.2, 0);
-    DestroyIcon(bombEfct[0]);
-    DestroyEffect(bombEfct[1]);
-    DestroyInWorldText(bombEfct[2]);
-    bombEfct[0] = CreateIcon(AllPlayers(humanTeam), bombPos, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
-    bombEfct[1] = CreateEffect(ap(ta), Effect.Sphere, cautionColor, bombPos, bombSize, EffectRev.Color);
-    // bombEfct[2] = CreateInWorldText(ap(ta), "Danger zone", bombPos, basicInWorldTextSize, Clipping.ClipAgainstSurfaces,
-    //     InworldTextRev.VisibleToAndColor, cautionColor, Spectators.VisibleAlways);
+    define bombIcon! = CreateIcon(AllPlayers(humanTeam), bombPos, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
+    define bombEfct! = CreateEffect(ap(ta), Effect.Sphere, cautionColor, bombPos, bombSize, EffectRev.Color);
 
     for(define index! = 0; index < 3; index++){
         PlayEffect(ap(ta), PlayEffect.RingExplosion, Color.Yellow, bombPos, blastRange * 2);
@@ -1454,10 +1461,59 @@ if(
     Damage(targets, ep, blastDamage / 2);
     StartDamageOverTime(targets, ep, 3, blastDamage / 2);
     PlayContinuousBlast(Color.Red, bombPos, blastRange, scale, scale);
-    DestroyIcon(bombEfct[0]);
-    DestroyEffect(bombEfct[1]);
-    // DestroyInWorldText(bombEfct[2]);
+    DestroyIcon(bombIcon);
+    DestroyEffect(bombEfct);
 }
+
+// TAG EnemyBot/Mod/Restrain ----------
+rule: "EnemyBot/Mod/Restrain"
+Event.OngoingPlayer
+if(
+    TeamOf() == enemyTeam &&
+    enemyModType == EnemyModType.Restrain &&
+    IsAlive(ep) &&
+    IsInCombat()
+){
+    define target!;
+    Wait(RandomReal(0.0, 1.0), WaitBehavior.AbortWhenFalse);
+    
+    while(true){
+        if(
+            aimTarget != null &&
+            IsAlive(aimTarget) &&
+            IsOnGround(aimTarget)
+        ){
+            target = aimTarget;
+            break;
+        }
+        Wait(3.0, WaitBehavior.AbortWhenFalse);
+    }
+
+    define icon! = CreateIcon(AllPlayers(humanTeam), ep, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
+
+    while(
+        IsAlive(target) &&
+        IsOnGround(target) &&
+        IsAlive(ep)
+    ){
+        Teleport(ep, PositionOf(target) + FacingDirectionOf(target));
+        SetStatus(ep, ep, Status.Rooted, 1.1);
+        SetStatus(target, ep, Status.Frozen, 1.1);
+        SetFacing(target, DirectionTowards(target, ep));
+        SetFacing(ep, DirectionTowards(ep, target));
+        PressButton(ep, Button.Melee);
+
+        Wait(1, WaitBehavior.IgnoreCondition);
+    }
+
+    DestroyIcon(icon);
+    ClearStatus(ep, Status.Frozen);
+    ClearStatus(target, Status.Frozen);
+    StartFacingAimTarget();
+
+    LoopIfConditionIsTrue();
+}
+
 
 // TAG EnemyBot/CautionColor ----------
 define cautionColor: isBlink ? Color.Red : Color.Yellow;
