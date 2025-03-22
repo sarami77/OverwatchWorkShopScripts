@@ -1439,21 +1439,23 @@ if(
 }
 
 // TAG EnemyBot/Mod/Explosion ----------
+define bombScale : 
+    enemyType == EnemyType.Minion ?     2 :
+    enemyType == EnemyType.Elite ?      4 :
+    enemyType == EnemyType.SubBoss ?    6 :
+    enemyType == EnemyType.Boss ?       6 :
+    0;
+
 rule: "EnemyBot/Mod/Explosion"
 Event.OnDeath
 if(
     TeamOf() == enemyTeam &&
     enemyModType == EnemyModType.Explosion
 ){
-    define scale! = 
-        enemyType == EnemyType.Minion ?     2 :
-        enemyType == EnemyType.Elite ?      4 :
-        enemyType == EnemyType.SubBoss ?    6 :
-        enemyType == EnemyType.Boss ?       6 :
-        0;
-    define bombSize! =      scale * 0.2;
-    define blastRange! =    scale * 1.2;
-    define blastDamage! =   scale * 100;
+
+    define bombSize! =      bombScale * 0.2;
+    define blastRange! =    bombScale * 1.2;
+    define blastDamage! =   bombScale * 100;
     define bombPos! = PositionOf() + Vector(0, 0.2, 0);
     define bombIcon! = CreateIcon(AllPlayers(humanTeam), bombPos, Icon.Warning, IconRev.VisibleToAndColor, cautionColor, true);
     define bombEfct! = CreateEffect(ap(ta), Effect.Sphere, cautionColor, bombPos, bombSize, EffectRev.Color);
@@ -1469,13 +1471,18 @@ if(
     SetStatus(targets, ep, Status.Burning, 3);
     Damage(targets, ep, blastDamage / 2);
     StartDamageOverTime(targets, ep, 3, blastDamage / 2);
-    PlayContinuousBlast(Color.Red, bombPos, blastRange, scale, scale);
+    PlayContinuousBlast(Color.Red, bombPos, blastRange, bombScale, bombScale);
     DestroyIcon(bombIcon);
     DestroyEffect(bombEfct);
 }
 
 // TAG EnemyBot/Mod/Restrain ----------
-define maxRestrainSecond: 6;
+define restrainSecond :
+    enemyType == EnemyType.Minion ?     6 :
+    enemyType == EnemyType.Elite ?      8 :
+    enemyType == EnemyType.SubBoss ?    10 :
+    enemyType == EnemyType.Boss ?       10 :
+    0;
 
 rule: "EnemyBot/Mod/Restrain"
 Event.OngoingPlayer
@@ -1526,7 +1533,7 @@ if(
         SetFacing(target, DirectionTowards(EyePosition(target), EyePosition(ep)));
         SetFacing(ep, DirectionTowards(EyePosition(ep), EyePosition(target)));
         PressButton(ep, Button.Melee);
-        if(tryCount >= maxRestrainSecond){
+        if(tryCount >= restrainSecond){
             break;
         }
         tryCount ++;
