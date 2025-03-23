@@ -1,6 +1,34 @@
 import "Utility.del";
 
 // TAG SerServerLoadMeasures ----------
+globalvar define loadLimit = ServerLoad.FULL;
+globalvar define countActionWait;
+
+// TAG SerServerLoadMeasures/WaitUntilLoadLimitRelease ----------
+void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
+    if(
+        ServerLoad() >= loadLimit
+    ){
+        countActionWait ++;
+
+        WaitUntil(ServerLoad() < loadLimit, MaxValue());
+
+        // while(ServerLoad() >= loadLimit){
+        //     Wait(0.2, WaitBehavior.IgnoreCondition);
+        // }
+
+        // distribute load
+        Wait(RandomReal(0.0, 3.0), WaitBehavior.IgnoreCondition);
+    }
+}
+
+// TAG ServerLoadMeasures/LoadLimit ----------
+define ServerLoadOfDoLoadLimitDown : ServerLoad.HIGH;
+define WaitTimeLoadLimitDown : 0.1;
+define ChangeStepLoadLimitDown : 50;
+define WaitTimeLoadLimitUp : 0.1;
+define ChangeStepLoadLimitUp : 50;
+
 enum ServerLoad{
     LOW = 100,
     MID = 150,
@@ -8,71 +36,73 @@ enum ServerLoad{
     FULL = 255
 }
 
-// TAG SerServerLoadMeasures/WaitUntilServerLoadLimitRelease ----------
-define NormalizedServerLoad() : (ServerLoad() / ServerLoad.FULL);
-define ActionWaitServerLoad : ServerLoad.HIGH;
-globalvar define countWaitByServerLoad;
+rule: "ServerOverloadMeasures/LoadLimit/down"
+Event.OngoingGlobal
+if(
+    ServerLoad() >= ServerLoadOfDoLoadLimitDown &&
+    loadLimit > 0
+){
+    Wait(WaitTimeLoadLimitDown, WaitBehavior.AbortWhenFalse);
+    TuneLoadLimit(-ChangeStepLoadLimitDown);
 
-void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
-    if(
-        ServerLoad() >= ActionWaitServerLoad
-    ){
-        countWaitByServerLoad ++;
+    Loop();
+}
 
-        // WaitUntil(!(ServerLoad() >= ActionWaitServerLoad), 3.0);
+rule: "ServerOverloadMeasures/LoadLimit/up"
+Event.OngoingGlobal
+if(
+    ServerLoad() < ServerLoadOfDoLoadLimitDown &&
+    loadLimit < ServerLoad.HIGH
+){
+    Wait(WaitTimeLoadLimitUp, WaitBehavior.AbortWhenFalse);
+    TuneLoadLimit(ChangeStepLoadLimitUp);
 
-        while(ServerLoad() >= ActionWaitServerLoad){
-            // Wait(NormalizedServerLoad() * 1.0, WaitBehavior.IgnoreCondition);
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-        }
+    Loop();
+}
 
-        // distribute load
-        Wait(RandomReal(0.0, 1.0), WaitBehavior.IgnoreCondition);
-
-        countWaitByServerLoad --;
+void TuneLoadLimit(define changeVal)"TuneLoadLimit"{
+    loadLimit += changeVal;
+    if(loadLimit > ServerLoad.FULL){
+        loadLimit = ServerLoad.FULL;
+    }
+    else if(loadLimit < 0){
+        loadLimit = 0;
     }
 }
 
 // TAG ServerLoadMeasures/GameSpeed ----------
-define GameSpeedSlowServerLoad : ServerLoad.FULL;
-define watchTimGameSpeedDecrease: 1.5;
-define watchTimeGameSpeedIncrease: 1.5;
-define watchTimeGameSpeedForceIncrease: 5.0;
-define speedChangeUnit: 10;
+define ServerLoadOfDoGameSpeedDown : ServerLoad.FULL;
+define WaitTimeGameSpeedDown : 1.5;
+define ChangeStepGameSpeedDown : 10;
+define WaitTimeGameSpeedUp : 5.0;
+define ChangeStepGameSpeedUp : 10;
+
 define gameSpeedMax: 100;
 globalvar define gameSpeed = gameSpeedMax;
 globalvar define countGameSpeedDecrease;
 
-rule: "ServerOverloadMeasures/GameSpeed/decrease"
+rule: "ServerOverloadMeasures/GameSpeed/down"
 Event.OngoingGlobal
 if(
-    gameSpeed > 0 &&
-    (ServerLoad() >= GameSpeedSlowServerLoad)
+    ServerLoad() >= ServerLoadOfDoGameSpeedDown &&
+    gameSpeed > 0
 ){
-    Wait(watchTimGameSpeedDecrease, WaitBehavior.AbortWhenFalse);
+    Wait(WaitTimeGameSpeedDown, WaitBehavior.AbortWhenFalse);
+    TuneGameSpeed(-ChangeStepGameSpeedDown);
+
     countGameSpeedDecrease ++;
-    TuneGameSpeed(-speedChangeUnit);
     Loop();
 }
 
-rule: "ServerOverloadMeasures/GameSpeed/increase"
+rule: "ServerOverloadMeasures/GameSpeed/up"
 Event.OngoingGlobal
 if(
-    gameSpeed < gameSpeedMax &&
-    !(ServerLoad() >= GameSpeedSlowServerLoad)
-){
-    Wait(watchTimeGameSpeedIncrease, WaitBehavior.AbortWhenFalse);
-    TuneGameSpeed(speedChangeUnit);
-    Loop();
-}
-
-rule: "ServerOverloadMeasures/GameSpeed/increaseByTimeout"
-Event.OngoingGlobal
-if(
+    // ServerLoad() < ServerLoadOfDoGameSpeedDown &&
     gameSpeed < gameSpeedMax
 ){
-    Wait(watchTimeGameSpeedForceIncrease, WaitBehavior.AbortWhenFalse);
-    TuneGameSpeed(speedChangeUnit);
+    Wait(WaitTimeGameSpeedUp, WaitBehavior.AbortWhenFalse);
+    TuneGameSpeed(ChangeStepGameSpeedUp);
+
     Loop();
 }
 
