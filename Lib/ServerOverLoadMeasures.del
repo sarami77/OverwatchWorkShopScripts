@@ -1,20 +1,22 @@
 import "Utility.del";
 
 // TAG SerServerLoadMeasures ----------
-globalvar define loadLimit = ServerLoad.FULL;
+globalvar define loadLimit = maxLoadLimit;
 globalvar define countActionWait;
+
+define IsLoadLimit() : ServerLoad() >= loadLimit;
 
 // TAG SerServerLoadMeasures/WaitUntilLoadLimitRelease ----------
 void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
     if(
-        ServerLoad() >= loadLimit
+        IsLoadLimit()
     ){
         countActionWait ++;
 
-        WaitUntil(ServerLoad() < loadLimit, MaxValue());
+        WaitUntil(!IsLoadLimit(), MaxValue());
 
         // while(ServerLoad() >= loadLimit){
-        //     Wait(0.2, WaitBehavior.IgnoreCondition);
+        //     Wait(0.1, WaitBehavior.IgnoreCondition);
         // }
 
         // distribute load
@@ -23,7 +25,8 @@ void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
 }
 
 // TAG ServerLoadMeasures/LoadLimit ----------
-define ServerLoadOfDoLoadLimitDown : ServerLoad.HIGH;
+define maxLoadLimit : ServerLoad.HIGH;
+define ServerLoadOfDoLoadLimitDown : ServerLoad.FULL;
 define WaitTimeLoadLimitDown : 0.1;
 define ChangeStepLoadLimitDown : 50;
 define WaitTimeLoadLimitUp : 0.1;
@@ -52,7 +55,7 @@ rule: "ServerOverloadMeasures/LoadLimit/up"
 Event.OngoingGlobal
 if(
     ServerLoad() < ServerLoadOfDoLoadLimitDown &&
-    loadLimit < ServerLoad.HIGH
+    loadLimit < ServerLoad.FULL
 ){
     Wait(WaitTimeLoadLimitUp, WaitBehavior.AbortWhenFalse);
     TuneLoadLimit(ChangeStepLoadLimitUp);
@@ -62,8 +65,8 @@ if(
 
 void TuneLoadLimit(define changeVal)"TuneLoadLimit"{
     loadLimit += changeVal;
-    if(loadLimit > ServerLoad.FULL){
-        loadLimit = ServerLoad.FULL;
+    if(loadLimit > maxLoadLimit){
+        loadLimit = maxLoadLimit;
     }
     else if(loadLimit < 0){
         loadLimit = 0;
