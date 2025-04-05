@@ -2859,42 +2859,37 @@ playervar define isRepeatFiring;
 playervar define repeatDuring;
 
 // can's implment as function, cuz need control instance each button
-Boolean isMatchButton(in define matchButton, in define butttons){
-    return IsTrueForAny(butttons, ae == matchButton);
-}
-
-// can's implment as function, cuz need control instance each button
-void StartButtonControl(in define button, in define buttonBehaivor, in define releaseMin, in define releaseMax, in define pressMin, in define pressMax, in define isDependingState){
+void StartButtonControl(in define button, in define buttonBehaivor, in define releaseMin, in define releaseMax, in define pressMin, in define pressMax, in define isDependingActionState){
     if(noButtonControl) return;
     if(buttonBehaivor == ButtonBehaivor.Non) return;
 
-    define startButton = false;
+    define startButonControl = false;
 
-    // if state dependent buttons
+    // if button dependent state
     if(
-        isDependingState
+        isDependingActionState
     ){
-        // if attack state dependent buttons
+        // if button dependent attack state
         if(
             actionState == ActionState.Attack &&
-            isMatchButton(button, attackButtons)
+            IsTrueForAny(button, attackButtons)
         ){
-            startButton = true;
+            startButonControl = true;
         }
-        // if support state dependent buttons
+        // if button dependent support state
         else if(
             actionState == ActionState.Support &&
-            isMatchButton(button, supportButtons)
+            IsTrueForAny(button, supportButtons)
         ){
-            startButton = true;
+            startButonControl = true;
         }
         // else
     }
     else{
-        startButton = true;
+        startButonControl = true;
     }
 
-    if(!startButton){
+    if(!startButonControl){
         // stop button
         StopHoldingButton(ep, button);
     }
@@ -2912,7 +2907,7 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
             
             // release-press action
             if(buttonBehaivor == ButtonBehaivor.ReleasePress){
-                // start hold button
+                // if ult button
                 if(
                     button == Button.Ultimate &&
                     (
@@ -2922,9 +2917,10 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                         IsTrueProbability(50 * (1 - EnemyDensity(aimTarget, ActionRange.Close)))
                     )                
                 ){
-                    // wait only, skip hold ultimate button 
+                    // skip hold ultimate button 
                     Wait(0.1, WaitBehavior.IgnoreCondition);
                 }
+                // if jump button
                 else if(
                     button == Button.Jump &&
                     enableDoubleJump &&
@@ -2937,8 +2933,9 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                     Wait(RandomReal(0.1, 0.5), WaitBehavior.IgnoreCondition);                    
                     StartHoldingButton(ep, button);
                 }
+                // if other button
                 else{
-                    StartHoldingButton(ep, button);     // SetButtonBit(button, true);
+                    StartHoldingButton(ep, button);
                 }
                 
                 // button hold during
@@ -2946,7 +2943,7 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                 if(!enableButtonControl){ break; }
 
                 // stop hold button
-                StopHoldingButton(ep, button);          // SetButtonBit(button, false);
+                StopHoldingButton(ep, button);
             }
             // release-repeat action
             else if(buttonBehaivor == ButtonBehaivor.ReleaseRepeat){
@@ -2954,7 +2951,7 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                 repeatDuring = RandomReal(pressMin, pressMax);
                 
                 // start repeat button
-                isRepeatFiring = true;                  // SetButtonBit(button, true);
+                isRepeatFiring = true;
                 while(
                     isRepeatFiring            
                 ){
@@ -2964,17 +2961,15 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                     if(!enableButtonControl){ break; }
                 }
                 if(!enableButtonControl){ break; }
-
-                // stop repeat button
-                                                        // SetButtonBit(button, false);
             }
-            
+
             // button release during
             Wait(RandomReal(releaseMin, releaseMax), WaitBehavior.IgnoreCondition);
             if(!enableButtonControl){ break; }
         }
 
-        StopHoldingButton(ep, button);          // SetButtonBit(button, false);
+        StopHoldingButton(ep, button);
+        // SetButtonBit(button, false);
     }
 }
 
