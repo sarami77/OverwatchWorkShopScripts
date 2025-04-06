@@ -351,9 +351,9 @@ playervar define aimOffset;
 void StartFacingAimTarget() playervar "StartFacingAimTarget"{
     StartFacing(
         ep,
-        DirectionTowards(
-            EyePosition(),
-            EyePosition(aimTarget) + aimOffset
+            DirectionTowards(
+                EyePosition(),
+                    EyePosition(aimTarget) + aimOffset
         ),
         facingSpeedRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
 }
@@ -1906,7 +1906,6 @@ if(
     FindTarget();
     // apply next state
     SetActionState(ep, GetNextActionState());
-
     // action call to near bots
     CallToNearBot();
 }
@@ -2046,16 +2045,14 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Non
 ){
-    // reset button control
-    enableButtonControl = false;
-    Wait(0.1, WaitBehavior.IgnoreCondition);
-
     // stop facing
     StopFacing(ep);
     // stop move
     StopMove(ep);
 
     while(true){
+        // reset button control
+        enableButtonControl = false;
         // not in ult positioning
         if(!isInMoveUltimateState){
             // poling action
@@ -2076,10 +2073,6 @@ if(
     actionState == ActionState.Attack
 ){
     AbortIf(!isBotActive);
-
-    // reset button control for change depending state button set
-    enableButtonControl = false;
-    Wait(0.1, WaitBehavior.IgnoreCondition);
 
     while(true){
         // not in ult positioning
@@ -2110,10 +2103,6 @@ if(
     actionState == ActionState.Support
 ){
     AbortIf(!isBotActive);
-
-    // reset button control for change depending state button set
-    enableButtonControl = false;
-    Wait(0.1, WaitBehavior.IgnoreCondition);
 
     while(true){
         // not in ult positioning
@@ -2711,14 +2700,6 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         break;
     }
 
-    // if already button control enabled
-    if(enableButtonControl){
-        // restart button control by param changed
-        enableButtonControl = false;
-        Wait(0.1, WaitBehavior.IgnoreCondition);
-        enableButtonControl = true;
-    }
-
     hasButtonControlPropety = true;
 }
 
@@ -2858,12 +2839,18 @@ if(
 playervar define isRepeatFiring;
 playervar define repeatDuring;
 
+define isControlEnableCondition(define states):
+    // enable flag
+    enableButtonControl &&
+    // in state of button enable
+    IsTrueForAny(actionState, states);
+
 // can's implment as function, cuz need control instance each button
 void StartButtonControl(in define button, in define buttonBehaivor, in define releaseMin, in define releaseMax, in define pressMin, in define pressMax, in define isDependingActionState){
     if(noButtonControl) return;
     if(buttonBehaivor == ButtonBehaivor.Non) return;
 
-    define startButonControl = false;
+    define buttonEnableState = [];
 
     // if button dependent state
     if(
@@ -2871,40 +2858,36 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
     ){
         // if button dependent attack state
         if(
-            actionState == ActionState.Attack &&
             IsTrueForAny(button, attackButtons)
         ){
-            startButonControl = true;
+            buttonEnableState += ActionState.Attack;
         }
+
         // if button dependent support state
-        else if(
-            actionState == ActionState.Support &&
+        if(
             IsTrueForAny(button, supportButtons)
         ){
-            startButonControl = true;
+            buttonEnableState += ActionState.Attack;
         }
-        // else
     }
     else{
-        startButonControl = true;
+        // set all active state
+        buttonEnableState = [ActionState.Attack, ActionState.Support];
     }
 
-    if(!startButonControl){
-        // stop button
-        StopHoldingButton(ep, button);
-    }
-    else{
+    if(
+        isControlEnableCondition(buttonEnableState)
+    ){
         // release action at first by prob
         if(IsTrueProbability(50)){
             // button release during
             Wait(RandomReal(releaseMin, releaseMax), WaitBehavior.IgnoreCondition);
         }
 
-        // start button
-        while(enableButtonControl){
-            WaitUntilServerLoadLimitRelease(watchUpdateRate);
-            if(!enableButtonControl){ break; }
-            
+        // start button control
+        while(
+            isControlEnableCondition(buttonEnableState)
+        ){
             // release-press action
             if(buttonBehaivor == ButtonBehaivor.ReleasePress){
                 // if ult button
@@ -2940,7 +2923,6 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                 
                 // button hold during
                 Wait(RandomReal(pressMin, pressMax), WaitBehavior.IgnoreCondition);
-                if(!enableButtonControl){ break; }
 
                 // stop hold button
                 StopHoldingButton(ep, button);
@@ -2958,18 +2940,25 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                     // button repeat during
                     PressButton(ep, button);
                     Wait(0.25, WaitBehavior.IgnoreCondition);
-                    if(!enableButtonControl){ break; }
                 }
-                if(!enableButtonControl){ break; }
+            }
+
+            if(
+                !isControlEnableCondition(buttonEnableState)
+            ){
+                break;
             }
 
             // button release during
             Wait(RandomReal(releaseMin, releaseMax), WaitBehavior.IgnoreCondition);
-            if(!enableButtonControl){ break; }
+            WaitUntilServerLoadLimitRelease(watchUpdateRate);
         }
 
         StopHoldingButton(ep, button);
-        // SetButtonBit(button, false);
+    }
+    else{
+        // stop button control
+        StopHoldingButton(ep, button);
     }
 }
 
