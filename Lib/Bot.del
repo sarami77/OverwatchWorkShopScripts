@@ -2045,14 +2045,16 @@ if(
     IsDummyBot() &&
     actionState == ActionState.Non
 ){
+    // reset button control
+    enableButtonControl = false;
+    Wait(0.1, WaitBehavior.IgnoreCondition);
+
     // stop facing
     StopFacing(ep);
     // stop move
     StopMove(ep);
 
     while(true){
-        // reset button control
-        enableButtonControl = false;
         // not in ult positioning
         if(!isInMoveUltimateState){
             // poling action
@@ -2073,6 +2075,10 @@ if(
     actionState == ActionState.Attack
 ){
     AbortIf(!isBotActive);
+
+    // reset button control for change depending state button set
+    enableButtonControl = false;
+    Wait(0.1, WaitBehavior.IgnoreCondition);
 
     while(true){
         // not in ult positioning
@@ -2103,6 +2109,10 @@ if(
     actionState == ActionState.Support
 ){
     AbortIf(!isBotActive);
+
+    // reset button control for change depending state button set
+    enableButtonControl = false;
+    Wait(0.1, WaitBehavior.IgnoreCondition);
 
     while(true){
         // not in ult positioning
@@ -2700,6 +2710,14 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         break;
     }
 
+    // if already button control enabled
+    if(enableButtonControl){
+        // restart button control by param changed
+        enableButtonControl = false;
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        enableButtonControl = true;
+    }
+
     hasButtonControlPropety = true;
 }
 
@@ -2839,18 +2857,12 @@ if(
 playervar define isRepeatFiring;
 playervar define repeatDuring;
 
-define isControlEnableCondition(define states):
-    // enable flag
-    enableButtonControl &&
-    // in state of button enable
-    IsTrueForAny(actionState, states);
-
 // can's implment as function, cuz need control instance each button
 void StartButtonControl(in define button, in define buttonBehaivor, in define releaseMin, in define releaseMax, in define pressMin, in define pressMax, in define isDependingActionState){
     if(noButtonControl) return;
     if(buttonBehaivor == ButtonBehaivor.Non) return;
 
-    define buttonEnableState = [];
+    define startButonControl = false;
 
     // if button dependent state
     if(
@@ -2858,49 +2870,40 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
     ){
         // if button dependent attack state
         if(
+            actionState == ActionState.Attack &&
             IsTrueForAny(button, attackButtons)
         ){
-            buttonEnableState += ActionState.Attack;
+            startButonControl = true;
         }
-
         // if button dependent support state
-        if(
+        else if(
+            actionState == ActionState.Support &&
             IsTrueForAny(button, supportButtons)
         ){
-            buttonEnableState += ActionState.Support;
+            startButonControl = true;
         }
+        // else
     }
     else{
-        // set all active state
-        buttonEnableState = [ActionState.Attack, ActionState.Support];
+        startButonControl = true;
     }
 
-    if(
-        isControlEnableCondition(buttonEnableState)
-    ){
-        define doRelease = true;
+    if(!startButonControl){
+        // stop button
+        StopHoldingButton(ep, button);
+    }
+    else{
         // release action at first by prob
         if(IsTrueProbability(50)){
             // button release during
-            doRelease = false;
+            Wait(RandomReal(releaseMin, releaseMax), WaitBehavior.IgnoreCondition);
         }
 
-        // start button control
-        while(true){
+        // start button
+        while(enableButtonControl){
             WaitUntilServerLoadLimitRelease(watchUpdateRate);
-
-            // button release during
-            if(doRelease){
-                Wait(RandomReal(releaseMin, releaseMax), WaitBehavior.IgnoreCondition);
-            }
-            else{
-                // skip release at first
-                doRelease = true;
-            }
+            if(!enableButtonControl){ break; }
             
-            // check button control condition
-            if(!isControlEnableCondition(buttonEnableState)){ break; }
-
             // release-press action
             if(buttonBehaivor == ButtonBehaivor.ReleasePress){
                 // if ult button
@@ -2936,6 +2939,8 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                 
                 // button hold during
                 Wait(RandomReal(pressMin, pressMax), WaitBehavior.IgnoreCondition);
+                if(!enableButtonControl){ break; }
+
                 // stop hold button
                 StopHoldingButton(ep, button);
             }
@@ -2952,18 +2957,18 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                     // button repeat during
                     PressButton(ep, button);
                     Wait(0.25, WaitBehavior.IgnoreCondition);
+                    if(!enableButtonControl){ break; }
                 }
+                if(!enableButtonControl){ break; }
             }
 
-            // check button control condition
-            if(!isControlEnableCondition(buttonEnableState)){ break; }
+            // button release during
+            Wait(RandomReal(releaseMin, releaseMax), WaitBehavior.IgnoreCondition);
+            if(!enableButtonControl){ break; }
         }
 
         StopHoldingButton(ep, button);
-    }
-    else{
-        // stop button control
-        StopHoldingButton(ep, button);
+        // SetButtonBit(button, false);
     }
 }
 
