@@ -2878,16 +2878,29 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
     if(
         isControlEnableCondition(buttonEnableState)
     ){
+        define doRelease = true;
         // release action at first by prob
         if(IsTrueProbability(50)){
             // button release during
-            Wait(RandomReal(releaseMin, releaseMax), WaitBehavior.IgnoreCondition);
+            doRelease = false;
         }
 
         // start button control
-        while(
-            isControlEnableCondition(buttonEnableState)
-        ){
+        while(true){
+            WaitUntilServerLoadLimitRelease(watchUpdateRate);
+
+            // button release during
+            if(doRelease){
+                Wait(RandomReal(releaseMin, releaseMax), WaitBehavior.IgnoreCondition);
+            }
+            else{
+                // skip release at first
+                doRelease = true;
+            }
+            
+            // check button control condition
+            if(!isControlEnableCondition(buttonEnableState)){ break; }
+
             // release-press action
             if(buttonBehaivor == ButtonBehaivor.ReleasePress){
                 // if ult button
@@ -2923,7 +2936,6 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                 
                 // button hold during
                 Wait(RandomReal(pressMin, pressMax), WaitBehavior.IgnoreCondition);
-
                 // stop hold button
                 StopHoldingButton(ep, button);
             }
@@ -2943,15 +2955,8 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                 }
             }
 
-            if(
-                !isControlEnableCondition(buttonEnableState)
-            ){
-                break;
-            }
-
-            // button release during
-            Wait(RandomReal(releaseMin, releaseMax), WaitBehavior.IgnoreCondition);
-            WaitUntilServerLoadLimitRelease(watchUpdateRate);
+            // check button control condition
+            if(!isControlEnableCondition(buttonEnableState)){ break; }
         }
 
         StopHoldingButton(ep, button);
