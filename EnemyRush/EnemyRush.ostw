@@ -746,8 +746,8 @@ if(
         scale =             2.5;
         voiceLine =         0.1;
         maxHealth =         1000;
-        addArmor =          MaxHealth() * 0.5;
-        addShield =         MaxHealth() * 0.5;
+        addArmor =          20;
+        addShield =         20;
         healReceived =      200;
         healDealt =         200 * dealHealScale;
 
@@ -813,10 +813,10 @@ if(
 
     // add health pool
     if(addArmor != null){
-        AddHealthPoolToPlayer(ep, HealthType.Armor, addArmor, true, false);
+        AddHealthPoolToPlayer(ep, HealthType.Armor, MaxHealth() * addArmor / DefaultPercentage(), true, false);
     }
     if(addShield != null){
-        AddHealthPoolToPlayer(ep, HealthType.Shields, addShield, true, false);
+        AddHealthPoolToPlayer(ep, HealthType.Shields, MaxHealth() * addShield / DefaultPercentage(), true, false);
     }
 
     // wait max health change finish
@@ -1477,14 +1477,14 @@ if(
 }
 
 // TAG EnemyBot/Mod/Restrain ----------
-define restrainSecond :
+define freezeSecond :
     enemyType == EnemyType.Minion ?     4 :
     enemyType == EnemyType.Elite ?      6 :
     enemyType == EnemyType.SubBoss ?    8 :
     enemyType == EnemyType.Boss ?       8 :
     0;
 
-rule: "EnemyBot/Mod/Restrain"
+rule: "EnemyBot/Mod/Freeze"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
@@ -1508,8 +1508,6 @@ if(
 
     define icon! = CreateIcon(AllPlayers(humanTeam), target, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
     define tryCount! = 0;
-    StopFacing();
-    enableButtonControl = false;
 
     define isFirstTeleport! = true;
 
@@ -1529,9 +1527,9 @@ if(
         PressButton(ep, Button.Melee);
         SetStatus(ep, ep, Status.Rooted, 1.5);
         SetStatus(target, ep, Status.Frozen, 1.5);
-        SetFacing(target, DirectionTowards(EyePosition(target), EyePosition(ep)));
+        aimTarget = target;
         SetFacing(ep, DirectionTowards(EyePosition(ep), EyePosition(target)));
-        if(tryCount >= restrainSecond){
+        if(tryCount >= freezeSecond){
             break;
         }
         tryCount ++;
@@ -1542,7 +1540,6 @@ if(
     ClearStatus(ep, Status.Frozen);
     ClearStatus(target, Status.Frozen);
     StartFacingAimTarget();
-    enableButtonControl = true;
     Wait(3.0, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
