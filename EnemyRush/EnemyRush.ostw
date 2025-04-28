@@ -640,7 +640,7 @@ define damageDealtEachLevel:
     confirmGameDifficulty == GameDifficulty.EXPERT ?    damageDealtBase * 1.8  :    //+0.4
     confirmGameDifficulty == GameDifficulty.LEGENDARY ? damageDealtBase * 2.2  :    //+0.4
     confirmGameDifficulty == GameDifficulty.INSANITY ?  damageDealtBase * 2.6  :    //+0.4
-                                                        damageDealtBase ; 
+                                                        damageDealtBase ;
 
 define enemyTeamColor: Color.Team1;
 define humanTeamColor: Color.Team2;
@@ -648,8 +648,6 @@ define humanTeamColor: Color.Team2;
 define IsBossClass(in define player):
     player.enemyType == EnemyType.SubBoss ||
     player.enemyType == EnemyType.Boss;
-
-define dealHealScale: IsSupportHero(HeroOf()) ? 2.0 : 1.0;
 
 playervar define damageDealt!;
 playervar define spawnTime!;
@@ -697,9 +695,9 @@ if(
 
         scale =             0.7;
         voiceLine =         1.5;
-        maxHealth =         25;
-        healReceived =      25;
-        healDealt =         25 * dealHealScale;
+        maxHealth =         50;
+        healReceived =      50;
+        healDealt =         50;
 
         // scalable config by update function
         spawnTime =         1.0;
@@ -713,9 +711,9 @@ if(
 
         scale =             1.0;
         voiceLine =         1.0;
-        maxHealth =         100;
-        healReceived =      100;
-        healDealt =         100 * dealHealScale;
+        maxHealth =         150;
+        healReceived =      150;
+        healDealt =         150;
 
         // scalable config by update function
         spawnTime =         2.0;
@@ -731,7 +729,7 @@ if(
         voiceLine =         0.5;
         maxHealth =         600;
         healReceived =      200;
-        healDealt =         200 * dealHealScale;
+        healDealt =         200;
 
         // scalable config by update function
         spawnTime =         4.0;
@@ -746,15 +744,18 @@ if(
         scale =             2.5;
         voiceLine =         0.1;
         maxHealth =         1000;
+        healReceived =      200;
+        healDealt =         200;
         addArmor =          20;
         addShield =         20;
-        healReceived =      200;
-        healDealt =         200 * dealHealScale;
 
         // scalable config by update function
         spawnTime =         6.0;
         damageDealt =       150;
     }
+
+    // if support hero, multi deal heal
+    healDealt *= IsSupportHero(HeroOf()) ? 3.0 : 1.0;
 
     // set mod
     enemyModType = RandomValueInArray(enemyModList[enemyModNo]);
@@ -1452,7 +1453,6 @@ if(
     TeamOf() == enemyTeam &&
     enemyModType == EnemyModType.Explosion
 ){
-
     define bombSize! =      bombScale * 0.2;
     define blastRange! =    bombScale * 1.2;
     define blastDamage! =   bombScale * 100;
@@ -1507,14 +1507,15 @@ if(
     }
 
     define icon! = CreateIcon(AllPlayers(humanTeam), target, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
+    define effect! = CreateEffect(AllPlayers(humanTeam), Effect.BadAura, Color.Blue, ep, freezeSecond / 4, EffectRev.PositionAndRadius);
     define tryCount! = 0;
-
     define isFirstTeleport! = true;
 
     while(
+        tryCount < freezeSecond &&
+        IsAlive(ep) &&
         IsAlive(target) &&
-        IsOnGround(target) &&
-        IsAlive(ep)
+        IsOnGround(target)
     ){
         teleportPosition = PositionOf(target) + Normalize(VectorWithOutY(DirectionTowards(target, ep)));
         // show pre teleport effect
@@ -1527,15 +1528,15 @@ if(
         PressButton(ep, Button.Melee);
         SetStatus(ep, ep, Status.Rooted, 1.5);
         SetStatus(target, ep, Status.Frozen, 1.5);
+        
+
         aimTarget = target;
         SetFacing(target, DirectionTowards(EyePosition(target), EyePosition(ep)));
-        if(tryCount >= freezeSecond){
-            break;
-        }
-        tryCount ++;
         Wait(0.5, WaitBehavior.IgnoreCondition);
+        tryCount ++;
     }
 
+    DestroyEffect(effect);
     DestroyIcon(icon);
     ClearStatus(ep, Status.Frozen);
     ClearStatus(target, Status.Frozen);
