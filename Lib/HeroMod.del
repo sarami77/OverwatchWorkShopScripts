@@ -44,6 +44,7 @@ enum HeroModType{
 enum HeroModTrigger{
     ACTIVATE,
     DEACTIVATE,
+    PRESS_RELOAD_KEY,
     LONG_PRESS_MELEE_KEY,
     TIME_PASSED,
     STOP,
@@ -293,6 +294,8 @@ playervar define isDogAttaking!;
 playervar define dogEntity!;
 playervar define dogPos;
 playervar define dogDest!;
+// TAG GUNSHIP_GUNNER
+playervar define zoomLevel;
 
 // TAG HeroMod/Function ----------
 define CanTouchPlayerList():
@@ -1850,6 +1853,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
             "  * gunship has powerful auto cannon with blast and barrage" + NL +
             "  * press secondary fire key to shot grenade machine gun" + NL +
             "  * long press melee key to shot ult charge as nuke cannon" + NL +
+            "  * press reload key to change zoom level" + NL +
             "  * hold crouch key to descent" + NL +
             "- every 4 seconds passed to lose 1% ult charge";
     }
@@ -2013,6 +2017,8 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         SetMaxHealth(ep, DefaultPercentage());
         SetDamageDealt(ep, DefaultPercentage());
         SetGravity(ep, DefaultPercentage());
+        StopCamera();
+        zoomLevel = 0;
         // ClearStatus(ep, Status.Rooted);
         if(prevHero != Hero.Bastion){
             ForcePlayerHero(ep, prevHero);
@@ -2093,6 +2099,25 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
         UltimateChargePercent(ep) > 0
     ){
         HeroMod_Action_NUKE_CANON();
+    }
+    else if(
+        trigger == HeroModTrigger.PRESS_RELOAD_KEY &&
+        isTransformed &&
+        IsAlive()
+    ){
+        Wait(0.1, WaitBehavior.IgnoreCondition);        
+        if(zoomLevel == 0){
+            StartCamera(ep, EyePosition() + (FacingDirectionOf() * zoomLevel * 10), EyePosition() + (FacingDirectionOf() * zoomLevel * 10) + FacingDirectionOf(), 100);
+            zoomLevel = 1;
+        }
+        else if(zoomLevel == 1){
+
+            zoomLevel = 2;
+        }
+        else{
+            StopCamera();
+            zoomLevel = 0;
+        }
     }
 }
 // TAG ZOMBIE
@@ -2621,6 +2646,20 @@ if(
         Wait(3, WaitBehavior.IgnoreCondition);
         LoopIfConditionIsTrue();
     }
+}
+
+rule: "HeroModTrigger/PRESS_RELOAD_KEY"
+Event.OngoingPlayer
+if(
+    TeamOf() == humanTeam &&
+    (
+        heroModType == HeroModType.GUNSHIP_GUNNER
+    ) &&
+    (
+        IsButtonHeld(ep, Button.Reload)
+    )
+){
+    DoHeroModAction(heroModType, HeroModTrigger.PRESS_RELOAD_KEY, null);
 }
 
 // TAG USING_PRIMARY
