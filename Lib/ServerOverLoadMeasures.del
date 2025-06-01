@@ -1,81 +1,43 @@
 import "Utility.del";
 
 // TAG SerServerLoadMeasures ----------
-globalvar define loadLimit = maxLoadLimit;
-globalvar define countActionWait;
-
-define IsLoadLimit() : ServerLoad() >= loadLimit;
-
 // TAG SerServerLoadMeasures/WaitUntilLoadLimitRelease ----------
-void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
-    if(
-        IsLoadLimit()
-    ){
-        countActionWait ++;
-
-        // WaitUntil(!IsLoadLimit(), 5.0);
-
-        while(IsLoadLimit() ){
-            Wait(0.1, WaitBehavior.IgnoreCondition);
-        }
-
-        // distribute load
-        Wait(RandomReal(0.0, 1.0), WaitBehavior.IgnoreCondition);
-
-        countActionWait --;
-    }
-}
-
-// TAG ServerLoadMeasures/LoadLimit ----------
-define maxLoadLimit : ServerLoad.HIGH;
-define ServerLoadOfDoLoadLimitDown : ServerLoad.HIGH;
-define WaitTimeLoadLimitDown : 0.1;
-define ChangeStepLoadLimitDown : 50;
-define WaitTimeLoadLimitUp : 0.1;
-define ChangeStepLoadLimitUp : 50;
-
 enum ServerLoad{
+    IDLE = 50,
     LOW = 100,
     MID = 150,
     HIGH = 200,
     FULL = 255
 }
 
-// rule: "ServerOverloadMeasures/LoadLimit/down"
-// Event.OngoingGlobal
-// if(
-//     ServerLoad() >= ServerLoadOfDoLoadLimitDown &&
-//     loadLimit > 0
-// ){
-//     Wait(WaitTimeLoadLimitDown, WaitBehavior.AbortWhenFalse);
-//     TuneLoadLimit(-ChangeStepLoadLimitDown);
+define IsLoadOvered() : ServerLoad() >= ServerLoad.FULL;
+define IsLoadLimited() : ServerLoad() >= ServerLoad.HIGH;
 
-//     Loop();
-// }
+globalvar define countActionWait;
 
-// rule: "ServerOverloadMeasures/LoadLimit/up"
-// Event.OngoingGlobal
-// if(
-//     ServerLoad() < ServerLoadOfDoLoadLimitDown &&
-//     loadLimit < ServerLoad.FULL
-// ){
-//     Wait(WaitTimeLoadLimitUp, WaitBehavior.AbortWhenFalse);
-//     TuneLoadLimit(ChangeStepLoadLimitUp);
+void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
+    if(
+        IsLoadLimited()
+    ){
+        countActionWait ++;
 
-//     Loop();
-// }
+        // WaitUntil(!IsLoadLimit(), 3.0);
 
-// void TuneLoadLimit(define changeVal)"TuneLoadLimit"{
-//     loadLimit += changeVal;
-//     loadLimit = Min(loadLimit, maxLoadLimit);
-//     loadLimit = Max(loadLimit, 0);
-// }
+        while(IsLoadLimited()){
+            Wait(0.2, WaitBehavior.IgnoreCondition);
+        }
+
+        Wait(RandomReal(0.0, ServerLoad() / ServerLoad.FULL * 3.0), WaitBehavior.IgnoreCondition);
+
+        countActionWait --;
+    }
+}
 
 // TAG ServerLoadMeasures/GameSpeed ----------
 define ServerLoadOfDoGameSpeedDown : ServerLoad.FULL;
 define WaitTimeGameSpeedDown : 3.0;
 define ChangeStepGameSpeedDown : 30;
-define WaitTimeGameSpeedUp : 5.0;
+define WaitTimeGameSpeedUp : 3.0;
 define ChangeStepGameSpeedUp : 30;
 
 define gameSpeedMax: 100;
