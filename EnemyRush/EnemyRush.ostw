@@ -33,7 +33,7 @@ Event.OngoingGlobal
         null, "[PVE] ENEMY RUSH ver.13.5 / Share code [V7PEF]", null,
         Location.Left, -999,
         Color.White, gameSpeed < gameSpeedMax ? cautionColor : Color.Gray, Color.White,
-        HudTextRev.StringAndColor, Spectators.VisibleAlways);
+        HudTextRev.VisibleToAndColor, Spectators.VisibleAlways);
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
@@ -1809,7 +1809,7 @@ void PlayTeleportEffect(define isBefore!, define isBeamFromBody!) playervar "Pla
             //     BodyPosition(ep) :
                 teleportPosition + Vector(0, 30, 0),
             teleportPosition,
-            enemyTeamColor, EffectRev.VisibleToPositionAndRadius);
+            enemyTeamColor, EffectRev.PositionAndRadius);
         // wait for show teleport shadow of before
         Wait(showTeleportBeamTime / 2, WaitBehavior.IgnoreCondition);
 
@@ -1912,6 +1912,16 @@ if(
             // dbgHudTxt(<"UP POS BY POS INV">);
         }
         else if(
+            // too close from spawn point
+            DistanceBetween(
+                teleportBasePosition,
+                SpawnPoints(humanTeam)[0]
+            ) <= ActionRange.Far
+        ){
+            needUpdateTeleportBasePosition = true;
+            // dbgHudTxt(<"UP POS BY CRS SPN PNT">);
+        }
+        else if(
             // position too close player
             DistanceBetween(
                 teleportBasePosition,
@@ -1922,53 +1932,19 @@ if(
             // dbgHudTxt(<"UP POS BY CRS PLR">);
         }
         else if(
-            // too close from spawn point
-            DistanceBetween(
-                teleportBasePosition,
-                SpawnPoints(humanTeam)[0]
-            ) <= ActionRange.Middle
+            // not line from closest object player
+            !IsInLineOfSight(
+                PositionOffsetY1() + teleportBasePosition,
+                PositionOffsetY1() + PositionOf(ClosestPlayerTo(objectPos, humanTeam)),
+                BarrierLOS.NoBarriersBlock
+            )
         ){
             needUpdateTeleportBasePosition = true;
-            // dbgHudTxt(<"UP POS BY CRS SPN PNT">);
+            // dbgHudTxt(<"UP POS BY NON LINE PLR">);
         }
         else{
-            if(
-                // player on object
-                IsTeamOnObject(humanTeam)
-            ){
-                define checkPos! = HasObjectDirection() ? positionObjectAhead : objectPos;
-                if(
-                    // not line from checkPos
-                    !IsInLineOfSight(
-                        PositionOffsetY1() + teleportBasePosition,
-                        PositionOffsetY1() + checkPos,
-                        BarrierLOS.NoBarriersBlock
-                    )
-                ){
-                    needUpdateTeleportBasePosition = true;
-                    // dbgHudTxt(<"UP POS BY NON LINE OBJ OR AHD">);
-                }
-                else{
-                    // dbgHudTxt(<"POS KEP">);
-                }
-            }
-            else{
-                if(
-                    // not line from closest object player
-                    !IsInLineOfSight(
-                        PositionOffsetY1() + teleportBasePosition,
-                        PositionOffsetY1() + PositionOf(ClosestPlayerTo(objectPos, humanTeam)),
-                        BarrierLOS.NoBarriersBlock
-                    )
-                ){
-                    needUpdateTeleportBasePosition = true;
-                    // dbgHudTxt(<"UP POS BY NON LINE PLR">);
-                }
-                else{
-                    // dbgHudTxt(<"POS KEP">);
-                }
-            }
-        } 
+            // dbgHudTxt(<"POS KEP">);
+        }
     }
     
     // if has update flag of commonTeleportBasePosition
