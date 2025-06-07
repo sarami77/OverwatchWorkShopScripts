@@ -297,6 +297,11 @@ playervar define dogDest!;
 // TAG GUNSHIP_GUNNER
 playervar define zoomLevel;
 
+// TAG DEAL_HEAL
+playervar define dealHealSum;
+// TAG RECEIVE_DAMAGE
+playervar define receiveDamageSum;
+
 // TAG HeroMod/Function ----------
 define CanTouchPlayerList():
     (
@@ -1320,7 +1325,6 @@ void HeroMod_Action_GRUDGE_LIGHTNING(define trigger!, define inputPayload!) play
         else if(
             trigger == HeroModEvent.TIME_PASSED
         ){
-
             Wait(1, WaitBehavior.AbortWhenFalse);
         }
     }
@@ -1414,7 +1418,6 @@ void HeroMod_Action_GRUDGE_FIRE_BALL(define trigger!, define inputPayload!) play
         else if(
             trigger == HeroModEvent.TIME_PASSED
         ){
-
             Wait(1, WaitBehavior.AbortWhenFalse);
         }
     }
@@ -2801,7 +2804,12 @@ if(
     ) &&
     Attacker() != ep
 ){
-    DoHeroModAction(heroModType, HeroModEvent.RECEIVE_DAMAGE, EventDamage());
+    receiveDamageSum += EventDamage();
+    if(IsLoadOvered()){
+        Wait(1.0, WaitBehavior.RestartWhenTrue);
+    }
+    DoHeroModAction(heroModType, HeroModEvent.RECEIVE_DAMAGE, receiveDamageSum);
+    receiveDamageSum = 0;
 }
 
 // TAG DEAL_HEAL
@@ -2814,7 +2822,12 @@ if(
     ) &&
     Healee() != ep
 ){
-    DoHeroModAction(heroModType, HeroModEvent.DEAL_HEAL, EventHealing());
+    dealHealSum += EventHealing();
+    if(IsLoadOvered()){
+        Wait(1.0, WaitBehavior.RestartWhenTrue);
+    }
+    DoHeroModAction(heroModType, HeroModEvent.DEAL_HEAL, dealHealSum);
+    dealHealSum = 0;
 }
 
 // TAG KILL
@@ -2840,6 +2853,7 @@ if(
         heroModType == HeroModType.ZOMBIE
     )
 ){
+    Wait(0.1, WaitBehavior.IgnoreCondition);
     DoHeroModAction(heroModType, HeroModEvent.DEATH, null);
 }
 
