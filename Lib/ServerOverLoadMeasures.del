@@ -11,7 +11,9 @@ enum ServerLoad{
 }
 
 define IsLoadOvered() : ServerLoad() >= ServerLoad.FULL;
-define IsLoadLimited() : ServerLoad() >= ServerLoad.FULL;
+define IsLoadLimited() : ServerLoad() >= ServerLoad.HIGH;
+define releaseGateNum : 10;
+define releaseGateInterval : 0.1;
 
 globalvar define countActionWait;
 
@@ -20,16 +22,13 @@ void WaitUntilServerLoadLimitRelease(define baseTime = 1.0){
         IsLoadLimited()
     ){
         countActionWait ++;
-
-        // WaitUntil(!IsLoadLimited(), 3.0);
-
         while(IsLoadLimited()){
             Wait(0.1, WaitBehavior.IgnoreCondition);
         }
-
-        // Wait(RandomReal(0.0, 0.5), WaitBehavior.IgnoreCondition);
-
         countActionWait --;
+
+        Wait((countActionWait % (releaseGateNum + 1)) * releaseGateInterval, WaitBehavior.IgnoreCondition);
+
     }
 }
 
