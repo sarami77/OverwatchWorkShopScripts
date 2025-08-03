@@ -588,8 +588,10 @@ if(
         NormalizedHealth() < 1.0 ||
         // has line of close player
         IsInLineOfSight(
-            EyePosition(),
-            EyePosition(closePlayer))
+            EyePosition(ep),
+            EyePosition(closePlayer),
+            BarrierLOS.NoBarriersBlock
+        )
     ){
         // start bot
         isBotActive = true;
@@ -1222,7 +1224,7 @@ if(
     define progressStage! = 0;
 
     while(true){
-        define progress! = ObjectProgress(humanTeam);
+        define progress! = ObjectProgress();
         define progressAssetNo! = -1;
         define progressAssetInterval!;
 
@@ -1651,7 +1653,7 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
             // has line to close player
             IsInLineOfSight(
                 PositionOffsetY1() + candidatePosition,
-                PositionOffsetY1() + closePlayerPosition,
+                EyePosition(closePlayer),
                 BarrierLOS.NoBarriersBlock
             )
                 &&
@@ -1732,7 +1734,7 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
             // has line to close player
             IsInLineOfSight(
                 PositionOffsetY1() + candidatePosition,
-                PositionOffsetY1() + closePlayerPosition,
+                EyePosition(closePlayer),
                 BarrierLOS.NoBarriersBlock
             )
                 &&
@@ -1934,7 +1936,7 @@ if(
             // not line from closest object player
             !IsInLineOfSight(
                 PositionOffsetY1() + teleportBasePosition,
-                PositionOffsetY1() + PositionOf(ClosestPlayerTo(objectPos, humanTeam)),
+                EyePosition(ClosestPlayerTo(objectPos, humanTeam)),
                 BarrierLOS.NoBarriersBlock
             )
         ){
@@ -2059,9 +2061,19 @@ if(
                 // not in ult
                 !IsUsingUltimate() &&
                 // by health high
-                IsTrueProbability(NormalizedHealth() * 100) &&
+                IsTrueProbability(
+                    // own health
+                    NormalizedHealth(ep) *
+                    // target health
+                    (aimTarget != null ? NormalizedHealth(aimTarget) : 1)
+                    * 100
+                ) &&
                 // has not line to teleportBasePosition
-                !IsInLineOfSight(EyePosition(ep), PositionOffsetY1() + teleportBasePosition) 
+                !IsInLineOfSight(
+                    EyePosition(ep),
+                    PositionOffsetY1() + teleportBasePosition,
+                    BarrierLOS.NoBarriersBlock
+                ) 
             ){
                 // do teleport instantly
                 break;
@@ -2085,7 +2097,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    spawnRushInterval = ObjectProgressScaledInterval(humanTeam, 50, 60);
+    spawnRushInterval = 50 + RandomInteger(-5, 5);
     // apply workshop setting
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.0, 100, 4);
     // round for counting
@@ -2095,7 +2107,7 @@ if(
     }
 
     // action
-    define spawnRushDuration! = RandomInteger(15, 30);
+    define spawnRushDuration! = RandomInteger(10, 20);
     spawnRushDuration *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Duration Scale", 1.0, 0.0, 100, 5);
     define deployInterval! = RandomInteger(1, 5);
     spawnRushCount = RoundToInteger(spawnRushDuration / deployInterval, Rounding.Down);
@@ -2125,7 +2137,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    shotCallInterval = ObjectProgressScaledInterval(humanTeam, 40, 60);
+    shotCallInterval = 50 + RandomInteger(-5, 5);
     // apply workshop setting
     shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.0, 100, 6);
     // round for counting
@@ -2437,8 +2449,8 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         // wm(); debugHuds[Last()] = CreateDebugHud("Server Load Peak", ServerLoadPeak(), ServerLoadPeak() >= ServerLoad.FULL ? Color.Red : ServerLoadPeak() >= ServerLoad.HIGH ? Color.Yellow : Color.Gray);
         // wm(); debugHuds[Last()] = CreateDebugHud("Server Load Avrg", ServerLoadAverage(), ServerLoadAverage() >= ServerLoad.FULL ? Color.Red : ServerLoadAverage() >= ServerLoad.HIGH ? Color.Yellow : Color.Gray);
         wm(); debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), IsLoadOvered() ? Color.Red : IsLoadLimited()  ? Color.Yellow : Color.Gray);
-        wm(); debugHuds[Last()] = CreateDebugHud("Game Speed", gameSpeed, gameSpeed < gameSpeedMax ? Color.Yellow : Color.Gray);
         wm(); debugHuds[Last()] = CreateDebugHud("Count Action Wait", countActionWait, Color.Gray);
+        wm(); debugHuds[Last()] = CreateDebugHud("Game Speed", gameSpeed, gameSpeed < gameSpeedMax ? Color.Yellow : Color.Gray);
         wm(); debugHuds[Last()] = CreateDebugHud("Count Game Speed Decrease", countGameSpeedDecrease, countGameSpeedDecrease > 0 ? Color.Yellow : Color.Gray);
     }
 
@@ -2450,7 +2462,7 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         wm(); debugHuds[Last()] = CreateDebugHud("Reload Asset Interval", reloadFriendBotAssetInterval, reloadFriendBotAssetInterval <= 5 ? Color.Yellow : Color.Team2);
         wm(); debugHuds[Last()] = CreateDebugHud("Asset Number", friendBotAssetNo, Color.Team2);
         wm(); debugHuds[Last()] = CreateDebugHud("Death Count", playerDeathCount, Color.Team2);
-        wm(); debugHuds[Last()] = CreateDebugHud("Object Progress", ObjectProgress(humanTeam), Color.Team2);
+        wm(); debugHuds[Last()] = CreateDebugHud("Object Progress", ObjectProgress(), Color.Team2);
         wm(); debugHuds[Last()] = CreateDebugHud("Game Progress Diff", GameProgressDiff(humanTeam), Color.Team2);
 
         // enemy team
