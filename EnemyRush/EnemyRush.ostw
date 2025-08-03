@@ -612,7 +612,7 @@ if(
 }
 
 // TAG EnemyBot/Config ----------
-define spawnTimeBase: 12;
+define spawnTimeBase: 16;
 define spawnTimeEachLevel:
     confirmGameDifficulty == GameDifficulty.EASY ?      spawnTimeBase * 1.0 :
     confirmGameDifficulty == GameDifficulty.NORMAL ?    spawnTimeBase * 0.9 :  //-0.1
@@ -1590,8 +1590,9 @@ define placableAreaExtendSizeScaleOnPayloadEscort: 0.3;
 define placableAreaOffset: ActionRange.CanFind;   // bot can find other range
 
 globalvar define teleportBasePosition;
+globalvar define teleportCandidatePositionArray;
 playervar define teleportPosition;
-define teleportAreaSize: 5;
+define teleportAreaSize: 8;
 define teleportAreaForceUpdateSize: teleportAreaSize * 1.5;
 
 define CanSnapMapSurface()"CanSnapMapSurface"{
@@ -1653,6 +1654,12 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
                 PositionOffsetY1() + closePlayerPosition,
                 BarrierLOS.NoBarriersBlock
             )
+                &&
+            // not too close from spawn point
+            DistanceBetween(
+                candidatePosition,
+                SpawnPoints(humanTeam)[0]
+            ) > ActionRange.CanFind
         ){
             returnPosition = candidatePosition;
             break;
@@ -1728,6 +1735,12 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
                 PositionOffsetY1() + closePlayerPosition,
                 BarrierLOS.NoBarriersBlock
             )
+                &&
+            // not too close from spawn point
+            DistanceBetween(
+                candidatePosition,
+                SpawnPoints(humanTeam)[0]
+            ) > ActionRange.CanFind
         ){
             returnPosition = candidatePosition;
             break;
@@ -1738,22 +1751,17 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
     return returnPosition;
 }
 
-// TAG EnemyBot/Teleport/GetTeleportPositionByTeleportBasePosition
-define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositionByTeleportBasePosition"{
-    define returnPosition! = null;
+// TAG EnemyBot/Teleport/SetTeleportCandidatePositionArray
+void SetTeleportCandidatePositionArray(define basePosition) globalvar "SetTeleportCandidatePositionArray"{
     define canSnapMap = CanSnapMapSurface();
-    define closePlayer = ClosestPlayerTo(teleportBasePosition, humanTeam);
+    define closePlayer = ClosestPlayerTo(basePosition, humanTeam);
 
-    if(
-        IsInSpawnRoom(closePlayer)
-    ){
-        return returnPosition;
-    }
+    teleportCandidatePositionArray = [];
 
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select teleportPosition from teleportBasePosition around
         define candidatePosition = 
-            teleportBasePosition
+            basePosition
                 +
             RandomPosition(
                 teleportAreaSize,
@@ -1777,14 +1785,18 @@ define GetTeleportPositionByTeleportBasePosition() playervar "GetTeleportPositio
                 EyePosition(closePlayer),
                 BarrierLOS.NoBarriersBlock
             )
+                &&
+            // not too close from spawn point
+            DistanceBetween(
+                candidatePosition,
+                SpawnPoints(humanTeam)[0]
+            ) > ActionRange.CanFind
         ){
-            returnPosition = candidatePosition;
-            break;
+            teleportCandidatePositionArray[CountOf(teleportCandidatePositionArray)] = candidatePosition;
+            dbgPlyEft(candidatePosition);
         }
         Wait(searchPositionInterval, WaitBehavior.IgnoreCondition);
     }
-
-    return returnPosition;
 }
 
 playervar define telBeam!;
@@ -1835,9 +1847,12 @@ void DoTeleport(define isBeamFromBody!, define isTeleportToOnObject!)"DoTeleport
         newPosition = BlockedPositon(CurrentObjectPosition(), objectDirection, 6);
         ApplyImpulse(ep, Down(), 1, Relative.ToWorld, ContraryMotion.Cancel);
     }
-    else if(IsTrueProbability(25)){
-        // set teleportPosition by common position
-        newPosition = GetTeleportPositionByTeleportBasePosition();
+    else if(teleportCandidatePositionArray != null){
+        // set teleportPosition by teleport candidate position array
+        newPosition = RandomValueInArray(teleportCandidatePositionArray);
+    }
+    else{
+        newPosition = teleportBasePosition;
     }
 
     if(
@@ -1850,10 +1865,10 @@ void DoTeleport(define isBeamFromBody!, define isTeleportToOnObject!)"DoTeleport
 
         if(IsInSpawnRoom()){
             define waitTime! = 
-                // set delay time proportional to slot number for load distributing
-                ((maxCreateEnemyBotNum - SlotOf() - 1) * 0.2) *
-                // scale by alive enemy num
-                (NumberOfLivingPlayers() / NumberOfPlayers());
+                // set random delay for load distributing
+                RandomReal(0, 1.0) *
+                // scale by alive enemy team alives
+                (NumberOfLivingPlayers(enemyTeam) / NumberOfPlayers(enemyTeam));
             Wait(waitTime, WaitBehavior.IgnoreCondition);
         }
 
@@ -1899,20 +1914,11 @@ if(
         }
         else if(
             // position invalid
-            teleportBasePosition == null
+            teleportBasePosition == null ||
+            teleportCandidatePositionArray == null
         ){
             needUpdateTeleportBasePosition = true;
             // dbgHudTxt(<"UP POS BY POS INV">);
-        }
-        else if(
-            // too close from spawn point
-            DistanceBetween(
-                teleportBasePosition,
-                SpawnPoints(humanTeam)[0]
-            ) <= ActionRange.CanFind
-        ){
-            needUpdateTeleportBasePosition = true;
-            // dbgHudTxt(<"UP POS BY CRS SPN PNT">);
         }
         else if(
             // position too close player
@@ -1962,8 +1968,10 @@ if(
         if(
             newPosition != null
         ){
-            // update commonTeleportBasePosition by new position
+            // update teleportBasePosition by new position
             teleportBasePosition = newPosition;
+            // set teleport candidate position array by teleportBasePosition
+            SetTeleportCandidatePositionArray(teleportBasePosition);
             // release update flag
             needUpdateTeleportBasePosition = false;
 
@@ -2077,7 +2085,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    spawnRushInterval = ObjectProgressScaledInterval(humanTeam, 40, 50) + RandomInteger(-5, 5);
+    spawnRushInterval = ObjectProgressScaledInterval(humanTeam, 50, 60) + RandomInteger(-5, 5);
     // apply workshop setting
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.0, 100, 4);
     // round for counting
