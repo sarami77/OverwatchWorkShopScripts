@@ -1617,7 +1617,7 @@ define searchPositionTryCountMax: 10;
 define searchPositionInterval: 0.1;
 
 define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositionByClosestPlayer"{
-    define returnPosition! = null;
+    define returnPosition = null;
     define canSnapMap = CanSnapMapSurface();
     define objectPosition = CurrentObjectOnPosition();
     define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
@@ -1677,14 +1677,25 @@ globalvar define blockedPos;
 globalvar define positionObjectAhead;
 
 define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObject"{
-    define returnPosition! = null;
+    define returnPosition = null;
     define canSnapMap = CanSnapMapSurface();
     define objectPosition = CurrentObjectOnPosition();
+    define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
+    define closePlayerPosition = PositionOf(closePlayer);
 
     if(
         // has object direction
         HasObjectDirection()
     ){
+        // get blockedPos by extension line collision position from objectPosition
+        blockedPos = BlockedPositon(objectPosition, objectDirection, placableAreaOffset);
+        // get positionObjectAhead by blockedPos
+        positionObjectAhead = ShiftedPosition(
+            objectPosition,
+            DirectionTowards(objectPosition, blockedPos),
+            DistanceBetween(objectPosition, blockedPos) * 0.75
+        );
+
         if(
             // player on object
             IsTeamOnObject(humanTeam)
@@ -1698,22 +1709,18 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
             // clear extend size by non cut off distance of object direction
             placableAreaExtendSize = 0;
         }
-
-        // overwrite position by positionObjectAhead
-        objectPosition = positionObjectAhead;
     }
     else{
+        // get positionObjectAhead by object position
+        positionObjectAhead = objectPosition;
         // get teleportAreaExtendSize by fixed value of non object direction
         placableAreaExtendSize = placableAreaSize * placableAreaExtendSizeScaleOnPointCapture;
     }
 
-    define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
-    define closePlayerPosition = PositionOf(closePlayer);
-
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select candidatePosition at object ahead
         define candidatePosition =
-            objectPosition
+            positionObjectAhead
                 +
             RandomPosition(
                 placableAreaSize + placableAreaExtendSize,
@@ -1893,16 +1900,6 @@ if(
 ){
     define objectPos! = CurrentObjectOnPosition();
 
-    if(HasObjectDirection()){
-        // get blockedPos by extension line collision position
-        blockedPos = BlockedPositon(objectPos, objectDirection, placableAreaOffset);
-        // get positionObjectAhead by between object position and blockedPos
-        positionObjectAhead = ShiftedPosition(
-            objectPos,
-            DirectionTowards(objectPos, blockedPos),
-            DistanceBetween(objectPos, blockedPos) * 0.75
-        );
-    }
 
     // if has not update flag of commonTeleportBasePosition
     if(!needUpdateTeleportBasePosition){
