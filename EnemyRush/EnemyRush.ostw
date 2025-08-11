@@ -1587,11 +1587,10 @@ if(
 }
 
 // TAG EnemyBot/Teleport ----------
-define placableAreaSize: 20;
-globalvar define placableAreaExtendSize;
-define placableAreaExtendSizeScaleOnPointCapture: 0.4;
-define placableAreaExtendSizeScaleOnPayloadEscort: 0.3;
-define placableAreaOffset: ActionRange.CanFind;   // bot can find other range
+globalvar define placeAreaBasePosition;
+globalvar define placeAreaSize;
+define placeAreaBaseSize: 20;
+define placeAreaOffset: ActionRange.CanFind;   // bot can find other range
 
 globalvar define teleportBasePosition;
 globalvar define teleportCandidatePositionArray;
@@ -1623,23 +1622,22 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
     define canSnapMap = CanSnapMapSurface();
     define objectPosition = CurrentObjectOnPosition();
     define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
-    define closePlayerPosition = PositionOf(closePlayer);
 
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select candidatePosition at almost middle position of close player and object
         define candidatePosition =
-            closePlayerPosition
+            placeAreaBasePosition
                 +
             RandomPosition(
-                placableAreaSize,
-                placableAreaSize,
-                placableAreaSize
+                placeAreaSize,
+                placeAreaSize,
+                placeAreaSize
             )
                 + 
             (
-                DirectionTowards(closePlayerPosition, objectPosition)
+                DirectionTowards(placeAreaBasePosition, objectPosition)
                     *
-                DistanceBetween(closePlayerPosition, objectPosition) * 0.3
+                DistanceBetween(placeAreaBasePosition, objectPosition) * 0.3
             );
         
         if(
@@ -1648,7 +1646,7 @@ define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositi
             candidatePosition = NearestWalkablePosition(candidatePosition);
         }
         else{
-            candidatePosition = BelowPosition(candidatePosition + Vector(0, placableAreaSize * 2.0, 0));
+            candidatePosition = BelowPosition(candidatePosition + Vector(0, placeAreaBaseSize * 2.0, 0));
         }
 
         if(
@@ -1680,44 +1678,16 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
     define canSnapMap = CanSnapMapSurface();
     define objectPosition = CurrentObjectOnPosition();
     define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
-    define closePlayerPosition = PositionOf(closePlayer);
-
-    define positionObjectAhead;
-
-    if(
-        // has object direction
-        HasObjectDirection()
-    ){
-        // get blockedPos by extension line collision position from objectPosition
-        define blockedPos = BlockedPositon(objectPosition, objectDirection, placableAreaOffset);
-        // get positionObjectAhead by blockedPos
-        positionObjectAhead = ShiftedPosition(
-            objectPosition,
-            DirectionTowards(objectPosition, blockedPos),
-            DistanceBetween(objectPosition, blockedPos) * 0.75
-        );
-
-        // get teleportAreaExtendSize by object position and blockedPos
-        define cutoutDistance! = placableAreaOffset - DistanceBetween(objectPosition, blockedPos);
-        // get teleportAreaExtendSize by cutoutDistance with scale
-        placableAreaExtendSize = cutoutDistance * placableAreaExtendSizeScaleOnPayloadEscort;
-    }
-    else{
-        // get positionObjectAhead by object position
-        positionObjectAhead = objectPosition;
-        // get teleportAreaExtendSize by fixed value of non object direction
-        placableAreaExtendSize = placableAreaSize * placableAreaExtendSizeScaleOnPointCapture;
-    }
 
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
         // select candidatePosition at object ahead
         define candidatePosition =
-            positionObjectAhead
+            placeAreaBasePosition
                 +
             RandomPosition(
-                placableAreaSize + placableAreaExtendSize,
-                placableAreaSize + placableAreaExtendSize,
-                placableAreaSize + placableAreaExtendSize
+                placeAreaSize,
+                placeAreaSize,
+                placeAreaSize
             );
 
         if(
@@ -1726,7 +1696,7 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
             candidatePosition = NearestWalkablePosition(candidatePosition);
         }
         else{
-            candidatePosition = BelowPosition(candidatePosition + Vector(0, placableAreaSize * 2.0, 0));
+            candidatePosition = BelowPosition(candidatePosition + Vector(0, placeAreaBaseSize * 2.0, 0));
         }
 
         if(
@@ -1882,7 +1852,8 @@ void DoTeleport(define isBeamFromBody!, define isTeleportToOnObject!)"DoTeleport
 }
 
 // TAG EnemyBot/Teleport/UpdateTeleportBasePosition ----------
-globalvar define needUpdateTeleportBasePosition!;
+globalvar define needUpdateTeleportBasePosition;
+globalvar define blockedPos;
 
 rule: "EnemyBot/Teleport/UpdateTeleportBasePosition"
 Event.OngoingGlobal
@@ -1891,6 +1862,38 @@ if(
 ){
     define objectPosition! = CurrentObjectOnPosition();
     define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
+    define closePlayerPosition = PositionOf(closePlayer);
+
+    // update placeAreaBasePosition and placeAreaSize
+    if(
+        !IsTeamOnObject(humanTeam)
+    ){
+        placeAreaBasePosition = closePlayerPosition;
+        placeAreaSize = placeAreaBaseSize;
+    }
+    else if(
+        // has object direction
+        HasObjectDirection()
+    ){
+        // get blockedPos by extension line collision position from objectPosition
+        blockedPos = BlockedPositon(objectPosition, objectDirection, placeAreaOffset);
+        // get placeAreaBasePosition by blockedPos
+        placeAreaBasePosition = ShiftedPosition(
+            objectPosition,
+            DirectionTowards(objectPosition, blockedPos),
+            DistanceBetween(objectPosition, blockedPos) * 0.75
+        );
+        // get cutoutDistance by object position and blockedPos
+        define cutoutDistance! = placeAreaOffset - DistanceBetween(objectPosition, blockedPos);
+        // get placeAreaSize by cutoutDistance with scale
+        placeAreaSize = placeAreaBaseSize + (cutoutDistance * 0.2);
+    }
+    else{
+        // get placeAreaBasePosition by object position
+        placeAreaBasePosition = objectPosition;
+        // get placeAreaSize by fixed value of non object direction
+        placeAreaSize = placeAreaBaseSize + (placeAreaBaseSize * 0.3);
+    }
 
     // if has not update flag of commonTeleportBasePosition
     if(!needUpdateTeleportBasePosition){
@@ -1918,13 +1921,19 @@ if(
             needUpdateTeleportBasePosition = true;
         }
         else if(
-            // not line from closest object player
+            // position too far base position
+            DistanceBetween(
+                teleportBasePosition,
+                placeAreaBasePosition
+            ) > placeAreaSize        
+        ){
+            needUpdateTeleportBasePosition = true;
+        }
+        else if(
+            // not line from base position
             !IsInLineOfSight(
                 PositionOffsetY1() + teleportBasePosition,
-                // player on object
-                IsTeamOnObject(humanTeam) ?
-                    PositionOffsetY1() + objectPosition :
-                    PositionOffsetY1() + PositionOf(closePlayer),
+                PositionOffsetY1() + placeAreaBasePosition,
                 BarrierLOS.NoBarriersBlock
             )
         ){
@@ -2052,7 +2061,7 @@ if(
                     PositionOffsetY1() + PositionOf(ep),
                     PositionOffsetY1() + teleportBasePosition,
                     BarrierLOS.NoBarriersBlock
-                ) 
+                )
             ){
                 // do teleport instantly
                 break;
@@ -2190,6 +2199,8 @@ if(
 }
 
 // TAG Debug ----------
+define showDebugEffect  : debugMode >= DebugMode.ShowParam;
+
 rule: "DebugGlobalAction"
 Event.OngoingGlobal
 Team.All
@@ -2197,42 +2208,31 @@ if(
     initCompleted
 ){
     // teleportBasePosition icon
-    CreateIcon(debugMode >= DebugMode.ShowParam ? hp : null, teleportBasePosition, Icon.ArrowDown,
+    CreateIcon(showDebugEffect ? hp : null,
+        teleportBasePosition, Icon.ArrowDown,
         IconRev.VisibleToAndPosition, enemyTeamColor, true);
     // teleportBasePosition orb
-    CreateEffect(debugMode >= DebugMode.ShowParam ? hp : null, Effect.Orb, enemyTeamColor,
-        PositionOffsetY1() + teleportBasePosition, 1, EffectRev.VisibleToPositionAndRadius);
-    // // positionObjectAhead orb
-    // CreateEffect(debugMode != DebugMode.Non ? hp : null, Effect.Orb, Color.White,
-    //         positionObjectAhead, 1, EffectRev.VisibleToPositionAndRadius);
-
-    // // teleportAreaSize ring
-    // CreateEffect(debugMode != DebugMode.Non ? hp : null, Effect.Ring, Color.Red,
-    //         teleportBasePosition, teleportAreaSize, EffectRev.VisibleToPositionAndRadius);
-    // // teleportAreaForceUpdateRange ring
-    // CreateEffect(debugMode != DebugMode.Non ? hp : null, Effect.Ring, Color.Yellow,
-    //         teleportBasePosition, teleportAreaForceUpdateSize, EffectRev.VisibleToPositionAndRadius);
-
-    // // placable teleportPosition area size sphere
-    // CreateEffect(debugMode == DebugMode.ShowParam ? hp : null,
-    //         Effect.Sphere, Color.White,
-    //         HasObjectDirection() ?
-    //                 positionObjectAhead :
-    //                 CurrentObjectOnPosition(),
-    //         placableAreaSize + placableAreaExtendSize,
-    //         EffectRev.VisibleToPositionAndRadius);
-
-    // // object -> positionObjectAhead beam
-    // CreateBeamEffect(debugMode != DebugMode.Non ? hp : null, BeamType.GoodBeam, 
-    //         CurrentObjectOnPosition(),
-    //         positionObjectAhead, 
-    //         Color.White, EffectRev.VisibleToPositionAndRadius);
-    // // positionObjectAhead or object -> commonTeleportBasePosition beam
-    // CreateBeamEffect(debugMode != DebugMode.Non ? hp : null, BeamType.GoodBeam, 
-    //         HasObjectDirection() ? positionObjectAhead : CurrentObjectOnPosition(),
-    //         PositionOffsetY1() + teleportBasePosition, 
-    //         Color.Red, EffectRev.VisibleToPositionAndRadius);
-
+    CreateEffect(showDebugEffect ? hp : null,
+        Effect.Orb, enemyTeamColor,
+        PositionOffsetY1() + teleportBasePosition,
+        1, EffectRev.VisibleToPositionAndRadius);
+    // // placeAreaBasePosition -> teleportBasePosition beam
+    // CreateBeamEffect(showDebugEffect ? hp : null,
+    //     BeamType.GoodBeam, 
+    //     PositionOffsetY1() + teleportBasePosition, 
+    //     PositionOffsetY1() + placeAreaBasePosition,
+    //     enemyTeamColor, EffectRev.VisibleToPositionAndRadius);
+    // // objectPosition -> blockedPos beam
+    // CreateBeamEffect(showDebugEffect ? hp : null,
+    //     BeamType.GoodBeam, 
+    //     CurrentObjectOnPosition(), 
+    //     blockedPos,
+    //     Color.White, EffectRev.VisibleToPositionAndRadius);
+    // // placeAreaSize sphere
+    // CreateEffect(showDebugEffect ? hp : null,
+    //     Effect.Sphere, Color.White,
+    //     placeAreaBasePosition,
+    //     placeAreaSize, EffectRev.VisibleToPositionAndRadius);
 
     define forceModRate = WorkshopSettingReal("Friend Bot Settings", "Force Mod Rate (when player team in disadvantage, friend bot use powerfull mod)", 1.0, 0.0, 100, 2);
 
