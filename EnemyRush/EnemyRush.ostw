@@ -1613,6 +1613,141 @@ define CanSnapMapSurface()"CanSnapMapSurface"{
     );
 }
 
+// TAG EnemyBot/Teleport/UpdateTeleportBasePosition ----------
+globalvar define needUpdateTeleportBasePosition;
+globalvar define blockedPos;
+globalvar define updateTrigger;
+
+rule: "EnemyBot/Teleport/UpdateTeleportBasePosition"
+Event.OngoingGlobal
+if(
+    IsGameInProgress()
+){
+    define objectPosition! = CurrentObjectOnPosition();
+    define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
+    define closePlayerPosition = PositionOf(closePlayer);
+
+    // update placeAreaBasePosition and placeAreaSize
+    if(
+        !IsTeamOnObject(humanTeam)
+    ){
+        placeAreaBasePosition = closePlayerPosition;
+        placeAreaSize = placeAreaBaseSize;
+    }
+    else if(
+        // has object direction
+        HasObjectDirection()
+    ){
+        // get blockedPos by extension line collision position from objectPosition
+        blockedPos = BlockedPositon(objectPosition, objectDirection, placeAreaOffset);
+        // get placeAreaBasePosition by blockedPos
+        placeAreaBasePosition = ShiftedPosition(
+            objectPosition,
+            DirectionTowards(objectPosition, blockedPos),
+            DistanceBetween(objectPosition, blockedPos) * 0.75
+        );
+        // get cutoutDistance by object position and blockedPos
+        define cutoutDistance! = placeAreaOffset - DistanceBetween(objectPosition, blockedPos);
+        // get placeAreaSize by cutoutDistance with scale for paylod block
+        placeAreaSize = placeAreaBaseSize + (cutoutDistance * 0.1);
+    }
+    else{
+        // get placeAreaBasePosition by object position
+        placeAreaBasePosition = objectPosition;
+        // get placeAreaSize with sclae for point defend
+        placeAreaSize = placeAreaBaseSize * 1.2;
+    }
+
+    // if has not update flag of commonTeleportBasePosition
+    if(!needUpdateTeleportBasePosition){
+        // set update flag
+        if(
+            // position invalid
+            teleportBasePosition == null ||
+            teleportCandidatePositionArray == null
+        ){
+            needUpdateTeleportBasePosition = true;
+            updateTrigger = "POS INV";
+        }
+        else if(
+            // by probability
+            IsTrueProbability(3)
+        ){
+            needUpdateTeleportBasePosition = true;
+            updateTrigger = "PROB";
+        }
+        else if(
+            // position too close player
+            DistanceBetween(
+                teleportBasePosition,
+                ClosestPlayerTo(teleportBasePosition, humanTeam)
+            ) <= teleportAreaForceUpdateSize        
+        ){
+            needUpdateTeleportBasePosition = true;
+            updateTrigger = "PLR CLS";
+        }
+        else if(
+            // position too far base position
+            DistanceBetween(
+                teleportBasePosition,
+                placeAreaBasePosition
+            ) > placeAreaSize        
+        ){
+            updateTrigger = "TOO FAR";
+            needUpdateTeleportBasePosition = true;
+        }
+        else if(
+            // not line from base position
+            !IsInLineOfSight(
+                PositionOffsetY1() + teleportBasePosition,
+                PositionOffsetY1() + placeAreaBasePosition,
+                BarrierLOS.NoBarriersBlock
+            )
+        ){
+            updateTrigger = "NOT LIN";
+            needUpdateTeleportBasePosition = true;
+        }
+    }
+    
+    // if has update flag of commonTeleportBasePosition
+    if(
+        needUpdateTeleportBasePosition
+    ){
+        // if(showDebugEffect)
+        //     dbgMsg(<"POS UPDT TRGR = <0>", updateTrigger>);
+
+        define newPosition! = null;
+        // calc new position
+        if(
+            // player on object
+            IsTeamOnObject(humanTeam)
+        ){
+            // calc by object
+            newPosition = GetTeleportBasePositionByObject();
+        }
+        else{
+            // calc by closest player
+            newPosition = GetTeleportBasePositionByClosestPlayer();
+        }
+
+        // found position
+        if(
+            newPosition != null
+        ){
+            // update teleportBasePosition by new position
+            teleportBasePosition = newPosition;
+            // set teleport candidate position array by teleportBasePosition
+            SetTeleportCandidatePositionArray(teleportBasePosition);
+            // release update flag
+            needUpdateTeleportBasePosition = false;
+        }
+    }
+
+    Wait(teleportBasePosition == null ? 1 : 3, WaitBehavior.IgnoreCondition);
+    WaitUntilServerLoadLimitRelease();
+    LoopIfConditionIsTrue();
+}
+
 // TAG EnemyBot/Teleport/GetTeleportBasePositionByClosestPlayer
 define searchPositionTryCountMax: 10;
 define searchPositionInterval: 0.1;
@@ -1725,13 +1860,10 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
 // TAG EnemyBot/Teleport/SetTeleportCandidatePositionArray
 void SetTeleportCandidatePositionArray(define basePosition) globalvar "SetTeleportCandidatePositionArray"{
     define canSnapMap = CanSnapMapSurface();
-
-
     define closePlayer = ClosestPlayerTo(basePosition, humanTeam);
-
     teleportCandidatePositionArray = [];
 
-    while(CountOf(teleportCandidatePositionArray) <= (searchPositionTryCountMax / 2)){
+    while(CountOf(teleportCandidatePositionArray) <= (searchPositionTryCountMax * 0.3)){
         for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
             // select teleportPosition from teleportBasePosition around
             define candidatePosition = 
@@ -1767,7 +1899,7 @@ void SetTeleportCandidatePositionArray(define basePosition) globalvar "SetTelepo
                 ) > ActionRange.CanFind
             ){
                 teleportCandidatePositionArray[CountOf(teleportCandidatePositionArray)] = candidatePosition;
-                dbgPlyEft(candidatePosition);
+                // dbgPlyEft(candidatePosition);
             }
             Wait(searchPositionInterval, WaitBehavior.IgnoreCondition);
         }
@@ -1856,141 +1988,6 @@ void DoTeleport(define isBeamFromBody!, define isTeleportToOnObject!)"DoTeleport
         // show teleport effect
         PlayTeleportEffect(false, isBeamFromBody);
     }
-}
-
-// TAG EnemyBot/Teleport/UpdateTeleportBasePosition ----------
-globalvar define needUpdateTeleportBasePosition;
-globalvar define blockedPos;
-globalvar define updateTrigger;
-
-rule: "EnemyBot/Teleport/UpdateTeleportBasePosition"
-Event.OngoingGlobal
-if(
-    IsGameInProgress()
-){
-    define objectPosition! = CurrentObjectOnPosition();
-    define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
-    define closePlayerPosition = PositionOf(closePlayer);
-
-    // update placeAreaBasePosition and placeAreaSize
-    if(
-        !IsTeamOnObject(humanTeam)
-    ){
-        placeAreaBasePosition = closePlayerPosition;
-        placeAreaSize = placeAreaBaseSize;
-    }
-    else if(
-        // has object direction
-        HasObjectDirection()
-    ){
-        // get blockedPos by extension line collision position from objectPosition
-        blockedPos = BlockedPositon(objectPosition, objectDirection, placeAreaOffset);
-        // get placeAreaBasePosition by blockedPos
-        placeAreaBasePosition = ShiftedPosition(
-            objectPosition,
-            DirectionTowards(objectPosition, blockedPos),
-            DistanceBetween(objectPosition, blockedPos) * 0.75
-        );
-        // get cutoutDistance by object position and blockedPos
-        define cutoutDistance! = placeAreaOffset - DistanceBetween(objectPosition, blockedPos);
-        // get placeAreaSize by cutoutDistance with scale for paylod block
-        placeAreaSize = placeAreaBaseSize + (cutoutDistance * 0.1);
-    }
-    else{
-        // get placeAreaBasePosition by object position
-        placeAreaBasePosition = objectPosition;
-        // get placeAreaSize with sclae for point defend
-        placeAreaSize = placeAreaBaseSize * 1.2;
-    }
-
-    // if has not update flag of commonTeleportBasePosition
-    if(!needUpdateTeleportBasePosition){
-        // set update flag
-        if(
-            // position invalid
-            teleportBasePosition == null ||
-            teleportCandidatePositionArray == null
-        ){
-            needUpdateTeleportBasePosition = true;
-            updateTrigger = "POS INV";
-        }
-        else if(
-            // by probability
-            IsTrueProbability(3)
-        ){
-            needUpdateTeleportBasePosition = true;
-            updateTrigger = "PROB";
-        }
-        else if(
-            // position too close player
-            DistanceBetween(
-                teleportBasePosition,
-                ClosestPlayerTo(teleportBasePosition, humanTeam)
-            ) <= teleportAreaForceUpdateSize        
-        ){
-            needUpdateTeleportBasePosition = true;
-            updateTrigger = "PLR CLS";
-        }
-        else if(
-            // position too far base position
-            DistanceBetween(
-                teleportBasePosition,
-                placeAreaBasePosition
-            ) > placeAreaSize        
-        ){
-            updateTrigger = "TOO FAR";
-            needUpdateTeleportBasePosition = true;
-        }
-        else if(
-            // not line from base position
-            !IsInLineOfSight(
-                PositionOffsetY1() + teleportBasePosition,
-                PositionOffsetY1() + placeAreaBasePosition,
-                BarrierLOS.NoBarriersBlock
-            )
-        ){
-            updateTrigger = "NOT LIN";
-            needUpdateTeleportBasePosition = true;
-        }
-    }
-    
-    // if has update flag of commonTeleportBasePosition
-    if(
-        needUpdateTeleportBasePosition
-    ){
-        if(showDebugEffect)
-            dbgMsg(<"POS UPDT TRGR = <0>", updateTrigger>);
-
-        define newPosition! = null;
-        // calc new position
-        if(
-            // player on object
-            IsTeamOnObject(humanTeam)
-        ){
-            // calc by object
-            newPosition = GetTeleportBasePositionByObject();
-        }
-        else{
-            // calc by closest player
-            newPosition = GetTeleportBasePositionByClosestPlayer();
-        }
-
-        // found position
-        if(
-            newPosition != null
-        ){
-            // update teleportBasePosition by new position
-            teleportBasePosition = newPosition;
-            // set teleport candidate position array by teleportBasePosition
-            SetTeleportCandidatePositionArray(teleportBasePosition);
-            // release update flag
-            needUpdateTeleportBasePosition = false;
-        }
-    }
-
-    Wait(teleportBasePosition == null ? 1 : 3, WaitBehavior.IgnoreCondition);
-    WaitUntilServerLoadLimitRelease();
-    LoopIfConditionIsTrue();
 }
 
 globalvar define sucideCount!;
@@ -2238,23 +2235,23 @@ if(
         Effect.Ring, enemyTeamColor,
         teleportBasePosition,
         teleportAreaForceUpdateSize, EffectRev.VisibleToPositionAndRadius);
-    // placeAreaBasePosition -> teleportBasePosition beam
-    CreateBeamEffect(showDebugEffect ? hp : null,
-        BeamType.BadBeam, 
-        PositionOffsetY1() + teleportBasePosition, 
-        placeAreaBasePosition,
-        enemyTeamColor, EffectRev.VisibleToPositionAndRadius);
-    // objectPosition -> blockedPos beam
-    CreateBeamEffect((showDebugEffect && blockedPos != null )? hp : null,
-        BeamType.BadBeam, 
-        CurrentObjectOnPosition(), 
-        blockedPos,
-        Color.White, EffectRev.VisibleToPositionAndRadius);
-    // placeAreaSize sphere
-    CreateEffect(showDebugEffect ? hp : null,
-        Effect.Sphere, Color.White,
-        placeAreaBasePosition,
-        placeAreaSize, EffectRev.VisibleToPositionAndRadius);
+    // // placeAreaBasePosition -> teleportBasePosition beam
+    // CreateBeamEffect(showDebugEffect ? hp : null,
+    //     BeamType.BadBeam, 
+    //     PositionOffsetY1() + teleportBasePosition, 
+    //     placeAreaBasePosition,
+    //     enemyTeamColor, EffectRev.VisibleToPositionAndRadius);
+    // // objectPosition -> blockedPos beam
+    // CreateBeamEffect((showDebugEffect && blockedPos != null )? hp : null,
+    //     BeamType.BadBeam, 
+    //     CurrentObjectOnPosition(), 
+    //     blockedPos,
+    //     Color.White, EffectRev.VisibleToPositionAndRadius);
+    // // placeAreaSize sphere
+    // CreateEffect(showDebugEffect ? hp : null,
+    //     Effect.Sphere, Color.White,
+    //     placeAreaBasePosition,
+    //     placeAreaSize, EffectRev.VisibleToPositionAndRadius);
 
     define forceModRate = WorkshopSettingReal("Friend Bot Settings", "Force Mod Rate (when player team in disadvantage, friend bot use powerfull mod)", 1.0, 0.0, 100, 2);
 
