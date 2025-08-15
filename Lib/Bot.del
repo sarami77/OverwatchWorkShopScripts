@@ -137,10 +137,9 @@ playervar define enableFollowObject! = true;
 void SetMoveDir() playervar "SetMoveDir"{
     if(noMoving) return;
 
-    define distToTarget! = DistanceBetween(ep, aimTarget);
-    define objPos! = CurrentObjectOnPosition();
-    define nearEnemy! = ClosestPlayerTo(ep, EnemyTeamOf(ep));
-    define enemyDensity! = EnemyDensity(aimTarget, ActionRange.Close);
+    define distToTarget = DistanceBetween(ep, aimTarget);
+    define objPos = CurrentObjectOnPosition();
+    define nearEnemy = ClosestPlayerTo(ep, EnemyTeamOf(ep));
 
     // move for heal
     if(
@@ -209,19 +208,32 @@ void SetMoveDir() playervar "SetMoveDir"{
     // move for combat
     else if(actionState != ActionState.Non){
         moveTarget = null;
-        // get distRate by actionState
-        define distRate! = (actionState == ActionState.Attack) ? 1 : 0.5;
+
+        define distRate = (actionState == ActionState.Attack) ? 1 : 0.5;
+        define enemyDensity = EnemyDensity(aimTarget, ActionRange.Close);
+        define aggressiveProb =
+             DefaultPercentage() *
+                (
+                    // by own health high
+                    NormalizedHealth() *
+                    // by target health low
+                    (1 - NormalizedHealth(aimTarget)) *
+                    // by enemy density low
+                    (1 - enemyDensity)
+                );
 
         // front/back
         if(
             // target is close
-            distToTarget < (actionRangeMin * distRate)
+            distToTarget < (actionRangeMin * distRate) &&
+            IsTrueProbability(DefaultPercentage() - aggressiveProb)
         ){
             moveDirFB = Backward();
         }
         else if(
             // target is far
-            distToTarget > (actionRangeMax * distRate)
+            (distToTarget > (actionRangeMax * distRate) ) &&
+            IsTrueProbability(aggressiveProb)
         ){
             moveDirFB = Forward();
         }
@@ -232,21 +244,7 @@ void SetMoveDir() playervar "SetMoveDir"{
 
         // right/left
         if(
-            IsTrueProbability(
-                DefaultPercentage() *
-                (
-                    // by health low
-                    (1 - NormalizedHealth()) +
-
-                    actionState == ActionState.Attack
-                    ? 
-                        // by enemy density low
-                        (1 - enemyDensity)
-
-                    :
-                        0
-                )
-            )
+            IsTrueProbability(DefaultPercentage() - aggressiveProb)
         ){
             // start side step for dodge attack
             if(
@@ -262,7 +260,7 @@ void SetMoveDir() playervar "SetMoveDir"{
             }
         }
         else{
-            // stop side step by not close and not low helth
+            // stop side step
             moveDirLR = NoDirection();
         }
     }
