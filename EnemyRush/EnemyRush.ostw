@@ -1526,51 +1526,127 @@ if(
     Wait(3.0, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
+// TAG EnemyBot/EnemyAbility/SpawnRush ----------
+globalvar define spawnRushInterval;
+globalvar define spawnRushCount;
 
-
-// TAG EnemyBot/CautionColor ----------
-define cautionColor: isBlink ? Color.Red : Color.Yellow;
-
-globalvar define isBlink;
-
-rule: "EnemyBot/CautionColor/blinkColor"
+rule: "EnemyBot/EnemyAbility/SpawnRush"
 Event.OngoingGlobal
 if(
-    initCompleted
+    IsGameInProgress()
 ){
-    while(true){
-        isBlink = !isBlink;
-        Wait(0.2, WaitBehavior.AbortWhenFalse);
+    // set default interval by object progress
+    spawnRushInterval = 50 + RandomInteger(-5, 5);
+    // apply workshop setting
+    spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.0, 100, 4);
+    // round for counting
+    spawnRushInterval = RoundToInteger(spawnRushInterval, Rounding.Up);
+    for(;spawnRushInterval > 0; spawnRushInterval--){
+        Wait(1, WaitBehavior.IgnoreCondition);
     }
+
+    // action
+    define spawnRushDuration! = RandomInteger(15, 30);
+    spawnRushDuration *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Duration Scale", 1.0, 0.0, 100, 5);
+    define deployInterval! = RandomInteger(1, 5);
+    spawnRushCount = RoundToInteger(spawnRushDuration / deployInterval, Rounding.Down);
+    for(; spawnRushCount > 0; spawnRushCount--){
+        Respawn(
+            FilteredArray(
+                AllDeadPlayers(enemyTeam),
+                (
+                    ae.enemyType != EnemyType.Boss
+                )
+            )
+        );
+        
+        Wait(deployInterval, WaitBehavior.IgnoreCondition);
+    }
+
+    Wait(1, WaitBehavior.IgnoreCondition);
+    LoopIfConditionIsTrue();
 }
 
-// TAG EnemyBot/ThreatIcon ----------
-playervar define threatIcon;
+// TAG EnemyBot/EnemyAbility/ShotCall ----------
+globalvar define shotCallInterval;
 
-define isThreatIconActive:
+rule: "EnemyBot/EnemyAbility/ShotCall"
+Event.OngoingGlobal
+if(
+    IsGameInProgress()
+){
+    // set default interval by object progress
+    shotCallInterval = 50 + RandomInteger(-5, 5);
+    // apply workshop setting
+    shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.0, 100, 6);
+    // round for counting
+    shotCallInterval = RoundToInteger(shotCallInterval, Rounding.Up);
+    for(;shotCallInterval > 0; shotCallInterval--){
+        Wait(1, WaitBehavior.IgnoreCondition);
+    }
+
+    // action
+    define activeEnemys! = AllPlayers(enemyTeam);
+    define shotCallDelay! = RandomReal(0.2, 1.0);
+    for(define scLoopIndex! = 0; scLoopIndex < CountOf(activeEnemys); scLoopIndex ++){
+        if(
+            IsAlive(activeEnemys[scLoopIndex]) &&
+            !IsInSpawnRoom(activeEnemys[scLoopIndex])
+        ){
+            SetUltimateCharge(activeEnemys[scLoopIndex], DefaultPercentage());
+            PressButton(activeEnemys[scLoopIndex], Button.Ultimate);
+
+            Wait(shotCallDelay, WaitBehavior.IgnoreCondition);
+        }
+    }
+
+    Wait(1, WaitBehavior.IgnoreCondition);
+    LoopIfConditionIsTrue();
+}
+
+// TAG EnemyBot/EnemyAbility/MoreUltimate ----------
+define moreAbilityInterval: RandomReal(0.1, 1);
+
+playervar define moreUltProb;
+
+rule: "EnemyBot/EnemyAbility/moreUltimate"
+Event.OngoingPlayer
+if(
+    TeamOf() == enemyTeam &&
     IsBossClass(ep) &&
     IsAlive() &&
-    IsInCombat();
-
-rule: "EnemyBot/ThreatIcon/show"
-Event.OngoingPlayer
-if(
-    enemyTeam == TeamOf() &&
-    isThreatIconActive
+    actionState != ActionState.Non &&
+    IsUsingUltimate()
 ){
-    // show threat icon to boss enemys for easy to caution enemy from player
-    DestroyIcon(threatIcon);
-    threatIcon = CreateIcon(AllPlayers(), ep, Icon.Skull,
-        IconRev.Position, enemyTeamColor, false);
+    moreUltProb = DefaultPercentage();
+
+    while(
+        IsAlive() &&
+        IsTrueProbability(moreUltProb)
+    ){
+        WaitUntil(!IsUsingUltimate(), MaxValue());
+        SetUltimateCharge(ep, DefaultPercentage());
+        Wait(moreAbilityInterval, WaitBehavior.IgnoreCondition);
+        PressButton(ep, Button.Ultimate);
+    }
+    moreUltProb = 0;
+
+    WaitUntil(!IsUsingUltimate(), MaxValue());
+    Wait(1.0, WaitBehavior.IgnoreCondition);
 }
 
-rule: "EnemyBot/ThreatIcon/hide"
+globalvar define decreaseProb! =
+    WorkshopSettingReal("Enemy Bot Settings", "(Sub boss & Boss) Rapid-Fire-Ultimate Termination Scale", 1.0, 0.0, 100, 8)
+        * 10.0;
+
+rule: "EnemyBot/EnemyAbility/decreaseMultiUltimateProb"
 Event.OngoingPlayer
 if(
-    enemyTeam == TeamOf() &&
-    !isThreatIconActive
+    moreUltProb > 0
 ){
-    DestroyIcon(threatIcon);
+    Wait(1.0, WaitBehavior.IgnoreCondition);
+    moreUltProb -= moreUltProb < decreaseProb ? moreUltProb : decreaseProb;
+    LoopIfConditionIsTrue();
 }
 
 // TAG EnemyBot/Teleport ----------
@@ -2079,127 +2155,49 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG EnemyBot/EnemyAbility/SpawnRush ----------
-globalvar define spawnRushInterval;
-globalvar define spawnRushCount;
+// TAG EnemyBot/CautionColor ----------
+define cautionColor: isBlink ? Color.Red : Color.Yellow;
 
-rule: "EnemyBot/EnemyAbility/SpawnRush"
+globalvar define isBlink;
+
+rule: "EnemyBot/CautionColor/blinkColor"
 Event.OngoingGlobal
 if(
-    IsGameInProgress()
+    initCompleted
 ){
-    // set default interval by object progress
-    spawnRushInterval = 50 + RandomInteger(-5, 5);
-    // apply workshop setting
-    spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.0, 100, 4);
-    // round for counting
-    spawnRushInterval = RoundToInteger(spawnRushInterval, Rounding.Up);
-    for(;spawnRushInterval > 0; spawnRushInterval--){
-        Wait(1, WaitBehavior.IgnoreCondition);
+    while(true){
+        isBlink = !isBlink;
+        Wait(0.2, WaitBehavior.AbortWhenFalse);
     }
-
-    // action
-    define spawnRushDuration! = RandomInteger(15, 30);
-    spawnRushDuration *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Duration Scale", 1.0, 0.0, 100, 5);
-    define deployInterval! = RandomInteger(1, 5);
-    spawnRushCount = RoundToInteger(spawnRushDuration / deployInterval, Rounding.Down);
-    for(; spawnRushCount > 0; spawnRushCount--){
-        Respawn(
-            FilteredArray(
-                AllDeadPlayers(enemyTeam),
-                (
-                    ae.enemyType != EnemyType.Boss
-                )
-            )
-        );
-        
-        Wait(deployInterval, WaitBehavior.IgnoreCondition);
-    }
-
-    Wait(1, WaitBehavior.IgnoreCondition);
-    LoopIfConditionIsTrue();
 }
 
-// TAG EnemyBot/EnemyAbility/ShotCall ----------
-globalvar define shotCallInterval;
+// TAG EnemyBot/ThreatIcon ----------
+playervar define threatIcon;
 
-rule: "EnemyBot/EnemyAbility/ShotCall"
-Event.OngoingGlobal
-if(
-    IsGameInProgress()
-){
-    // set default interval by object progress
-    shotCallInterval = 50 + RandomInteger(-5, 5);
-    // apply workshop setting
-    shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.0, 100, 6);
-    // round for counting
-    shotCallInterval = RoundToInteger(shotCallInterval, Rounding.Up);
-    for(;shotCallInterval > 0; shotCallInterval--){
-        Wait(1, WaitBehavior.IgnoreCondition);
-    }
-
-    // action
-    define activeEnemys! = AllPlayers(enemyTeam);
-    define shotCallDelay! = RandomReal(0.2, 1.0);
-    for(define scLoopIndex! = 0; scLoopIndex < CountOf(activeEnemys); scLoopIndex ++){
-        if(
-            IsAlive(activeEnemys[scLoopIndex]) &&
-            !IsInSpawnRoom(activeEnemys[scLoopIndex])
-        ){
-            SetUltimateCharge(activeEnemys[scLoopIndex], DefaultPercentage());
-            PressButton(activeEnemys[scLoopIndex], Button.Ultimate);
-
-            Wait(shotCallDelay, WaitBehavior.IgnoreCondition);
-        }
-    }
-
-    Wait(1, WaitBehavior.IgnoreCondition);
-    LoopIfConditionIsTrue();
-}
-
-// TAG EnemyBot/EnemyAbility/MoreUltimate ----------
-define moreAbilityInterval: RandomReal(0.1, 1);
-
-playervar define moreUltProb;
-
-rule: "EnemyBot/EnemyAbility/moreUltimate"
-Event.OngoingPlayer
-if(
-    TeamOf() == enemyTeam &&
+define isThreatIconActive:
     IsBossClass(ep) &&
     IsAlive() &&
-    actionState != ActionState.Non &&
-    IsUsingUltimate()
-){
-    moreUltProb = DefaultPercentage();
+    IsInCombat();
 
-    while(
-        IsAlive() &&
-        IsTrueProbability(moreUltProb)
-    ){
-        WaitUntil(!IsUsingUltimate(), MaxValue());
-        SetUltimateCharge(ep, DefaultPercentage());
-        Wait(moreAbilityInterval, WaitBehavior.IgnoreCondition);
-        PressButton(ep, Button.Ultimate);
-    }
-    moreUltProb = 0;
-
-    WaitUntil(!IsUsingUltimate(), MaxValue());
-    Wait(1.0, WaitBehavior.IgnoreCondition);
-}
-
-globalvar define decreaseProb! =
-    WorkshopSettingReal("Enemy Bot Settings", "(Sub boss & Boss) Rapid-Fire-Ultimate Termination Scale", 1.0, 0.0, 100, 8)
-        * 10.0;
-
-rule: "EnemyBot/EnemyAbility/decreaseMultiUltimateProb"
+rule: "EnemyBot/ThreatIcon/show"
 Event.OngoingPlayer
 if(
-    moreUltProb > 0
+    enemyTeam == TeamOf() &&
+    isThreatIconActive
 ){
-    Wait(1.0, WaitBehavior.IgnoreCondition);
-    moreUltProb -= moreUltProb < decreaseProb ? moreUltProb : decreaseProb;
-    LoopIfConditionIsTrue();
+    // show threat icon to boss enemys for easy to caution enemy from player
+    DestroyIcon(threatIcon);
+    threatIcon = CreateIcon(AllPlayers(), ep, Icon.Skull,
+        IconRev.Position, enemyTeamColor, false);
+}
+
+rule: "EnemyBot/ThreatIcon/hide"
+Event.OngoingPlayer
+if(
+    enemyTeam == TeamOf() &&
+    !isThreatIconActive
+){
+    DestroyIcon(threatIcon);
 }
 
 // TAG Debug ----------
