@@ -1,6 +1,5 @@
 import "SkirmishWithBotHorde.setting.json";
 import "../Lib/Bot.del";
-import "../Lib/Regeneration.del";
 import "../Lib/Utility.del";
 import "../Lib/ServerOverloadMeasures.del";
 
@@ -13,14 +12,6 @@ disabled rule: "Original source code was created by [sarami77#1868]"-1{}
 disabled rule: "Check detail with https://github.com/sarami77/OverwatchWorkShopScripts"-1{}
 
 // TAG Bot/CreateBot ----------
-rule: "SetDebugSetting"
-Event.OngoingGlobal
-{
-    CreateDebugHud("Server Load", ServerLoad(), ServerLoad() < 255 ? Color.Orange : Color.Red);
-    CreateDebugHud("game Logic Speed", gameLogicSpeed, gameLogicSpeed >= 100 ? Color.Orange : Color.Red);
-    CreateDebugHud("count Wait Random For Distribute Server Load", countGameLogicSpeedDecrease, Color.Orange);
-}
-
 globalvar define initCompleted!;
 
 rule: "InitialSetting"
@@ -46,7 +37,7 @@ Event.OngoingGlobal
     Wait(5, WaitBehavior.AbortWhenFalse);
 
     // set bot num
-    botNum = WorkshopSettingInteger("Enemy Bot Settings", "Bot Count", 12, 0, 24, 1);
+    maxBotNum = WorkshopSettingInteger("Enemy Bot Settings", "Bot Count", 24, 0, 24, 1);
 
     // Notify completion of init game setting and start game main logic
     initCompleted = true;
@@ -114,22 +105,20 @@ if(
     killCount ++;
 }
 
-globalvar define botNum;
+globalvar define maxBotNum;
 
 define botAsset:
     [   // assetNo 0
-        [EnemyType.Non,     RandomHero(),         1],
-        [EnemyType.Non,     RandomHero(),         1],
-        [EnemyType.Non,     RandomHero(),         1],
-        [EnemyType.Non,     RandomHero(),         1],
-        [EnemyType.Non,     RandomHero(),         1],
-        [EnemyType.Non,     RandomHero(),         1],
-        [EnemyType.Non,     RandomHero(),         1],
-        [EnemyType.Non,     RandomHero(),         1],
-        [EnemyType.Non,     RandomHero(),         1],
-        [EnemyType.Non,     RandomHero(),         1],
-        [EnemyType.Non,     RandomHero(),         1],
-        [EnemyType.Non,     RandomHero(),         1]
+        [EnemyType.Non,     RandomHero(),         2],
+        [EnemyType.Non,     RandomHero(),         2],
+        [EnemyType.Non,     RandomHero(),         2],
+        [EnemyType.Non,     RandomHero(),         2],
+        [EnemyType.Non,     RandomHero(),         2],
+        [EnemyType.Non,     RandomHero(),         2],
+        [EnemyType.Non,     RandomHero(),         2],
+        [EnemyType.Non,     RandomHero(),         2],
+        [EnemyType.Non,     RandomHero(),         2],
+        [EnemyType.Non,     RandomHero(),         2]
     ];
 
 rule: "ReloadBotList"
@@ -140,14 +129,56 @@ if(
     // TAG BotList
     dbgMsg("Reload Bot List");
 
-    DestroyBots(Team.Team1);
-    CreateBotsByAsset(botAsset, Team.Team1, botNum / 2);
-
-    DestroyBots(Team.Team2);
-    CreateBotsByAsset(botAsset, Team.Team2, botNum / 2);
+    ReloadBotList();
     
     Wait(180, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
+}
+
+
+
+rule: "FriendBot/tuneAssetMemberNum"
+Event.OngoingGlobal
+if(
+    initCompleted
+){
+    define prevPlayerNum! = -1;
+
+    while(true){
+        // check Interval
+        WaitUpdateLongCycle();
+
+        if(
+            // playerNum changed
+            prevPlayerNum != HumanPlayerNum(Team.All)
+        ){
+            // save current playerNum
+            prevPlayerNum = HumanPlayerNum(Team.All);
+            // force reload asset
+            ReloadBotList();
+        }
+    }
+}
+
+globalvar define isLockedCreateBotsByAsset = false;
+
+void ReloadBotList()"ReloadBotList"{
+    // TAG BotList
+    dbgMsg("Reload Bot List");
+
+    if(!isLockedCreateBotsByAsset){
+        isLockedCreateBotsByAsset = true;
+
+        define createNum = (maxBotNum / 2) - HumanPlayerNum(Team.Team1);
+        DestroyBots(Team.Team1);
+        CreateBotsByAsset(botAsset, Team.Team1, createNum);
+
+        createNum = (maxBotNum / 2) - HumanPlayerNum(Team.Team2);
+        DestroyBots(Team.Team2);
+        CreateBotsByAsset(botAsset, Team.Team2, createNum);
+
+        isLockedCreateBotsByAsset = false;
+    }
 }
 
 rule: "ReloadTeleportPosition"
@@ -164,7 +195,8 @@ rule: "SetDummyBotSetting"
 Event.OngoingPlayer
 {
     StartForcingDummyBotName(ep, GetDummyName());
-    watchUpdateRate = 4;
+    isBotActive = true;
+    watchUpdateRate = 3;
 }
 
 rule: "FastRespaw"
@@ -183,6 +215,8 @@ if(
     IsInSpawnRoom()
 ){
     ExecTeleport();
+    Wait(1);
+    LoopIfConditionIsTrue();
 }
 
 define keepMovingSecondOfTeleportPlayer: 0.2;
@@ -196,9 +230,11 @@ if(
 ){
     Wait(keepMovingSecondOfTeleportPlayer, WaitBehavior.AbortWhenFalse);
     ExecTeleport();
+    Wait(1);
+    LoopIfConditionIsTrue();
 }
 
-globalvar define combatAreaRange = WorkshopSettingReal("Game Settings", "Combat Area Range", 55, 0, 1000, 1);
+globalvar define combatAreaRange = WorkshopSettingReal("Game Settings", "Combat Area Range", 40, 0, 1000, 1);
 
 globalvar define combatAreaPos;
 
@@ -217,8 +253,8 @@ if(
             ApplyImpulse(ep, VectorTowards(ep, combatAreaPos),
                 DistanceBetween(ep, combatAreaPos) * 0.5,
                 Relative.ToWorld, ContraryMotion.Cancel);
-            Wait(0.1, WaitBehavior.AbortWhenFalse);
-            WaitUntilServerLoadLimitRelease(watchUpdateRate);
+            Wait(0.2, WaitBehavior.AbortWhenFalse);
+            WaitUntilServerLoadLimitRelease();
         }
     }
 }
@@ -238,12 +274,26 @@ rule: "TeleortByTargetNotFoundForPlayer"
 Event.OngoingPlayer
 if(
     !IsDummyBot() &&
-    !IsInSpawnRoom(ep) &&
-    !IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep)))
+    !IsInSpawnRoom(ep)
 ){
-    Wait(5, WaitBehavior.AbortWhenFalse);
-    ExecTeleport();
-    LoopIfConditionIsTrue();
+    define count!;
+    Wait(3, WaitBehavior.AbortWhenFalse);
+
+    while(true){
+        if(!IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep)))){
+            count ++;
+        }
+        else{
+            count = 0;
+        }
+
+        if(count >= 3){
+            count = 0;
+            ExecTeleport();
+        }
+
+        Wait(3, WaitBehavior.AbortWhenFalse);
+    }
 }
 
 rule: "ShiftTeleportPositionBySpawnRoomKill"
@@ -299,24 +349,16 @@ void SetCombatAreaPositionAtRandom()"SetCombatAreaPositionAtRandom"{
 
 playervar define guardEffectEntity;
 
-globalvar define parallelCount;
 
 void ExecTeleport()"ExecTeleport"{
-    if(IsDummyBot()){
-        while(parallelCount >= 1){
-            Wait(RandomReal(0.5, 1), WaitBehavior.AbortWhenFalse);
-        }
-    }
-
-    parallelCount ++;
-
     define teleportPos;
-    for(define telLoopIndex = 0; telLoopIndex < 5; telLoopIndex++){ 
-
+    for(define telLoopIndex = 0; telLoopIndex < 10; telLoopIndex++){ 
         teleportPos = NearestWalkablePosition(
             combatAreaPos +
             RandomPosition(combatAreaRange, combatAreaRange / 2, combatAreaRange)
         );
+
+        define closePlayer = ClosestPlayerTo(teleportPos, EnemyTeamOf(ep));
 
         if(
             // not inside ours spwan room
@@ -325,6 +367,9 @@ void ExecTeleport()"ExecTeleport"{
             // not inside enemy spwan room
             !IsInSpawnRoomPosition(teleportPos, EnemyTeamOf(ep))
                 &&
+            // not too close to enemy
+            DistanceBetween(teleportPos, closePlayer) >= 10
+                &&
             (
                 // ignore has line for seeding
                 IsTrueProbability(50)
@@ -332,40 +377,35 @@ void ExecTeleport()"ExecTeleport"{
                 // has line to enemy
                 IsInLineOfSight(
                     teleportPos + Up(),
-                    PositionOf(
-                        ClosestPlayerTo(
-                            teleportPos,
-                            EnemyTeamOf(ep)
-                        )
-                    ) + Up()
+                    PositionOf(closePlayer) + Up()
                 )
             )
         ){
             break;
         }
-        Wait(0.5, WaitBehavior.IgnoreCondition);
-        WaitUntilServerLoadLimitRelease(watchUpdateRate);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        WaitUntilServerLoadLimitRelease();
     }
 
-    Teleport(ep, teleportPos);
-    PlayEffect(
-        ep, PlayEffect.DebuffImpactSound,
-        Color.White, ep, MaxLength());
-    SetStatus(ep, null, Status.Rooted, 1);
-    SetStatus(ep, null, Status.Invincible, 2);
-    DestroyEffect(guardEffectEntity);
-    guardEffectEntity = CreateEffect(
-        AllPlayers(), Effect.Sphere, Color.White,
-        ep, 1.25, EffectRev.PositionAndRadius);
+    if(teleportPos != null){
+        Teleport(ep, teleportPos);
+        PlayEffect(
+            ep, PlayEffect.DebuffImpactSound,
+            Color.White, ep, MaxLength());
+        SetStatus(ep, null, Status.Rooted, 1);
+        SetStatus(ep, null, Status.Invincible, 2);
+        DestroyEffect(guardEffectEntity);
+        guardEffectEntity = CreateEffect(
+            AllPlayers(), Effect.Sphere, Color.White,
+            ep, 1.25, EffectRev.PositionAndRadius);
 
-    Wait(0.1, WaitBehavior.IgnoreCondition);
-    // set initial face direction
-    SetFacing(
-        ep,
-        DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))),
-        Relative.ToWorld);
-
-    parallelCount --;
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+        // set initial face direction
+        SetFacing(
+            ep,
+            DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))),
+            Relative.ToWorld);
+    }
 }
 
 rule: "hideGuardEffect"
@@ -377,6 +417,23 @@ if(
     Wait(2, WaitBehavior.IgnoreCondition);
     DestroyEffect(guardEffectEntity);
     guardEffectEntity = 0;
+}
+
+// TAG Debug ----------
+globalvar define debugHuds;
+define Last():
+    CountOf(debugHuds);
+
+rule: "SetDebugSetting"
+Event.OngoingGlobal
+{
+    wm(); debugHuds[Last()] = CreateDebugHud("Server Load", ServerLoad(), IsLoadOvered() ? Color.Red : IsLoadLimited()  ? Color.Yellow : Color.Gray);
+    wm(); debugHuds[Last()] = CreateDebugHud("Count Action Wait", countActionWait, Color.Gray);
+    wm(); debugHuds[Last()] = CreateDebugHud("Game Speed", gameSpeed, gameSpeed < gameSpeedMax ? Color.Yellow : Color.Gray);
+    wm(); debugHuds[Last()] = CreateDebugHud("Count Game Speed Decrease", countGameSpeedDecrease, countGameSpeedDecrease > 0 ? Color.Yellow : Color.Gray);
+    wm(); debugHuds[Last()] = CreateDebugHud("human player Num", HumanPlayerNum(Team.All), HumanPlayerNum(Team.All) <= 1 ? Color.Gray : Color.Yellow);
+    wm(); debugHuds[Last()] = CreateDebugHud("Team player num", <"<0> / <1>", NumberOfLivingPlayers(Team.Team1), NumberOfPlayers(Team.Team1)>, NumberOfLivingPlayers(Team.Team1) < NumberOfPlayers(Team.Team1) ? Color.Yellow : Color.Team1);
+    wm(); debugHuds[Last()] = CreateDebugHud("Team player num", <"<0> / <1>", NumberOfLivingPlayers(Team.Team2), NumberOfPlayers(Team.Team2)>, NumberOfLivingPlayers(Team.Team2) < NumberOfPlayers(Team.Team2) ? Color.Yellow : Color.Team2);
 }
 
 rule: "Debug/resetTeleportPos"
@@ -400,14 +457,30 @@ if(
     IsButtonHeld(ep, Button.Reload)
 ){
     WaitLongPressConfirm();
-    dbgMsg("Reload Bot List");
-    
-    define teamAsset = AllHeroes();
-    // define teamAsset = [Hero.Kiriko, Hero.JunkerQueen, Hero.Sojourn];
-    parallelCount = 0;
-    DestroyBots(Team.Team1);
-    CreateBotsByAsset(botAsset, Team.Team1, botNum / 2);
-
-    DestroyBots(Team.Team2);
-    CreateBotsByAsset(botAsset, Team.Team2, botNum / 2);
+    ReloadBotList();
 }
+
+rule: "DebugPlayJoinPlayerSound"
+Event.OnPlayerJoin
+Team.All
+if(
+    !IsDummyBot()
+){
+    define soundCount! = 3;
+    define positionArray! = [
+        PositionOf(hp),
+        SpawnPoints(Team.Team1)[0],
+        CurrentObjectPosition(),
+        SpawnPoints(Team.Team2)[0]
+    ];
+
+    for(define sndCount! = 0; sndCount < soundCount; sndCount++){
+        for(define posIndex! = 0; posIndex < CountOf(positionArray); posIndex++){
+            PlayEffect(HostPlayer(),
+                PlayEffect.BuffImpactSound,
+                null, positionArray[posIndex], MaxValue());
+        }
+        Wait(0.5);
+    }
+}
+
