@@ -131,7 +131,7 @@ if(
 
     ReloadBotList();
     
-    Wait(180, WaitBehavior.AbortWhenFalse);
+    Wait(RandomInteger(100, 140), WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -187,7 +187,7 @@ if(
     initCompleted
 ){
     SetCombatAreaPositionAtRandom();
-    Wait(120, WaitBehavior.AbortWhenFalse);
+    Wait(RandomInteger(100, 140), WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
 
@@ -234,7 +234,7 @@ if(
     LoopIfConditionIsTrue();
 }
 
-globalvar define combatAreaRange = WorkshopSettingReal("Game Settings", "Combat Area Range", 40, 0, 1000, 1);
+globalvar define combatAreaRange = WorkshopSettingReal("Game Settings", "Combat Area Range", 50, 0, 1000, 1);
 
 globalvar define combatAreaPos;
 
@@ -259,7 +259,7 @@ if(
     }
 }
 
-rule: "TeleortByTargetNotFoundForBot"
+disabled rule: "TeleortByTargetNotFoundForBot"
 Event.OngoingPlayer
 if(
     IsDummyBot() &&
@@ -270,29 +270,34 @@ if(
     LoopIfConditionIsTrue();
 }
 
+define maxCheckCount: IsDummyBot() ? 3 : 5;
+define checkInterval: 3;
+
 rule: "TeleortByTargetNotFoundForPlayer"
 Event.OngoingPlayer
 if(
-    !IsDummyBot() &&
+    // !IsDummyBot() &&
     !IsInSpawnRoom(ep)
 ){
-    define count!;
-    Wait(3, WaitBehavior.AbortWhenFalse);
+    define checkCount!;
+    Wait(1, WaitBehavior.AbortWhenFalse);
 
     while(true){
-        if(!IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep)))){
-            count ++;
+        if(
+            !IsInLineOfSight(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep)))
+        ){
+            checkCount ++;
         }
         else{
-            count = 0;
+            checkCount = 0;
         }
 
-        if(count >= 3){
-            count = 0;
+        if(checkCount >= maxCheckCount){
+            checkCount = 0;
             ExecTeleport();
         }
 
-        Wait(3, WaitBehavior.AbortWhenFalse);
+        Wait(checkInterval, WaitBehavior.AbortWhenFalse);
     }
 }
 
@@ -303,7 +308,7 @@ if(
 ){
     if(
         IsInSpawnRoomPosition(PositionOf(ep), OppositeTeamOf(TeamOf(ep))) &&
-        IsTrueProbability(25)
+        IsTrueProbability(50)
     ){
         dbgMsg("Shift Teleport Position By Spawn Room Kill");
         SetCombatAreaPositionAtRandom();
@@ -368,11 +373,11 @@ void ExecTeleport()"ExecTeleport"{
             !IsInSpawnRoomPosition(teleportPos, EnemyTeamOf(ep))
                 &&
             // not too close to enemy
-            DistanceBetween(teleportPos, closePlayer) >= 10
+            DistanceBetween(teleportPos, closePlayer) >= 5
                 &&
             (
                 // ignore has line for seeding
-                IsTrueProbability(50)
+                IsTrueProbability(25)
                     ||
                 // has line to enemy
                 IsInLineOfSight(
@@ -388,6 +393,9 @@ void ExecTeleport()"ExecTeleport"{
     }
 
     if(teleportPos != null){
+        ApplyImpulse(ep, Down(), 100, Relative.ToWorld, ContraryMotion.Cancel);
+        Wait(0.1, WaitBehavior.IgnoreCondition);
+
         Teleport(ep, teleportPos);
         PlayEffect(
             ep, PlayEffect.DebuffImpactSound,
@@ -470,7 +478,7 @@ if(
     define positionArray! = [
         PositionOf(hp),
         SpawnPoints(Team.Team1)[0],
-        CurrentObjectPosition(),
+        combatAreaPos,
         SpawnPoints(Team.Team2)[0]
     ];
 
