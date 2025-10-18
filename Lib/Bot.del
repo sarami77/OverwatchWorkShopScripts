@@ -214,13 +214,6 @@ void SetMoveDir() playervar "SetMoveDir"{
         moveTarget = null;
 
         define distRate = (actionState == ActionState.Attack) ? 1 : 0.5;
-        define enemyDensity = EnemyDensity(aimTarget, ActionRange.Close);
-        define aggressiveProb =
-            DefaultPercentage() *
-            // by target health low
-            (1 - NormalizedHealth(aimTarget)) *
-            // by enemy density low
-            (1 - enemyDensity);
 
                 // front/back
         if(
@@ -233,7 +226,13 @@ void SetMoveDir() playervar "SetMoveDir"{
             // target is far
             (distToTarget > (actionRangeMax * distRate)) &&
             // is aggressive
-            IsTrueProbability(aggressiveProb)
+            IsTrueProbability(
+                DefaultPercentage() *
+                // by target health low
+                (1 - NormalizedHealth(aimTarget)) *
+                // by enemy density low
+                (1 - EnemyDensity(aimTarget, ActionRange.Close))
+            )
         ){
             moveDirFB = Forward();
         }
@@ -245,7 +244,12 @@ void SetMoveDir() playervar "SetMoveDir"{
         // right/left
         if(
             actionState == ActionState.Attack &&
-            IsTrueProbability((DefaultPercentage() - aggressiveProb) * sideStepRate)
+            IsTrueProbability(
+                DefaultPercentage() *
+                // by distance close
+                (1 - (DistanceBetween(ep, aimTarget) / ActionRange.CanFind)) *
+                sideStepRate
+            )
         ){
             // start side step for dodge attack
             if(
