@@ -1656,7 +1656,7 @@ if(
 // TAG EnemyBot/Teleport ----------
 globalvar define placeAreaBasePosition;
 globalvar define placeAreaSize;
-define placeAreaBaseSize: teleportAreaSize * 2;
+define placeAreaBaseSize: teleportAreaSize * 1.5;
 define placeAreaOffset: ActionRange.CanFind;   // bot can find other range
 
 globalvar define teleportBasePosition;
@@ -1683,7 +1683,6 @@ define CanSnapMapSurface()"CanSnapMapSurface"{
 // TAG EnemyBot/Teleport/UpdateTeleportBasePosition ----------
 globalvar define needUpdateTeleportBasePosition;
 globalvar define blockedPos;
-globalvar define updateTrigger;
 
 rule: "EnemyBot/Teleport/UpdateTeleportBasePosition"
 Event.OngoingGlobal
@@ -1733,7 +1732,6 @@ if(
             teleportBasePosition == null
         ){
             needUpdateTeleportBasePosition = true;
-            updateTrigger = "POS INV";
         }
         else if(
             teleportCandidatePositionArray == null ||
@@ -1741,14 +1739,12 @@ if(
             CountOf(teleportCandidatePositionArray) <= 3
         ){
             needUpdateTeleportBasePosition = true;
-            updateTrigger = "POS CNT LOW";
         }
         else if(
             // by probability
             IsTrueProbability(3)
         ){
             needUpdateTeleportBasePosition = true;
-            updateTrigger = "PRB";
         }
         else if(
             // position too close player
@@ -1758,7 +1754,6 @@ if(
             ) <= teleportAreaForceUpdateSize        
         ){
             needUpdateTeleportBasePosition = true;
-            updateTrigger = "PLR CLS";
         }
         else if(
             // position too far base position
@@ -1767,7 +1762,6 @@ if(
                 placeAreaBasePosition
             ) > placeAreaSize        
         ){
-            updateTrigger = "TOO FAR";
             needUpdateTeleportBasePosition = true;
         }
         else if(
@@ -1778,7 +1772,6 @@ if(
                 BarrierLOS.NoBarriersBlock
             )
         ){
-            updateTrigger = "NOT LIN";
             needUpdateTeleportBasePosition = true;
         }
     }
@@ -1787,9 +1780,6 @@ if(
     if(
         needUpdateTeleportBasePosition
     ){
-        // if(showDebugEffect)
-        //     dbgMsg(<"POS UPDT TRGR = <0>", updateTrigger>);
-
         define newPosition! = null;
         // calc new position
         if(
@@ -1822,62 +1812,80 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG EnemyBot/Teleport/GetTeleportBasePositionByClosestPlayer
+// TAG EnemyBot/Teleport/GetCandidatePosition
+define GetCandidatePosition(define basePosition, define randomSize, define offset) "GetCandidatePosition"{
+    define candidatePosition = 
+        basePosition +
+        RandomPosition(
+            randomSize,
+            randomSize,
+            randomSize
+        ) +
+        offset;
+    
+    return candidatePosition;
+}
+
+// TAG EnemyBot/Teleport/SnapCandidatePosition
+define GetSnapedPosition(define inputPosition, define dropDistance)"SnapCandidatePosition"{
+    if(
+        CanSnapMapSurface()
+    ){
+        inputPosition = NearestWalkablePosition(inputPosition);
+    }
+    else{
+        inputPosition = BelowPosition(inputPosition + Vector(0, dropDistance, 0));
+    }
+    return inputPosition;
+}
+
+// TAG EnemyBot/Teleport/CheckCandidatePosition
+define IsValidPosition(define checkPosition, define checkTarget)"CheckCandidatePosition"{
+    define isValid = false;
+    if(
+        // has line to checkTarget
+        IsInLineOfSight(
+            PositionOffsetY1() + checkPosition,
+            PositionOffsetY1() + PositionOf(checkTarget),
+            BarrierLOS.NoBarriersBlock
+        )
+            &&
+        // not too close from spawn point
+        DistanceBetween(
+            checkPosition,
+            SpawnPoints(humanTeam)[0]
+        ) > ActionRange.Far
+    
+    ){
+        isValid = true;
+    }
+
+    return isValid;
+}
+
 define searchPositionTryCountMax: 10;
 define searchPositionInterval: 0.1;
 
+// TAG EnemyBot/Teleport/GetTeleportBasePositionByClosestPlayer
 define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositionByClosestPlayer"{
     define returnPosition = null;
-    define canSnapMap = CanSnapMapSurface();
     define objectPosition = CurrentObjectOnPosition();
     define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
+    define offset =
+        DirectionTowards(placeAreaBasePosition, objectPosition) *
+        DistanceBetween(placeAreaBasePosition, objectPosition) * 0.25;
 
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
-        // select candidatePosition at almost middle position of close player and object
-        define candidatePosition =
-            placeAreaBasePosition
-                +
-            RandomPosition(
-                placeAreaSize,
-                placeAreaSize,
-                placeAreaSize
-            )
-                + 
-            (
-                DirectionTowards(placeAreaBasePosition, objectPosition)
-                    *
-                DistanceBetween(placeAreaBasePosition, objectPosition) * 0.25
-            );
-        
-        if(
-            canSnapMap
-        ){
-            candidatePosition = NearestWalkablePosition(candidatePosition);
-        }
-        else{
-            candidatePosition = BelowPosition(candidatePosition + Vector(0, placeAreaBaseSize * 2.0, 0));
-        }
-
-        if(
-            // has line to close player
-            IsInLineOfSight(
-                PositionOffsetY1() + candidatePosition,
-                PositionOffsetY1() + PositionOf(closePlayer),
-                BarrierLOS.NoBarriersBlock
-            )
-                &&
-            // not too close from spawn point
-            DistanceBetween(
-                candidatePosition,
-                SpawnPoints(humanTeam)[0]
-            ) > ActionRange.Middle
-        ){
-            returnPosition = candidatePosition;
+        define candidatePosition = GetCandidatePosition(placeAreaBasePosition, placeAreaSize, offset);        
+        candidatePosition = GetSnapedPosition(candidatePosition, placeAreaBaseSize * 2.0);
+        if(IsValidPosition(candidatePosition, closePlayer)){
+            returnPosition = candidatePosition; 
             break;
         }
+
         Wait(searchPositionInterval, WaitBehavior.IgnoreCondition);
     }
-
+        
     return returnPosition;
 }
 
@@ -1889,42 +1897,13 @@ define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObj
     define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
 
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
-        // select candidatePosition at object ahead
-        define candidatePosition =
-            placeAreaBasePosition
-                +
-            RandomPosition(
-                placeAreaSize,
-                placeAreaSize,
-                placeAreaSize
-            );
-
-        if(
-            canSnapMap
-        ){
-            candidatePosition = NearestWalkablePosition(candidatePosition);
-        }
-        else{
-            candidatePosition = BelowPosition(candidatePosition + Vector(0, placeAreaBaseSize * 2.0, 0));
-        }
-
-        if(
-            // has line to close player
-            IsInLineOfSight(
-                PositionOffsetY1() + candidatePosition,
-                PositionOffsetY1() + PositionOf(closePlayer),
-                BarrierLOS.NoBarriersBlock
-            )
-                &&
-            // not too close from spawn point
-            DistanceBetween(
-                candidatePosition,
-                SpawnPoints(humanTeam)[0]
-            ) > ActionRange.Middle
-        ){
-            returnPosition = candidatePosition;
+        define candidatePosition = GetCandidatePosition(placeAreaBasePosition, placeAreaSize, NoPosition());
+        candidatePosition = GetSnapedPosition(candidatePosition, placeAreaBaseSize * 2.0);
+        if(IsValidPosition(candidatePosition, closePlayer)){
+            returnPosition = candidatePosition;  
             break;
         }
+
         Wait(searchPositionInterval, WaitBehavior.IgnoreCondition);
     }
     
@@ -1939,42 +1918,12 @@ void SetTeleportCandidatePositionArray(define basePosition) globalvar "SetTelepo
     define closePlayer = ClosestPlayerTo(basePosition, humanTeam);
 
     for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
-        // select teleportPosition from teleportBasePosition around
-        define candidatePosition = 
-            basePosition
-                +
-            RandomPosition(
-                teleportAreaSize,
-                teleportAreaSize,
-                teleportAreaSize
-            );
-
-        if(
-            canSnapMap
-        ){
-            candidatePosition = NearestWalkablePosition(candidatePosition);
-        }
-        else{
-            candidatePosition = BelowPosition(candidatePosition + Vector(0, teleportAreaSize * 2.0, 0));
-        }
-
-        if(
-            // has line to close player
-            IsInLineOfSight(
-                PositionOffsetY1() + candidatePosition,
-                PositionOffsetY1() + PositionOf(closePlayer),
-                BarrierLOS.NoBarriersBlock
-            )
-                &&
-            // not too close from spawn point
-            DistanceBetween(
-                candidatePosition,
-                SpawnPoints(humanTeam)[0]
-            ) > ActionRange.Middle
-        ){
+        define candidatePosition = GetCandidatePosition(basePosition, teleportAreaSize, NoPosition());
+        candidatePosition = GetSnapedPosition(candidatePosition, teleportAreaSize * 2.0);
+        if(IsValidPosition(candidatePosition, closePlayer)){
             teleportCandidatePositionArray[CountOf(teleportCandidatePositionArray)] = candidatePosition;
-            // dbgPlyEft(candidatePosition);
         }
+
         Wait(searchPositionInterval, WaitBehavior.IgnoreCondition);
     }
 }
@@ -2075,7 +2024,6 @@ if(
     if(sucideCount >= 3){
         // reset by invalid position
         needUpdateTeleportBasePosition = true;
-        updateTrigger = "SUCD";
         sucideCount = 0;
     }
 }
