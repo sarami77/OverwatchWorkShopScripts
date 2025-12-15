@@ -221,9 +221,9 @@ if(
 
     // buff humanTeam player
     PlayEffectsToTeam(humanTeam);
-    Heal(AllLivingPlayers(humanTeam), null, MaxValue());
+    Heal(AllPlayers(humanTeam), null, MaxValue());
     Resurrect(AllDeadPlayers(humanTeam));
-    SetUltimateCharge(AllLivingPlayers(humanTeam), 100);
+    SetUltimateCharge(AllPlayers(humanTeam), 100);
     BigMessage(AllPlayers(humanTeam), "Final Stand !");
     Wait(0.5, WaitBehavior.IgnoreCondition);   // show slow
     
@@ -609,7 +609,7 @@ if(
 }
 
 // TAG EnemyBot/Config ----------
-define spawnTimeBase: 16;
+define spawnTimeBase: 10;
 define spawnTimeEachLevel:
     confirmGameDifficulty == GameDifficulty.EASY ?              spawnTimeBase * 1.0 :
     confirmGameDifficulty == GameDifficulty.NORMAL ?            spawnTimeBase * 0.9 :   //-0.1
@@ -855,27 +855,28 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     define diff! = GameProgressDiff(humanTeam);
 
     // tune interval by game progress diff
-    if(70 <= diff){
+    // player team advantage, fast enemy respawn
+    if(25 <= diff){
         spawnTimeScale = 0;
     }
-    else if(40 <= diff && diff < 70){
+    else if(15 <= diff){
         spawnTimeScale = 0.25;
     }
-    else if(10 <= diff && diff < 40){
+    else if(5 <= diff){
         spawnTimeScale = 0.5;
     }
     // team even, default enemy respawn
-    else if(-10 <= diff && diff < 10){
+    else if(-5 <= diff){
         spawnTimeScale = 1.0;
     }
     // enemy team advantage, slow enemy respawn
-    else if(-40 <= diff && diff < -10){
+    else if(-15 <= diff){
         spawnTimeScale = 1.5;
     }
-    else if(-70 <= diff && diff < -40){
+    else if(-25 <= diff){
         spawnTimeScale = 2.0;
     }
-    else if(diff < -70){
+    else{
         spawnTimeScale = 2.5;
     }
 
@@ -2096,16 +2097,16 @@ if(
                 PositionOffsetY1() + teleportBasePosition,
                 BarrierLOS.NoBarriersBlock
             ) &&
-            // by health 
-            IsTrueProbability(
-                DefaultPercentage() *
-                NormalizedHealth()
+            // has not line to near player
+            !IsInLineOfSight(
+                PositionOffsetY1() + PositionOf(ep),
+                PositionOffsetY1() + PositionOf(ClosestPlayerTo(ep, humanTeam)),
+                BarrierLOS.NoBarriersBlock
             )
-            // // has not line to near player
-            // !IsInLineOfSight(
-            //     PositionOffsetY1() + PositionOf(ep),
-            //     PositionOffsetY1() + PositionOf(ClosestPlayerTo(ep, humanTeam)),
-            //     BarrierLOS.NoBarriersBlock
+            // // by health 
+            // IsTrueProbability(
+            //     DefaultPercentage() *
+            //     NormalizedHealth()
             // )
         ){
             // do teleport instantly
