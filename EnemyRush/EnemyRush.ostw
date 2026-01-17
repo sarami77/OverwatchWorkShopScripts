@@ -1709,7 +1709,7 @@ if(
         );
         // get cutoutDistance by object position and blockedPos
         define cutoutDistance! = placeAreaOffset - DistanceBetween(objectPosition, blockedPos);
-        // get placeAreaSize by cutoutDistance with scale for paylod block
+        // get placeAreaSize by cutoutDistance with scale for payload block
         placeAreaSize = placeAreaBaseSize + (cutoutDistance * 0.15);
     }
     else{
@@ -1742,15 +1742,6 @@ if(
             needUpdateTeleportBasePosition = true;
         }
         else if(
-            // position too close player position
-            DistanceBetween(
-                teleportBasePosition,
-                PositionOf(ClosestPlayerTo(teleportBasePosition, humanTeam))
-            ) <= teleportAreaForceUpdateSize        
-        ){
-            needUpdateTeleportBasePosition = true;
-        }
-        else if(
             // position too far base position
             DistanceBetween(
                 teleportBasePosition,
@@ -1769,6 +1760,16 @@ if(
         ){
             needUpdateTeleportBasePosition = true;
         }
+        else if(
+            // position too close player position
+            DistanceBetween(
+                teleportBasePosition,
+                PositionOf(ClosestPlayerTo(teleportBasePosition, humanTeam))
+            ) <= teleportAreaForceUpdateSize        
+        ){
+            needUpdateTeleportBasePosition = true;
+        }
+
     }
     
     // if has update flag
@@ -1777,17 +1778,7 @@ if(
     ){
         define newPosition! = null;
         // calc new position
-        if(
-            // player on object
-            IsTeamOnObject(humanTeam)
-        ){
-            // calc by object
-            newPosition = GetTeleportBasePositionByObject();
-        }
-        else{
-            // calc by closest player
-            newPosition = GetTeleportBasePositionByClosestPlayer();
-        }
+        newPosition = GetTeleportBasePosition();
 
         // found position
         if(
@@ -1807,6 +1798,61 @@ if(
     LoopIfConditionIsTrue();
 }
 
+define searchPositionTryCountMax: 10;
+define searchPositionInterval: 0.1;
+
+// TAG EnemyBot/Teleport/GetTeleportBasePosition
+define GetTeleportBasePosition() globalvar "GetTeleportBasePosition"{
+    define returnPosition = null;
+    define objectPosition = CurrentObjectOnPosition();
+    define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
+    define offset = null;
+
+    if(
+        // player on object
+        IsTeamOnObject(humanTeam)
+    ){
+        // get offset
+        offset =
+            DirectionTowards(placeAreaBasePosition, objectPosition) *
+            DistanceBetween(placeAreaBasePosition, objectPosition) * 0.25;
+    }
+    else{
+        // non offset
+        offset = NoPosition();
+    }
+
+    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
+        define candidatePosition = GetCandidatePosition(placeAreaBasePosition, placeAreaSize, offset);
+        candidatePosition = GetSnapedPosition(candidatePosition, placeAreaBaseSize * 2.0);
+        if(IsValidPosition(candidatePosition, closePlayer)){
+            returnPosition = candidatePosition; 
+            break;
+        }
+
+        Wait(searchPositionInterval, WaitBehavior.IgnoreCondition);
+    }
+        
+    return returnPosition;
+}
+
+// TAG EnemyBot/Teleport/SetTeleportCandidatePositionArray
+void SetTeleportCandidatePositionArray(define basePosition) globalvar "SetTeleportCandidatePositionArray"{
+    teleportCandidatePositionArray = [];
+
+    define closePlayer = ClosestPlayerTo(basePosition, humanTeam);
+
+    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
+        define candidatePosition = GetCandidatePosition(basePosition, teleportAreaSize, NoPosition());
+        candidatePosition = GetSnapedPosition(candidatePosition, teleportAreaSize * 2.0);
+        if(IsValidPosition(candidatePosition, closePlayer)){
+            teleportCandidatePositionArray[CountOf(teleportCandidatePositionArray)] = candidatePosition;
+        }
+
+        Wait(searchPositionInterval, WaitBehavior.IgnoreCondition);
+    }
+}
+
 // TAG EnemyBot/Teleport/GetCandidatePosition
 define GetCandidatePosition(define basePosition, define randomSize, define offset) "GetCandidatePosition"{
     define candidatePosition = 
@@ -1821,8 +1867,8 @@ define GetCandidatePosition(define basePosition, define randomSize, define offse
     return candidatePosition;
 }
 
-// TAG EnemyBot/Teleport/SnapCandidatePosition
-define GetSnapedPosition(define inputPosition, define dropDistance)"SnapCandidatePosition"{
+// TAG EnemyBot/Teleport/GetSnapedPosition
+define GetSnapedPosition(define inputPosition, define dropDistance)"GetSnapedPosition"{
     if(
         CanSnapMapSurface()
     ){
@@ -1872,68 +1918,6 @@ define IsValidPosition(define checkPosition, define checkTarget)"CheckCandidateP
     return isValid;
 }
 
-define searchPositionTryCountMax: 10;
-define searchPositionInterval: 0.1;
-
-// TAG EnemyBot/Teleport/GetTeleportBasePositionByClosestPlayer
-define GetTeleportBasePositionByClosestPlayer() globalvar "GetTeleportBasePositionByClosestPlayer"{
-    define returnPosition = null;
-    define objectPosition = CurrentObjectOnPosition();
-    define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
-    define offset =
-        DirectionTowards(placeAreaBasePosition, objectPosition) *
-        DistanceBetween(placeAreaBasePosition, objectPosition) * 0.25;
-
-    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
-        define candidatePosition = GetCandidatePosition(placeAreaBasePosition, placeAreaSize, offset);        
-        candidatePosition = GetSnapedPosition(candidatePosition, placeAreaBaseSize * 2.0);
-        if(IsValidPosition(candidatePosition, closePlayer)){
-            returnPosition = candidatePosition; 
-            break;
-        }
-
-        Wait(searchPositionInterval, WaitBehavior.IgnoreCondition);
-    }
-        
-    return returnPosition;
-}
-
-// TAG EnemyBot/Teleport/GetTeleportBasePositionByObject
-define GetTeleportBasePositionByObject() globalvar "GetTeleportBasePositionByObject"{
-    define returnPosition = null;
-    define objectPosition = CurrentObjectOnPosition();
-    define closePlayer = ClosestPlayerTo(objectPosition, humanTeam);
-
-    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
-        define candidatePosition = GetCandidatePosition(placeAreaBasePosition, placeAreaSize, NoPosition());
-        candidatePosition = GetSnapedPosition(candidatePosition, placeAreaBaseSize * 2.0);
-        if(IsValidPosition(candidatePosition, closePlayer)){
-            returnPosition = candidatePosition;  
-            break;
-        }
-
-        Wait(searchPositionInterval, WaitBehavior.IgnoreCondition);
-    }
-    
-    return returnPosition;
-}
-
-// TAG EnemyBot/Teleport/SetTeleportCandidatePositionArray
-void SetTeleportCandidatePositionArray(define basePosition) globalvar "SetTeleportCandidatePositionArray"{
-    teleportCandidatePositionArray = [];
-
-    define closePlayer = ClosestPlayerTo(basePosition, humanTeam);
-
-    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
-        define candidatePosition = GetCandidatePosition(basePosition, teleportAreaSize, NoPosition());
-        candidatePosition = GetSnapedPosition(candidatePosition, teleportAreaSize * 2.0);
-        if(IsValidPosition(candidatePosition, closePlayer)){
-            teleportCandidatePositionArray[CountOf(teleportCandidatePositionArray)] = candidatePosition;
-        }
-
-        Wait(searchPositionInterval, WaitBehavior.IgnoreCondition);
-    }
-}
 
 playervar define telBeam!;
 define showTeleportBeamTime: 0.5;
