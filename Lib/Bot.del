@@ -138,8 +138,8 @@ void SetMoveDir() playervar "SetMoveDir"{
     if(noMoving) return;
 
     define distToTarget = DistanceBetween(ep, aimTarget);
-    define objPos = CurrentObjectOnPosition();
-
+    define objOnPos = CurrentObjectOnPosition();
+    define isTank = IsTankHero(HeroOf(ep));
     // move for heal
     if(
         enableRetreat
@@ -186,22 +186,22 @@ void SetMoveDir() playervar "SetMoveDir"{
             moveDirLR = Vector(XOf(dirTo), 0, 0);
         } 
     }
-    // move for secure object
+    // move for secure object in combat
     else if(
-        (
-            // not on object
-            !IsTeamOnObject(TeamOf(ep)) &&
-            // by health
-            IsTrueProbability(NormalizedHealth() * DefaultPercentage())
-            // is tank
-            // IsTankHero(HeroOf(ep))
-        )
-            ||
-        // enemy close win
+        // enemy team close win
         IsCloseWin(EnemyTeamOf(ep))
+            ||
+        (
+            // is tank
+            isTank &&
+            // anyone not on object 
+            !IsTeamOnObject(TeamOf(ep)) &&
+            // can find object range
+            DistanceBetween(ep, objOnPos) <= ActionRange.CanFind
+        )
     ){
         // move to object
-        moveTarget = PositionOf(objPos);
+        moveTarget = objOnPos;
         moveDirFB = NoDirection();
         moveDirLR = NoDirection();
     }
@@ -1649,11 +1649,11 @@ define IsSighted(in define player!):
     CanFindLine(player);
 
 define CanFindRange(in define player!) :
-    HasSpawned(player) &&
+    // HasSpawned(player) &&
     DistanceBetween(ep, player) <= ActionRange.CanFind;
 
 define CanFindLine(in define player!) :
-    HasSpawned(player) &&
+    // HasSpawned(player) &&
     IsInLineOfSight(EyePosition(ep), EyePosition(player), BarrierLOS.NoBarriersBlock);
 
 void FindTarget()"FindTarget"{
