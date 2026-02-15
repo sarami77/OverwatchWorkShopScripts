@@ -1434,17 +1434,17 @@ if(
 
 // TAG EnemyBot/Mod/Explode ----------
 define bombScale : 
-    enemyType == EnemyType.Minion ?     2 :
-    enemyType == EnemyType.Elite ?      4 :
-    enemyType == EnemyType.SubBoss ?    6 :
-    enemyType == EnemyType.Boss ?       6 :
+    enemyType == EnemyType.Minion ?     1 :
+    enemyType == EnemyType.Elite ?      2 :
+    enemyType == EnemyType.SubBoss ?    4 :
+    enemyType == EnemyType.Boss ?       4 :
     0;
-define bombSize:    bombScale * 0.2;
-define bombRange:   bombScale * 1.2;
-define bombDamage:  bombScale * 60;
-define bombCountInterval:       0.7;
-define bombExploadDamageRatio:  0.7;
-define bombBunrningSecond:      bombScale * 1.5;
+define bombSize:    bombScale * 0.4;
+define bombRange:   2 + (bombScale * 4.0);
+define bombCountDownInterval:       0.6;
+define bombExplpdeDamage:           100 + (bombScale * 1.5);
+define bombBunrningDamagePS:        20 + (bombScale * 1.5);
+define bombBunrningSecond:          3 + (bombScale * 1.5);
 
 rule: "EnemyBot/Mod/Explode"
 Event.OnDeath
@@ -1452,32 +1452,32 @@ if(
     TeamOf() == enemyTeam &&
     enemyModType == EnemyModType.Explode
 ){
-    define bombPos! = PositionOf() + Vector(0, 0.2, 0);
+    define bombPos! = PositionOf() + Vector(0, 0.1, 0);
     define bombIcon! = CreateIcon(AllPlayers(humanTeam), bombPos, Icon.Warning, IconRev.VisibleToAndColor, cautionColor, true);
     define bombEfct! = CreateEffect(ap(ta), Effect.Sphere, cautionColor, bombPos, bombSize, EffectRev.Color);
 
     for(define index! = 0; index < 3; index++){
         PlayEffect(ap(ta), PlayEffect.RingExplosion, Color.Yellow, bombPos, bombRange * 2);
         PlayEffect(ap(ta), PlayEffect.DebuffImpactSound, null, bombPos, 75);
-        Wait(bombCountInterval, WaitBehavior.IgnoreCondition);
+        Wait(bombCountDownInterval, WaitBehavior.IgnoreCondition);
     }
 
     define targets! = PlayersWithinRadius(bombPos, bombRange, humanTeam, RadiusLOS.SurfacesAndAllBarriers);
-    ApplyBlastImpulse(targets, bombPos, bombRange, 4);
-    SetStatus(targets, ep, Status.Burning, 3);
-    Damage(targets, ep, bombDamage * bombExploadDamageRatio);
-    StartDamageOverTime(targets, ep, bombBunrningSecond, bombDamage * (1 - bombExploadDamageRatio));
-    PlayContinuousBlast(Color.Red, bombPos, bombRange, bombScale, bombScale);
+    SetStatus(targets, ep, Status.Burning, bombBunrningSecond);
+    ApplyBlastImpulse(targets, bombPos, bombRange, 3);
+    Damage(targets, ep, bombExplpdeDamage);
+    StartDamageOverTime(targets, ep, bombBunrningSecond, bombBunrningDamagePS);
+    PlayContinuousBlast(Color.Red, bombPos, bombRange, bombScale * 1.5, bombScale * 1.5);
     DestroyIcon(bombIcon);
     DestroyEffect(bombEfct);
 }
 
 // TAG EnemyBot/Mod/Freeze ----------
 define freezeSecond :
-    enemyType == EnemyType.Minion ?     4 :
-    enemyType == EnemyType.Elite ?      6 :
-    enemyType == EnemyType.SubBoss ?    8 :
-    enemyType == EnemyType.Boss ?       8 :
+    enemyType == EnemyType.Minion ?     3 :
+    enemyType == EnemyType.Elite ?      5 :
+    enemyType == EnemyType.SubBoss ?    7 :
+    enemyType == EnemyType.Boss ?       7 :
     0;
 
 rule: "EnemyBot/Mod/Freeze"
@@ -1516,8 +1516,8 @@ if(
         isFirstTeleport = false;
 
         PressButton(ep, Button.Melee);
-        SetStatus(ep, ep, Status.Rooted, 1.5);
-        SetStatus(target, ep, Status.Frozen, 1.5);
+        SetStatus(ep, ep, Status.Rooted, 1.1);
+        SetStatus(target, ep, Status.Frozen, 1.1);
         if(!IsMoving(target)){
             SetFacing(target, DirectionTowards(EyePosition(target), EyePosition(ep)));
         }
@@ -1526,7 +1526,8 @@ if(
         if(
             !IsAlive(ep) ||
             !IsAlive(target) ||
-            !IsOnGround(target)
+            !IsOnGround(target) ||
+            DistanceBetween(ep, target) > (ActionRange.Melee * 2)
         ){
             break;
         }
@@ -1550,7 +1551,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    spawnRushInterval = 60 + RandomInteger(-10, 10);
+    spawnRushInterval = 60 + RandomInteger(-5, 5);
     // apply workshop setting
     spawnRushInterval *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Interval Scale", 1.0, 0.0, 100, 4);
     // round for counting
@@ -1560,7 +1561,7 @@ if(
     }
 
     // action
-    define spawnRushDuration! = 20 + RandomInteger(-10, 10);
+    define spawnRushDuration! = 20 + RandomInteger(-5, 5);
     spawnRushDuration *= WorkshopSettingReal("Enemy Bot Settings", "Spawn-Rush Duration Scale", 1.0, 0.0, 100, 5);
     define deployInterval! = RandomInteger(1, 5);
     spawnRushCount = RoundToInteger(spawnRushDuration / deployInterval, Rounding.Down);
@@ -1590,7 +1591,7 @@ if(
     IsGameInProgress()
 ){
     // set default interval by object progress
-    shotCallInterval = 60 + RandomInteger(-10, 10);
+    shotCallInterval = 60 + RandomInteger(-5, 5);
     // apply workshop setting
     shotCallInterval *= WorkshopSettingReal("Enemy Bot Settings", "All-Out-Ultmate Interval Scale", 1.0, 0.0, 100, 6);
     // round for counting
