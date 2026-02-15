@@ -783,8 +783,7 @@ if(
     else if(enemyModType == EnemyModType.Freeze){
         name = <"<0> freezer", name>;
         // freeze enemy when encount
-        maxHealth   *= 0.5;
-        damageDealt *= 0.1;
+        damageDealt *= 0.25;
     }
 
     // set param
@@ -1385,7 +1384,7 @@ define enemyModNoLotteryList: [
     // all flying
     [6, 2],
     // all explode
-    [7, 2],
+    [7, 1],
     // all freeze
     [8, 1]
 ];
@@ -1476,8 +1475,8 @@ if(
 define freezeSecond :
     enemyType == EnemyType.Minion ?     3 :
     enemyType == EnemyType.Elite ?      5 :
-    enemyType == EnemyType.SubBoss ?    7 :
-    enemyType == EnemyType.Boss ?       7 :
+    enemyType == EnemyType.SubBoss ?    9 :
+    enemyType == EnemyType.Boss ?       9 :
     0;
 
 rule: "EnemyBot/Mod/Freeze"
@@ -1505,20 +1504,18 @@ if(
     define icon! = CreateIcon(AllPlayers(humanTeam), target, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
     define effect! = CreateEffect(AllPlayers(humanTeam), Effect.BadAura, Color.Blue, ep, freezeSecond / 4, EffectRev.PositionAndRadius);
     define tryCount! = 0;
-    define isFirstTeleport! = true;
 
     for(tryCount = 0; tryCount < freezeSecond; tryCount++){
         aimTarget = target;
         teleportPosition = PositionOf(target) + Normalize(VectorWithOutY(DirectionTowards(target, ep)));
-        if(isFirstTeleport){ PlayTeleportEffect(true, true); }  // show pre teleport effect
+        if(tryCount <= 0){ PlayTeleportEffect(true, true); }  // show pre teleport effect
         Teleport(ep, teleportPosition);
-        if(isFirstTeleport){ PlayTeleportEffect(false, true); } // show teleport effect
-        isFirstTeleport = false;
+        if((tryCount <= 0)){ PlayTeleportEffect(false, true); } // show teleport effect
 
         PressButton(ep, Button.Melee);
         SetStatus(ep, ep, Status.Rooted, 1.1);
         SetStatus(target, ep, Status.Frozen, 1.1);
-        if(!IsMoving(target)){
+        if(tryCount > 0){
             SetFacing(target, DirectionTowards(EyePosition(target), EyePosition(ep)));
         }
 
@@ -1527,7 +1524,7 @@ if(
             !IsAlive(ep) ||
             !IsAlive(target) ||
             !IsOnGround(target) ||
-            DistanceBetween(ep, target) > (ActionRange.Melee * 2)
+            DistanceBetween(ep, target) > ActionRange.Melee * (tryCount <= 0 ? 2.0 : 1.0)
         ){
             break;
         }
@@ -1605,7 +1602,6 @@ if(
     define shotCallDelay! = RandomReal(0.2, 1.0);
     for(define scLoopIndex! = 0; scLoopIndex < CountOf(activeEnemys); scLoopIndex ++){
         if(
-            IsAlive(activeEnemys[scLoopIndex]) &&
             !IsInSpawnRoom(activeEnemys[scLoopIndex])
         ){
             SetUltimateCharge(activeEnemys[scLoopIndex], DefaultPercentage());
