@@ -148,7 +148,7 @@ void SetMoveDir() playervar "SetMoveDir"{
                 // not using ult
                 !IsUsingUltimate() &&
                 // by low health
-                IsTrueProbability(150 * (1 - NormalizedHealth()))
+                IsTrueProbability(100 * (1 - NormalizedHealth()))
             )
         :
             false
@@ -211,7 +211,7 @@ void SetMoveDir() playervar "SetMoveDir"{
 
         define distRate = (actionState == ActionState.Attack) ? 1 : 0.5;
 
-                // front/back
+        // front/back
         if(
             // target is close
             (distToTarget < (actionRangeMin * distRate))
@@ -220,15 +220,7 @@ void SetMoveDir() playervar "SetMoveDir"{
         }
         else if(
             // target is far
-            (distToTarget > (actionRangeMax * distRate)) &&
-            // is aggressive
-            IsTrueProbability(
-                DefaultPercentage() *
-                // by target health low
-                (1 - NormalizedHealth(aimTarget)) *
-                // by enemy density low
-                (1 - EnemyDensity(aimTarget, ActionRange.Close))
-            )
+            (distToTarget > (actionRangeMax * distRate))
         ){
             moveDirFB = Forward();
         }
@@ -384,7 +376,6 @@ if(
     LoopIfConditionIsTrue();
 }
 
-// TAG Bot/PolingAction ----------
 void StartFacingTemporaryWithButton(define target!, define button!, define keepTime! = 0.1, define angle! = 30) playervar "StartFacingTemporaryWithButton"{
     // target is player
     if(HasSpawned(target)){
@@ -412,6 +403,7 @@ void StartFacingTemporaryWithButton(define target!, define button!, define keepT
     StartFacingAimTarget();
 }
 
+// TAG Bot/PolingAction ----------
 define IsInCombat(): actionState != ActionState.Non;
 
 void PolingAction() playervar "PolingAction"{
@@ -419,6 +411,7 @@ void PolingAction() playervar "PolingAction"{
     define hero = HeroOfWithDuplicate();
 
     // common action
+
     // melee
     while(
         actionState == ActionState.Attack &&
@@ -447,10 +440,6 @@ void PolingAction() playervar "PolingAction"{
         Wait(0.5, WaitBehavior.AbortWhenFalse);
     }
 
-    if(!IsInAir()){
-        PressButton(ep, Button.Interact);
-    }
-
     // reload
     if(
         (
@@ -466,8 +455,49 @@ void PolingAction() playervar "PolingAction"{
     }
 
     // hero action
+
+    // deploy carryer
+    if(hero == Hero.JetpackCat){
+        if(
+            IsAlive() &&
+            actionState != ActionState.Support
+        ){
+            define targets! = PlayersWithinRadius(BelowPosition(ep), 5, TeamOf(ep), RadiusLOS.Off);
+            targets = RemoveFromArray(targets, ep);
+
+            if(
+                CountOf(targets) > 0 &&
+                !IsUsingAbility1()
+            ){
+                PressButton(ep, Button.Ability1);
+
+                define target! = RandomValueInArray(targets);
+                if(IsDummyBot(target)){
+                    Wait(0.1, WaitBehavior.IgnoreCondition);
+                    PressButton(target, Button.Interact);
+                }
+
+                while(
+                    IsAlive(ep) && IsAlive(target) &&
+                    DistanceBetween(PositionOf(ep) + Vector(0, 2.5, 0), target) <= 10
+                ){
+                    Wait(2.0, WaitBehavior.IgnoreCondition);
+                }
+            }
+        }
+    }
+    // Anran
+    else if(hero == Hero.Anran){
+        if(
+            IsDead(ep) &&
+            UltimateChargePercent(ep) >= DefaultPercentage() &&
+            IsTrueProbability(50)
+        ){
+            PressButton(ep, Button.Ultimate);
+        }
+    }
     // Ana
-    if(hero == Hero.Ana){
+    else if(hero == Hero.Ana){
         if(
             IsInCombat() &&
             UltimateChargePercent() >= DefaultPercentage()
@@ -1495,7 +1525,8 @@ if(
         rotateProb = 50;
     }
     else if(
-        hero == Hero.Lifeweaver
+        hero == Hero.Lifeweaver ||
+        hero == Hero.Mizuki
     ){
         isCanAction = true;
     }
@@ -1541,14 +1572,10 @@ if(
 
     define hero! = HeroOfWithDuplicate();
     if(
-        hero == Hero.Ramattra
+        (hero == Hero.Ramattra && !IsNemesisForm(ep)) ||
+        hero == Hero.Domina
     ){
-        if(
-            // is omnic form
-            !IsNemesisForm(ep)
-        ){
-            isCanAction = true;
-        }        
+        isCanAction = true;       
     }
 
     // place secondary
@@ -2218,12 +2245,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
 
     enableDoubleJump = false;
     supportPrioloty = 0.0;
-    supportButtons = [
-        Button.PrimaryFire,
-        Button.SecondaryFire,
-        Button.Ability1,
-        Button.Ability2
-    ];
+    supportButtons = [];
     attackButtons = [
         Button.PrimaryFire,
         Button.SecondaryFire,
@@ -2288,6 +2310,20 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         secondaryFireButtonPressMax = 40;       // to more use scorp
         jumpButtonReleaseMax = 40;              // to suppress cancel scorp
         ultimateButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use nano boost (Prefer PolingAction
+        supportButtons = [
+            Button.PrimaryFire,
+            Button.SecondaryFire,
+            Button.Ability2
+        ];
+        break;
+
+        case Hero.JetpackCat:
+        actionRangeMin = ActionRange.Middle;
+        actionRangeMax = ActionRange.Far;
+        primaryFireButtonReleaseMax = 1;
+        jumpButtonPressMax = 5;                 // to more use jetpack
+        ability1ButtonBehaivor = ButtonBehaivor.Non;          // to suppress over use carryer (Prefer PolingAction
+        supportPrioloty = 1.0;
         supportButtons = [
             Button.PrimaryFire,
             Button.SecondaryFire,
@@ -2575,7 +2611,6 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         case Hero.Sigma:
         actionRangeMin = ActionRange.Close;
         actionRangeMax = ActionRange.Middle;
-        primaryFireButtonReleaseMax = 0;        // to more confirm gravity flax
         secondaryFireButtonReleaseMax = 3;      // to deploy barrier to far distance
         secondaryFireButtonPressMin = 0.1;        // to deploy barrier to close distance
         secondaryFireButtonPressMax = 0.5;        // to deploy barrier to close distance
@@ -2589,6 +2624,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         break;
         
         case Hero.Soldier76:
+        case Hero.Emre:
         actionRangeMin = ActionRange.Close;
         actionRangeMax = ActionRange.Middle;
         break;
@@ -2693,35 +2729,43 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         ultimateButtonReleaseMax = 30;          // to suppress over use transcendence
         break;
 
+        case Hero.Wuyang:
+        actionRangeMin = ActionRange.Middle;
+        actionRangeMax = ActionRange.Far;
+        supportPrioloty = 1.0;
+        attackButtons = [
+            Button.PrimaryFire,
+            Button.Ability1,
+            Button.Ability2
+        ];
+        supportButtons = [
+            Button.SecondaryFire,
+            Button.Ability1,
+            Button.Ability2
+        ];
+        break;
+
+        case Hero.Vendetta:
+        actionRangeMin = ActionRange.Melee;
+        actionRangeMax = ActionRange.Close;
+        secondaryFireButtonPressMax = 3.0;
+        break;
+
+        case Hero.Domina:
+        actionRangeMin = ActionRange.Close;
+        actionRangeMax = ActionRange.Middle;
+        primaryFireButtonPressMax = 20;
+        enablePlaceSecondary = true;
+        break;
+
+        case Hero.Mizuki:
+        enablePlaceUltimate = true;
+        break;
+
         case Hero.Freja:
+        case Hero.Anran:
         break;
 
-        default:
-        if(IsTrueForAny(AllSupportHeroes(), HeroOf(ep) == ae)){
-            wooyang = HeroOf(ep);
-
-            primaryFireButtonPressMax = 1.2;
-            primaryFireButtonPressMin = 0.1;
-            primaryFireButtonReleaseMax = 0.1;
-            supportPrioloty = 0.75;
-            attackButtons = [
-                Button.PrimaryFire,
-                Button.Ability1,
-                Button.Ability2
-            ];
-            supportButtons = [
-                Button.SecondaryFire,
-                Button.Ability1,
-                Button.Ability2
-            ];
-
-        }
-        else{
-            vendetta = HeroOf(ep);
-            actionRangeMin = ActionRange.Melee;
-            secondaryFireButtonPressMax = 3.0;
-        }
-        break;
     }
 
     // if already button control enabled
@@ -2734,9 +2778,6 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
 
     hasButtonControlPropety = true;
 }
-
-globalvar define wooyang!;
-globalvar define vendetta!;
 
 enum ButtonBehaivor{
     Non,
