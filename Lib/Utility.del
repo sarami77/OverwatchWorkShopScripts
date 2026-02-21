@@ -124,22 +124,41 @@ define ObjectProgress() globalvar "ObjectProgress"{
         progress = 0;
     }
     else{
-        if(!IsHybridMap()){
-            progress = PayloadProgressPercentage();
-        }
-        else{
-            define objIdx! = ObjectiveIndex();
-
-            if(objIdx == 0){
+        if(IsHybridMap()){
+            if(ObjectiveIndex() == 0){
                 progress = (PointCapturePercentage() * 0.3);
             }
             else{
                 progress = 30 + (PayloadProgressPercentage() * 0.7);
             }
         }
+        else{
+            progress = PayloadProgressPercentage();
+        }
     }
+
     return progress;
 }
+
+define CurrentObjectPosition() globalvar "CurrentObjectPosition"{
+    define objPos!;
+
+    if(IsHybridMap()){
+        if(ObjectiveIndex() == 0){
+            objPos = ObjectivePosition(0);
+        }
+        else{
+            objPos = PayloadPosition();
+        }
+    }
+    else{
+        objPos = PayloadPosition();
+    }
+
+    return objPos;
+}
+
+define CurrentObjectOnPosition(): CurrentObjectPosition() + Vector(0, 4, 0);
 
 define IsCloseWin(define team!)"IsCloseWin"{
     define isCloseWin! = false;
@@ -171,28 +190,6 @@ define IsOverTime():
     IsGameInProgress() &&
     // HasMatchTime() &&
     MatchTime() <= 0;
-
-define CurrentObjectOnPosition(): CurrentObjectPosition() + Vector(0, 4, 0);
-
-define CurrentObjectPosition() globalvar "CurrentObjectPosition"{
-    define objPos!;
-    
-    if(!IsHybridMap()){
-        objPos = PayloadPosition();
-    }
-    else{
-        define objIdx! = ObjectiveIndex();
-
-        if(objIdx == 0){
-            objPos = ObjectivePosition(objIdx);
-        }
-        else{
-            objPos = PayloadPosition();
-        }
-    }
-
-    return objPos;
-}
 
 define HumanPlayerNum(define team!):
     CountOf(FilteredArray(AllPlayers(team), !IsDummyBot(ae)));
@@ -468,18 +465,18 @@ define BelowPosition(in define position):
     );
 
 define InvalidPosition():
-        Vector(0, -MaxLength(), 0);
+    Vector(0, -MaxLength(), 0);
 
 define NoPosition():
-        Vector(0, 0, 0);
+    Vector(0, 0, 0);
 
 define IsInSpawnRoomPosition(in define pos, in define team):
-    IsInLineOfSight(SpawnPoints(team)[0] + Up(), pos + Up());
+    IsInLineOfSight(SpawnPoints(team)[0] + PositionOffsetY1(), pos + PositionOffsetY1());
 
 
 // TAG Player ----------
 define IsHostPlayerInGame(){
-    return IsTrueForAny(AllPlayers(), ae == HostPlayer());
+    return ArrayContains(AllPlayers(Team.All), HostPlayer());
 }
 
 define PlayersAsHero(define hero): 
@@ -781,20 +778,9 @@ define RandomTankHero(): rva(AllTankHeroes());
 define RandomDamageHero(): rva(AllDamageHeroes());
 define RandomSupportHero(): rva(AllSupportHeroes());
 
-define IsTankHero(in define hero!): IsMatchInArray(hero, AllTankHeroes());
-define IsDamageHero(in define hero!): IsMatchInArray(hero, AllDamageHeroes());
-define IsSupportHero(in define hero!): IsMatchInArray(hero, AllSupportHeroes());
-
-define IsMatchInArray(define value!, define valueArray!)"IsMatchInArray"{
-    define isMatch! = false;
-    for(define index! = 0; index < CountOf(valueArray); index++){
-        if(valueArray[index] == value){
-            isMatch = true;
-            break;
-        }
-    }
-    return isMatch;
-}
+define IsTankHero(in define hero!): 0 <= IndexOfArrayValue(AllTankHeroes(), hero);
+define IsDamageHero(in define hero!): 0 <= IndexOfArrayValue(AllDamageHeroes(), hero);
+define IsSupportHero(in define hero!): 0 <= IndexOfArrayValue(AllSupportHeroes(), hero);
 
 globalvar define FavoriteDamageHeroList! =
     [
