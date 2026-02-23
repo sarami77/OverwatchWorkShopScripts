@@ -1364,7 +1364,7 @@ define enemyModList:
         ],
         [
             // modNo 7 all explode
-            EnemyModType.Explode
+            EnemyModType.Freeze
         ],
         [
             // modNo 8 all freeze
@@ -1374,19 +1374,19 @@ define enemyModList:
 
 define enemyModNoLotteryList: [
     // no mod
-    [0, 30],
+    [0, 15],
     // half mod
-    [1, 20], 
+    [1, 15], 
     // all mod
     [2, 5],
     // all health
-    [3, 2],
+    [3, 1],
     // all speed
-    [4, 2],
+    [4, 1],
     // all jump
-    [5, 2],
+    [5, 1],
     // all flying
-    [6, 2],
+    [6, 1],
     // all explode
     [7, 1],
     // all freeze
@@ -1445,9 +1445,9 @@ define bombScale :
 define bombSize:    bombScale * 0.4;
 define bombRange:   1 + (bombScale * 4.0);
 define bombCountDownInterval:       0.8;
-define bombExplpdeDamage:           100 + (bombScale * 1.7);
+define bombExplpdeDamage:           100 + (bombScale * 2.0);
 define bombBunrningDamagePS:        25 + (bombScale * 1.5);
-define bombBunrningSecond:          3 + (bombScale * 1.5);
+define bombBunrningSecond:          3 + (bombScale * 1.25);
 
 rule: "EnemyBot/Mod/Explode"
 Event.OnDeath
@@ -1465,7 +1465,7 @@ if(
         Wait(bombCountDownInterval, WaitBehavior.IgnoreCondition);
     }
 
-    define targets! = PlayersWithinRadius(bombPos, bombRange, humanTeam, RadiusLOS.SurfacesAndAllBarriers);
+    define targets! = PlayersWithinRadius(bombPos, bombRange, Team.All, RadiusLOS.SurfacesAndAllBarriers);
     SetStatus(targets, ep, Status.Burning, bombBunrningSecond);
     ApplyBlastImpulse(targets, bombPos, bombRange, 3);
     Damage(targets, ep, bombExplpdeDamage);
@@ -1479,8 +1479,8 @@ if(
 define freezeSecond :
     enemyType == EnemyType.Minion ?     3 :
     enemyType == EnemyType.Elite ?      5 :
-    enemyType == EnemyType.SubBoss ?    9 :
-    enemyType == EnemyType.Boss ?       9 :
+    enemyType == EnemyType.SubBoss ?    7 :
+    enemyType == EnemyType.Boss ?       7 :
     0;
 
 rule: "EnemyBot/Mod/Freeze"
@@ -1511,11 +1511,19 @@ if(
 
     for(tryCount = 0; tryCount < freezeSecond; tryCount++){
         aimTarget = target;
-        teleportPosition = PositionOf(target) + Normalize(VectorWithOutY(DirectionTowards(target, ep)));
-        if(tryCount <= 0){ PlayTeleportEffect(true, true); }  // show pre teleport effect
-        Teleport(ep, teleportPosition);
-        if((tryCount <= 0)){ PlayTeleportEffect(false, true); } // show teleport effect
+        
+        if(tryCount <= 0){
+            teleportPosition = target;
+            PlayTeleportEffect(true, true);     // show pre teleport effect
+            Wait(1.0, WaitBehavior.IgnoreCondition);
+            PlayTeleportEffect(false, true);    // show teleport effect
+            if(!IsInLineOfSight(EyePosition(ep), EyePosition(target))){
+                break;
+            }
+        }
 
+        teleportPosition = PositionOf(target) + (Normalize(VectorWithOutY(DirectionTowards(target, ep))) * 1.5);
+        Teleport(ep, teleportPosition);
         PressButton(ep, Button.Melee);
         SetStatus(ep, ep, Status.Rooted, 1.1);
         SetStatus(target, ep, Status.Frozen, 1.1);
