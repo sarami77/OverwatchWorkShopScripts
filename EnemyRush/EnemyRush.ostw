@@ -1505,49 +1505,54 @@ if(
         Wait(1.0, WaitBehavior.AbortWhenFalse);
     }
 
-    define icon! = CreateIcon(AllPlayers(), target, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
-    define effect! = CreateEffect(AllPlayers(), Effect.BadAura, Color.Blue, ep, freezeSecond / 2, EffectRev.PositionAndRadius);
+    teleportPosition = target;
+    PlayTeleportEffect(true, true);     // show pre teleport effect
+    Wait(1.0, WaitBehavior.IgnoreCondition);
+    PlayTeleportEffect(false, true);    // show teleport effect
+
+    define icon!;
+    define effect!;
     define tryCount! = 0;
 
     for(tryCount = 0; tryCount < freezeSecond; tryCount++){
-        aimTarget = target;
-        
-        if(tryCount <= 0){
-            teleportPosition = target;
-            PlayTeleportEffect(true, true);     // show pre teleport effect
-            Wait(1.0, WaitBehavior.IgnoreCondition);
-            PlayTeleportEffect(false, true);    // show teleport effect
-            if(!IsInLineOfSight(EyePosition(ep), EyePosition(target))){
-                break;
-            }
-        }
-
         if(
-            !IsAlive(ep) ||
-            !IsAlive(target) ||
-            !IsOnGround(target) ||
-            DistanceBetween(ep, target) > meleeRange * (tryCount <= 0 ? 2 : 1)
+            IsDead(ep) ||
+            IsDead(target) ||
+            IsInAir(target) ||
+            (
+                tryCount <= 0 ? 
+                    !IsInLineOfSight(EyePosition(ep), EyePosition(target)) :
+                    !DistanceBetween(ep, target) > meleeRange
+            )
         ){
             break;
         }
-        
+
         teleportPosition = PositionOf(target) + (Normalize(VectorWithOutY(DirectionTowards(target, ep))) * 1.5);
         Teleport(ep, teleportPosition);
+        aimTarget = target;
         PressButton(ep, Button.Melee);
         SetStatus(ep, ep, Status.Rooted, 1.1);
         SetStatus(target, ep, Status.Frozen, 1.1);
-        if(tryCount > 0){
+
+        if(!IsMoving(target)){
             SetFacing(target, DirectionTowards(EyePosition(target), EyePosition(ep)));
+        }
+
+        if(tryCount <= 0){
+            icon = CreateIcon(AllPlayers(), target, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
+            effect = CreateEffect(AllPlayers(), Effect.BadAura, Color.Blue, ep, freezeSecond / 2, EffectRev.PositionAndRadius);
         }
 
         Wait(1.0, WaitBehavior.IgnoreCondition);
     }
-
-    DestroyEffect(effect);
+    
     DestroyIcon(icon);
+    DestroyEffect(effect);
     ClearStatus(ep, Status.Frozen);
     ClearStatus(target, Status.Frozen);
     StartFacingAimTarget();
+    
     Wait(3.0, WaitBehavior.AbortWhenFalse);
     LoopIfConditionIsTrue();
 }
