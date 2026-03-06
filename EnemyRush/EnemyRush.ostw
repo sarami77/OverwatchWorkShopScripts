@@ -2216,7 +2216,18 @@ if(
         if(
             IsTrueProbability(GameProgressDiff(humanTeam) * -0.05 * forceModRate)
         ){
-            forceHeroMod();
+            define target! = 
+                RandomValueInArray(
+                    FilteredArray(
+                        AllPlayers(humanTeam),
+                        (
+                            IsDummyBot(ae) &&
+                            !ae.isTransformed
+                        )
+                    )
+                );
+            define mod! = GetFromLotteryList(forceParkLotteryList);
+            forceHeroMod(target, mod);
         }
 
         // in god mod
@@ -2233,25 +2244,22 @@ if(
 
             // force use gunship a frined
             if(IsTrueEverySeconds(5)){
-                define last! = FirstOf(
-                    SortedArray(
-                        FilteredArray(
-                            AllPlayers(humanTeam),
-                            (
-                                IsDummyBot(ae)
-                            )
-                        ),
-                        -SlotOf(ae)
-                    )
-                );
-
+                define target! = FirstOf(
+                        SortedArray(
+                            FilteredArray(
+                                AllPlayers(humanTeam),
+                                (
+                                    IsDummyBot(ae)
+                                )
+                            ),
+                            -SlotOf(ae)
+                        )
+                    );
+                
                 if(
-                    last != null &&
-                    !last.isTransformed
+                    !target.isTransformed
                 ){
-                    last.heroModType = HeroModType.GUNSHIP_GUNNER;
-                    SetUltimateCharge(last, DefaultPercentage());
-                    PressButton(last, Button.Ultimate);
+                    forceHeroMod(target, HeroModType.GUNSHIP_GUNNER);
                 }
             }
         }
@@ -2550,13 +2558,8 @@ if(
 ){
     // kill players on aim center
     WaitLongPressConfirm();
-    forceHeroMod();
 
-    LoopIfConditionIsTrue();
-}
-
-void forceHeroMod()"forceHeroMod"{
-    define player! = 
+    define target! = 
         RandomValueInArray(
             FilteredArray(
                 AllPlayers(humanTeam),
@@ -2566,15 +2569,22 @@ void forceHeroMod()"forceHeroMod"{
                 )
             )
         );
+    define mod! = GetFromLotteryList(forceParkLotteryList);
+    forceHeroMod(target, mod);
 
-    player.heroModType = GetFromLotteryList(forceParkLotteryList);
+    LoopIfConditionIsTrue();
+}
 
-    if(IsDead(player)){
-        Resurrect(player);
+void forceHeroMod(define target, define mod)"forceHeroMod"{
+    // dbgHudTxt(<"target = <0>", target>);
+    // dbgHudTxt(<"mod = <0>", mod>);
+    target.heroModType = mod;
+    if(IsDead(target)){
+        Resurrect(target);
     }
-    player.grudgePower = 100;
-    SetUltimateCharge(player, DefaultPercentage());
-    PressButton(player, Button.Ultimate);
+    target.grudgePower = 100;
+    SetUltimateCharge(target, DefaultPercentage());
+    PressButton(target, Button.Ultimate);
 }
 
 // rule: "Debug/forceAllHeroMod"
