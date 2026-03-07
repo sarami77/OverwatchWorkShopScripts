@@ -1144,7 +1144,8 @@ globalvar define forceReloadEnemyAsset! = false;
 rule: "EnemyBot/Asset/Interval/reloadReloadEnemyAsset"
 Event.OngoingGlobal
 if(
-    IsGameInProgress()
+    IsGameInProgress() ||
+    IsInEnemyStandBy()
 ){
     while(true){
         // if force reload, skip change assetNo and set interval
@@ -1699,7 +1700,8 @@ globalvar define blockedPos;
 rule: "EnemyBot/Teleport/UpdateTeleportBasePosition"
 Event.OngoingGlobal
 if(
-    IsGameInProgress()
+    IsGameInProgress() ||
+    IsInEnemyStandBy()
 ){
     define objOnPos = CurrentObjectOnPosition();
     define clsPlyr = ClosestPlayerTo(objOnPos, humanTeam);
@@ -1926,12 +1928,15 @@ define IsValidPosition(define checkPosition, define checkTarget)"CheckCandidateP
             CurrentObjectPosition()
         ) > teleportAreaSize
             &&
-        // has line to checkTarget
-        IsInLineOfSight(
-            PositionOffsetY1() + checkPosition,
-            PositionOffsetY1() + PositionOf(checkTarget),
-            BarrierLOS.NoBarriersBlock
-        )
+        IsInEnemyStandBy() ? 
+            true
+        :
+            // has line to checkTarget
+            IsInLineOfSight(
+                PositionOffsetY1() + checkPosition,
+                PositionOffsetY1() + PositionOf(checkTarget),
+                BarrierLOS.NoBarriersBlock
+            )
     ){
         isValid = true;
     }
@@ -2001,8 +2006,6 @@ void DoTeleport(define isBeamFromBody!, define isTeleportToOnObject!)"DoTeleport
     ){
         // update teleportPosition by new position
         teleportPosition = newPosition;
-        // wait teleport until game start.
-        WaitUntil(IsGameInProgress(), MaxValue());
 
         if(IsInSpawnRoom()){
             define waitTime! = 
@@ -2054,7 +2057,10 @@ rule: "EnemyBot/Teleport/teleportByRespawn"
 Event.OngoingPlayer
 if(
     TeamOf() == enemyTeam &&
-    IsGameInProgress() &&
+    (
+        IsGameInProgress() ||
+        IsInEnemyStandBy()
+    ) &&
     IsInSpawnRoom()
 ){
     DoTeleport(false, false);
