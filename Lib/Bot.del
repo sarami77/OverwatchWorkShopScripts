@@ -468,30 +468,35 @@ void PolingAction() playervar "PolingAction"{
     if(hero == Hero.JetpackCat){
         if(
             IsAlive() &&
-            actionState != ActionState.Support
+            actionState == ActionState.Non
         ){
-            define targets! = PlayersWithinRadius(BelowPosition(ep), 5, TeamOf(ep), RadiusLOS.Off);
-            targets = RemoveFromArray(targets, ep);
-
-            if(
-                CountOf(targets) > 0 &&
-                !IsUsingAbility1()
-            ){
+            if(!IsUsingAbility1()){
                 PressButton(ep, Button.Ability1);
-
-                define target! = RandomValueInArray(targets);
-                if(IsDummyBot(target)){
-                    Wait(0.1, WaitBehavior.IgnoreCondition);
-                    PressButton(target, Button.Interact);
-                }
-
-                while(
-                    IsAlive(ep) && IsAlive(target) &&
-                    DistanceBetween(PositionOf(ep) + Vector(0, 2.5, 0), target) <= 10
-                ){
-                    Wait(2.0, WaitBehavior.IgnoreCondition);
-                }
             }
+            Wait(1, WaitBehavior.AbortWhenFalse);
+
+            define targets! = PlayersWithinRadius(
+                BlockedPosition(PositionOf(), Down(), 5),
+                5, TeamOf(ep), RadiusLOS.Off);
+                targets = RemoveFromArray(targets, ep);
+            
+            while(CountOf(targets) > 0){
+                define target = RandomValueInArray(targets);
+                if(IsDummyBot(target)){
+                    PressButton(targets, Button.Interact);
+                }
+                StartHoldingButton(ep, Button.Jump);
+                StopHoldingButton(ep, Button.Crouch);
+                Wait(1, WaitBehavior.IgnoreCondition);
+
+                targets = PlayersWithinRadius(
+                    BlockedPosition(PositionOf(), Down(), 5),
+                    5, TeamOf(ep), RadiusLOS.Off);
+                targets = RemoveFromArray(targets, ep);
+            }
+            
+            StartHoldingButton(ep, Button.Crouch);
+            StopHoldingButton(ep, Button.Jump);
         }
     }
     // Anran
