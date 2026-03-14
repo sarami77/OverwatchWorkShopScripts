@@ -14,6 +14,7 @@ define IsLoadOvered() : ServerLoad() >= ServerLoad.FULL;
 
 // TAG SerServerLoadMeasures/WaitUntilLoadLimitRelease ----------
 define checkLoadInterval : 0.1;
+// define checkLoadInterval : countActionWait * 0.01;
 define releaseGateMaxNum : 10;
 define releaseGateInterval : 0.1;
 define checkGateInterval : releaseGateInterval;
@@ -37,10 +38,11 @@ void WaitUntilServerLoadLimitRelease(){
 
 // TAG ServerLoadMeasures/GameSpeed ----------
 define ServerLoadOfDoGameSpeedDown : ServerLoad.FULL;
-define WaitTimeGameSpeedDown : 3.0;
-define ChangeStepGameSpeedDown : 50;
-define WaitTimeForceGameSpeedUp : 3.0;
-define ChangeStepGameSpeedUp : 50;
+define WaitTimeGameSpeedDown : 2.0;
+define ChangeStepGameSpeedDown : 10;
+define WaitTimeGameSpeedUp : 1.0;
+define ChangeStepGameSpeedUp : 10;
+define WaitTimeGameForceSpeedUp : 3.0;
 
 define gameSpeedMax: 100;
 globalvar define gameSpeed = gameSpeedMax;
@@ -62,10 +64,22 @@ if(
 rule: "ServerOverloadMeasures/GameSpeed/up"
 Event.OngoingGlobal
 if(
+    ServerLoad() < ServerLoadOfDoGameSpeedDown &&
+    gameSpeed < gameSpeedMax
+){
+    Wait(WaitTimeGameSpeedUp, WaitBehavior.AbortWhenFalse);
+    TuneGameSpeed(ChangeStepGameSpeedUp);
+
+    Loop();
+}
+
+rule: "ServerOverloadMeasures/GameSpeed/forceUp"
+Event.OngoingGlobal
+if(
     // ServerLoad() < ServerLoadOfDoGameSpeedDown &&
     gameSpeed < gameSpeedMax
 ){
-    Wait(WaitTimeForceGameSpeedUp, WaitBehavior.AbortWhenFalse);
+    Wait(WaitTimeGameForceSpeedUp, WaitBehavior.AbortWhenFalse);
     TuneGameSpeed(ChangeStepGameSpeedUp);
 
     Loop();
