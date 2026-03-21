@@ -129,6 +129,7 @@ void DestroyBots(define team!)"DestroyBots"{
 define noMoving: false;   // for debug
 define sideStepRate: 0.75;
 
+playervar define prevPosition;
 playervar define moveDirFB;
 playervar define moveDirLR;
 playervar define moveTarget;
@@ -214,53 +215,70 @@ void SetMoveDir() playervar "SetMoveDir"{
     // move for combat
     else if(actionState != ActionState.Non){
         moveTarget = null;
+        define currentPosition = PositionOf();
 
-        define distRate = (actionState == ActionState.Attack) ? 1 : 0.5;
-
-        // front/back
         if(
-            // target is close
-            (distToTarget < (actionRangeMin * distRate))
+            IsMoving() &&
+            DistanceBetween(prevPosition, currentPosition) <= watchUpdateRate
         ){
-            moveDirFB = Backward();
-        }
-        else if(
-            // target is far
-            (distToTarget > (actionRangeMax * distRate))
-        ){
-            moveDirFB = Forward();
+            // reverse for stuck
+            moveDirFB = -moveDirFB;
+            moveDirLR = -moveDirLR;
         }
         else{
-            // stop move by own action range
-            moveDirFB = NoDirection();
-        }
+            prevPosition = currentPosition;
+            define distRate = (actionState == ActionState.Attack) ? 1 : 0.5;
 
-        // right/left
-        if(
-            actionState == ActionState.Attack &&
-            IsTrueProbability(
-                DefaultPercentage() *
-                // by distance close
-                (1 - (DistanceBetween(ep, aimTarget) / ActionRange.CanFind)) *
-                sideStepRate
-            )
-        ){
-            // start side step for dodge attack
+            // front/back
             if(
-                // no side step
-                moveDirLR == NoDirection()
+                // target is close
+                (distToTarget < (actionRangeMin * distRate))
             ){
-                // start left/right step
-                moveDirLR = RandomValueInArray([Right(), Left()]);
+                moveDirFB = Backward();
             }
-            else if(IsTrueProbability(50)){
-                // change side step to reverse
-                moveDirLR = -moveDirLR;
+            else if(
+                // target is far
+                (distToTarget > (actionRangeMax * distRate))
+            ){
+                moveDirFB = Forward();
             }
-        }
-        else{
-            // stop side step
-            moveDirLR = NoDirection();
+            else{
+                // stop move by own action range
+                moveDirFB = NoDirection();
+            }
+
+            // right/left
+            if(
+                actionState == ActionState.Attack &&
+                IsTrueProbability(
+                    DefaultPercentage() * sideStepRate *
+                    // by distance close
+                    (
+                        1 - (
+                            DistanceBetween(ep, aimTarget) / ActionRange.CanFind
+                        )
+                    )
+                )
+            ){
+                // start side step for dodge attack
+                if(
+                    // no side step
+                    moveDirLR == NoDirection()
+                ){
+                    // start left/right step
+                    moveDirLR = RandomValueInArray([Right(), Left()]);
+                }
+                else if(
+                    IsTrueProbability(50)
+                ){
+                    // change side step to reverse
+                    moveDirLR = -moveDirLR;
+                }
+            }
+            else{
+                // stop side step
+                moveDirLR = NoDirection();
+            }
         }
     }
 }
@@ -381,24 +399,22 @@ if(
     LoopIfConditionIsTrue();
 }
 
-void StartFacingTemporaryWithButton(define target!, define button!, define keepTime! = 0.1, define angle! = 30) playervar "StartFacingTemporaryWithButton"{
+void StartFacingTemporaryWithButton(define target!, define button!, define keepTime! = 0.1) playervar "StartFacingTemporaryWithButton"{
     // target is player
     if(HasSpawned(target)){
-        StartFacingPlayer(target, facingSpeedRate);
+        StartFacingPlayer(target, facingSpeedRate * 10);
     }
     // target is position
     else{
-        StartFacingPosition(target, facingSpeedRate);
+        StartFacingPosition(target, facingSpeedRate * 10);
     }
 
-    define tryTime! = 3.0;
+    define tryTime! = 2.0;
     define tryInterval! = 0.2;
-    define maxTryCount! = tryTime * tryInterval;
+    define maxTryCount! = tryTime / tryInterval;
     for(define tryCount! = 0; tryCount < maxTryCount; tryCount++){
+        if(IsInViewAngle(ep, target, 1)) break;
         Wait(tryInterval, WaitBehavior.IgnoreCondition);
-        if(IsInViewAngle(ep, target, angle)){
-            break;
-        }
     }
     
     Wait(0.1, WaitBehavior.IgnoreCondition);
@@ -540,7 +556,7 @@ void PolingAction() playervar "PolingAction"{
                 );
 
             if(boostTarget != null){
-                StartFacingTemporaryWithButton(boostTarget, Button.Ultimate, 0.1);
+                StartFacingTemporaryWithButton(boostTarget, Button.Ultimate);
             }
         }
     }
@@ -563,7 +579,7 @@ void PolingAction() playervar "PolingAction"{
                 );
 
             if(healTarget != null){
-                StartFacingTemporaryWithButton(healTarget, Button.Ability2, 0.1);
+                StartFacingTemporaryWithButton(healTarget, Button.Ability2);
             }
         }
     }
@@ -592,7 +608,7 @@ void PolingAction() playervar "PolingAction"{
                     IsDead(target) &&
                     AbilityCooldown(ep, Button.Ability2) <= 0
                 ){
-                    StartFacingTemporaryWithButton(target, Button.Ability1, 1.0);
+                    StartFacingTemporaryWithButton(target, Button.Ability1);
                     if(DistanceBetween(target) >= 3){
                         moveDirFB = Forward();
                         moveDirLR = NoDirection();
@@ -692,7 +708,7 @@ void PolingAction() playervar "PolingAction"{
 
             if(protectTarget != null){
                 protectTarget = BelowPosition(protectTarget);
-                StartFacingTemporaryWithButton(protectTarget, Button.Ability2, 0.1);
+                StartFacingTemporaryWithButton(protectTarget, Button.Ability2);
             }
         }
     }
@@ -731,7 +747,7 @@ void PolingAction() playervar "PolingAction"{
                 );
 
             if(protectTarget != null){
-                StartFacingTemporaryWithButton(protectTarget, Button.Ability2, 0.1);
+                StartFacingTemporaryWithButton(protectTarget, Button.Ability2);
             }
         }
     }
@@ -804,7 +820,7 @@ void PolingAction() playervar "PolingAction"{
                 StopMove(ep);
                 Wait(0.5, WaitBehavior.IgnoreCondition);
                 // aim to own step
-                StartFacingTemporaryWithButton(BelowPosition(ep), Button.Ability1, 0.1);
+                StartFacingTemporaryWithButton(BelowPosition(ep), Button.Ability1);
                 Wait(1, WaitBehavior.IgnoreCondition);
                 PressButton(ep, Button.Jump);
                 SetStatus(ep, null, Status.Rooted, RandomReal(3.0, 6.0));
@@ -829,7 +845,7 @@ void PolingAction() playervar "PolingAction"{
                     assistTarget != null &&
                     !IsAboveCeiling(assistTarget)
                 ){
-                    StartFacingTemporaryWithButton(BelowPosition(assistTarget) + Vector(0, 0.1, 0), Button.Ability1, 0.1);
+                    StartFacingTemporaryWithButton(BelowPosition(assistTarget) + Vector(0, 0.1, 0), Button.Ability1);
                 }
             }
         }
@@ -853,7 +869,7 @@ void PolingAction() playervar "PolingAction"{
                 );
 
             if(protectTarget != null){
-                StartFacingTemporaryWithButton(protectTarget, Button.Ability2, 0.1);
+                StartFacingTemporaryWithButton(protectTarget, Button.Ability2);
             }
         }
     }
@@ -886,7 +902,7 @@ void PolingAction() playervar "PolingAction"{
                     );
 
                 if(protectTarget != null){
-                    StartFacingTemporaryWithButton(protectTarget, Button.Ability1, 0.1);
+                    StartFacingTemporaryWithButton(protectTarget, Button.Ability1);
                 }
             }
 
@@ -906,7 +922,7 @@ void PolingAction() playervar "PolingAction"{
                     );
 
                 if(attackTarget != null){
-                    StartFacingTemporaryWithButton(attackTarget, Button.Ability2, 0.1);
+                    StartFacingTemporaryWithButton(attackTarget, Button.Ability2);
                 }
             }
         }
@@ -1124,7 +1140,7 @@ void PolingAction() playervar "PolingAction"{
                 Vector(0, 5, 0) +
                 RandomPosition(2.5, 2.5, 2.5);
             
-            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.1);
+            StartFacingTemporaryWithButton(aimPosition, Button.Ability2);
         }
         else if(
             AbilityCooldown(ep, Button.Ability2) <= 0 &&
@@ -1208,7 +1224,7 @@ void PolingAction() playervar "PolingAction"{
                         3
                     )
                 );
-            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.1);
+            StartFacingTemporaryWithButton(aimPosition, Button.Ability2);
             PressButton(ep, Button.PrimaryFire);
         }
 
@@ -1227,7 +1243,7 @@ void PolingAction() playervar "PolingAction"{
                         3
                     )
                 );
-            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.1);
+            StartFacingTemporaryWithButton(aimPosition, Button.Ability2);
             PressButton(ep, Button.PrimaryFire);
         }
 
@@ -1267,7 +1283,7 @@ void PolingAction() playervar "PolingAction"{
                 Wait(0.2, WaitBehavior.IgnoreCondition);
             }
 
-            StartFacingTemporaryWithButton(aimPosition, Button.Ability2, 0.5);
+            StartFacingTemporaryWithButton(aimPosition, Button.Ability2);
             PressButton(ep, Button.PrimaryFire);
         }
     }
@@ -1340,6 +1356,20 @@ void PolingAction() playervar "PolingAction"{
             enableButtonControl = true;
         }
     }
+    // Vendetta
+    else if(hero == Hero.Vendetta){
+        if(
+            IsInCombat() &&
+            IsTrueProbability(75) &&
+            AbilityCooldown(ep, Button.Ability1) <= 0
+        ){
+            StopHoldingButton(ep, Button.SecondaryFire);
+            StartFacingTemporaryWithButton(aimTarget + Vector(0, 20, 0), Button.Ability1);
+            if(UltimateChargePercent(ep) >= DefaultPercentage()){
+                PressButton(ep, Button.Ultimate);
+            }
+        }
+    }
     // WreckingBall
     else if(hero == Hero.WreckingBall){
         // use graple hook and tackle
@@ -1348,13 +1378,11 @@ void PolingAction() playervar "PolingAction"{
             IsTrueProbability(75) &&
             AbilityCooldown(ep, Button.SecondaryFire) <= 0
         ){
-            define detectDist! = 21;
-            define hasWallDir! = GetWallDirection(ep, detectDist, [Forward(), Left(), Right(), Backward()]);
-            if(hasWallDir != null){
-                // stop buton control for reduce ball form cancel by fire
-                enableButtonControl = false;
-                define aimPosition! = GetGrapplePosition(hasWallDir, detectDist);
-                StartFacingTemporaryWithButton(aimPosition, Button.SecondaryFire, RandomReal(3.0, 9.0));
+            // stop buton control for reduce ball form cancel by fire
+            enableButtonControl = false;
+            define grapplePosition! = GetGrapplePosition();
+            if(grapplePosition != null){
+                StartFacingTemporaryWithButton(grapplePosition, Button.SecondaryFire, RandomReal(3.0, 9.0));
             }
         }
 
@@ -1388,19 +1416,17 @@ void PolingAction() playervar "PolingAction"{
 
         if(
             IsInCombat() &&
-            DistanceBetween(ep, aimTarget) <= ActionRange.Close
+            DistanceBetween(ep, aimTarget) <= ActionRange.Middle
         ){
             // fallback by graple hook
             if(
                 AbilityCooldown(ep, Button.Ability1) <= 0
             ){
-                define detectDist! = 20;
-                define hasWallDir! = GetWallDirection(ep, detectDist, [Backward(), Left(), Right(), Forward()]);
-                if(hasWallDir != null){
-                    StopMove(ep);
-                    StopHoldingButton(ep, Button.SecondaryFire);
-                    define aimPosition! = GetGrapplePosition(hasWallDir, detectDist);
-                    StartFacingTemporaryWithButton(aimPosition, Button.Ability1, 0.1);
+                StopMove(ep);
+                StopHoldingButton(ep, Button.SecondaryFire);
+                define grapplePosition! = GetGrapplePosition();
+                if(grapplePosition != null){
+                    StartFacingTemporaryWithButton(grapplePosition, Button.Ability1);
                     StartHoldingButton(ep, Button.SecondaryFire);
                 }
             }
@@ -1570,7 +1596,7 @@ if(
                     DistanceBetween(ep, aimTarget) * 0.5
                 )
             );
-        StartFacingTemporaryWithButton(aimPosition, Button.PrimaryFire, 0.1);
+        StartFacingTemporaryWithButton(aimPosition, Button.PrimaryFire);
         PressButton(ep, Button.PrimaryFire);
         // restore buton control
         enableButtonControl = true;
@@ -1615,7 +1641,7 @@ if(
                     DistanceBetween(ep, aimTarget) * 0.25
                 )
             );
-        StartFacingTemporaryWithButton(aimPosition, Button.SecondaryFire, 0.1);
+        StartFacingTemporaryWithButton(aimPosition, Button.SecondaryFire);
         // restore buton control
         enableButtonControl = true;
     }

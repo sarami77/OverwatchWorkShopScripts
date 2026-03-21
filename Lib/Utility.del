@@ -331,43 +331,57 @@ define BlockedPositionByLocalVector(define player!, define localVector!, define 
     return blockedPosition;
 }
 
-define GetWallDirection(define player!, define detectDist!, define orderList!)"GetWallDirection"{
-    define hasWallDir!;
+define GetGrapplePosition() playervar "GetGrapplePosition"{
+    define grapplePosition! = null;
+    
+    define detectDist! = 20;
+    define checkDirList! = [
+        Backward(),
+        Backward() + Left(),
+        Backward() + Right(),
+        Left(),
+        Right(),
+        Forward() + Left(),
+        Forward() + Right(),
+        Forward()
+    ];
 
-    for(define index! = 0; index < CountOf(orderList); index++){
+    define maxDistPoint! = null;
+    define maxDist! = 0;
+    for(define index! = 0; index < CountOf(checkDirList); index++){
+        define blockedPosition! = BlockedPosition(ep, checkDirList[index], detectDist);
+        define distToBloked! = DistanceBetween(ep, blockedPosition);
+
         if(
-            IsBlockedBetween(
-                EyePosition(),
-                EyePosition() + (WorldVectorOf(orderList[index], player) * detectDist)
-            )
+            // block detected
+            distToBloked < detectDist &&
+            // can update maxDist
+            distToBloked > maxDist
         ){
-            hasWallDir = orderList[index];
-            break;
+            maxDist = distToBloked;
+            maxDistPoint = blockedPosition;
         }
     }
-    return hasWallDir;
-}
 
-define GetGrapplePosition(define hasWallDir!, define detectDist!) playervar "GetGrapplePosition"{
-    define blockedPos! = BlockedPosition(ep, WorldVectorOf(hasWallDir, ep), detectDist);
-    define blockedDist! = DistanceBetween(ep, blockedPos);
-    define cutoutDist! = detectDist - blockedDist;
-    define wallposition! =
-        // blocked as base
-        blockedPos +
-        // add hight by cutout
-        Vector(0, cutoutDist * 0.7, 0) +
-        // too close to wall
-        (
-            blockedDist <= 2.5
-            ?
-                // aim without random for touch wall
-                RandomPosition(0, 0, 0)
-            :
-                // aim with random
-                RandomPosition(5, 5, 5)
-        );
-    return wallposition;
+    if(maxDistPoint != null){
+        grapplePosition =
+            // blocked as base
+            maxDistPoint +
+            // add hight by cutout
+            Vector(0, (detectDist - maxDist) * 0.7, 0) +
+            // too close to wall
+            (
+                maxDist <= 2.5
+                ?
+                    // aim without random for touch wall
+                    RandomPosition(0, 0, 0)
+                :
+                    // aim with random
+                    RandomPosition(5, 5, 5)
+            );
+    }
+
+    return grapplePosition;
 }
 
 void StartFacingPlayer(define player!, define facingRate!) playervar "StartFacingPlayer"{
