@@ -53,7 +53,7 @@ define asset:
 
 globalvar define serverLoadTotal;
 
-rule: "BotTest"
+rule: "TestOngoingGlobal"
 Event.OngoingGlobal
 {
     DisableInspectorRecording();
@@ -67,10 +67,10 @@ Event.OngoingGlobal
             IsTrueEverySeconds(180)
         ){
             initBot = true;
-            DestroyBots(humanTeam);
-            DestroyBots(enemyTeam);
-            CreateBotsByAsset(asset[0], humanTeam, 12);
-            CreateBotsByAsset(asset[1], enemyTeam, 12);
+            // DestroyBots(humanTeam);
+            // DestroyBots(enemyTeam);
+            // CreateBotsByAsset(asset[0], humanTeam, 12);
+           // CreateBotsByAsset(asset[1], enemyTeam, 12);
             SetRespawnMaxTime(ap(ta), 0);
             // SetMaxHealth(ap(ta), 500);
             // Heal(ap(ta), null, MaxValue());
@@ -80,6 +80,8 @@ Event.OngoingGlobal
         }
 
         if(IsTrueEverySeconds(1)){
+
+
 
             // define idlePlayers = FilteredArray(AllPlayers(), 
             //     IsDummyBot(ae) && ae.actionState == ActionState.Non
@@ -95,12 +97,75 @@ Event.OngoingGlobal
             // SetAbilityCooldown(ap(ta), Button.Ability1, 0);
             // SetAbilityCooldown(ap(ta), Button.Ability2, 0);
             // SetUltimateCharge(ap(ta), 100);
-            SetStatus(hp, null, Status.PhasedOut, 9999);
+            // SetStatus(hp, null, Status.PhasedOut, 9999);
         }
 
         Wait(1);
     }
 }
+
+
+define bombScale : 
+    tuneVal == EnemyType.Minion * 0.01 ?     1 :
+    tuneVal == EnemyType.Elite * 0.01 ?      2 :
+    tuneVal == EnemyType.SubBoss * 0.01 ?    4 :
+    tuneVal == EnemyType.Boss * 0.01 ?       4 :
+    0;
+define bombCountDownInterval:       0.3 + (0.15 * bombScale);
+define bombSize:                    bombScale * 0.4;
+define bombExplodeRange:            2  + (bombScale * 3.0);
+define bombExplodeDamage:           50 + (bombScale * 100);
+define bombBunrningDamagePS:        25;
+define bombBunrningSecond:          1 + (bombScale * 1.5);
+
+rule: "TestOngoingPlayer"
+Event.OngoingPlayer
+if(
+    IsButtonHeld(hp, Button.Melee)
+){
+
+            define bombPos! = PositionOf(NoPosition()) + Vector(0, 0.1, 0);
+            define bombIcon! = CreateIcon(AllPlayers(humanTeam), bombPos, Icon.Warning, IconRev.VisibleToAndColor, cautionColor, true);
+            define bombEfct! = CreateEffect(AllPlayers(), Effect.Sphere, cautionColor, bombPos, bombSize, EffectRev.Color);
+            define bombEfctRing! = CreateEffect(AllPlayers(), Effect.Ring, cautionColor, bombPos, bombExplodeRange, EffectRev.Color);
+
+            for(define index! = 0; index < 3; index++){
+                PlayEffect(AllPlayers(), PlayEffect.DebuffImpactSound, null, bombPos, 75);
+                for(define index2! = 0; index2 < 3; index2++){
+                    PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.White, bombPos, bombSize * 0.75);
+                    Wait(bombCountDownInterval / 3, WaitBehavior.IgnoreCondition);
+                }
+            }
+
+            DestroyIcon(bombIcon);
+            DestroyEffect(bombEfct);
+            DestroyEffect(bombEfctRing);
+
+            define targets! = PlayersWithinRadius(bombPos, bombExplodeRange, Team.All, RadiusLOS.SurfacesAndAllBarriers);
+            SetStatus(targets, ep, Status.Burning, bombBunrningSecond);
+            ApplyBlastImpulse(targets, bombPos, bombExplodeRange, 3);
+            Damage(targets, ep, bombExplodeDamage);
+            StartDamageOverTime(targets, ep, bombBunrningSecond, bombBunrningDamagePS);
+            PlayContinuousBlast(Color.Red, bombPos, bombExplodeRange, bombScale * 1.5, bombScale * 1.5);
+
+}
+
+// TAG EnemyBot/CautionColor ----------
+define cautionColor: isBlink ? Color.Red : Color.Yellow;
+
+globalvar define isBlink;
+
+rule: "EnemyBot/CautionColor/blinkColor"
+Event.OngoingGlobal
+if(
+    true
+){
+    while(true){
+        isBlink = !isBlink;
+        Wait(0.15, WaitBehavior.AbortWhenFalse);
+    }
+}
+
 
 // TAG Round -----------------------------------------------
 rule: "Round/shortenAssemblePhase"
