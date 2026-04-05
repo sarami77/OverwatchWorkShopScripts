@@ -364,13 +364,19 @@ playervar define aimOffset;
 void StartFacingAimTarget() playervar "StartFacingAimTarget"{
     StartFacing(
         ep,
-        DirectionTowards(
-            EyePosition(),
-            EyePosition(aimTarget) + aimOffset
-        ),
-        aimTarget != null ? facingSpeedRate : 0,
+        aimTarget != null ?
+            DirectionTowards(
+                EyePosition(),
+                EyePosition(aimTarget) + aimOffset
+            )
+        :
+            FacingDirectionOf()
+        ,
+        facingSpeedRate,
         Relative.ToWorld, FacingRev.DirectionAndTurnRate);
 }
+
+define updateAimInterval: (1 / 4);
 
 rule: "EnemyBot/Aim/updateAimOffset"
 Event.OngoingPlayer
@@ -395,11 +401,17 @@ if(
         // slide aim to body by aim scatter high
         Vector(0, -(aimScatter / 2), 0);
 
-    Wait(0.25, WaitBehavior.IgnoreCondition);
+    Wait(updateAimInterval, WaitBehavior.IgnoreCondition);
     LoopIfConditionIsTrue();
 }
 
 void StartFacingTemporaryWithButton(define target!, define button!, define keepTime! = 0.1) playervar "StartFacingTemporaryWithButton"{
+    define rate! = DirectionDiffRate(
+        FacingDirectionOf(ep),
+        DirectionTowards(PositionOf(ep), PositionOf(target))
+    );
+    define waitForFacing! = 0.5 * rate;
+
     // target is player
     if(HasSpawned(target)){
         StartFacingPlayer(target, facingSpeedRate * 3);
@@ -409,18 +421,9 @@ void StartFacingTemporaryWithButton(define target!, define button!, define keepT
         StartFacingPosition(target, facingSpeedRate * 3);
     }
 
-    define tryTime! = 3.0;
-    define tryInterval! = 0.25;
-    define maxTryCount! = tryTime / tryInterval;
-
-    for(define tryCount! = 0; tryCount < maxTryCount; tryCount++){
-        Wait(tryInterval, WaitBehavior.IgnoreCondition);
-        if(IsInViewAngle(ep, target, 1)) break;
-    }
-
-    Wait(0.1, WaitBehavior.IgnoreCondition);
+    Wait(waitForFacing, WaitBehavior.IgnoreCondition);
     StartHoldingButton(ep, button);
-    Wait(0.1 + keepTime, WaitBehavior.IgnoreCondition);
+    Wait(keepTime, WaitBehavior.IgnoreCondition);
     StopHoldingButton(ep, button);
     Wait(0.1, WaitBehavior.IgnoreCondition);
 
@@ -655,7 +658,7 @@ void PolingAction() playervar "PolingAction"{
                     SetWeapon(ep, 1);
                 }
                 StopHoldingButton(ep, Button.PrimaryFire);
-                StartFacingTemporaryWithButton(boostTarget, Button.SecondaryFire, RandomReal(3, 6));
+                StartFacingTemporaryWithButton(boostTarget, Button.SecondaryFire, RandomReal(3.0, 6.0));
             }
         }
 
@@ -1288,6 +1291,7 @@ void PolingAction() playervar "PolingAction"{
 
             StartFacingTemporaryWithButton(aimPosition, Button.Ability2);
             PressButton(ep, Button.PrimaryFire);
+            StartHoldingButton(ep, Button.PrimaryFire);
         }
     }
     // Sojourn
@@ -1442,11 +1446,12 @@ void PolingAction() playervar "PolingAction"{
             if(
                 AbilityCooldown(ep, Button.Ability1) <= 0
             ){
-                StopMove(ep);
-                StopHoldingButton(ep, Button.SecondaryFire);
                 define grapplePosition! = GetGrapplePosition();
                 if(grapplePosition != null){
+                    StopMove(ep);
+                    StopHoldingButton(ep, Button.SecondaryFire);
                     StartFacingTemporaryWithButton(grapplePosition, Button.Ability1);
+                    Wait(1, WaitBehavior.IgnoreCondition);
                     StartHoldingButton(ep, Button.SecondaryFire);
                 }
             }
@@ -2676,6 +2681,7 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
         actionRangeMin = ActionRange.Melee;
         actionRangeMax = ActionRange.Close;
         ability2ButtonBehaivor = ButtonBehaivor.Non;         // to suppress over use shadow step (Prefer PolingAction
+        primaryFireButtonPressMax = 20;
         break;
 
         case Hero.Reinhardt:
