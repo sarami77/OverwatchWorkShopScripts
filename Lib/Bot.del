@@ -140,7 +140,7 @@ void SetMoveDir() playervar "SetMoveDir"{
 
     define distToTarget = DistanceBetween(ep, aimTarget);
     define objPos = CurrentObjectPosition();
-    define isTank = IsTankHero(HeroOf());
+    define isTank = IsTankHero(HeroOfWithDuplicate());
     // move for heal
     if(
         enableRetreat
@@ -433,37 +433,29 @@ void StartFacingTemporaryWithButton(define target!, define button!, define keepT
 // TAG Bot/PolingAction ----------
 define IsInCombat(): actionState != ActionState.Non;
 
+define IsMeleeHero(define hero!)"IsMeleeHero"{
+    return (
+        hero == Hero.Reinhardt ||
+        hero== Hero.Brigitte ||
+        hero== Hero.Venture ||
+        hero == Hero.Vendetta
+    );
+}
+
 void PolingAction() playervar "PolingAction"{
     // hero unique action
     define hero = HeroOfWithDuplicate();
+    define isMeleeHero! = IsMeleeHero(hero);
 
     // common action
 
     // melee
     while(
         actionState == ActionState.Attack &&
-        HasSpawned(aimTarget) &&
+        // HasSpawned(aimTarget) &&
         IsAlive(aimTarget) &&
-        (
-            Health(aimTarget) <=
-            (
-                meleeDamage * 
-                HeroOf() == Hero.Reinhardt ?    4 :
-                HeroOf() == Hero.Brigitte ?     4 :
-                HeroOf() == Hero.Vendetta ?     4 :
-                                                2
-            )
-        ) &&
-        (
-            DistanceBetween(ep, aimTarget) <=
-            (
-                meleeRange * 
-                HeroOf() == Hero.Reinhardt ?    2 :
-                HeroOf() == Hero.Brigitte ?     2 :
-                HeroOf() == Hero.Vendetta ?     2 :
-                                                1
-            )
-        )
+        Health(aimTarget) <= meleeDamage * (isMeleeHero ? 2 : 1) &&
+        DistanceBetween(ep, aimTarget) <= meleeRange * (meleeRange ? 2 : 1)
     ){
         // melee
         PressButton(ep, Button.Melee);
@@ -496,27 +488,26 @@ void PolingAction() playervar "PolingAction"{
                 PressButton(ep, Button.Ability1);
             }
             Wait(1, WaitBehavior.AbortWhenFalse);
-
-            define targets! = PlayersWithinRadius(
-                BlockedPosition(PositionOf(), Down(), 5),
-                5, TeamOf(ep), RadiusLOS.Off);
-            targets = RemoveFromArray(targets, ep);
             
-            while(CountOf(targets) > 0){
+            define targets!;
+            while(
+                enableButtonControl ||
+                CountOf(targets) > 0
+            ){
                 enableButtonControl = false;
-
-                define target = RandomValueInArray(targets);
-                if(IsDummyBot(target)){
-                    PressButton(targets, Button.Interact);
-                }
-                StartHoldingButton(ep, Button.Jump);
-                StopHoldingButton(ep, Button.Crouch);
-                Wait(1, WaitBehavior.IgnoreCondition);
 
                 targets = PlayersWithinRadius(
                     BlockedPosition(PositionOf(), Down(), 5),
                     5, TeamOf(ep), RadiusLOS.Off);
                 targets = RemoveFromArray(targets, ep);
+
+                define target = RandomValueInArray(targets);
+                if(IsDummyBot(target)){
+                    PressButton(target, Button.Interact);
+                }
+                StartHoldingButton(ep, Button.Jump);
+                StopHoldingButton(ep, Button.Crouch);
+                Wait(1, WaitBehavior.IgnoreCondition);
             }
 
             enableButtonControl = true;
