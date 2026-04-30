@@ -1708,50 +1708,42 @@ if(
     IsGameInProgress()
 ){
     define objOnPos = CurrentObjectOnPosition();
-    define clsPlyr = ClosestPlayerTo(objOnPos, humanTeam);
-    define clsPlyrPos = PositionOf(clsPlyr);
-
-    // update placeAreaBasePosition and placeAreaSize
 
     // for defend on path to object
-    if(
-        !IsTeamOnObject(humanTeam)
-    ){
-        // get placeAreaBasePosition by middle position of close player and object
-        placeAreaBasePosition =
-            ShiftedPosition(
-                clsPlyrPos,
-                DirectionTowards(clsPlyrPos, objOnPos),
-                DistanceBetween(clsPlyrPos, objOnPos) * 0.25
-            );
+    if(!IsTeamOnObject(humanTeam)){
+        define clsPlrPos =
+            Vector(0, 4, 0) + 
+            PositionOf(ClosestPlayerTo(objOnPos, humanTeam));
+
+        // get placeAreaBasePosition by base posiiton and direction
+        placeAreaBasePosition = GetPlaceAreaBasePosition(
+            clsPlrPos,
+            DirectionTowards(clsPlrPos, objOnPos),
+            placeAreaOffset
+        );
         // get placeAreaSize without sclae for path defend
         placeAreaSize = placeAreaBaseSize;
     }
+    // for defend on capture point
+    else if(!HasObjectDirection()){
+        // get placeAreaBasePosition by object position
+        placeAreaBasePosition = objOnPos;
+        // get placeAreaSize with sclae for point defend
+        placeAreaSize = placeAreaBaseSize + (placeAreaOffset / 2);
+    }
+    // for defend on payload
     else{
-        // for defend on capture point
-        if(
-            !HasObjectDirection()
-        ){
-            // get placeAreaBasePosition by object position
-            placeAreaBasePosition = objOnPos;
-            // get placeAreaSize with sclae for point defend
-            placeAreaSize = placeAreaBaseSize + placeAreaBaseSize;
-        }
-        // for defend on payload
-        else{
-            // get blockedPos by collision position of extension line from objectPosition 
-            blockedPos = BlockedPosition(objOnPos, objectDirection, placeAreaOffset);
-            // get placeAreaBasePosition by middle position of blockedPos and object
-            placeAreaBasePosition = ShiftedPosition(
-                objOnPos,
-                DirectionTowards(objOnPos, blockedPos),
-                DistanceBetween(objOnPos, blockedPos) * 0.75
-            );
-            // get cutoutDistance by object position and blockedPos
-            define cutoutDistance! = placeAreaOffset - DistanceBetween(objOnPos, blockedPos);
-            // get placeAreaSize with scale off cutoutDistance for payload
-            placeAreaSize = placeAreaBaseSize + (placeAreaBaseSize * (cutoutDistance / placeAreaOffset));
-        }
+        // get placeAreaBasePosition by base posiiton and direction
+        placeAreaBasePosition = GetPlaceAreaBasePosition(
+            objOnPos,
+            objectDirection,
+            placeAreaOffset);
+        // get placeAreaSize with scale by cutout distance
+        placeAreaSize = placeAreaBaseSize + (
+            placeAreaBaseSize *
+            // cutout distance scale
+            (placeAreaOffset - DistanceBetween(objOnPos, blockedPos)) / placeAreaOffset
+        );
     }
 
     // if has not update flag of teleportBasePosition
@@ -1831,10 +1823,34 @@ if(
     LoopIfConditionIsTrue();
 }
 
+globalvar define dbgBasePosition!;
+
+// TAG EnemyBot/Teleport/GetPlaceAreaBasePosition
+define GetPlaceAreaBasePosition(define basePosition, define baseDirection, define baseDistance) globalvar "GetPlaceAreaBasePosition"{
+    dbgBasePosition = basePosition;
+    define returnPosition = null;
+
+    // get blockedPos by collision position of extension line
+    blockedPos = BlockedPosition(
+        basePosition,
+        baseDirection,
+        baseDistance
+    );
+    // get placeAreaBasePosition by middle of blockedPos and position
+    returnPosition = ShiftedPosition(
+        basePosition,
+        DirectionTowards(basePosition, blockedPos),
+        DistanceBetween(basePosition, blockedPos) * 0.7
+    );
+
+    return returnPosition;
+}
+
+// TAG EnemyBot/Teleport/GetTeleportBasePosition
+
 define searchPositionTryCountMax: 10;
 define searchPositionInterval: 0.1;
 
-// TAG EnemyBot/Teleport/GetTeleportBasePosition
 define GetTeleportBasePosition() globalvar "GetTeleportBasePosition"{
     define returnPosition = null;
     define objOnPos = CurrentObjectOnPosition();
@@ -2196,15 +2212,15 @@ if(
         PositionOffsetY1() + teleportBasePosition, 
         placeAreaBasePosition,
         enemyTeamColor, EffectRev.VisibleToPositionAndRadius);
-    // objectPosition -> blockedPos beam
+    // closestPlayer or objectPosition -> blockedPos beam
     CreateBeamEffect((showDebugEffect && blockedPos != null )? hp : null,
         BeamType.BadBeam, 
-        CurrentObjectOnPosition(), 
+        dbgBasePosition, 
         blockedPos,
         Color.White, EffectRev.VisibleToPositionAndRadius);
     // placeAreaSize sphere
     CreateEffect(showDebugEffect ? hp : null,
-        Effect.Ring, Color.White,
+        Effect.Sphere, Color.White,
         placeAreaBasePosition,
         placeAreaSize, EffectRev.VisibleToPositionAndRadius);
 
