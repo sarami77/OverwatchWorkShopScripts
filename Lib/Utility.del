@@ -82,27 +82,6 @@ define FinaleProgress(): 95;
 define FinalWaveProgress(): 90;
 define FinaleRemainTime(): 10;
 
-define IsHybridMap() globalvar "IsHybridMap"{
-    define isHybridMap!;
-    define map! = CurrentMap();
-    if(
-        map == Map.Blizzard_World ||
-        map == Map.Blizzard_World_Winter ||
-        map == Map.Eichenwalde ||
-        map == Map.Eichenwalde_Halloween ||
-        map == Map.Hollywood ||
-        map == Map.Hollywood_Halloween ||
-        map == Map.Kings_Row ||
-        map == Map.Kings_Row_Winter ||
-        map == Map.Midtown ||
-        map == Map.Numbani ||
-        map == Map.Paraiso
-    ){
-        isHybridMap = true;
-    }
-    return isHybridMap;
-}
-
 define GameProgressDiff(define team!) globalvar "GameProgressDiff"{
     define prgDiff! = 0;
 
@@ -127,6 +106,19 @@ define ObjectProgressScaledValue(define beforeValue!, define afterValue!) global
     return value;
 }
 
+globalvar define isHybridMap!;
+rule: "Utility/isHybridMap"
+Event.OngoingGlobal
+if(
+    IsGameInProgress()
+){
+    // wait change to enable of object position 
+    Wait(0.1);  
+    // judge by first object position and payload popsition
+    isHybridMap = DistanceBetween(ObjectivePosition(0), PayloadPosition()) <= ActionRange.Middle;
+    //dbgHudTxt(<"isHybridMap = <0>", isHybridMap>);
+}
+
 define ObjectProgress() globalvar "ObjectProgress"{
     define progress!;
 
@@ -134,7 +126,7 @@ define ObjectProgress() globalvar "ObjectProgress"{
         progress = 0;
     }
     else{
-        if(IsHybridMap()){
+        if(isHybridMap){
             if(ObjectiveIndex() == 0){
                 progress = (PointCapturePercentage() * 0.3);
             }
@@ -153,7 +145,7 @@ define ObjectProgress() globalvar "ObjectProgress"{
 define CurrentObjectPosition() globalvar "CurrentObjectPosition"{
     define objPos!;
 
-    if(IsHybridMap()){
+    if(isHybridMap){
         if(ObjectiveIndex() == 0){
             objPos = ObjectivePosition(0);
         }
