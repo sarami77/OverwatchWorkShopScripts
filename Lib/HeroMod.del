@@ -1589,6 +1589,7 @@ void HeroMod_Action_TITAN_FORM(define trigger!) playervar "HeroMod_Action_TITAN_
     ){
         define titanScale! = 2.5;
         SetModHero(Hero.Reinhardt, titanScale, 400, 250, 100);
+        spawnRushInterval = 0;
 
         SetUltimateCharge(ep, DefaultPercentage());
         PressButton(ep, Button.Ultimate);
@@ -1626,7 +1627,7 @@ void HeroMod_Action_TITAN_FORM(define trigger!) playervar "HeroMod_Action_TITAN_
             Wait(1, WaitBehavior.IgnoreCondition);
         }
 
-        ResetModHero(Hero.Reinhardt, titanScale);
+        ResetModHero();
     }
 }
 // TAG BEAM_SNIPER
@@ -1660,6 +1661,7 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
     ){
         define sniperScale! = 2.0;
         SetModHero(Hero.Widowmaker, sniperScale, 200, 125, 50);
+        spawnRushInterval = 0;
 
         SetUltimateCharge(ep, DefaultPercentage());
         PressButton(ep, Button.Ultimate);
@@ -1686,7 +1688,7 @@ void HeroMod_Action_BEAM_SNIPER(define trigger!) playervar "HeroMod_Action_BEAM_
             Wait(1, WaitBehavior.IgnoreCondition);
         }
 
-        ResetModHero(Hero.Widowmaker, sniperScale);
+        ResetModHero();
     }
     else if(
         trigger == HeroModEvent.USING_SECONDARY &&
@@ -1840,6 +1842,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
     ){
         define gunshipScale! = 2.5;
         SetModHero(Hero.Bastion, gunshipScale, 300, 200, 1);
+        spawnRushInterval = 0;
 
         PressButton(ep, Button.Jump);
         
@@ -1956,7 +1959,7 @@ void HeroMod_Action_GUNSHIP_GUNNER(define trigger!) playervar "HeroMod_Action_GU
             Wait(1, WaitBehavior.IgnoreCondition);
         }
 
-        ResetModHero(Hero.Bastion, gunshipScale);
+        ResetModHero();
     }
     else if(
         trigger == HeroModEvent.USING_PRIMARY &&
@@ -2180,6 +2183,7 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
 
 // TAG HeroMod/SubFunction ----------
 playervar define prevHero!;
+playervar define modBodyScale!;
 void SetModHero(define hero!, define bodyScale!, define maxHealth!, define damageDealt!, define gravity!) playervar "SetModHero"{
     isTransformed = true;
     CancelPrimaryAction();
@@ -2196,32 +2200,28 @@ void SetModHero(define hero!, define bodyScale!, define maxHealth!, define damag
     Heal(ep, null, MaxValue());
 
     StartModifyingHeroVoiceLines(ep, 0.1, false);
-    for(define scale! = 1; scale < bodyScale; scale += 0.1){
-            StartScalingPlayer(ep, scale);
+    modBodyScale = 1;
+    for(; modBodyScale < bodyScale; modBodyScale += 0.1){
+            StartScalingPlayer(ep, modBodyScale);
             Wait(0.1, WaitBehavior.IgnoreCondition);
     }
-
-    spawnRushInterval = 0;
 }
 
-void ResetModHero(define fromHero!, define fromBodyScale!) playervar "ResetModHero"{
-    StopModifyingHeroVoiceLines(ep);
-    for(define scale! = fromBodyScale; scale > 1.0; scale -= 0.1){
-        StartScalingPlayer(ep, scale);
+void ResetModHero() playervar "ResetModHero"{
+    for(; modBodyScale > 1.0; modBodyScale -= 0.1){
+        StartScalingPlayer(ep, modBodyScale);
         Wait(0.1, WaitBehavior.IgnoreCondition);
     }
+    StopModifyingHeroVoiceLines(ep);
 
     SetUltimateCharge(ep, 0);
     SetMaxHealth(ep, DefaultPercentage());
     SetDamageDealt(ep, DefaultPercentage());
     SetGravity(ep, DefaultPercentage());
 
-    if(prevHero != fromHero){
-        ForcePlayerHero(ep, prevHero);
-    }
-    else{
-        Resurrect();
-    }
+    ForcePlayerHero(ep, prevHero);
+    Resurrect();
+
     StopForcingHero(ep);
     Wait(0.1, WaitBehavior.IgnoreCondition);
     SetButtonControlPropety();
