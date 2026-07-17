@@ -381,8 +381,6 @@ define updateAimInterval: (1 / 4);
 rule: "EnemyBot/Aim/updateAimOffset"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     actionState != ActionState.Non
 ){
     aimOffset =
@@ -1487,11 +1485,10 @@ rule: "Bot/EventAction/moveUltmate"
 Event.OngoingPlayer
 if(
     enableMoveUltimate &&
+    isBotActive &&
     IsAlive() &&
     IsUsingUltimate()
 ){
-    AbortIf(!isBotActive);
-    
     define isCanAction!;
     define waitForStartMove!;
     define moveSpeed!;
@@ -1575,12 +1572,11 @@ rule: "Bot/EventAction/placeUltmate"
 Event.OngoingPlayer
 if(
     enablePlaceUltimate &&
+    isBotActive &&
     IsAlive() &&
     UltimateChargePercent() >= DefaultPercentage() &&
     IsButtonHeld(ep, Button.Ultimate)
 ){
-    AbortIf(!isBotActive);
-
     define isCanAction!;
     define rotateProb!;
 
@@ -1635,12 +1631,11 @@ rule: "Bot/EventAction/placeSecondary"
 Event.OngoingPlayer
 if(
     enablePlaceSecondary &&
+    isBotActive &&
     IsAlive() &&
     AbilityCooldown(ep, Button.SecondaryFire) <= 0 &&
     IsButtonHeld(ep, Button.SecondaryFire)
 ){
-    AbortIf(!isBotActive);
-
     define isCanAction!;
 
     define hero! = HeroOfWithDuplicate();
@@ -1680,14 +1675,13 @@ rule: "Bot/EventAction/holdSecondary"
 Event.OngoingPlayer
 if(
     enableHoldSecondary &&
+    isBotActive &&
     IsAlive() &&
     IsFiringSecondary()
 ){
-    AbortIf(!isBotActive);
-
     define isHoldSecondary!;
-
     define hero! = HeroOfWithDuplicate();
+
     // postion fix hero
     if(
         hero == Hero.WreckingBall
@@ -1976,9 +1970,9 @@ Event.OnDeath
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
+    isBotActive &&
     Victim() == ep
 ){
-    AbortIf(!isBotActive);
     // reset target
     aimTarget = null;
     // apply next state
@@ -1990,13 +1984,13 @@ Event.OnElimination
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
+    isBotActive &&
     IsAlive() &&
     (
         actionState != ActionState.Non &&
         Victim() == aimTarget
     )
 ){
-    AbortIf(!isBotActive);
     aimTarget = null;
     WaitUntilServerLoadLimitRelease();
 
@@ -2009,15 +2003,9 @@ if(
 rule: "Bot/ActionState/ChangeTargetByTargetHealCompleted"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
-    IsAlive() &&
-    (
-        actionState == ActionState.Support &&
-        NormalizedHealth(aimTarget) >= needHealHealthScale
-    )
+    actionState == ActionState.Support &&
+    NormalizedHealth(aimTarget) >= needHealHealthScale
 ){
-    AbortIf(!isBotActive);
     aimTarget = null;
     WaitUntilServerLoadLimitRelease();
 
@@ -2032,12 +2020,12 @@ Event.OnDamageTaken
 if(
     isBotEnableTeam &&
     IsDummyBot() &&
+    isBotActive &&
     IsAlive() &&
     (
         Attacker() != ep
     )
 ){
-    AbortIf(!isBotActive);
     WaitUntilServerLoadLimitRelease();
 
     define tryFindTarget = false;
@@ -2074,74 +2062,10 @@ if(
     Wait(watchUpdateRate, WaitBehavior.IgnoreCondition);
 }
 
-// globalvar define isCallAttackCoolingDown1 = false;
-// globalvar define isCallAttackCoolingDown2 = false;
-
-// void CallToNearBot()"CallToNearBot"{
-//     // check cooldown for reduce overrun
-//     // if already CoolingDown flag true, ignore action
-//     if(TeamOf() == Team.Team1){
-//         if(isCallAttackCoolingDown1) return;
-//         isCallAttackCoolingDown1 = true;
-//     }
-//     else if(TeamOf() == Team.Team2){
-//         if(isCallAttackCoolingDown2) return;
-//         isCallAttackCoolingDown2 = true;
-//     }
-
-//     if(
-//         // has aim target
-//         HasSpawned(aimTarget)
-//     ){
-//         // get near idle bot
-//         define nearFriends = FilteredArray(
-//             AllLivingPlayers(TeamOf()),
-//             (
-//                 ae != ep &&
-//                 IsDummyBot(ae) &&
-//                 ae.isBotActive &&
-//                 (
-//                     // if support state
-//                     actionState == ActionState.Support ?
-//                         // call to near supportable bot for support
-//                         ae.supportPrioloty > 0 :
-//                         // call to near idle bot for attack
-//                         ae.actionState == ActionState.Non
-//                 ) &&
-//                 CanFindRange(ae)
-//             )
-//         );
-
-//         for(define index = 0; index < CountOf(nearFriends); index ++){
-//             // set same target
-//             nearFriends[index].aimTarget = ep.aimTarget;
-//             // set same state 
-//             SetActionState(nearFriends[index], ep.actionState);
-
-//             Wait(0.1, WaitBehavior.IgnoreCondition);
-//         }
-//     }
-// }
-
-// rule: "Bot/ActionState/releaseIsCallAttackCoolingDown"
-// Event.OngoingGlobal
-// if(
-//     isCallAttackCoolingDown1 ||
-//     isCallAttackCoolingDown2
-// ){
-//     // reduce overrun
-//     Wait(1.0, WaitBehavior.IgnoreCondition);
-//     isCallAttackCoolingDown1 = false;
-//     isCallAttackCoolingDown2 = false;
-//     Loop();
-// }
-
 // TAG Bot/ActionState/Non ----------
 rule: "Bot/ActionState/Non"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     actionState == ActionState.Non
 ){
     // reset button control
@@ -2169,12 +2093,8 @@ if(
 rule: "Bot/ActionState/Attack"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     actionState == ActionState.Attack
 ){
-    AbortIf(!isBotActive);
-
     // reset button control for change depending state button set
     enableButtonControl = false;
     Wait(0.1, WaitBehavior.IgnoreCondition);
@@ -2203,12 +2123,8 @@ if(
 rule: "Bot/ActionState/Support"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     actionState == ActionState.Support
 ){
-    AbortIf(!isBotActive);
-
     // reset button control for change depending state button set
     enableButtonControl = false;
     Wait(0.1, WaitBehavior.IgnoreCondition);
@@ -2891,8 +2807,6 @@ playervar define enableButtonControl;
 rule: "Bot/ButtonControl/StartButtonControlOfPrimaryFire"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     hasButtonControlPropety &&
     enableButtonControl
 ){
@@ -2910,8 +2824,6 @@ if(
 rule: "Bot/ButtonControl/StartButtonControlOfSecondaryFire"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     hasButtonControlPropety &&
     enableButtonControl
 ){
@@ -2929,8 +2841,6 @@ if(
 rule: "Bot/ButtonControl/StartButtonControlOfAbility1"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     hasButtonControlPropety &&
     enableButtonControl
 ){
@@ -2948,8 +2858,6 @@ if(
 rule: "Bot/ButtonControl/StartButtonControlAbility2"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     hasButtonControlPropety &&
     enableButtonControl
 ){
@@ -2967,8 +2875,6 @@ if(
 rule: "Bot/ButtonControl/StartButtonControlOfUltimate"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     hasButtonControlPropety &&
     enableButtonControl
 ){
@@ -2986,8 +2892,6 @@ if(
 rule: "Bot/ButtonControl/StartButtonControlOfJump"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     hasButtonControlPropety &&
     enableButtonControl
 ){
@@ -3005,8 +2909,6 @@ if(
 rule: "Bot/ButtonControl/StartButtonControlOfCrouch"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     hasButtonControlPropety &&
     enableButtonControl
 ){
@@ -3025,8 +2927,6 @@ if(
 rule: "Bot/ButtonControl/StopButtonControl"
 Event.OngoingPlayer
 if(
-    isBotEnableTeam &&
-    IsDummyBot() &&
     hasButtonControlPropety &&
     !enableButtonControl
 ){
