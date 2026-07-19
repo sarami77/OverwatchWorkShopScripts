@@ -2,7 +2,7 @@ import "Utility.del";
 import "Bot.del";
 
 // TAG Buddy ----------
-define followRangeMin: ActionRange.Close / 2;
+define followRangeMin: 5;
 define followRangeMax: ActionRange.CanFind;
 define followTryIntervalSecond: 1;
 define followTryCountMax: 3;
@@ -205,23 +205,20 @@ if(
     IsAlive() &&
     actionState == ActionState.Non
 ){
-    // wait for interrupt initial teleport if entity spawned
-    Wait(0.1, WaitBehavior.AbortWhenFalse);
-
     // try follow movement by loop
     define followTryCount! = 0;
+    // set follow target
+    SetFollowTarget();
 
     while(followTryCount < followTryCountMax){
-        // set follow target
-        SetFollowTarget();
         // get distance to followTarget
         define dist! = DistanceBetween(ep, followTarget);
         define hasLine! = IsInLineOfSight(ep, followTarget);
-        // is in of follow range min and has line
+
+
+        // followTarget in close
         if(
-            // near followTarget
             dist <= followRangeMin &&
-            // has line followTarget
             hasLine
         ){
             // stop follow
@@ -242,23 +239,32 @@ if(
                 ),
                 facingSpeedRate, Relative.ToWorld, FacingRev.DirectionAndTurnRate);
 
+            define nearTarget! = dist <= (followRangeMin * 2);
+
             // start walk
-            // has line
-            if(hasLine){
+            if(
+                // cant walk straight to target
+                !hasLine ||
+                // close target
+                nearTarget
+            ){
+                // move to random direction
+                moveDirFB = RandomValueInArray([NoDirection(), Forward(), Forward()]);
+                moveDirLR = RandomValueInArray([NoDirection(), Right(), Left()]);
+
+                if(!hasLine){
+                    // count up try count by has not line
+                    followTryCount ++;
+                }
+            }
+            else if(hasLine){
                 // move to forward straight
                 moveDirFB = Forward();
                 moveDirLR = NoDirection();
                 // reset count by has line
                 followTryCount = 0;
             }
-            else{
-                // move to random direction
-                moveDirFB = RandomValueInArray([Forward(), Backward(), NoDirection()]);
-                moveDirLR = RandomValueInArray([Right(), Left()]);
-                // count up try count by has not line
-                followTryCount ++;
-            }
-
+            
             // move to followTarget
             StartMove(ep);
 
