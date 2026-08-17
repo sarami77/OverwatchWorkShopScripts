@@ -141,6 +141,7 @@ void SetMoveDir() playervar "SetMoveDir"{
     define distToTarget = DistanceBetween(ep, aimTarget);
     define objPos = CurrentObjectPosition();
     define isTank = IsTankHero(HeroOfWithDuplicate());
+    define plyNumOnObj = NumberOfPlayersOnObjective(TeamOf());
     // move for heal
     if(
         enableRetreat
@@ -190,21 +191,15 @@ void SetMoveDir() playervar "SetMoveDir"{
     // move for secure object in combat
     else if(
         objPos != null &&
+        // can find object range
+        DistanceBetween(ep, objPos) <= ActionRange.CanFind &&
         (
-            // enemy team close win
-            IsCloseWin(EnemyTeamOf(ep))
-                ||
-            (
-                (
-                    // is tank
-                    isTank ?
-                        // own team not on object 
-                        !IsTeamOnObject(TeamOf()) :
-                        false
-                ) &&
-                // can find object range
-                DistanceBetween(ep, objPos) <= ActionRange.CanFind
-            )
+            // any-role secure obj until 3mans on obj
+            IsCloseWin(EnemyTeamOf(ep)) ?   plyNumOnObj < 3 :
+            // tank secure obj until 1mans on obj
+            isTank ?                        plyNumOnObj < 1 :
+            // other-role not secure obj
+                                            false
         )
     ){
         // move to object
