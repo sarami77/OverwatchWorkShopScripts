@@ -1,6 +1,6 @@
 import "Utility.del";
 
-// TAG SerServerLoadMeasures ----------
+// TAG ServerOverloadMeasures/ServerLoad ----------
 enum ServerLoad{
     IDLE = 50,
     LOW = 100,
@@ -9,37 +9,63 @@ enum ServerLoad{
     FULL = 255
 }
 
-define IsLoadLimited() :    ServerLoad() >= ServerLoad.HIGH;
-define IsLoadOvered() :     ServerLoad() >= ServerLoad.FULL;
+// TAG ServerLoadMeasures/ServerLoadLimit ----------
+define IsServerLoadLimiting() :
+    ServerLoad() >= ServerLoad.HIGH ||
+    ServerLoadAverage() >= ServerLoad.HIGH;
 
-// TAG SerServerLoadMeasures/WaitUntilLoadLimitRelease ----------
-define releaseGateMaxSecond : 1.0;
-define releaseGateMaxNum : 10;
+globalvar define isLoadLimiting;
+
+rule: "ServerOverloadMeasures/setLoadLimit"
+Event.OngoingGlobal
+if(
+    IsServerLoadLimiting()
+){
+    isLoadLimiting = true;
+}
+
+rule: "ServerOverloadMeasures/resetLoadLimit"
+Event.OngoingGlobal
+if(
+    !IsServerLoadLimiting()
+){
+    isLoadLimiting = false;
+}
+
+// TAG ServerLoadMeasures/WaitUntilServerLoadLimitRelease ----------
+define releaseGateMaxSecond : 3.0;
+define releaseGateMaxNum : 30;
 define releaseGateInterval : releaseGateMaxSecond / releaseGateMaxNum;
 globalvar define countActionWait;
 
 void WaitUntilServerLoadLimitRelease(){
 
     while(
-        IsLoadLimited()
+        isLoadLimiting
     ){
         countActionWait ++;
-
-        define gateTicketNo = countActionWait % releaseGateMaxNum;
-        WaitUntil(!IsLoadLimited(), 5.0);
-        Wait(releaseGateInterval * gateTicketNo, WaitBehavior.IgnoreCondition);
-
+        define waitTime = GetWaitTime();
+        WaitUntil(!isLoadLimiting, MaxValue());
+        Wait(waitTime , WaitBehavior.IgnoreCondition);
         countActionWait --;
     }
 }
 
-// TAG ServerLoadMeasures/GameSpeed ----------
-define GameSpeedDownServerLoad : ServerLoad.FULL;
+Number GetWaitTime()"GetWaitTime"{
+    return
+        (releaseGateMaxSecond / releaseGateMaxNum) *    // get wait time of a gate
+        (countActionWait % releaseGateMaxNum);          // add wait time by gate number
+        
+}
+
+// TAG ServerLoadMeasures/GameSpeedLimiti ----------
+define IsGameSpeedLimiting() :
+    ServerLoad() >= ServerLoad.FULL;
+
 define WaitTimeGameSpeedDown : 1.0;
 define WaitTimeGameSpeedUp : 1.0;
 define ChangeStepGameSpeedDown : 10;
 define ChangeStepGameSpeedUp : 10;
-
 define gameSpeedMax: DefaultPercentage();
 globalvar define gameSpeed = gameSpeedMax;
 globalvar define countGameSpeedDecrease;
@@ -47,7 +73,7 @@ globalvar define countGameSpeedDecrease;
 rule: "ServerOverloadMeasures/GameSpeed/down"
 Event.OngoingGlobal
 if(
-    ServerLoad() >= GameSpeedDownServerLoad &&
+    IsGameSpeedLimiting() &&
     gameSpeed > 0
 ){
     Wait(WaitTimeGameSpeedDown, WaitBehavior.AbortWhenFalse);
@@ -60,7 +86,7 @@ if(
 rule: "ServerOverloadMeasures/GameSpeed/up"
 Event.OngoingGlobal
 if(
-    ServerLoad() < GameSpeedDownServerLoad &&
+    !IsGameSpeedLimiting() &&
     gameSpeed < gameSpeedMax
 ){
     Wait(WaitTimeGameSpeedUp, WaitBehavior.AbortWhenFalse);
