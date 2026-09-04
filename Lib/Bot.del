@@ -1708,16 +1708,16 @@ void FindAimTarget()"FindAimTarget"{
     if(IsTrueProbability(DefaultPercentage() * supportPrioloty))
     {
         // find support target
-        candidateTarget = FindTarget(true);
+        candidateTarget = FindTarget(ActionState.Support);
         // not found support target
         if(candidateTarget == null){
             // find attack target
-            candidateTarget = FindTarget(false);
+            candidateTarget = FindTarget(ActionState.Attack);
         }
     }
     else{
         // find attack target
-        candidateTarget = FindTarget(false);
+        candidateTarget = FindTarget(ActionState.Attack);
     }
 
     // confirm as target
@@ -1730,18 +1730,18 @@ define probAimWeaker:
     actionRangeMax == ActionRange.Close ?   0 :
                                             0 ;
 
-define FindTarget(define forSupport)"FindTarget"{
+define FindTarget(define forState)"FindTarget"{
     // get target list
     define targets = FilteredArray(
         AllLivingPlayers(
-            forSupport ?
+            forState == ActionState.Support ?
                 TeamOf(ep) :
                 EnemyTeamOf(ep)
         ),
         (
             ae != ep &&
             DistanceBetween(ep, ae) <= actionRangeMax &&
-            forSupport ?
+            forState == ActionState.Support ?
                 NormalizedHealth(ae) <= needHealHealthScale :
                 true
         )
@@ -1749,13 +1749,12 @@ define FindTarget(define forSupport)"FindTarget"{
 
     // sort target list order by distance or health
     define isAimWeaker = IsTrueProbability(probAimWeaker);
-    targets = 
-        SortedArray(
-            targets,
-            isAimWeaker ? 
-                NormalizedHealth(ae) : 
-                DistanceBetween(ep, ae)
-        );
+    targets = SortedArray(
+        targets,
+        isAimWeaker ? 
+            NormalizedHealth(ae) : 
+            DistanceBetween(ep, ae)
+    );
 
     // check isSighted target from list top
     for(define index = 0; index < CountOf(targets); index++){
@@ -1779,8 +1778,7 @@ define GetNextActionState()"GetNextActionState"{
         // self alive
         IsAlive() &&
         // has target
-        aimTarget != null &&
-        HasSpawned(aimTarget)
+        aimTarget != null
     ){
         if(
             // target is friend
@@ -2953,10 +2951,10 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                 else{
                     StartHoldingButton(ep, button);
                 }
-                                                                            //SetButtonBit(button, true);
+                                                                            SetButtonBit(button, true);
                 // button hold during
                 Wait(RandomReal(pressMin, pressMax), WaitBehavior.AbortWhenFalse);
-                                                                            //SetButtonBit(button, false);
+                                                                            SetButtonBit(button, false);
 
                 // stop hold button
                 StopHoldingButton(ep, button);
@@ -2969,7 +2967,7 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                 
                 // start repeat button
                 isRepeatFiring = true;
-                                                                            //SetButtonBit(button, true);
+                                                                            SetButtonBit(button, true);
                 while(
                     isRepeatFiring            
                 ){
@@ -2977,7 +2975,7 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                     PressButton(ep, button);    
                     Wait(repeatInterval, WaitBehavior.AbortWhenFalse);
                 }
-                                                                            //SetButtonBit(button, false);
+                                                                            SetButtonBit(button, false);
             }
 
             // button release during
@@ -3001,74 +2999,82 @@ if(
 }
 
 // TAG Debug ----------
-// rule: "Bot/Debug/ShowDebugInfo"
-// Event.OngoingPlayer
-// if(
-//     isBotEnableTeam &&
-//     IsDummyBot()
-// ){
-//     // enable button text
-//     CreateInWorldText(
-//         AllPlayers(),
-//         <"Bot_Active = <0>\n\rAction_State = <1>\n\rButton_CONTROL = <2>\n\rButton_Flag = <3>\n\rmoveDirFB = <4>\n\rrmoveDirLR = <5>",
-//             isBotActive ? "true" : "false",
-//             actionState == ActionState.Non ?        "Non" :
-//             actionState == ActionState.Attack ?     "Attack" :
-//             actionState == ActionState.Support ?    "Support" :
-//                                                     "???",
-//             enableButtonControl,
-//             buttonFlagText,
-//             moveDirFB,
-//             moveDirLR
-//         >,
-//         EyePosition(ep) + Vector(0, 1.25, 0),
-//         0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
-//         enableButtonControl ? Color.Yellow : Color.White,
-//         Spectators.DefaultVisibility);
-//     // while(true){
-//     //     // tagret line
-//     //     if(
-//     //         actionState != ActionState.Non &&
-//     //         HasSpawned(aimTarget)
-//     //     ){
-//     //         dbgPlyBemEft(EyePosition(ep), BodyPosition(aimTarget));
-//     //     }
-//     //     Wait(1);
-//     // }
-// }
+rule: "Bot/Debug/ShowDebugInfo"
+Event.OngoingPlayer
+if(
+    isBotEnableTeam &&
+    IsDummyBot()
+){
+    // enable button text
+    CreateInWorldText(
+        AllPlayers(),
+        <
+            "bot_Active = <0>\r
+            action_State = <1>\r
+            button_Control = <2>\r
+            button_Flag = <3>\r
+            aim_Target = <4>\r
+            moveDir_FB = <5>\r
+            moveDir_LR = <6>",
+            isBotActive,
+            actionState == ActionState.Non ?        "Non" :
+            actionState == ActionState.Attack ?     "Attack" :
+            actionState == ActionState.Support ?    "Support" :
+                                                    "???",
+            enableButtonControl,
+            buttonFlagText,
+            aimTarget,
+            moveDirFB,
+            moveDirLR
+        >,
+        EyePosition(ep) + Vector(0, 1.25, 0),
+        0.8, Clipping.DoNotClip, InworldTextRev.VisibleToPositionStringAndColor,
+        IsDead() ? Color.Gray : Color.White,
+        Spectators.DefaultVisibility);
+    // while(true){
+    //     // tagret line
+    //     if(
+    //         actionState != ActionState.Non &&
+    //         HasSpawned(aimTarget)
+    //     ){
+    //         dbgPlyBemEft(EyePosition(ep), BodyPosition(aimTarget));
+    //     }
+    //     Wait(1);
+    // }
+}
 
-// define initialButtonFlag: [false, false, false, false, false, false, false];
-// playervar define buttonFlag = initialButtonFlag;
+define initialButtonFlag: [false, false, false, false, false, false, false];
+playervar define buttonFlag = initialButtonFlag;
 
-// void SetButtonBit(define button, define state)"SetButtonBit"{
-//     switch(button){
-//         case Button.PrimaryFire:    if(state) buttonFlag[0] = true;    else buttonFlag[0] = false; break;
-//         case Button.SecondaryFire:  if(state) buttonFlag[1] = true;    else buttonFlag[1] = false; break;
-//         case Button.Ability1:       if(state) buttonFlag[2] = true;    else buttonFlag[2] = false; break;
-//         case Button.Ability2:       if(state) buttonFlag[3] = true;    else buttonFlag[3] = false; break;
-//         case Button.Ultimate:       if(state) buttonFlag[4] = true;    else buttonFlag[4] = false; break;
-//         case Button.Jump:           if(state) buttonFlag[5] = true;    else buttonFlag[5] = false; break;
-//         case Button.Crouch:         if(state) buttonFlag[6] = true;    else buttonFlag[6] = false; break;
-//     }
-//     UpdateButtonFlagText();
-// }
+void SetButtonBit(define button, define state)"SetButtonBit"{
+    switch(button){
+        case Button.PrimaryFire:    if(state) buttonFlag[0] = true;    else buttonFlag[0] = false; break;
+        case Button.SecondaryFire:  if(state) buttonFlag[1] = true;    else buttonFlag[1] = false; break;
+        case Button.Ability1:       if(state) buttonFlag[2] = true;    else buttonFlag[2] = false; break;
+        case Button.Ability2:       if(state) buttonFlag[3] = true;    else buttonFlag[3] = false; break;
+        case Button.Ultimate:       if(state) buttonFlag[4] = true;    else buttonFlag[4] = false; break;
+        case Button.Jump:           if(state) buttonFlag[5] = true;    else buttonFlag[5] = false; break;
+        case Button.Crouch:         if(state) buttonFlag[6] = true;    else buttonFlag[6] = false; break;
+    }
+    UpdateButtonFlagText();
+}
 
-// void ClearButtonBit()"SetButtonBit"{
-//     buttonFlag = initialButtonFlag;
-//     UpdateButtonFlagText();
-// }
+void ClearButtonBit()"SetButtonBit"{
+    buttonFlag = initialButtonFlag;
+    UpdateButtonFlagText();
+}
 
-// playervar define buttonFlagText;
+playervar define buttonFlagText;
 
-// void UpdateButtonFlagText()"UpdateButtonFlagText"{
-//     buttonFlagText = "";
-//     for (define index = 0; index < CountOf(buttonFlag); index++)
-//     {
-//         if(buttonFlag[index]){
-//             buttonFlagText = <"<0><1>", buttonFlagText, "1">;
-//         }
-//         else{
-//             buttonFlagText = <"<0><1>", buttonFlagText, "0">;
-//         }
-//     }
-// }
+void UpdateButtonFlagText()"UpdateButtonFlagText"{
+    buttonFlagText = "";
+    for (define index = 0; index < CountOf(buttonFlag); index++)
+    {
+        if(buttonFlag[index]){
+            buttonFlagText = <"<0><1>", buttonFlagText, "1">;
+        }
+        else{
+            buttonFlagText = <"<0><1>", buttonFlagText, "0">;
+        }
+    }
+}
