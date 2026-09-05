@@ -1702,48 +1702,16 @@ if(
     if(!needUpdateTeleportBasePosition){
         // check update condition
         if(
-            // position invalid
-            teleportBasePosition == null
-        ){
-            needUpdateTeleportBasePosition = true;
-        }
-        else if(
-            // position count nothing
-            CountOf(teleportCandidatePositionArray) <= 0
-        ){
-            needUpdateTeleportBasePosition = true;
-        }
-        else if(
-            // by probability
-            IsTrueProbability(3)
-        ){
-            needUpdateTeleportBasePosition = true;
-        }
-        else if(
-            // position too far base position
-            DistanceBetween(
-                teleportBasePosition,
-                placeAreaBasePosition
-            ) > placeAreaSize        
-        ){
-            needUpdateTeleportBasePosition = true;
-        }
-        else if(
-            // position too close player position
-            DistanceBetween(
-                teleportBasePosition,
-                PositionOf(ClosestPlayerTo(teleportBasePosition, humanTeam))
-            ) <= teleportAreaSize        
-        ){
-            needUpdateTeleportBasePosition = true;
-        }
-        else if(
-            // not line from base position
-            !IsInLineOfSight(
-                PositionOffsetY1() + teleportBasePosition,
-                PositionOffsetY1() + placeAreaBasePosition,
-                BarrierLOS.NoBarriersBlock
-            )
+                // position invalid
+                teleportBasePosition == null ||
+                // by probability
+                IsTrueProbability(3) ||
+                // position too far base position
+                (DistanceBetween(teleportBasePosition, placeAreaBasePosition) > placeAreaSize) ||
+                // position too close player position
+                (DistanceBetween(teleportBasePosition, PositionOf(ClosestPlayerTo(teleportBasePosition, humanTeam))) <= teleportAreaSize) ||
+                // not line from base position
+                !IsInLineOfSight(PositionOffsetY1() + teleportBasePosition, PositionOffsetY1() + placeAreaBasePosition, BarrierLOS.NoBarriersBlock)
         ){
             needUpdateTeleportBasePosition = true;
         }
@@ -1765,9 +1733,19 @@ if(
             needUpdateTeleportBasePosition = false;
             // update teleportBasePosition by new position
             teleportBasePosition = newPosition;
-            // set teleport candidate position array by teleportBasePosition
-            SetTeleportCandidatePositionArray(teleportBasePosition);
+            // reset teleport candidate position array
+            teleportCandidatePositionArray = null;
+            // for(define index! = 0; index < CountOf(dbgIcons); index++){
+            //     DestroyEffect(dbgIcons[index]);
+            // }
+            // dbgIcons = null;
         }
+    }
+
+    // can add more candidate position
+    if(CountOf(teleportCandidatePositionArray) < teleportCandidatePositionCountmax){
+        // set teleport candidate position array by teleportBasePosition
+        SetTeleportCandidatePositionArray(teleportBasePosition);
     }
 
     Wait(3.0, WaitBehavior.IgnoreCondition);
@@ -1799,7 +1777,7 @@ define GetPlaceAreaBasePosition(define basePosition, define baseDirection, defin
 }
 
 // TAG EnemyBot/Teleport/GetTeleportBasePosition
-
+define teleportCandidatePositionCountmax: 10;
 define searchPositionTryCountMax: 10;
 define searchPositionInterval: 0.1;
 
@@ -1823,21 +1801,30 @@ define GetTeleportBasePosition() globalvar "GetTeleportBasePosition"{
 }
 
 // TAG EnemyBot/Teleport/SetTeleportCandidatePositionArray
+// globalvar define dbgIcons;
+
 void SetTeleportCandidatePositionArray(define basePosition) globalvar "SetTeleportCandidatePositionArray"{
-    define tempCandidatePositionArray = [];
     define closePlayer = ClosestPlayerTo(basePosition, humanTeam);
 
-    for(define searchPositionTryCount = 0; searchPositionTryCount < searchPositionTryCountMax; searchPositionTryCount++){
+    for(
+        define searchPositionTryCount = 0;
+        searchPositionTryCount < searchPositionTryCountMax &&
+        CountOf(teleportCandidatePositionArray) < teleportCandidatePositionCountmax;
+        searchPositionTryCount++
+    ){
         define candidatePosition = GetCandidatePosition(basePosition, teleportAreaSize);
         candidatePosition = GetSnapedPosition(candidatePosition, teleportAreaSize * 2.0);
         if(IsValidPosition(candidatePosition, closePlayer)){
-            tempCandidatePositionArray[CountOf(tempCandidatePositionArray)] = candidatePosition;
+            teleportCandidatePositionArray[CountOf(teleportCandidatePositionArray)] = candidatePosition;
+
+            // dbgIcons[CountOf(dbgIcons)] = CreateEffect(showDebugEffect ? hp : null,
+            //     Effect.Orb, Color.White,
+            //     candidatePosition,
+            //     1, EffectRev.None);
         }
 
         Wait(searchPositionInterval, WaitBehavior.IgnoreCondition);
     }
-
-    teleportCandidatePositionArray = tempCandidatePositionArray;
 }
 
 // TAG EnemyBot/Teleport/GetCandidatePosition
