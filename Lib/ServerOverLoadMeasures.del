@@ -61,10 +61,11 @@ Number GetWaitTime()"GetWaitTime"{
 define IsGameSpeedLimiting() :
     ServerLoad() >= ServerLoad.FULL;
 
-define WaitTimeGameSpeedDown : 1.0;
-define WaitTimeGameSpeedUp : 1.0;
-define ChangeStepGameSpeedDown : 5;
-define ChangeStepGameSpeedUp : 10;
+define WaitTimeGameSpeedDown :      1.0;
+define WaitTimeGameSpeedUp :        1.0;
+define WaitTimeGameSpeedUpForce :   5.0;
+define ChangeStepGameSpeedDown :    5;
+define ChangeStepGameSpeedUp :      5;
 define gameSpeedMax: DefaultPercentage();
 globalvar define gameSpeed = gameSpeedMax;
 globalvar define countGameSpeedDecrease;
@@ -79,7 +80,7 @@ if(
     TuneGameSpeed(-ChangeStepGameSpeedDown);
 
     countGameSpeedDecrease ++;
-    Loop();
+    LoopIfConditionIsTrue();
 }
 
 rule: "ServerOverloadMeasures/GameSpeed/up"
@@ -91,7 +92,19 @@ if(
     Wait(WaitTimeGameSpeedUp, WaitBehavior.AbortWhenFalse);
     TuneGameSpeed(ChangeStepGameSpeedUp);
 
-    Loop();
+    LoopIfConditionIsTrue();
+}
+
+rule: "ServerOverloadMeasures/GameSpeed/upForce"
+Event.OngoingGlobal
+if(
+    !IsGameSpeedLimiting() &&
+    gameSpeed < gameSpeedMax
+){
+    Wait(WaitTimeGameSpeedUpForce, WaitBehavior.IgnoreCondition);
+    TuneGameSpeed(ChangeStepGameSpeedUp);
+
+    LoopIfConditionIsTrue();
 }
 
 void TuneGameSpeed(define changeVal)"TuneGameSpeed"{
