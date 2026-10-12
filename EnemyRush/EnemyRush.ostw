@@ -771,12 +771,34 @@ if(
     // if sucide, skip wait timer
     if(Attacker() != ep){
         // wait for respawn by each timer
-        Wait(confirmSpawnTime, WaitBehavior.AbortWhenFalse);
+        for(define spawnTimer = confirmSpawnTime; spawnTimer > 0; spawnTimer--){
+            define icon;
+
+            // counter of bug
+            if(
+                debugMode >= DebugMode.ShowParam
+            ){
+                define objPos = CurrentObjectPosition();
+
+                if(
+                    spawnTimer % 3 == 0 &&
+                    DistanceBetween(ep, objPos) <= ActionRange.Close
+                ){
+                    if(icon == null) icon = CreateEffect(hp, Effect.Orb, Color.Yellow, ep, 1, EffectRev.PositionAndRadius);
+                    Wait(0.5);
+                    ApplyImpulse(ep,
+                        VectorWithOutY(DirectionTowards(objPos, ep)) + Vector(0, 1, 0),
+                        30, Relative.ToWorld, ContraryMotion.Cancel);
+                    Wait(0.5);
+                    DestroyIcon(icon);
+                }
+            }
+
+            Wait(1, WaitBehavior.AbortWhenFalse);
+        }
     }
     // respawn
-    if(IsDead()){
-        Respawn();
-    }
+    Respawn();
 }
 
 globalvar define spawnTimeScale;
@@ -819,6 +841,8 @@ void UpdateEachSpawnInterval()"UpdateEachSpawnInterval"{
     confirmSpawnTime *= WorkshopSettingReal("Enemy Bot Settings", "Basic Spawn Intarval Scale", 1.0, 0.0, 100, 3);
     // apply tune scale
     confirmSpawnTime *= spawnTimeScale;
+
+    confirmSpawnTime = RoundToInteger(confirmSpawnTime, Rounding.Down);
 }
 
 // TAG EnemyBot/Config/DealtDamage ----------
@@ -2267,28 +2291,28 @@ if(
     }
 }
 
-globalvar define playerDeathCount! = 0;  // for debug
-globalvar define enemyDeathCount! = [0,0,0,0];  // for debug
+// globalvar define playerDeathCount! = 0;  // for debug
+// globalvar define enemyDeathCount! = [0,0,0,0];  // for debug
 
-rule: "Debug/countDeath"
-Event.OnDeath
-if(
-    Attacker() != ep
-){
-    // death count for debug
-    if(TeamOf() == humanTeam){
-        playerDeathCount ++;
-    }
-    else{
-        enemyDeathCount[
-            enemyType == EnemyType.Minion ?     0 :
-            enemyType == EnemyType.Elite ?      1 :
-            enemyType == EnemyType.SubBoss ?    2 :
-            enemyType == EnemyType.Boss ?       3 :
-                                                0
-        ] ++;
-    }
-}
+// rule: "Debug/countDeath"
+// Event.OnDeath
+// if(
+//     Attacker() != ep
+// ){
+//     // death count for debug
+//     if(TeamOf() == humanTeam){
+//         playerDeathCount ++;
+//     }
+//     else{
+//         enemyDeathCount[
+//             enemyType == EnemyType.Minion ?     0 :
+//             enemyType == EnemyType.Elite ?      1 :
+//             enemyType == EnemyType.SubBoss ?    2 :
+//             enemyType == EnemyType.Boss ?       3 :
+//                                                 0
+//         ] ++;
+//     }
+// }
 
 rule: "Debug/initDebugMode"
 Event.OngoingGlobal
