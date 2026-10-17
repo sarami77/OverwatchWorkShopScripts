@@ -764,7 +764,8 @@ playervar define confirmSpawnTime;
 rule: "EnemyBot/Config/SpawnInterval/waitingRespawn"
 Event.OnDeath
 if(
-    TeamOf() == enemyTeam
+    TeamOf() == enemyTeam &&
+    IsDead()
 ){
     // wait for show dead effect
     Wait(showDeadEffectTime, WaitBehavior.AbortWhenFalse);
@@ -785,7 +786,7 @@ if(
                     ApplyImpulse(ep,
                         VectorWithOutY(DirectionTowards(objPos, ep)) + Vector(0, 1, 0),
                         50, Relative.ToWorld, ContraryMotion.Cancel);
-                    Wait(3);
+                    Wait(3, WaitBehavior.AbortWhenFalse);
                     DestroyIcon(icon);
                 }
             }
@@ -2232,8 +2233,8 @@ if(
                 spawnRushInterval = 0;
             }
             // force ult rush
-            if(shotCallInterval > 0){
-                shotCallInterval = 0;
+            if(shotCallInterval > 10){
+                shotCallInterval = 10;
             }
 
             // force hero mod to gunship
@@ -2390,22 +2391,25 @@ void ShowDebugHud(define player!)"ShowDebugHud"{
         wm(); debugHuds[Last()] = CreateDebugHud("human player Num", HumanPlayerNum(humanTeam), HumanPlayerNum(humanTeam) > 1 ? Color.Yellow : Color.Team2);
         wm(); debugHuds[Last()] = CreateDebugHud(
             "Server Load", ServerLoad(), 
-            ServerLoad()            >= ServerLoad.FULL ?    Color.Red :
-            ServerLoad()            >= ServerLoad.HIGH ?    Color.Yellow:
-                                                            Color.Gray);
+            ServerLoad() >= ServerLoad.FULL ?   Color.Red :
+            ServerLoad() >= ServerLoad.HIGH ?   Color.Yellow:
+                                                Color.Gray);
         wm(); debugHuds[Last()] = CreateDebugHud(
             "Server Load avrg", ServerLoadAverage(), 
-            ServerLoadAverage()     >= ServerLoad.FULL ?    Color.Red :
-            ServerLoadAverage()     >= ServerLoad.HIGH ?    Color.Yellow:
-                                                            Color.Gray);
+            ServerLoadAverage() >= ServerLoad.FULL ?    Color.Red :
+            ServerLoadAverage() >= ServerLoad.HIGH ?    Color.Yellow:
+                                                        Color.Gray);
         // wm(); debugHuds[Last()] = CreateDebugHud(
         //     "Server Load peak", ServerLoadPeak(), 
-        //     ServerLoadPeak()    >= ServerLoad.FULL ? Color.Red :
-        //     ServerLoadPeak()    >= ServerLoad.HIGH ? Color.Yellow:
+        //     ServerLoadPeak() >= ServerLoad.FULL ?    Color.Red :
+        //     ServerLoadPeak() >= ServerLoad.HIGH ?    Color.Yellow:
         //                                              Color.Gray);
-        wm(); debugHuds[Last()] = CreateDebugHud("Count Action Wait", countActionWait, Color.Gray);
+        wm(); debugHuds[Last()] = CreateDebugHud("Count Action Wait", countActionWait, isLoadLimiting ? Color.Yellow : Color.Gray);
         wm(); debugHuds[Last()] = CreateDebugHud("Game Speed", gameSpeed, gameSpeed < gameSpeedMax ? Color.Yellow : Color.Gray);
-        wm(); debugHuds[Last()] = CreateDebugHud("Count Game Speed Decrease", countGameSpeedDecrease, Color.Gray);
+        wm(); debugHuds[Last()] = CreateDebugHud("Count Game Speed Decrease", countGameSpeedDecrease,
+            countGameSpeedDecrease > 10 ?   Color.Yellow :
+            countGameSpeedDecrease > 20 ?   Color.Red :
+                                            Color.Gray);
     }
 
     if(
