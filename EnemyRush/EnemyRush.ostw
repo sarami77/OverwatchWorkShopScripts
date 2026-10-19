@@ -500,25 +500,33 @@ if(
     define closePlayer! = ClosestPlayerTo(ep, EnemyTeamOf(ep));
     SetFacing(ep, DirectionTowards(EyePosition(), EyePosition(closePlayer)));
 
-    for(define count = 0; count < 6; count++){
-        if(
-            // has damage
-            NormalizedHealth() < 1.0 ||
-            // has line of close player
-            IsInLineOfSight(
-                PositionOffsetY1() + PositionOf(ep),
-                PositionOffsetY1() + PositionOf(closePlayer),
-                BarrierLOS.NoBarriersBlock
+    if(
+        // has line of close player
+        IsInLineOfSight(
+            PositionOffsetY1() + PositionOf(ep),
+            PositionOffsetY1() + PositionOf(closePlayer),
+            BarrierLOS.NoBarriersBlock
+        )
+    ){
+        // notify around bot
+        define players = FilteredArray(
+            AllLivingPlayers(enemyTeam),
+            (
+                !ae.isBotActive &&
+                DistanceBetween(ep, ae) <= ActionRange.Close
             )
-        ){
-            // start bot
-            isBotActive = true;
-            Abort();
+        );
+        for(define index! = 0; index < CountOf(players); index++){
+                                                dbgPlyEft(players[index]);
+            // players[index].aimTarget = closePlayer;
+            players[index].isBotActive = true;
+            Wait(0.1, WaitBehavior.IgnoreCondition);
         }
-        Wait(0.5, WaitBehavior.IgnoreCondition);
+        Abort();
     }
 
-    Wait(0.1, WaitBehavior.IgnoreCondition);
+
+    Wait(1.0, WaitBehavior.IgnoreCondition);
     WaitUntilServerLoadLimitRelease();
     LoopIfConditionIsTrue();
 }
@@ -1388,7 +1396,7 @@ if(
     define bombEfctRing! = CreateEffect(AllPlayers(), Effect.Ring, cautionColor, bombPos, bombExplodeRange, EffectRev.Color);
 
     for(define index! = 0; index < 3; index++){
-        define targets! = PlayersWithinRadius(bombPos, bombExplodeRange, EnemyTeamOf(ep), RadiusLOS.Off);
+        define targets! = PlayersWithinRadius(bombPos, bombExplodeRange, humanTeam, RadiusLOS.Off);
         for(define index2! = 0; index2 < 3; index2++){
             PlayEffect(targets, PlayEffect.DebuffImpactSound, null, bombPos, 100);
             PlayEffect(AllPlayers(), PlayEffect.BadExplosion, Color.White, bombPos, bombSize * 0.75);
@@ -2118,7 +2126,7 @@ define isThreatIconActive:
 rule: "EnemyBot/ThreatIcon/show"
 Event.OngoingPlayer
 if(
-    enemyTeam == TeamOf() &&
+    TeamOf() == enemyTeam &&
     isThreatIconActive
 ){
     // show threat icon to boss enemys for easy to caution enemy from player
@@ -2130,7 +2138,7 @@ if(
 rule: "EnemyBot/ThreatIcon/hide"
 Event.OngoingPlayer
 if(
-    enemyTeam == TeamOf() &&
+    TeamOf() == enemyTeam &&
     !isThreatIconActive
 ){
     DestroyIcon(threatIcon);
