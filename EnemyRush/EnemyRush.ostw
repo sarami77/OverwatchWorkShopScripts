@@ -1435,6 +1435,11 @@ define freezeSecond :
     enemyType == EnemyType.Boss ?       8 :
     0;
 
+define freezeTargetCondition(define target):
+            IsAlive(target) &&
+            AltitudeOf(target) <= 3 &&
+            IsInLineOfSight(EyePosition(ep), EyePosition(target));
+
 rule: "EnemyBot/Mod/Freeze"
 Event.OngoingPlayer
 if(
@@ -1443,71 +1448,61 @@ if(
     IsAlive(ep) &&
     actionState == ActionState.Attack
 ){
-    define target!;
+    define freezeTarget!;
     
-    while(true){
-        if(
-            aimTarget != null &&
-            IsAlive(aimTarget) &&
-            AltitudeOf(aimTarget) <= 3
-        ){
-            target = aimTarget;
-            break;
-        }
+    while(!freezeTargetCondition(aimTarget)){
         Wait(1.0, WaitBehavior.AbortWhenFalse);
+        WaitUntilServerLoadLimitRelease();
     }
 
-    teleportPosition = target;
+    freezeTarget = aimTarget;
+    teleportPosition = freezeTarget;
     PlayTeleportEffect(true, true);     // show pre teleport effect
     Wait(0.5, WaitBehavior.IgnoreCondition);
     PlayTeleportEffect(false, true);    // show teleport effect
 
-    LoopIf(
-        !(
-            AltitudeOf(target) <= 3 &&
-            IsInLineOfSight(EyePosition(ep), EyePosition(target))
-        )
-    );
+    if(!freezeTargetCondition(freezeTarget)){
+        Wait(1.0, WaitBehavior.IgnoreCondition);
+        LoopIfConditionIsTrue();
+    }
 
     define icon!;
     define effect!;
     define tryCount! = 0;
 
     for(tryCount = 0; tryCount < freezeSecond; tryCount++){
-        aimTarget = target;
+        CancelPrimaryAction();
 
-        if(
-            !(
-                IsAlive(ep) &&
-                IsAlive(target) &&
-                DistanceBetween(ep, target) <= meleeRange * 2.0
-            )
-        ){
-            break;
-        }
-
-        teleportPosition = PositionOf(target) + (Normalize(VectorWithOutY(DirectionTowards(target, ep))) * 1.5);
+        teleportPosition = PositionOf(freezeTarget) + (Normalize(VectorWithOutY(DirectionTowards(freezeTarget, ep))) * 1.5);
         Teleport(ep, teleportPosition);
         PressButton(ep, Button.Melee);
         SetStatus(ep, ep, Status.Rooted, 1.5);
-        SetStatus(target, ep, Status.Frozen, 1.5);
-
-        if(!IsMoving(target)){
-            SetFacing(target, DirectionTowards(EyePosition(target), EyePosition(ep)));
-        }
+        SetStatus(freezeTarget, ep, Status.Frozen, 1.5);
+        SetFacing(freezeTarget, DirectionTowards(EyePosition(freezeTarget), EyePosition(ep)));
+        aimTarget = freezeTarget;
 
         if(tryCount <= 0){
-            icon = CreateIcon(AllPlayers(), target, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
+            icon = CreateIcon(AllPlayers(), freezeTarget, Icon.ExclamationMark, IconRev.VisibleToAndColor, cautionColor, true);
             effect = CreateEffect(AllPlayers(), Effect.BadAura, Color.Blue, ep, freezeSecond / 2, EffectRev.PositionAndRadius);
         }
 
         Wait(1.0, WaitBehavior.IgnoreCondition);
+
+        if(
+            !(
+                IsAlive(ep) &&
+                IsAlive(freezeTarget) &&
+                DistanceBetween(ep, freezeTarget) <= meleeRange * 2.0
+            )
+        ){
+            break;
+        }
     }
     
     DestroyIcon(icon);
     DestroyEffect(effect);
     ClearStatus(ep, Status.Frozen);
-    ClearStatus(target, Status.Frozen);
+    ClearStatus(freezeTarget, Status.Frozen);
     StartFacingAimTarget();
     
     Wait(3.0, WaitBehavior.AbortWhenFalse);
