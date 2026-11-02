@@ -24,7 +24,7 @@ enum HeroModType{
     HEALING_SYRINGE,    // [SUPPORT ABILITY]
     SAVIOR,             // [SUPPORT ABILITY]
     POWERFUL_GIFT,      // [SUPPORT ABILITY]
-    FIELD_BUNKER,       // [SUPPORT ABILITY]
+    INSTANT_BUNKER,       // [SUPPORT ABILITY]
     TECHNICIAN,         // [ATTACK ABILITY]
     GRUDGE_LIGHTNING,   // [ATTACK ABILITY]
     GRUDGE_FIRE_BALL,   // [ATTACK ABILITY]
@@ -258,7 +258,7 @@ void DoHeroModAction(define heromod!, define event!, define inputPayload!) playe
         case HeroModType.HEALING_SYRINGE:   HeroMod_Action_HEALING_SYRINGE(event);                    break;
         case HeroModType.SAVIOR:            HeroMod_Action_SAVIOR(event);                             break;
         case HeroModType.POWERFUL_GIFT:     HeroMod_Action_POWERFUL_GIFT(event);                      break;
-        case HeroModType.FIELD_BUNKER:      HeroMod_Action_FIELD_BUNKER(event);                       break;
+        case HeroModType.INSTANT_BUNKER:      HeroMod_Action_INSTANT_BUNKER(event);                       break;
         case HeroModType.TECHNICIAN:        HeroMod_Action_TECHNICIAN(event);                         break;
         case HeroModType.SURVIVALIST:       HeroMod_Action_SURVIVALIST(event);                        break;
         case HeroModType.ARTILLERY_SUPPORT: HeroMod_Action_ARTILLERY_SUPPORT(event);                  break;
@@ -846,19 +846,20 @@ void HeroMod_Action_POWERFUL_GIFT(define trigger!) playervar "HeroMod_Action_POW
         }
     }
 }
-// TAG FIELD_BUNKER
-void HeroMod_Action_FIELD_BUNKER(define trigger!) playervar "HeroMod_Action_FIELD_BUNKER"{
+// TAG INSTANT_BUNKER
+void HeroMod_Action_INSTANT_BUNKER(define trigger!) playervar "HeroMod_Action_INSTANT_BUNKER"{
     define consumeHealth! = IsDummyBot() ? 50 : 100;
 
     if(
         trigger == HeroModEvent.ACTIVATE
     ){
-        heroModName = "FIELD BUNKER";
+        heroModName = "INSTANT BUNKER";
         heroModDetail = "[SUPPORT ABILITY]" + NL +
             "hold melee key..." + NL +
-            "  + deploy safe zone and protect you and around ally" + NL +
+            "  * deploy safe zone and protect you and around ally" + NL +
             "    * in safezone players disable any receive damage and knockback" + NL +
-            "  - consume your 100 health by every 1 second passed" + NL +
+            "  - every 1 second passed to consume your 100 health" + NL +
+            "    * every 5 second passed to consume health increase to double" + NL +
             "    * not die even if consume all health";
     }
     else if(
@@ -884,18 +885,18 @@ void HeroMod_Action_FIELD_BUNKER(define trigger!) playervar "HeroMod_Action_FIEL
             Color.Orange,
             bunkerPos, bunkerRange, EffectRev.PositionAndRadius);
         bunkerEntity[2] = CreateInWorldText(AllPlayers(),
-            <"Safe zone here\n\rRemaining <0>%", RoundToInteger(Health() / MaxHealth() * 100, Rounding.Up)>,
+            <"Safe zone here\n\rRemaining <0>%", RoundToInteger(NormalizedHealth() * 100)>,
             bunkerPos + Vector(0, 1.5, 0), basicInWorldTextSize * 2, Clipping.ClipAgainstSurfaces,
             InworldTextRev.VisibleToPositionAndString, Color.Orange, Spectators.DefaultVisibility);
-        bunkerEntity[3] = CreateIcon(AllPlayers(), bunkerPos,
-            Icon.ArrowDown, IconRev.PositionAndColor, Color.Orange, true);
+        bunkerEntity[3] = CreateIcon(AllPlayers(), bunkerPos + Vector(0, 3.0, 0),
+            Icon.Flag, IconRev.PositionAndColor, Color.Orange, true);
 
         define duaringCount!;
         while(
             IsButtonHeld(ep, Button.Melee) ||
             IsDummyBot()
         ){
-            define target! = 
+            define targets! = 
                 FilteredArray(
                     AllLivingPlayers(humanTeam),
                     (
@@ -903,17 +904,21 @@ void HeroMod_Action_FIELD_BUNKER(define trigger!) playervar "HeroMod_Action_FIEL
                     )
                 );
 
-            for(define index! = 0; index < CountOf(target); index++){
-                PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Orange, target[index], 1);
+            PlayEffect(targets, PlayEffect.BuffImpactSound, null, bunkerPos, DefaultPercentage());
+            PlayEffect(targets, PlayEffect.RingExplosion, Color.Orange, bunkerPos, bunkerRange * 2);
+            SetStatus(targets, ep, Status.PhasedOut, 1.5);
+            
+            for(define index! = 0; index < CountOf(targets); index++){
+                define target! = targets[index];
+                PlayEffect(AllPlayers(), PlayEffect.GoodPickupEffect, Color.Orange, target, 1);
+
                 if(
-                    IsDummyBot(target[index]) &&
+                    IsDummyBot(target) &&
                     IsTrueProbability(50) 
                 ){
-                    SetStatus(target[index], ep, Status.Rooted, 1.5);
+                    SetStatus(target, ep, Status.Rooted, 1.5);
                 }
-            }                
-            PlayEffect(target, PlayEffect.BuffImpactSound, null, bunkerPos, DefaultPercentage());
-            SetStatus(target, ep, Status.PhasedOut, 1.5);
+            }     
             
             if(duaringCount >= 5){
                 duaringCount = 0;
@@ -2568,7 +2573,7 @@ if(
         heroModType == HeroModType.BIRD_MAN ||
         heroModType == HeroModType.HEALING_SYRINGE ||
         heroModType == HeroModType.SAVIOR ||
-        heroModType == HeroModType.FIELD_BUNKER ||
+        heroModType == HeroModType.INSTANT_BUNKER ||
         heroModType == HeroModType.POWERFUL_GIFT ||
         heroModType == HeroModType.GRUDGE_FIRE_BALL ||
         heroModType == HeroModType.GRUDGE_LIGHTNING ||
@@ -2600,7 +2605,7 @@ if(
             prob = 0;
         }
         else if(
-            heroModType == HeroModType.FIELD_BUNKER ||
+            heroModType == HeroModType.INSTANT_BUNKER ||
             heroModType == HeroModType.GRUDGE_FIRE_BALL ||
             heroModType == HeroModType.GRUDGE_LIGHTNING
         ){
