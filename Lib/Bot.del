@@ -1841,6 +1841,8 @@ if(
     SetActionState(ep, ActionState.Non);
 }
 
+define changeTargetProb: 50;
+
 rule: "Bot/ActionState/StateControl"
 Event.OngoingPlayer
 if(
@@ -1850,46 +1852,17 @@ if(
 ){
     while(true){
         if(IsAlive()){
-            define tryFindTarget = false;
-
-            // has not target
             if(
-                // target not sighted
+                // by target health high
+                IsTrueProbability(changeTargetProb * NormalizedHealth(aimTarget)) ||
+                (
+                    // support target heal almost completed
+                    actionState == ActionState.Support &&
+                    NormalizedHealth(aimTarget) >= needHealHealthScale
+                ) ||
+                // target not in sight
                 !IsSighted(aimTarget)
             ){
-                // get new target
-                tryFindTarget = true;
-            }
-            // has target
-            else{
-                // check change tagrget condition as attack state
-                if(
-                    actionState == ActionState.Attack
-                ){
-                    if(
-                        // change target by target health
-                        IsTrueProbability(50 * NormalizedHealth(aimTarget))
-                    ){
-                        // change target
-                        tryFindTarget = true;
-                    }
-                }
-                // check change tagrget condition as support state
-                else{
-                    if(
-                        // change target by target health
-                        IsTrueProbability(50 * NormalizedHealth(aimTarget)) ||
-                        // target heal almost completed
-                        NormalizedHealth(aimTarget) >= needHealHealthScale
-                    ){
-                        // change target 
-                        tryFindTarget = true;
-                    }
-                }
-            }
-
-            // get new target
-            if(tryFindTarget){
                 // find target
                 FindAimTarget();
             }
@@ -1937,9 +1910,9 @@ if(
         Victim() == aimTarget
     )
 ){
-    aimTarget = null;
     WaitUntilServerLoadLimitRelease();
-
+    // reset aimTarget
+    aimTarget = null;
     // find next target
     FindAimTarget();
     // apply next state
@@ -1949,19 +1922,20 @@ if(
 rule: "Bot/ActionState/ChangeTargetByTargetHealCompleted"
 Event.OngoingPlayer
 if(
+    // support target heal almost completed
     actionState == ActionState.Support &&
     NormalizedHealth(aimTarget) >= needHealHealthScale
 ){
-    aimTarget = null;
     WaitUntilServerLoadLimitRelease();
-
+    // reset aimTarget
+    aimTarget = null;
     // find next target
     FindAimTarget();
     // apply next state
     SetActionState(ep, GetNextActionState());
 }
 
-define intervalTryChangeTargetByDamageTaken: 3;
+define intervalChangeTargetByDamageTaken: 3;
 
 rule: "Bot/ActionState/ChangeTargetToAttackerByDamageTaken"
 Event.OnDamageTaken
@@ -1976,29 +1950,15 @@ if(
 ){
     WaitUntilServerLoadLimitRelease();
 
-    define tryFindTarget = false;
-
-    // non state by has not target
     if(
-        actionState == ActionState.Non
+        // non state by has not target
+        actionState == ActionState.Non ||
+        // by target health high
+        IsTrueProbability(changeTargetProb * NormalizedHealth(aimTarget)) ||
+        // target not in sight
+        !IsSighted(aimTarget)
     ){
-        // change target
-        tryFindTarget = true;
-    }
-    // check change tagret by target health
-    else if(
-        // change target by target health
-        IsTrueProbability(100 * NormalizedHealth(aimTarget))
-    ){
-        // change target
-        tryFindTarget = true;
-    }
-
-    if(
-        // find target
-        tryFindTarget
-    ){
-        // set target by attacker
+        // set target at attacker
         aimTarget = Attacker();
         // apply next state
         SetActionState(ep, GetNextActionState());
@@ -2007,7 +1967,7 @@ if(
     // action call to near bots
     // CallToNearBot();
     // reduce overrun
-    Wait(intervalTryChangeTargetByDamageTaken, WaitBehavior.IgnoreCondition);
+    Wait(intervalChangeTargetByDamageTaken, WaitBehavior.IgnoreCondition);
 }
 
 // TAG Bot/ActionState/Non ----------
@@ -2020,6 +1980,7 @@ if(
 
     // reset button control
     enableButtonControl = false;
+    // update button set by wait
     Wait(0.1, WaitBehavior.IgnoreCondition);
 
     // stop facing
@@ -2047,6 +2008,7 @@ if(
 ){
     // reset button control for change depending state button set
     enableButtonControl = false;
+    // update button set by wait
     Wait(0.1, WaitBehavior.IgnoreCondition);
 
     while(true){
@@ -2077,6 +2039,7 @@ if(
 ){
     // reset button control for change depending state button set
     enableButtonControl = false;
+    // update button set by wait
     Wait(0.1, WaitBehavior.IgnoreCondition);
 
     while(true){
@@ -2188,6 +2151,12 @@ playervar define jumpButtonPressMin!;
 playervar define jumpButtonPressMax!;
 
 // TAG Bot/ButtonControl/SetButtonControlPropety ----------
+enum ButtonBehaivor{
+    Non,
+    ReleasePress,
+    ReleaseRepeat
+}
+
 void SetButtonControlPropety()"SetButtonControlPropety"{
     // basic routine
     aimScatter = 0.4;
@@ -2751,12 +2720,6 @@ void SetButtonControlPropety()"SetButtonControlPropety"{
     hasButtonControlPropety = true;
 }
 
-enum ButtonBehaivor{
-    Non,
-    ReleasePress,
-    ReleaseRepeat
-}
-
 // TAG Bot/ButtonControl/StartButtonControl ----------
 define noButtonControl: false;   // for debug
 
@@ -2905,8 +2868,12 @@ playervar define repeatInterval;
 
 // can't implment as function, cuz need control instance each button
 void StartButtonControl(in define button, in define buttonBehaivor, in define releaseMin, in define releaseMax, in define pressMin, in define pressMax, in define isDependingActionState){
-    if(noButtonControl) return;
-    if(buttonBehaivor == ButtonBehaivor.Non) return;
+    if(
+        noButtonControl ||
+        buttonBehaivor == ButtonBehaivor.Non
+    ){
+        return;
+    } 
 
     define startButonControl = false;
 
