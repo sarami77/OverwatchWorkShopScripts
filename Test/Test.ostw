@@ -57,19 +57,20 @@ Event.OngoingGlobal
             initBot = true;
             DestroyBots(humanTeam);
             DestroyBots(enemyTeam);
-            CreateBotsByAsset(asset[1], humanTeam, 12);
-            CreateBotsByAsset(asset[1], enemyTeam, 12);
-            SetRespawnMaxTime(ap(ta), 10);
+            CreateBotsByAsset(asset[0], humanTeam, 0);
+            CreateBotsByAsset(asset[0], enemyTeam, 1);
+            SetRespawnMaxTime(ap(ta), 0);
             // SetMaxHealth(ap(ta), 500);
             // Heal(ap(ta), null, MaxValue());
-            SetStatus(ap(ta), null, Status.Unkillable, MaxValue() );
+            // SetStatus(ap(ta), null, Status.Unkillable, MaxValue() );
             AllPlayers().watchUpdateRate = 1;
+            AllPlayers().isBotActive = true;
             HostPlayer().isBotActive = false;
         }
 
         define player = GetPlayerMinChebyshevDistance(hp, AllLivingPlayers(EnemyTeamOf(hp)));
-        dbgHudTxt(<"player = <0>", player>);
-        dbgPlyBemEft(hp, player);
+        // dbgHudTxt(<"player = <0>", player>);
+        // dbgPlyBemEft(hp, player);
 
         Wait(0.2);
     }
@@ -92,11 +93,147 @@ define bombBunrningSecond:          1 + (bombScale * 1.5);
 rule: "TestOngoingPlayer"
 Event.OngoingPlayer
 if(
+    ep == hp &&
     IsButtonHeld(hp, Button.Melee)
 ){
     // write here
-
+    // HeroMod_Action_ARTILLERY(
+    //     IsCrouching() ?
+    //     ARTILLERY_MODE.SUPPORT :
+    //     ARTILLERY_MODE.REQUEST
+    // );
 }
+
+// TAG HeroMod_Action_ARTILLERY
+enum ARTILLERY_MODE{
+    SUPPORT,
+    REQUEST
+}
+
+void HeroMod_Action_ARTILLERY(define targetMode!) playervar "HeroMod_Action_ARTILLERY" {
+    Wait(0.5, WaitBehavior.IgnoreCondition);
+
+    // config value
+    define artilleryAttackInterval! = 0.2;
+    define attackCount = targetMode == ARTILLERY_MODE.SUPPORT ? 200 : 400;
+    define artilleryScatterRange! = targetMode == ARTILLERY_MODE.SUPPORT ? 10.0 : 5.0;
+    define artilleryDamageRange! = 5.0;
+    define artilleryDamage! = 100;
+
+    // create shell
+    define deployPosition = PositionOf(ep) + (VectorWithOutY(RandomDirection()) * 40) + (Up() * 80);
+    define landPosition1;
+    define landPosition2;
+    define shellPosition1;
+    define shellPosition2;
+    define shellEffect1! = CreateEffect(AllPlayers(), Effect.Orb,
+        Color.White,
+        shellPosition1,
+        1, EffectRev.PositionAndRadius
+    );
+    define shellEffect2! = CreateEffect(AllPlayers(), Effect.Orb,
+        Color.White,
+        shellPosition2,
+        1, EffectRev.PositionAndRadius
+    );
+
+    // shell land and blast animation
+    define basePosition;
+    for(define count = 0; count < attackCount / 2; count ++){
+        // update base positio by every 4 shot
+        if(count % 4 == 0){
+            // get base position
+            basePosition =
+                targetMode == ARTILLERY_MODE.SUPPORT ?
+                PositionOf(ep) :
+                AimingPosition(ActionRange.CanFind, EnemyTeamOf(ep));
+            basePosition = BelowPosition(basePosition);
+        }
+
+        // start land animation1
+        landPosition1 =
+            basePosition + 
+            RandomPosition(
+                artilleryScatterRange,
+                0,
+                artilleryScatterRange
+            );
+        shellPosition1 = deployPosition;
+        ChaseVariableOverTime(
+            shellPosition1,
+            landPosition1,
+            artilleryAttackInterval * 2,
+            TimeChaseReevaluation.None
+        );
+        
+        Wait(artilleryAttackInterval, WaitBehavior.IgnoreCondition);
+
+        
+        if(count != 0)
+            // start blast animation2
+            DoExplosion(landPosition2, artilleryDamageRange, artilleryDamage);
+
+        // start land animation2
+        landPosition2 =
+            basePosition + 
+            RandomPosition(
+                artilleryScatterRange,
+                0,
+                artilleryScatterRange
+            );
+        shellPosition2 = deployPosition;
+        ChaseVariableOverTime(
+            shellPosition2,
+            landPosition2,
+            artilleryAttackInterval * 2,
+            TimeChaseReevaluation.None
+        );
+
+        Wait(artilleryAttackInterval, WaitBehavior.IgnoreCondition);
+        
+        // start blast animation1
+        DoExplosion(landPosition1, artilleryDamageRange, artilleryDamage);
+    }
+
+    Wait(artilleryAttackInterval, WaitBehavior.IgnoreCondition);
+
+    // final blast animation2
+    // play blast sound
+    DoExplosion(landPosition2, artilleryDamageRange, artilleryDamage);
+
+    StopChasingVariable(shellPosition1);
+    StopChasingVariable(shellPosition2);
+    DestroyEffect(shellEffect1);
+    DestroyEffect(shellEffect2);
+
+    if(targetMode == ARTILLERY_MODE.REQUEST){
+        SetUltimateCharge(ep, 0);
+    }
+}
+
+void DoExplosion(define pos, define range, define damage)"DoExplosion"{
+        // play blast sound
+        PlayEffect(
+            AllPlayers(), PlayEffect.RingExplosionSound,
+            Color .White,
+            pos,
+            MaxLength());
+        // play blast
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodExplosion,
+            Color.Orange,
+            pos,
+            range);
+        // damage
+        Damage(
+            PlayersWithinRadius(
+                pos, range,
+                EnemyTeamOf(ep), RadiusLOS.Off
+            ),
+            ep, damage
+        );
+}
+
 // TAG KillCount -----------------------------------------------
 globalvar define killCountTeam1;
 globalvar define killCountTeam2;

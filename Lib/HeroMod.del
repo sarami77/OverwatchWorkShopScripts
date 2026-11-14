@@ -2257,7 +2257,7 @@ void HeroMod_Action_ARTILLERY(define targetMode!) playervar "HeroMod_Action_ARTI
     define artilleryAttackInterval! = 0.33;
     define attackCount = targetMode == ARTILLERY_MODE.SUPPORT ? 20 : 40;
     define artilleryScatterRange! = targetMode == ARTILLERY_MODE.SUPPORT ? 10.0 : 5.0;
-    define artilleryDamageRange! = 6.0;
+    define artilleryDamageRange! = 5.0;
     define artilleryDamage! = 100;
 
     // create shell
@@ -2276,37 +2276,28 @@ void HeroMod_Action_ARTILLERY(define targetMode!) playervar "HeroMod_Action_ARTI
         shellPosition2,
         1, EffectRev.PositionAndRadius
     );
-    define isFirstShot! = true;
 
-    // blast animation
-    for(define count = attackCount / 2; count > 0; count --){
-        // get target by base position
-        define basePosition! =
-            targetMode == ARTILLERY_MODE.SUPPORT ? PositionOf(ep) : AimingPosition(ActionRange.CanFind, EnemyTeamOf(ep));
-        define target! = basePosition;
-        
-        define attackPosition!;
-        if(
-            target == null
-        ){
-            // if not found target, get attack position by base position
-            attackPosition = basePosition;
-        }
-        else{
-            // get attack position by target
-            attackPosition = BelowPosition(PositionOf(target));
+    // shell land and blast animation
+    define basePosition;
+    for(define count = 0; count < attackCount / 2; count ++){
+        // update base positio by every 4 shot
+        if(count % 4 == 0){
+            // get base position
+            basePosition =
+                targetMode == ARTILLERY_MODE.SUPPORT ?
+                PositionOf(ep) :
+                AimingPosition(ActionRange.CanFind, EnemyTeamOf(ep));
+            basePosition = BelowPosition(basePosition);
         }
 
-        // land animation1
-        // set landed position by attackPosition with random scatter
+        // start land animation1
         landPosition1 =
-            attackPosition + 
+            basePosition + 
             RandomPosition(
                 artilleryScatterRange,
                 0,
                 artilleryScatterRange
             );
-        // shell land animation
         shellPosition1 = deployPosition;
         ChaseVariableOverTime(
             shellPosition1,
@@ -2317,101 +2308,38 @@ void HeroMod_Action_ARTILLERY(define targetMode!) playervar "HeroMod_Action_ARTI
         
         Wait(artilleryAttackInterval, WaitBehavior.IgnoreCondition);
 
-        // first attack
-        if(isFirstShot){
-            isFirstShot = false;
-            // skip blast animation2
-        }
-        else{
-            // blast animation2
-            // play blast sound
-            PlayEffect(
-                AllPlayers(), PlayEffect.RingExplosionSound,
-                Color .White,
-                landPosition2,
-                MaxLength());
-            // play blast
-            PlayEffect(
-                AllPlayers(), PlayEffect.GoodExplosion,
-                Color.Orange,
-                landPosition2,
-                artilleryDamageRange);
-            // damage
-            Damage(
-                PlayersWithinRadius(
-                    landPosition2, artilleryDamageRange,
-                    EnemyTeamOf(ep), RadiusLOS.Off
-                ),
-                ep, artilleryDamage
-            );
-        }
+        
+        if(count != 0)
+            // start blast animation2
+            DoExplosion(landPosition2, artilleryDamageRange, artilleryDamage);
 
-        // land animation2
-        // set landed position by attackPosition with random scatter
+        // start land animation2
         landPosition2 =
-            attackPosition + 
+            basePosition + 
             RandomPosition(
                 artilleryScatterRange,
                 0,
                 artilleryScatterRange
             );
-        // shell land animation
         shellPosition2 = deployPosition;
         ChaseVariableOverTime(
             shellPosition2,
-                landPosition2,
-                artilleryAttackInterval * 2,
-                TimeChaseReevaluation.None
-            );
+            landPosition2,
+            artilleryAttackInterval * 2,
+            TimeChaseReevaluation.None
+        );
 
         Wait(artilleryAttackInterval, WaitBehavior.IgnoreCondition);
         
-        // blast animation1
-        // play blast sound
-        PlayEffect(
-            AllPlayers(), PlayEffect.RingExplosionSound,
-            Color .White,
-            landPosition1,
-            MaxLength());
-        // play blast
-        PlayEffect(
-            AllPlayers(), PlayEffect.GoodExplosion,
-            Color.Orange,
-            landPosition1,
-            artilleryDamageRange);
-        // damage
-        Damage(
-            PlayersWithinRadius(
-                landPosition1, artilleryDamageRange,
-                EnemyTeamOf(ep), RadiusLOS.Off
-            ),
-            ep, artilleryDamage
-        );
+        // start blast animation1
+        DoExplosion(landPosition1, artilleryDamageRange, artilleryDamage);
     }
 
     Wait(artilleryAttackInterval, WaitBehavior.IgnoreCondition);
 
     // final blast animation2
     // play blast sound
-    PlayEffect(
-        AllPlayers(), PlayEffect.RingExplosionSound,
-        Color .White,
-        landPosition2,
-        MaxLength());
-    // play blast
-    PlayEffect(
-        AllPlayers(), PlayEffect.GoodExplosion,
-        Color.Orange,
-        landPosition2,
-        artilleryDamageRange);
-    // damage
-    Damage(
-        PlayersWithinRadius(
-            landPosition2, artilleryDamageRange,
-            EnemyTeamOf(ep), RadiusLOS.Off
-        ),
-        ep, artilleryDamage
-    ); 
+    DoExplosion(landPosition2, artilleryDamageRange, artilleryDamage);
 
     StopChasingVariable(shellPosition1);
     StopChasingVariable(shellPosition2);
@@ -2421,6 +2349,29 @@ void HeroMod_Action_ARTILLERY(define targetMode!) playervar "HeroMod_Action_ARTI
     if(targetMode == ARTILLERY_MODE.REQUEST){
         SetUltimateCharge(ep, 0);
     }
+}
+
+void DoExplosion(define pos, define range, define damage)"DoExplosion"{
+        // play blast sound
+        PlayEffect(
+            AllPlayers(), PlayEffect.RingExplosionSound,
+            Color .White,
+            pos,
+            MaxLength());
+        // play blast
+        PlayEffect(
+            AllPlayers(), PlayEffect.GoodExplosion,
+            Color.Orange,
+            pos,
+            range);
+        // damage
+        Damage(
+            PlayersWithinRadius(
+                pos, range,
+                EnemyTeamOf(ep), RadiusLOS.Off
+            ),
+            ep, damage
+        );
 }
 
 // TAG HeroMod_Action_FIRE_BALL
