@@ -122,15 +122,10 @@ void SetMoveDir() playervar "SetMoveDir"{
         ){
             // move to healer
             moveTarget = PositionOf(nearHealer);
-            moveDirFB = NoDirection();
-            moveDirLR = NoDirection();
         }
         else{
             // move to spawn room side
-            define dirTo! = LocalVectorOf(DirectionTowards(ep, SpawnPoints(TeamOf())[0]), ep, Transformation.Rotation);
-            moveTarget = null;
-            moveDirFB = Vector(0, 0, ZOf(dirTo));
-            moveDirLR = Vector(XOf(dirTo), 0, 0);
+            moveTarget = SpawnPoints(TeamOf())[0];
         } 
     }
     // move for secure object in combat
@@ -151,8 +146,6 @@ void SetMoveDir() playervar "SetMoveDir"{
     ){
         // move to object
         moveTarget = objOnPos;
-        moveDirFB = NoDirection();
-        moveDirLR = NoDirection();
     }
     // move for combat
     else if(actionState != ActionState.Non){
@@ -226,18 +219,19 @@ void SetMoveDir() playervar "SetMoveDir"{
     }
 }
 
-void StartMove(define player!, define ignoreAbyss! = false) playervar "StartMove"{
+void StartMove(define ignoreAbyss! = false) playervar "StartMove"{
     if(noMoving) return;
 
     define confirmMoveDir = NoDirection();
 
     if(
-        moveTarget == null
+        moveTarget != null
     ){
-        confirmMoveDir = player.moveDirFB + player.moveDirLR;
+        confirmMoveDir = LocalVectorOf(DirectionTowards(ep, moveTarget), ep, Transformation.Rotation);
+        
     }
-    else if(moveTarget != null){
-        confirmMoveDir = LocalVectorOf(DirectionTowards(player, moveTarget), ep, Transformation.Rotation);
+    else{
+        confirmMoveDir = moveDirFB + moveDirLR;
     }
     
     if(
@@ -248,47 +242,44 @@ void StartMove(define player!, define ignoreAbyss! = false) playervar "StartMove
             !ignoreAbyss &&
             IsBelowAbyss(
                 BlockedPositionByLocalVector(
-                    player,
+                    ep,
                     confirmMoveDir,
-                    walkMeterPerSec * player.watchUpdateRate
+                    walkMeterPerSec * ep.watchUpdateRate
                 )
             )
         ){
-            StopMove(player);
+            StopMove();
+        }
+        else if(moveTarget != null){
+            // move by dynamic target
+            StartThrottleInDirection(
+                ep,
+                DirectionTowards(ep, moveTarget),
+                1,
+                Relative.ToWorld,
+                ThrottleBehavior.ReplaceExistingThrottle,
+                ThrottleRev.DirectionAndMagnitude
+            );
         }
         else{
-            if(
-                moveTarget == null
-            ){
-                // move by fix vector
-                StartThrottleInDirection(
-                    player,
-                    confirmMoveDir,
-                    1,
-                    Relative.ToPlayer,
-                    ThrottleBehavior.ReplaceExistingThrottle,
-                    ThrottleRev.DirectionAndMagnitude
-                );
-            }
-            else{
-                // move by dynamic target
-                StartThrottleInDirection(
-                    player,
-                    DirectionTowards(player, moveTarget),
-                    1,
-                    Relative.ToWorld,
-                    ThrottleBehavior.ReplaceExistingThrottle,
-                    ThrottleRev.DirectionAndMagnitude
-                );
-            }
+            // move by fix vector
+            StartThrottleInDirection(
+                ep,
+                confirmMoveDir,
+                1,
+                Relative.ToPlayer,
+                ThrottleBehavior.ReplaceExistingThrottle,
+                ThrottleRev.DirectionAndMagnitude
+            );
         }
     }
 }
 
-void StopMove(define player!) playervar "StopMove"{
-    player.moveDirFB = NoDirection();
-    player.moveDirLR = NoDirection();
-    StopThrottleInDirection(player);
+void StopMove() playervar "StopMove"{
+    moveTarget = null;
+    moveDirFB = NoDirection();
+    moveDirLR = NoDirection();
+    StopThrottleInDirection(ep);
 } 
 
 // TAG Bot/Aim ----------
@@ -546,10 +537,10 @@ void PolingAction() playervar "PolingAction"{
                     if(DistanceBetween(target) >= 3){
                         moveDirFB = Forward();
                         moveDirLR = NoDirection();
-                        StartMove(ep);
+                        StartMove();
                     }
                     else{
-                        StopMove(ep);
+                        StopMove();
                     }
                     StartHoldingButton(ep, Button.Ability2);
                     Wait(1, WaitBehavior.IgnoreCondition);
@@ -718,7 +709,7 @@ void PolingAction() playervar "PolingAction"{
 
             if(protectTarget != null){
                 StartFacingTemporaryWithButton(protectTarget, Button.Ability1, 3.0);
-                StopMove(ep);
+                StopMove();
             }
         }
     }
@@ -729,7 +720,7 @@ void PolingAction() playervar "PolingAction"{
             AbilityCooldown(ep, Button.Ability2) <= 0 &&
             DistanceBetween(ep, aimTarget) > ActionRange.Close
         ){
-            StopMove(ep);
+            StopMove();
             PressButton(ep, Button.Ability2);
             PressButton(ep, Button.PrimaryFire);
             Wait(1.0, WaitBehavior.IgnoreCondition);
@@ -742,7 +733,7 @@ void PolingAction() playervar "PolingAction"{
                 PressButton(ep, Button.Interact);
             }
             
-            StartMove(ep);
+            StartMove();
         }
     }
     // LifeWeever
@@ -758,7 +749,7 @@ void PolingAction() playervar "PolingAction"{
                 IsTrueProbability(50 + (DefaultPercentage() * (1 - NormalizedHealth()))) &&
                 !IsAboveCeiling(ep)
             ){
-                StopMove(ep);
+                StopMove();
                 Wait(0.5, WaitBehavior.IgnoreCondition);
                 // aim to own step
                 StartFacingTemporaryWithButton(BelowPosition(ep), Button.Ability1);
@@ -888,7 +879,7 @@ void PolingAction() playervar "PolingAction"{
                 define localDir! = LocalVectorOf(DirectionTowards(ep, healTarget), ep, Transformation.Rotation);
                 moveDirFB = Vector(0, 0, ZOf(localDir));
                 moveDirLR = Vector(XOf(localDir), 0, 0);
-                StartMove(ep);
+                StartMove();
             }
             Wait(0.5, WaitBehavior.IgnoreCondition);
         }
@@ -904,13 +895,13 @@ void PolingAction() playervar "PolingAction"{
         ){
             enableButtonControl = false;
             Wait(0.1, WaitBehavior.IgnoreCondition);
-            StopMove(ep);
+            StopMove();
             StopFacing(ep);
             PressButton(ep, Button.Ability2);
             Wait(0.7);
             PressButton(ep, Button.PrimaryFire);
             StartFacingAimTarget();
-            StartMove(ep);
+            StartMove();
             enableButtonControl = true;
         }
 
@@ -997,7 +988,7 @@ void PolingAction() playervar "PolingAction"{
         ){
             // move backward for combat
             moveDirFB = Backward();
-            StartMove(ep);
+            StartMove();
             
             if(
                 AbilityCooldown(ep, Button.Jump) <= 0
@@ -1123,7 +1114,7 @@ void PolingAction() playervar "PolingAction"{
                 define localDir! = LocalVectorOf(DirectionTowards(ep, healTarget), ep, Transformation.Rotation);
                 moveDirFB = Vector(0, 0, ZOf(localDir));
                 moveDirLR = Vector(XOf(localDir), 0, 0);
-                StartMove(ep);
+                StartMove();
             }
         }
 
@@ -1274,7 +1265,7 @@ void PolingAction() playervar "PolingAction"{
                 // move foward for melee
                 moveDirFB = Forward();
                 moveDirLR = NoDirection();
-                StartMove(ep);
+                StartMove();
                 // melee by hammer
                 PressButton(ep, Button.PrimaryFire);
                 Wait(0.3, WaitBehavior.IgnoreCondition);
@@ -1295,7 +1286,7 @@ void PolingAction() playervar "PolingAction"{
         ){
             enableButtonControl = false;
             Wait(0.1, WaitBehavior.IgnoreCondition);
-            StartMove(ep);
+            StartMove();
             StopHoldingButton(ep, Button.PrimaryFire);
             StopHoldingButton(ep, Button.SecondaryFire);
             PressButton(ep, Button.Ability1);
@@ -1401,7 +1392,7 @@ void PolingAction() playervar "PolingAction"{
             ){
                 define grapplePosition! = GetGrapplePosition();
                 if(grapplePosition != null){
-                    StopMove(ep);
+                    StopMove();
                     StartFacingTemporaryWithButton(grapplePosition, Button.Ability1);
                     Wait(1, WaitBehavior.IgnoreCondition);
                 }
@@ -1486,14 +1477,14 @@ if(
         Wait(0.1, WaitBehavior.IgnoreCondition);
 
         // stop current input
-        StopMove(ep);
+        StopMove();
         // wait for start mode
         Wait(waitForStartMove, WaitBehavior.IgnoreCondition);
 
         // start move postion selecter to foward
         moveDirFB = Forward();
         moveDirLR = NoDirection();
-        StartMove(ep, true);
+        StartMove(true);
         // decrease move speed if multi position attack mode
         if(isMultiPosAttack) moveSpeed -= 0.01;
         // wait for arrival target
@@ -1503,7 +1494,7 @@ if(
 
         // stop move if not multi position attack mode
         if(!isMultiPosAttack){
-            StopMove(ep);
+            StopMove();
         }
         // repeat press button by pressButtonInterval
         for(define tryCount! = 0; tryCount < countPressButton; tryCount++){
@@ -1511,7 +1502,7 @@ if(
             Wait(RandomReal(0.25, 0.5), WaitBehavior.IgnoreCondition);
         }
         // reduce walking after ult
-        StopMove(ep);
+        StopMove();
         // restore buton control and poling action
         enableButtonControl = true;
         // stop ult positioning
@@ -1951,6 +1942,7 @@ if(
         Attacker() != aimTarget
     )
 ){
+    AbortIf(EventDamage() <= 5);
     WaitUntilServerLoadLimitRelease();
 
     if(
@@ -1989,7 +1981,7 @@ if(
     // stop facing
     StopFacing(ep);
     // stop move
-    StopMove(ep);
+    StopMove();
 
     while(true){
         // not in ult positioning
@@ -2024,7 +2016,7 @@ if(
             // set moveDir
             SetMoveDir();
             // start move by moveDir
-            StartMove(ep);
+            StartMove();
             // poling action
             PolingAction(); 
         }
@@ -2055,7 +2047,7 @@ if(
             // set moveDir
             SetMoveDir();
             // start move by moveDir
-            StartMove(ep);
+            StartMove();
             // poling action
             PolingAction(); 
         }
