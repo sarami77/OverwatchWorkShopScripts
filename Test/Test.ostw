@@ -19,12 +19,12 @@ define enemyTeam: Team.Team2;
 define asset:
     [
         [
-            [EnemyType.Non,     RandomSupportHero(),    1],
-            [EnemyType.Non,     RandomSupportHero(),    1],
-            [EnemyType.Non,     RandomDamageHero(),    1],
-            [EnemyType.Non,     RandomDamageHero(),    1],
-            [EnemyType.Non,     RandomTankHero(),    1],
-            [EnemyType.Non,     RandomTankHero(),    1]
+            [EnemyType.Non,     RandomSupportHero(),    2],
+            [EnemyType.Non,     RandomSupportHero(),    2],
+            [EnemyType.Non,     RandomDamageHero(),    2],
+            [EnemyType.Non,     RandomDamageHero(),    2],
+            [EnemyType.Non,     RandomTankHero(),    2],
+            [EnemyType.Non,     RandomTankHero(),    2]
         ],
         [
             // [EnemyType.Non,     Hero.Baptiste,    1],
@@ -57,10 +57,10 @@ Event.OngoingGlobal
             initBot = true;
             DestroyBots(humanTeam);
             DestroyBots(enemyTeam);
-            CreateBotsByAsset(asset[0], humanTeam, 0);
-            CreateBotsByAsset(asset[0], enemyTeam, 1);
-            SetRespawnMaxTime(ap(ta), 0);
-            // SetMaxHealth(ap(ta), 500);
+            CreateBotsByAsset(asset[0], humanTeam, 12);
+            CreateBotsByAsset(asset[0], enemyTeam, 12);
+            SetRespawnMaxTime(ap(ta), 0.1);
+            SetMaxHealth(ap(ta), 1000);
             // Heal(ap(ta), null, MaxValue());
             // SetStatus(ap(ta), null, Status.Unkillable, MaxValue() );
             AllPlayers().watchUpdateRate = 1;
@@ -68,11 +68,14 @@ Event.OngoingGlobal
             HostPlayer().isBotActive = false;
         }
 
-        define player = GetPlayerMinChebyshevDistance(hp, AllLivingPlayers(EnemyTeamOf(hp)));
-        // dbgHudTxt(<"player = <0>", player>);
-        // dbgPlyBemEft(hp, player);
+        if(
+            IsTrueEverySeconds(3)
+        ){
+            define target = FilteredArray(AllLivingPlayers(), ae.actionState == ActionState.Non);
+            Teleport(target, NoPosition());
+        }
 
-        Wait(0.2);
+        Wait(1.0);
     }
 }
 
@@ -93,15 +96,13 @@ define bombBunrningSecond:          1 + (bombScale * 1.5);
 rule: "TestOngoingPlayer"
 Event.OngoingPlayer
 if(
-    ep == hp &&
-    IsButtonHeld(hp, Button.Melee)
+    IsButtonHeld(ep, Button.PrimaryFire)
 ){
+    Wait(SlotOf()* 0.1, WaitBehavior.IgnoreCondition);
     // write here
-    // HeroMod_Action_ARTILLERY(
-    //     IsCrouching() ?
-    //     ARTILLERY_MODE.SUPPORT :
-    //     ARTILLERY_MODE.REQUEST
-    // );
+    HeroMod_Action_ARTILLERY(
+        ARTILLERY_MODE.REQUEST
+    );
 }
 
 // TAG HeroMod_Action_ARTILLERY
@@ -114,7 +115,7 @@ void HeroMod_Action_ARTILLERY(define targetMode!) playervar "HeroMod_Action_ARTI
     Wait(0.5, WaitBehavior.IgnoreCondition);
 
     // config value
-    define artilleryAttackInterval! = 0.2;
+    define artilleryAttackInterval! = 0.5;
     define attackCount = targetMode == ARTILLERY_MODE.SUPPORT ? 200 : 400;
     define artilleryScatterRange! = targetMode == ARTILLERY_MODE.SUPPORT ? 10.0 : 5.0;
     define artilleryDamageRange! = 5.0;
