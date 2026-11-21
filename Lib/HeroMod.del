@@ -2098,6 +2098,7 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
             "+ deploy drone and pattrole around for guard you" + NL +
             "  * drone stun and damage little to near enemy" + NL +
             "  * drone alert you with blink icon when close enemy" + NL +
+            "  * using ult to increases drone performance" + NL +
             "- receive heal 50%";
         SetHealingReceived(ep, 50);
 
@@ -2129,14 +2130,15 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
         trigger == HeroModEvent.TIME_PASSED
     ){
         // config value
-        define dogActionInterval! = [0.5, 2.0];
-        define dogPatrolRange! = 6;
-        define dogAttackRange! = dogPatrolRange * 2;
-        define dogRetreatRange! = dogPatrolRange * 3;
-        define dogDealDamage! = 25;
+        define isUlt = IsUsingUltimate();
+        define dogActionInterval! = isUlt ? 0.5 : RandomReal(1.0, 2.0);
+        define dogDealDamage! =     isUlt ? 50 : 25;
+        define dogPatrolRange! =    6;
+        define dogAttackRange! =    dogPatrolRange * (isUlt ? 4 : 2);
+        define dogRetreatRange! =   dogPatrolRange * (isUlt ? 6 : 3);
 
         // set action interval by random
-        define interval! = RandomReal(dogActionInterval[0], dogActionInterval[1]);
+        define interval! = dogActionInterval;
 
         // start move by interval half
         ChaseVariableOverTime(dogPos, dogDest, interval / 2, TimeChaseReevaluation.DestinationAndDuration);
@@ -2149,7 +2151,7 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
                     FilteredArray(
                         AllLivingPlayers(EnemyTeamOf(ep)),
                         (
-                            DistanceBetween(dogPos, ae) <= dogAttackRange
+                            DistanceBetween(ep, ae) <= dogAttackRange
                         )
                     ),
                     DistanceBetween(ep, ae)
@@ -2178,13 +2180,13 @@ void HeroMod_Action_GUARD_DOG(define trigger!) playervar "HeroMod_Action_GUARD_D
                 PositionOf(target) +
                 RandomPosition(dogPatrolRange, dogPatrolRange / 2, dogPatrolRange) +
                 Vector(0, dogPatrolRange / 2, 0);
-
         }
         else{
             isDogAttaking = false;
             // set dest to event player nearby
             dogDest =
                 PositionOf() +
+                (FacingDirectionOf() * dogPatrolRange) +
                 RandomPosition(dogPatrolRange, dogPatrolRange / 2, dogPatrolRange) +
                 Vector(0, dogPatrolRange / 2, 0);
         }
