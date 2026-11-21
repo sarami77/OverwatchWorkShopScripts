@@ -1139,38 +1139,16 @@ void PolingAction() playervar "PolingAction"{
     }
     // Mei
     else if(hero == Hero.Mei){
-        // use ice wall for defend self
+        // use ice wall
         if(
             IsInCombat() &&
-            IsTrueProbability(DefaultPercentage() * (1 - NormalizedHealth()))  &&
+            IsTrueProbability(25)  &&
             AbilityCooldown(ep, Button.Ability2) <= 0
         ){
-            define aimPosition! = 
-                BelowPosition(
-                    ShiftedPosition(
-                        NormalizedHealth() <= 0.5 ? ep : aimTarget,
-                        VectorTowards(ep, aimTarget),
-                        3
-                    )
-                );
-            StartFacingTemporaryWithButton(aimPosition, Button.Ability2);
-            PressButton(ep, Button.PrimaryFire);
-        }
-
-        // use ice wall for split enemy
-        if(
-            IsInCombat() &&
-            IsTrueProbability(50)  &&
-            AbilityCooldown(ep, Button.Ability2) <= 0
-        ){
-            // aim between on ground
-            define aimPosition! = 
-                BelowPosition(
-                    ShiftedPosition(
-                        aimTarget,
-                        VectorTowards(ep, aimTarget),
-                        3
-                    )
+            define aimPosition! = GetPlacePosition(aimTarget, 
+                    IsTrueProbability(DefaultPercentage() * NormalizedHealth()) ?
+                        1.25 :  // enemy behind
+                        0.25    // own front
                 );
             StartFacingTemporaryWithButton(aimPosition, Button.Ability2);
             PressButton(ep, Button.PrimaryFire);
@@ -1206,26 +1184,10 @@ void PolingAction() playervar "PolingAction"{
             IsTrueProbability(DefaultPercentage() * NormalizedHealth()) &&
             AbilityCooldown(ep, Button.Ability2) <= 0 &&
             DistanceBetween(ep, aimTarget) > ActionRange.Close
+
         ){
-            define aimPosition!;
-
-            while(
-                aimPosition == null ||
-                DistanceBetween(ep, aimPosition) > ActionRange.CanFind
-            ){
-                // aim target behind
-                aimPosition = 
-                    BelowPosition(
-                        ShiftedPosition(
-                            aimTarget,
-                            VectorTowards(ep, aimTarget),
-                            5
-                        ) +
-                        RandomPosition(5, 0, 5)
-                    );
-                Wait(0.2, WaitBehavior.IgnoreCondition);
-            }
-
+            // aim target behind
+            define aimPosition! = GetPlacePosition(aimTarget, 1.25);
             StartFacingTemporaryWithButton(aimPosition, Button.Ability2);
             PressButton(ep, Button.PrimaryFire);
             StartHoldingButton(ep, Button.PrimaryFire);
@@ -1485,7 +1447,10 @@ if(
         // decrease move speed if multi position attack mode
         if(isMultiPosAttack) moveSpeed -= 0.01;
         // wait for arrival target
-        define dist! = DistanceBetween(ep, aimTarget);
+        define dist! = 
+            aimTarget != null ?
+                DistanceBetween(ep, aimTarget) :
+                ActionRange.Close;
         dist = dist <= 5 ? 5 : dist;
         Wait((dist * moveSpeed), WaitBehavior.IgnoreCondition);
 
@@ -1551,14 +1516,7 @@ if(
             PressButton(ep, Button.Ultimate);
         }
         // aim ground on between
-        define aimPosition! = 
-            BelowPosition(
-                ShiftedPosition(
-                    ep,
-                    VectorTowards(ep, aimTarget),
-                    DistanceBetween(ep, aimTarget) * 0.5
-                )
-            );
+        define aimPosition! = GetPlacePosition(aimTarget, 0.5);
         // trigger ultimate by PrimaryFire
         StartFacingTemporaryWithButton(aimPosition, Button.PrimaryFire);
         // restore buton control
@@ -1595,15 +1553,8 @@ if(
         // cancel hold SecondaryFire
         CancelPrimaryAction();
         StopHoldingButton(ep, Button.PrimaryFire);
-        // aim ground on 1/4
-        define aimPosition! = 
-            BelowPosition(
-                ShiftedPosition(
-                    ep,
-                    VectorTowards(ep, aimTarget),
-                    DistanceBetween(ep, aimTarget) * 0.25
-                )
-            );
+        // aim ground
+        define aimPosition! = GetPlacePosition(aimTarget, 0.25);
         StartFacingTemporaryWithButton(aimPosition, Button.SecondaryFire);
         // restore buton control
         enableButtonControl = true;
