@@ -44,10 +44,9 @@ globalvar define serverLoadTotal;
 rule: "TestOngoingGlobal"
 Event.OngoingGlobal
 {
-    DisableInspectorRecording();
+    // DisableInspectorRecording();
     Wait(3);
     define initBot = false;
-
 
     while(true){
         if(
@@ -57,182 +56,39 @@ Event.OngoingGlobal
             initBot = true;
             DestroyBots(humanTeam);
             DestroyBots(enemyTeam);
-            // CreateBotsByAsset(asset[1], humanTeam, 6);
-            CreateBotsByAsset(asset[1], enemyTeam, 6);
-            SetRespawnMaxTime(ap(ta), 0.1);
+            CreateBotsByAsset(asset[0], humanTeam, 6);
+            CreateBotsByAsset(asset[0], enemyTeam, 6);
+            SetRespawnMaxTime(ap(ta), 10);
             SetMaxHealth(ap(ta), 100);
             // Heal(ap(ta), null, MaxValue());
-            SetStatus(ap(ta), null, Status.Unkillable, MaxValue() );
+            // SetStatus(ap(ta), null, Status.Unkillable, MaxValue() );
             AllPlayers().watchUpdateRate = 1;
             AllPlayers().isBotActive = true;
             HostPlayer().isBotActive = false;
         }
 
         if(
-            IsTrueEverySeconds(3)
+            IsTrueEverySeconds(5)
         ){
             define target = FilteredArray(AllLivingPlayers(), IsDummyBot(ae) && ae.actionState == ActionState.Non);
             Teleport(target, NoPosition());
+            
+            SetUltimateCharge(ap(ta), 100);
         }
-
         Wait(1.0);
     }
 }
 
-
-define bombScale : 
-    tuneVal == EnemyType.Minion * 0.01 ?     1 :
-    tuneVal == EnemyType.Elite * 0.01 ?      2 :
-    tuneVal == EnemyType.SubBoss * 0.01 ?    4 :
-    tuneVal == EnemyType.Boss * 0.01 ?       4 :
-    0;
-define bombCountDownInterval:       0.3 + (0.15 * bombScale);
-define bombSize:                    bombScale * 0.4;
-define bombExplodeRange:            2  + (bombScale * 3.0);
-define bombExplodeDamage:           50 + (bombScale * 100);
-define bombBunrningDamagePS:        25;
-define bombBunrningSecond:          1 + (bombScale * 1.5);
-
 rule: "TestOngoingPlayer"
 Event.OngoingPlayer
 if(
-    IsButtonHeld(ep, Button.PrimaryFire)
+    HasSpawned(ep) &&
+    ep == PlayersInSlot(0, humanTeam)
 ){
-    // Wait(SlotOf()* 0.1, WaitBehavior.IgnoreCondition);
-    // // write here
-    // HeroMod_Action_ARTILLERY(
-    //     ARTILLERY_MODE.REQUEST
-    // );
-}
+    while(true){
 
-// TAG HeroMod_Action_ARTILLERY
-enum ARTILLERY_MODE{
-    SUPPORT,
-    REQUEST
-}
-
-void HeroMod_Action_ARTILLERY(define targetMode!) playervar "HeroMod_Action_ARTILLERY" {
-    Wait(0.5, WaitBehavior.IgnoreCondition);
-
-    // config value
-    define artilleryAttackInterval! = 0.5;
-    define attackCount = targetMode == ARTILLERY_MODE.SUPPORT ? 200 : 400;
-    define artilleryScatterRange! = targetMode == ARTILLERY_MODE.SUPPORT ? 10.0 : 5.0;
-    define artilleryDamageRange! = 5.0;
-    define artilleryDamage! = 100;
-
-    // create shell
-    define deployPosition = PositionOf(ep) + (VectorWithOutY(RandomDirection()) * 40) + (Up() * 80);
-    define landPosition1;
-    define landPosition2;
-    define shellPosition1;
-    define shellPosition2;
-    define shellEffect1! = CreateEffect(AllPlayers(), Effect.Orb,
-        Color.White,
-        shellPosition1,
-        1, EffectRev.PositionAndRadius
-    );
-    define shellEffect2! = CreateEffect(AllPlayers(), Effect.Orb,
-        Color.White,
-        shellPosition2,
-        1, EffectRev.PositionAndRadius
-    );
-
-    // shell land and blast animation
-    define basePosition;
-    for(define count = 0; count < attackCount / 2; count ++){
-        // update base positio by every 4 shot
-        if(count % 4 == 0){
-            // get base position
-            basePosition =
-                targetMode == ARTILLERY_MODE.SUPPORT ?
-                PositionOf(ep) :
-                AimingPosition(ActionRange.CanFind, EnemyTeamOf(ep));
-            basePosition = BelowPosition(basePosition);
-        }
-
-        // start land animation1
-        landPosition1 =
-            basePosition + 
-            RandomPosition(
-                artilleryScatterRange,
-                0,
-                artilleryScatterRange
-            );
-        shellPosition1 = deployPosition;
-        ChaseVariableOverTime(
-            shellPosition1,
-            landPosition1,
-            artilleryAttackInterval * 2,
-            TimeChaseReevaluation.None
-        );
-        
-        Wait(artilleryAttackInterval, WaitBehavior.IgnoreCondition);
-
-        
-        if(count != 0)
-            // start blast animation2
-            DoExplosion(landPosition2, artilleryDamageRange, artilleryDamage);
-
-        // start land animation2
-        landPosition2 =
-            basePosition + 
-            RandomPosition(
-                artilleryScatterRange,
-                0,
-                artilleryScatterRange
-            );
-        shellPosition2 = deployPosition;
-        ChaseVariableOverTime(
-            shellPosition2,
-            landPosition2,
-            artilleryAttackInterval * 2,
-            TimeChaseReevaluation.None
-        );
-
-        Wait(artilleryAttackInterval, WaitBehavior.IgnoreCondition);
-        
-        // start blast animation1
-        DoExplosion(landPosition1, artilleryDamageRange, artilleryDamage);
+        Wait(1.0);
     }
-
-    Wait(artilleryAttackInterval, WaitBehavior.IgnoreCondition);
-
-    // final blast animation2
-    // play blast sound
-    DoExplosion(landPosition2, artilleryDamageRange, artilleryDamage);
-
-    StopChasingVariable(shellPosition1);
-    StopChasingVariable(shellPosition2);
-    DestroyEffect(shellEffect1);
-    DestroyEffect(shellEffect2);
-
-    if(targetMode == ARTILLERY_MODE.REQUEST){
-        SetUltimateCharge(ep, 0);
-    }
-}
-
-void DoExplosion(define pos, define range, define damage)"DoExplosion"{
-        // play blast sound
-        PlayEffect(
-            AllPlayers(), PlayEffect.RingExplosionSound,
-            Color .White,
-            pos,
-            MaxLength());
-        // play blast
-        PlayEffect(
-            AllPlayers(), PlayEffect.GoodExplosion,
-            Color.Orange,
-            pos,
-            range);
-        // damage
-        Damage(
-            PlayersWithinRadius(
-                pos, range,
-                EnemyTeamOf(ep), RadiusLOS.Off
-            ),
-            ep, damage
-        );
 }
 
 // TAG KillCount -----------------------------------------------

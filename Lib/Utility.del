@@ -32,9 +32,16 @@ define MaxLength(): 1000;
 define DefaultPercentage(): 100;
 define DefaultRespawnTime(): 10;
 
+// TAG Math ----------
 // An offset in the Y direction because the point is buried in the surface
-define PositionOffset(): Vector(0, 0.6, 0);
+define PositionOffset(): Vector(0, 0.5, 0);
 define PositionOffsetY1(): Vector(0, 1, 0);
+
+define BodyPosition(in define player): 
+    Midpoint(
+        PositionOf(player),
+        EyePosition(player)
+    );
 
 define VectorWithOutY(in define vector):
     Normalize(
@@ -46,11 +53,10 @@ define VectorWithOutY(in define vector):
 define VectorScaledY(in define vector, in define scale):
     Vector(XOf(vector), YOf(vector * scale), ZOf(vector));
 
-define BodyPosition(in define player): 
-    Midpoint(
-        PositionOf(player),
-        EyePosition(player)
-    );
+define EaseInQuad(define t!)"EaseInQuad"{
+    define clampedT = Max(0.0, Min(1.0, t));
+    return clampedT * clampedT;
+}
 
 // TAG MatchTime ----------
 define IsOverTime():
@@ -562,20 +568,27 @@ define AimingPlayer():
         )
     );
 
-define EnemyDensity(define target!, define dist!) playervar "EnemyDensity"{
-    return 
+define TeamDensity(define team!, define target! = null, define dist! = null) playervar "EnemyDensity"{
+    define allNum! = NumberOfPlayers(EnemyTeamOf(ep));
+    if(allNum <= 0){
+        return 0;
+    }
+    define alvNum! =
         CountOf(
             FilteredArray(
-                AllLivingPlayers(EnemyTeamOf(ep)),
-                DistanceBetween(target, ae) <= dist
+                AllLivingPlayers(team),
+                (
+                    (target == null || dist == null) ?
+                        true :
+                        DistanceBetween(target, ae) <= dist
+                )
             )
-        )
-            /
-        NumberOfPlayers(EnemyTeamOf(ep));
+        );
+    return alvNum / allNum;
 }
 
 // TAG Team ----------
-define EnemyTeamOf(in define player!): 
+define EnemyTeamOf(in define player! = ep): 
     OppositeTeamOf(TeamOf(player));
 
 // define GetTeamNormalizedHealth()"GetTeamNormalizedHealth"{
@@ -774,7 +787,7 @@ enum ActionRange{
     CanFind = 40
 }
 
-// TAG ability ----------
+// TAG Ability ----------
 void AddAbilityStock(define player!, define button!, define addStock!)"AddAbilityStock"{
     if(AbilityCooldown(player, button) > 0){
         SetAbilityCooldown(player, button, 0);
@@ -818,7 +831,7 @@ define IsMechCalling(in define player!){
     return isCalling;
 }
 
-// TAG hero ----------
+// TAG Hero ----------
 define RandomHero(): rva(AllHeroes());
 define RandomTankHero(): rva(AllTankHeroes());
 define RandomDamageHero(): rva(AllDamageHeroes());

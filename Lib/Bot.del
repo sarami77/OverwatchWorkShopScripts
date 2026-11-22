@@ -137,7 +137,7 @@ void SetMoveDir() playervar "SetMoveDir"{
         // IsInLineOfSight(EyePosition(ep), objOnPos, BarrierLOS.NoBarriersBlock) &&
         (
             // when close lose, any-role secure obj until 3mans on obj
-            IsCloseWin(EnemyTeamOf(ep)) ?   plyNumOnObj < 3 :
+            IsCloseWin(EnemyTeamOf()) ?   plyNumOnObj < 3 :
             // tank secure obj until 1mans on obj
             isTank ?                        plyNumOnObj < 1 :
             // other-role not secure obj
@@ -652,7 +652,7 @@ void PolingAction() playervar "PolingAction"{
             AbilityCooldown(ep, Button.Ability1) <= 0 &&
             UltimateChargePercent(ep) >= DefaultPercentage() &&
             // enemy density high
-            IsTrueProbability(50 * EnemyDensity(aimTarget, ActionRange.Close))
+            IsTrueProbability(50 * TeamDensity(EnemyTeamOf(), aimTarget, ActionRange.Close))
         ){
             PressButton(ep, Button.Ability1);
             Wait(RandomReal(0, 1.5), WaitBehavior.IgnoreCondition);
@@ -844,7 +844,7 @@ void PolingAction() playervar "PolingAction"{
                 define attackTarget! = 
                     RandomValueInArray(
                         FilteredArray(
-                            AllLivingPlayers(EnemyTeamOf(ep)),
+                            AllLivingPlayers(EnemyTeamOf()),
                             (
                                 NormalizedHealth(ae) > criticalDamageHealthScale &&
                                 CanFindLine(ae)
@@ -1612,7 +1612,7 @@ void BallTackle() playervar "BallTackle"{
         dir = -1;
     }
     ApplyImpulse(ep, 
-        dir * DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf(ep))),
+        dir * DirectionTowards(ep, ClosestPlayerTo(ep, EnemyTeamOf())),
         25, Relative.ToWorld, ContraryMotion.Incorporate);
 }
 
@@ -1683,8 +1683,8 @@ define FindTarget(define inActionState)"FindTarget"{
     // get target list
     define targets = AllLivingPlayers(
         inActionState == ActionState.Support ?
-            TeamOf(ep) :
-            EnemyTeamOf(ep)
+            TeamOf() :
+            EnemyTeamOf()
     );
 
     // filter target list
@@ -2856,8 +2856,8 @@ void StartButtonControl(in define button, in define buttonBehaivor, in define re
                     !(
                         // not using ult
                         !IsUsingUltimate() &&
-                        // enemy density high
-                        IsTrueProbability(100 * (EnemyDensity(aimTarget, ActionRange.Close)))
+                        // target close range at enemy density is high with ease in
+                        IsTrueProbability(100 * (EaseInQuad(TeamDensity(EnemyTeamOf(), aimTarget, ActionRange.Close))))
                     )                
                 ){
                     // skip hold ultimate button 
