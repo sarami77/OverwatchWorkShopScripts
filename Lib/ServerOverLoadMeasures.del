@@ -10,26 +10,12 @@ enum ServerLoad{
 }
 
 // TAG ServerLoadMeasures/ServerLoadLimit ----------
-define IsServerLoadLimiting() :
-    ServerLoad() >= ServerLoad.HIGH;
-    // ServerLoad() >= (ServerLoad.HIGH - countGameSpeedDecrease);
+define ServerLoadLimit:
+    // ServerLoad.HIGH;
+    (ServerLoad.HIGH - countGameSpeedDecrease);
 
-globalvar define isLoadLimiting;
-
-rule: "ServerOverloadMeasures/setLoadLimit"
-Event.OngoingGlobal
-if(
-    IsServerLoadLimiting()
-){
-    isLoadLimiting = true;
-}
-
-rule: "ServerOverloadMeasures/resetLoadLimit"
-Event.OngoingGlobal
-if(
-    !IsServerLoadLimiting()
-){
-    isLoadLimiting = false;
+Boolean IsServerLoadLimiting()"IsServerLoadLimiting"{
+    return ServerLoad() >= ServerLoadLimit;
 }
 
 // TAG ServerLoadMeasures/WaitUntilServerLoadLimitRelease ----------
@@ -40,18 +26,18 @@ define releaseGateMaxSecondForce :  10.0;
 globalvar define countActionWait;
 
 void WaitUntilServerLoadLimitRelease(){
-    // if(isLoadLimiting){
+    // if(IsServerLoadLimiting()){
     //     countActionWait ++;
-    //     while(isLoadLimiting){
+    //     while(IsServerLoadLimiting()){
     //         Wait(checkLimitInterval, WaitBehavior.IgnoreCondition);
     //     }
     //     countActionWait --;
     // }
     
-    while(isLoadLimiting){
+    while(IsServerLoadLimiting()){
         countActionWait ++;
         define waitTime = GetWaitTime();
-        WaitUntil(!isLoadLimiting, releaseGateMaxSecondForce);
+        WaitUntil(!IsServerLoadLimiting(), releaseGateMaxSecondForce);
         Wait(waitTime, WaitBehavior.IgnoreCondition);
         countActionWait --;
     }
